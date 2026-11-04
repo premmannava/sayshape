@@ -186,6 +186,44 @@ export type ChartGeometry = {
   };
 };
 
+
+/** The datum beneath the pointer, with geometry relative to the chart box. */
+export interface ChartHover {
+  kind: "slot" | "slice";
+  index: number;
+}
+
+/** Only actual bars, line plot slots, and donut/pie slices are interactive. */
+export function chartHoverAt(d: ChartGeometry, x: number, y: number): ChartHover | null {
+  if (d.message || d.loading || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (d.pie) {
+    const p = d.pie;
+    const dx = x - p.cx, dy = y - p.cy;
+    const radius = Math.hypot(dx, dy);
+    if (radius < p.inner || radius > p.r) return null;
+    const turn = Math.PI * 2;
+    const angle = ((Math.atan2(dy, dx) + Math.PI / 2) % turn + turn) % turn;
+    const index = p.slices.findIndex((s) => angle >= s.start && angle < s.end);
+    return index < 0 ? null : { kind: "slice", index };
+  }
+  if (d.kind === "line") {
+    const p = d.plot;
+    if (x < p.x || x > p.x + p.w || y < p.y || y > p.y + p.h || !d.slots.length || p.w <= 0) return null;
+    const index = Math.min(d.slots.length - 1, Math.floor((x - p.x) / (p.w / d.slots.length)));
+    return d.slots[index]?.values.some((v) => v !== null) ? { kind: "slot", index } : null;
+  }
+  if (d.kind === "bar" || d.kind === "hbar") {
+    for (let i = 0; i < d.slots.length; i++) {
+      for (const b of d.slots[i]!.bars ?? []) {
+        if (b && b.w > 0 && b.h > 0 && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+          return { kind: "slot", index: i };
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------- data
 
 export interface ChartData {
@@ -1048,6 +1086,12 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     box.data = out.g;
     box.h = out.h;
   },
+  hitTest(box, x, y) {
+    const d = box.data as ChartGeometry | undefined;
+    const h = d && chartHoverAt(d, x - box.x, y - box.y);
+    return h ? { detail: h.kind + ":" + h.index } : null;
+  },
+  cursor: () => "crosshair",
   paintLoading: paintChartLoading,
   paint(box, ctx) {
     const { g, theme } = ctx;
@@ -1081,6 +1125,10 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       return;
     }
 
+    // The engine already tracks chart pointer hover and repaints when the datum changes.
+    // This region is mouse-only: charts do not introduce meaningless keyboard tab stops.
+    ctx.addHit(box, { focusable: false });
+
     // Just after its data arrived: marks grow into place while the rest fades in.
     const reveal = ctx.reveal(box.node);
     const fade = easeOut(reveal * 2.5);
@@ -1091,12 +1139,14 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       g.globalAlpha = base * fade;
       paintLegend(ctx, d, ox, oy, (k) => palette[k % palette.length]!);
       g.globalAlpha = base;
+      if (reveal >= 1) paintChartHover(box, ctx, d);
       return;
     }
 
     if (d.kind === "hbar") {
       paintHbar(ctx, d, ox, oy, colorOf, reveal);
       g.globalAlpha = base;
+      if (reveal >= 1) paintChartHover(box, ctx, d);
       return;
     }
 
@@ -1214,6 +1264,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     for (const s of d.slots) if (s.shownLabel) g.fillText(s.shownLabel, ox + s.labelX, oy + d.labelY);
     g.textBaseline = "middle";
     if (d.legend.length) paintLegend(ctx, d, ox, oy, colorOf);
+    if (reveal >= 1) paintChartHover(box, ctx, d);
   },
 };
 
@@ -1316,4 +1367,136 @@ function paintLegend(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, co
       g.fillText(it.detail, ox + it.detailX, oy + it.y);
     }
   }
+}
+
+
+/** Draw the active mark and an in-canvas tooltip. This works in sandboxed MCP Apps
+ * without a DOM portal, network access, or a second UI layer. */
+function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
+  if (!ctx.pointer || !ctx.isHovered(box.node)) return;
+  const hover = chartHoverAt(d, ctx.pointer.x - box.x, ctx.pointer.y - box.y);
+  if (!hover) return;
+  const { g, theme } = ctx;
+  const c = theme.colors, palette = seriesColors(theme);
+  const ox = box.x, oy = box.y;
+  const format = ctx.props(box.node).oneOf("format", FORMATS, "number");
+  const precise = (value: number): string => {
+    const opts: Intl.NumberFormatOptions = { maximumFractionDigits: 6 };
+    return new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts).format(value);
+  };
+  let heading = "";
+  const rows: Array<{ text: string; color: string }> = [];
+  g.save();
+  if (hover.kind === "slice" && d.pie) {
+    const s = d.pie.slices[hover.index]!;
+    heading = s.label;
+    rows.push({ text: precise(s.value) + " · " + shareText(s.share), color: palette[s.color % palette.length]! });
+    const p = d.pie, toCanvas = (a: number) => a - Math.PI / 2;
+    g.beginPath();
+    g.arc(ox + p.cx, oy + p.cy, p.r, toCanvas(s.start), toCanvas(s.end));
+    if (p.inner) g.arc(ox + p.cx, oy + p.cy, p.inner, toCanvas(s.end), toCanvas(s.start), true);
+    else g.lineTo(ox + p.cx, oy + p.cy);
+    g.closePath();
+    g.strokeStyle = c.ink;
+    g.globalAlpha *= 0.75;
+    g.lineWidth = 2.5;
+    g.stroke();
+  } else if (hover.kind === "slot") {
+    const s = d.slots[hover.index]!;
+    heading = s.label;
+    s.values.forEach((v, k) => {
+      if (v !== null) {
+        rows.push({
+          text: (d.series.length > 1 ? d.series[k]!.label : "Value") + ": " + precise(v),
+          color: d.series.length > 1 ? palette[k % palette.length]! : c.accent,
+        });
+      }
+    });
+    if (d.kind === "line") {
+      g.beginPath();
+      g.moveTo(ox + s.cx + 0.5, oy + d.plot.y);
+      g.lineTo(ox + s.cx + 0.5, oy + d.plot.y + d.plot.h);
+      g.strokeStyle = c.muted;
+      g.globalAlpha *= 0.65;
+      g.lineWidth = 1;
+      g.setLineDash([3, 4]);
+      g.stroke();
+      g.setLineDash([]);
+      g.globalAlpha = 1;
+      s.points?.forEach((pt, k) => {
+        if (!pt) return;
+        g.beginPath();
+        g.arc(ox + pt.x, oy + pt.y, 5, 0, Math.PI * 2);
+        g.fillStyle = c.raised;
+        g.fill();
+        g.lineWidth = 2.5;
+        g.strokeStyle = d.series.length > 1 ? palette[k % palette.length]! : c.accent;
+        g.stroke();
+      });
+    } else {
+      for (const b of s.bars ?? []) {
+        if (!b || b.w <= 0 || b.h <= 0) continue;
+        ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, Math.min(4, b.w / 2, b.h / 2));
+        g.strokeStyle = c.ink;
+        g.globalAlpha *= 0.72;
+        g.lineWidth = 2;
+        g.stroke();
+        g.globalAlpha = 1;
+      }
+    }
+  }
+  g.restore();
+  if (!rows.length) return;
+
+  // A bounded floating surface that never escapes the chart, even in a narrow chat.
+  const pad = 10, rowH = 18, titleH = 19;
+  const widthLimit = Math.max(1, box.w - 12);
+  const headingFont = themeFont(theme, 600, theme.text.caption + 1);
+  const bodyFont = themeFont(theme, 400, theme.text.caption);
+  g.save();
+  g.font = headingFont;
+  let needed = g.measureText(heading).width;
+  g.font = bodyFont;
+  for (const row of rows) needed = Math.max(needed, g.measureText(row.text).width + 14);
+  const w = Math.min(widthLimit, Math.max(132, Math.ceil(needed) + pad * 2));
+  const h = pad * 2 + titleH + rows.length * rowH;
+  const minX = box.x + 6, maxX = box.x + box.w - w - 6;
+  const x = Math.max(minX, Math.min(maxX, ctx.pointer.x + 13));
+  const minY = box.y + 5, maxY = box.y + box.h - h - 5;
+  const above = ctx.pointer.y - h - 10;
+  const y = Math.max(minY, Math.min(maxY, above < minY ? ctx.pointer.y + 12 : above));
+  ctx.roundRect(x, y, w, h, theme.radius.md);
+  g.shadowColor = c.shadow;
+  g.shadowBlur = 14;
+  g.shadowOffsetY = 4;
+  g.fillStyle = c.raised;
+  g.fill();
+  g.shadowBlur = 0;
+  g.shadowOffsetY = 0;
+  g.strokeStyle = c.line;
+  g.lineWidth = 1;
+  g.stroke();
+
+  const fitText = (value: string, font: string, max: number): string => {
+    g.font = font;
+    if (g.measureText(value).width <= max) return value;
+    let end = value.length;
+    while (end > 0 && g.measureText(value.slice(0, end) + "…").width > max) end--;
+    return end ? value.slice(0, end) + "…" : "";
+  };
+  g.textAlign = "left";
+  g.textBaseline = "middle";
+  g.fillStyle = c.ink;
+  g.font = headingFont;
+  g.fillText(fitText(heading, headingFont, w - pad * 2), x + pad, y + pad + titleH / 2);
+  rows.forEach((row, i) => {
+    const lineY = y + pad + titleH + i * rowH + rowH / 2;
+    g.beginPath();
+    g.arc(x + pad + 3, lineY, 3, 0, Math.PI * 2);
+    g.fillStyle = row.color;
+    g.fill();
+    g.fillStyle = c.muted;
+    g.fillText(fitText(row.text, bodyFont, w - pad * 2 - 14), x + pad + 14, lineY);
+  });
+  g.restore();
 }
