@@ -37,7 +37,7 @@
 import type { ComponentDef, LayoutContext } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import { ellipsize, fitLines, wrapText, type TextMeasurer } from "../text";
-import { SERIES_COUNT, seriesColors, sliceColors, type Theme } from "../theme";
+import { mixColors, SERIES_COUNT, seriesColors, sliceColors, type Theme } from "../theme";
 import type { Box, Value } from "../types";
 import { easeOut, paintGhost, staggered } from "../ghost";
 import { fillTint, themeFont } from "./util";
@@ -203,7 +203,7 @@ export function smoothLineControls(points: readonly { x: number; y: number }[]):
   });
 }
 
-function traceSmoothLine(
+export function traceSmoothLine(
   g: CanvasRenderingContext2D,
   run: readonly { x: number; y: number }[],
   ox: number, oy: number,
@@ -1052,6 +1052,9 @@ function paintHbar(box: Box, ctx: PaintCtx, d: ChartGeometry, ox: number, oy: nu
   g.stroke();
 
   g.globalAlpha = base;
+  const hot = ctx.pointer && ctx.isHovered(box.node)
+    ? chartHoverAt(d, ctx.pointer.x - ox, ctx.pointer.y - oy)
+    : null;
   d.slots.forEach((s, i) => {
     // A wave from top to bottom: each bar grows out of the zero line.
     const grow = reveal < 1 ? staggered(reveal, i, n) : 1;
@@ -1061,21 +1064,30 @@ function paintHbar(box: Box, ctx: PaintCtx, d: ChartGeometry, ox: number, oy: nu
       if (w <= 0.25) return;
       const right = full.x >= zero - 0.01;
       const b = { x: right ? full.x : full.x + full.w - w, y: full.y, w, h: full.h };
-      ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, Math.min(4, b.w / 2, b.h / 2));
-      g.fillStyle = colorOf(k);
-      g.fill();
+      ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, Math.min(6, b.w / 2, b.h / 2));
+      const hover = ctx.tween(box.node, `hbar:highlight:${i}:${k}`,
+        hot?.kind === "slot" && hot.index === i ? 1 : 0, 165);
+      paintPremiumBar(ctx, { x: ox + b.x, y: oy + b.y, w: b.w, h: b.h },
+        colorOf(k), right ? "right" : "left", hover);
     });
   });
 
+  // Value labels follow the animated bar tips, rather than jumping to the new
+  // end coordinate before the bar itself has finished moving.
   g.globalAlpha = base * fade;
   g.fillStyle = c.muted;
-  for (const s of d.slots) {
-    for (const v of s.valueLabels ?? []) {
-      if (!v) continue;
+  d.slots.forEach((s, i) => {
+    const grow = reveal < 1 ? staggered(reveal, i, n) : 1;
+    s.valueLabels?.forEach((v, k) => {
+      if (!v) return;
+      const bar = s.bars?.[k];
+      const right = !!bar && bar.x >= zero - 0.01;
+      const width = bar ? ctx.tween(box.node, `hbar:${i}:${k}`, bar.w, 440) * grow : 0;
+      const x = bar ? (right ? bar.x + width + theme.space.xs : bar.x + bar.w - width - theme.space.xs) : v.x;
       g.textAlign = v.align;
-      g.fillText(v.text, ox + v.x, oy + v.y);
-    }
-  }
+      g.fillText(v.text, ox + x, oy + v.y);
+    });
+  });
   if (d.legend.length) paintLegend(ctx, d, ox, oy, colorOf);
   g.globalAlpha = base;
 }
@@ -1277,6 +1289,11 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     g.strokeStyle = c.accent;
     if (d.kind === "bar") {
       const zero = d.zeroY ?? d.plot.y + d.plot.h;
+      const hot = ctx.pointer && ctx.isHovered(box.node)
+        ? chartHoverAt(d, ctx.pointer.x - ox, ctx.pointer.y - oy)
+        : null;
+      const showLabels = d.series.length === 1 && d.slots.length <= 7 && pw / d.slots.length >= 54;
+      const format = ctx.props(box.node).oneOf("format", FORMATS, "number");
       d.slots.forEach((s, i) => {
         // A wave from left to right: each bar grows out of the zero line.
         const grow = reveal < 1 ? staggered(reveal, i, d.slots.length) : 1;
@@ -1286,9 +1303,31 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           const h = ctx.tween(box.node, `bar:${i}:${k}`, full.h, 440) * grow;
           if (h <= 0.25) return;
           const b = { x: full.x, y: up ? full.y + full.h - h : full.y, w: full.w, h };
-          barPath(g, ox + b.x, oy + b.y, b.w, b.h, Math.min(4, b.w / 2, b.h), up);
-          g.fillStyle = colorOf(k);
-          g.fill();
+          barPath(g, ox + b.x, oy + b.y, b.w, b.h, Math.min(7, b.w / 2, b.h), up);
+          const hover = ctx.tween(box.node, `bar:highlight:${i}:${k}`,
+            hot?.kind === "slot" && hot.index === i ? 1 : 0, 165);
+          paintPremiumBar(ctx, { x: ox + b.x, y: oy + b.y, w: b.w, h: b.h },
+            colorOf(k), up ? "up" : "down", hover);
+          if (showLabels && k === 0 && s.values[0] !== null) {
+            const label = valueText(s.values[0]!, format);
+            g.save();
+            g.font = ctx.font(600, 11);
+            const slotRoom = pw / d.slots.length - 8;
+            const outside = up ? b.y - 9 : b.y + b.h + 9;
+            const roomOutside = outside >= d.plot.y + 8 && outside <= d.plot.y + d.plot.h - 8;
+            // Near the plot edge, place the value inside a tall bar instead
+            // of dropping the label or letting it clip above the chart.
+            const inside = !roomOutside && b.h >= 30;
+            const labelY = roomOutside ? outside : up ? b.y + 14 : b.y + b.h - 14;
+            if ((roomOutside || inside) && g.measureText(label).width < slotRoom) {
+              g.textAlign = "center";
+              g.textBaseline = "middle";
+              g.fillStyle = inside ? c.onAccent : c.muted;
+              g.globalAlpha *= 0.9;
+              g.fillText(label, ox + b.x + b.w / 2, oy + labelY);
+            }
+            g.restore();
+          }
         });
       });
     } else {
@@ -1379,6 +1418,42 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
 };
 
 type PaintCtx = Parameters<NonNullable<ComponentDef["paint"]>>[1];
+
+/**
+ * Paint a refined color surface in the existing bar path.
+ * The strong color is at the free edge and softens gently toward the baseline;
+ * the origin and the rounded free end still match the real data geometry.
+ * We use the original series color as the first gradient stop so custom themes
+ * and accessible category colors stay authoritative.
+ */
+function paintPremiumBar(
+  ctx: PaintCtx, rect: Rect, color: string,
+  direction: "up" | "down" | "left" | "right", hover = 0,
+): void {
+  const { g, theme } = ctx;
+  const endColor = mixColors(color, theme.colors.raised, 0.27) ?? color;
+  const gradient = direction === "up"
+    ? g.createLinearGradient(0, rect.y, 0, rect.y + rect.h)
+    : direction === "down"
+      ? g.createLinearGradient(0, rect.y + rect.h, 0, rect.y)
+      : direction === "right"
+        ? g.createLinearGradient(rect.x + rect.w, 0, rect.x, 0)
+        : g.createLinearGradient(rect.x, 0, rect.x + rect.w, 0);
+  gradient.addColorStop(0, color);
+  gradient.addColorStop(1, endColor);
+  g.fillStyle = gradient;
+  g.fill();
+  // Subtle edge definition and hover emphasis, without changing hit geometry.
+  if (hover > 0) {
+    fillTint(g, theme.colors.raised, 0.13 * hover);
+    g.save();
+    g.strokeStyle = color;
+    g.lineWidth = 1.5;
+    g.globalAlpha *= 0.26 * hover;
+    g.stroke();
+    g.restore();
+  }
+}
 
 /** A bar rounded only at its free end (the top of a rising bar, the bottom of a falling one), square on the axis. */
 function barPath(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, up: boolean): void {
