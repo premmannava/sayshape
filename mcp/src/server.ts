@@ -97,9 +97,10 @@ export function quickStart(withData = false): string {
     "QUICK START (the language is also called Loom)",
     sectionText("compact", "format").replace(/^FORMAT\n/, ""),
     "- Text and props can show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
+    "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue')`,
     `ELEMENTS\n${elementIndex(coreComponents)}`,
-    "IN A CHAT: one card with a title; the column is about 600px wide, so use grid min=140 for side-by-side figures; say in a caption when numbers come from your own knowledge; on=emit:name lets the person send a choice back to you.",
+    "IN A CHAT: one card with a title; the column is about 600px wide, so use grid min=140 for side-by-side figures; say in a caption when numbers come from your own knowledge.",
     `BEFORE YOU USE AN ELEMENT for the first time in a conversation, get its props and an example with sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData)).join(", ")}.`,
   ].join("\n");
 }
@@ -151,7 +152,7 @@ export function checkSpec(spec: string, hostNames: readonly string[] = []): Spec
  * Every other warning (a bad expression, a value outside a prop's choices, a
  * name nothing defines) leaves part of the interface wrong, so it needs a fix.
  */
-const HARMLESS = /has no prop "|already adds the currency sign|doesn't take quoted text; it was ignored|state lines should not be indented/;
+const HARMLESS = /has no prop "|already adds the currency sign|is a weight, not a style|doesn't take quoted text; it was ignored|state lines should not be indented/;
 export const isHarmless = (d: Diagnostic) => d.severity !== "error" && HARMLESS.test(d.message);
 
 function describeCheck(c: SpecCheck): string {

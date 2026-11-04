@@ -310,6 +310,21 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
   return out;
 }
 
+/** What a line starting with "on" gets: there are no handler blocks; actions go on the element. */
+export const ON_BLOCK_MESSAGE =
+  `There are no "on" blocks. Put the action on the element that runs it: button "Choose" on=emit:choose:{item.name}. ` +
+  `emit: sends the choice to the assistant, which answers it. To also change the screen, chain actions: on=set:chosen:{item.name};emit:choose:{item.name}`;
+
+/** Why an element can't go in its container, with what does go there and, for common slips, what to do instead. */
+function cantContain(parentName: string, parentType: string, type: string, accepts: ComponentDef["children"]): string {
+  let msg = `${parentName} can't contain "${type}"`;
+  if (Array.isArray(accepts)) msg += `; it holds ${accepts.join(", ")}`;
+  if (parentType === "list" && (type === "button" || type === "link")) {
+    msg += `. Make the row itself pressable, like list-item "{item.name}" on=emit:choose:{item.name}, or use a column of cards for rows with buttons`;
+  }
+  return msg;
+}
+
 /** The warning for "${money(x)}": shown once on screen, but the spec should drop its own sign. */
 function currencyMessage(where: string, expr: string): string {
   return `In ${where}: ${expr.trim().split("(")[0]}() already adds the currency sign, so the sign before {${expr}} is extra (it shows once). Write {${expr}} on its own`;
@@ -376,6 +391,8 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   let last: SayShapeNode | null = null;
   // A state line whose list or record was left open: the lines after it are probably the rest of it.
   let openState: { line: number; reported: boolean } | null = null;
+  // The first "on" block, which carries the explanation; later ones point back to it.
+  let onBlockLine: number | null = null;
   // State names whose value couldn't be read; their own line already says why.
   const skippedState = new Set<string>();
   // Names each line reads that it isn't inside the each for, checked once every each is known.
@@ -451,6 +468,14 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       return;
     }
     openState = null;
+    // "on choose_a" blocks are a common guess at handling a press inside the spec. Say how it works
+    // instead, once, without the knock-on messages about the rest of the line.
+    if (tok.type === "on" && !defOf("on", registry)) {
+      diagnostics.push({ line: lineNo, severity: "error", message: onBlockLine === null ? ON_BLOCK_MESSAGE : `Another "on" block, skipped; see line ${onBlockLine}` });
+      onBlockLine ??= lineNo;
+      skipDeeperThan = indent;
+      return;
+    }
     for (const p of tok.problems) diagnostics.push({ line: lineNo, severity: "warning", message: p });
     if (!tok.type) { skipDeeperThan = indent; return; }
 
@@ -483,7 +508,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     const parentName = container === root ? "the top level" : `"${container.type}" (line ${container.line})`;
     const fits = TRANSPARENT.has(tok.type) ? !!accepts : !!accepts && (accepts === "any" || accepts.includes(tok.type));
     if (!fits) {
-      diagnostics.push({ line: lineNo, severity: "error", message: `${parentName} can't contain "${tok.type}"` });
+      diagnostics.push({ line: lineNo, severity: "error", message: cantContain(parentName, container.type, tok.type, accepts) });
       skipDeeperThan = indent;
       return;
     }
@@ -506,6 +531,15 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
         }
       }
       for (const e of doubledCurrency(tok.text)) diagnostics.push({ line: lineNo, severity: "warning", message: currencyMessage("text", e) });
+    }
+    // style=semibold is a weight written as a style: use it as one rather than cost a retry.
+    const styleDef = def.props.style, weightDef = def.props.weight;
+    if (styleDef?.type === "enum" && weightDef?.type === "enum" && tok.props.style !== undefined && tok.props.weight === undefined
+      && !styleDef.values?.includes(tok.props.style) && weightDef.values?.includes(tok.props.style)) {
+      const w = tok.props.style;
+      tok.props.weight = w;
+      delete tok.props.style;
+      diagnostics.push({ line: lineNo, severity: "warning", message: `${w} is a weight, not a style, so it was used as weight=${w}` });
     }
     for (const [name, rawValue] of Object.entries(tok.props)) {
       const pdef = def.props[name] ?? COMMON_PROPS[name];
