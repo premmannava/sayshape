@@ -1,4 +1,5 @@
 import DefaultTheme from "vitepress/theme";
+import { h } from "vue";
 import type { Theme } from "vitepress";
 // The engine draws with Instrument Sans and IBM Plex Mono (src/theme.ts); the site uses the same faces,
 // self-hosted, so the shell and the canvas match and no font is fetched from a third party.
@@ -19,9 +20,12 @@ import Chat from "./components/Chat.vue";
 import Atlas from "./components/Atlas.vue";
 import ElementPage from "./components/ElementPage.vue";
 import Learn from "./components/Learn.vue";
+import Ask from "./components/Ask.vue";
 
 export default {
   extends: DefaultTheme,
+  // "Ask the docs" sits in the nav on every page, before the menu links.
+  Layout: () => h(DefaultTheme.Layout, null, { "nav-bar-content-before": () => h(Ask) }),
   enhanceApp({ app }) {
     app.component("LoomLive", LoomLive);
     app.component("Landing", Landing);

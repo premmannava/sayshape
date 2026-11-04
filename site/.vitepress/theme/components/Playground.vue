@@ -301,20 +301,30 @@ async function captureFrame() {
 
 // ------------------------------------------------------------ start-up
 
+/** Load a spec from a #spec= link. Returns whether the hash held one. */
+function loadFromHash(): boolean {
+  const fromLink = new URLSearchParams(location.hash.slice(1)).get("spec");
+  if (!fromLink) return false;
+  try {
+    const spec = fromBase64(fromLink);
+    sourceKey.value = "";
+    text.value = spec;
+    original.value = spec;
+  } catch {
+    say("That link's spec couldn't be read, so the default example is shown");
+  }
+  return true;
+}
+
+// A #spec= link followed while already on this page (from Ask, say) only changes the hash.
+function onHashChange() {
+  if (loadFromHash()) loom.value?.setSpec(text.value, { resetState: true });
+}
+
 onMounted(() => {
   const params = new URLSearchParams(location.search);
-  const hash = new URLSearchParams(location.hash.slice(1));
-  const fromLink = hash.get("spec");
-  if (fromLink) {
-    try {
-      const spec = fromBase64(fromLink);
-      sourceKey.value = "";
-      text.value = spec;
-      original.value = spec;
-    } catch {
-      say("That link's spec couldn't be read, so the default example is shown");
-    }
-  } else {
+  window.addEventListener("hashchange", onHashChange);
+  if (!loadFromHash()) {
     const key = params.get("example");
     if (key && sources.some((s) => s.key === key)) { sourceKey.value = key; text.value = sourceOf(key); original.value = text.value; }
   }
@@ -323,6 +333,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener("hashchange", onHashChange);
   signal.cancelled = true;
   siteObserver?.disconnect();
   clearTimeout(noticeTimer);
