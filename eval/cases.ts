@@ -4,7 +4,7 @@
  * of them will do. `checks` render the answer and use it (see checks.ts).
  * Traps check that models stay within the language.
  */
-import { acts, allDoneShowsMore, calls, nested, pressChanges, removes, repeats, typingChanges, typingFilters, type Check } from "./checks";
+import { acts, allDoneShowsMore, calls, nested, pressChanges, removes, repeats, shows, typingChanges, typingFilters, type Check } from "./checks";
 
 export interface EvalCase {
   id: string;
@@ -58,6 +58,7 @@ export const cases: EvalCase[] = [
   // Interactive
   { id: "int-quiz", category: "interactive", request: "A quiz question about which planet is largest, with four answers, that tells me if I'm right.", expect: [["radio", "button"]] },
   { id: "int-tip", category: "interactive", request: "A tip calculator for a $64 bill: tip from 10 to 25 percent with a slider, split between 1 to 6 people.", expect: ["slider", "stepper"] },
+  { id: "int-mortgage", category: "interactive", request: "A mortgage calculator: loan amount $300,000, interest rate 6.5%, 30-year term, each with a slider. Show the monthly payment.", expect: ["slider"], checks: [calls("pow"), shows(/\$1,896\.2\d/, "the correct monthly payment ($1,896.20)")] },
   { id: "int-map", category: "interactive", request: "Show the countries I've visited, Japan, Peru and Kenya, with a pin on each capital.", expect: ["map", "pin"] },
 
   // Data: lists that should come from state through each, with numbers computed from them

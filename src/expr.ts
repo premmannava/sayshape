@@ -119,11 +119,11 @@ const BUILTINS: Record<string, Fn> = {
     const key = (item: Value) => (field === undefined ? item : fieldOf(item, field));
     return makeList([...v].sort((x, y) => (desc ? -1 : 1) * order(key(x), key(y))));
   },
-  /** The first n items: take(sort(players, 'score', 'desc'), 3). */
   /** The first item of a list, or null when it's empty: first(sort(sales, 'revenue', 'desc')).month. */
   first: (v) => (isList(v) ? v[0] ?? null : NaN),
   /** The last item of a list, or null when it's empty. */
   last: (v) => (isList(v) ? v[v.length - 1] ?? null : NaN),
+  /** The first n items: take(sort(players, 'score', 'desc'), 3). */
   take: (v, n) => (isList(v) ? makeList(v.slice(0, Math.max(0, Math.floor(toNumber(n ?? 0)) || 0))) : NaN),
   sum: (v, a, b) => amounts(v, a, b)?.reduce((t, x) => t + x, 0) ?? NaN,
   avg: (v, a, b) => {
@@ -147,6 +147,15 @@ const BUILTINS: Record<string, Fn> = {
   floor: (n) => Math.floor(toNumber(n)),
   ceil: (n) => Math.ceil(toNumber(n)),
   abs: (n) => Math.abs(toNumber(n)),
+  /**
+   * pow(2, 10) is 1024: a number raised to a power, for compound growth and
+   * loan payments, like pow(1 + rate / 12, years * 12). A result too large to
+   * show, or with no real answer (pow(-8, 0.5)), is nothing (—), not Infinity.
+   */
+  pow: (base, exp) => {
+    const x = Math.pow(toNumber(base), toNumber(exp));
+    return isFinite(x) ? x : NaN;
+  },
   fixed: (n, d = 2) => toNumber(n).toFixed(toNumber(d)),
   /** money(2400) is $2,400.00, money(-84.1) is -$84.10; money(n, 'EUR') for another currency. */
   money: (n, currency = "USD") => {

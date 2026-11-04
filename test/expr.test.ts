@@ -30,6 +30,24 @@ describe("expressions", () => {
     expect(ev("max(a, 4)", { a: 9 })).toEqual({ ok: true, value: 9 });
   });
 
+  it("raises a number to a power with pow()", () => {
+    expect(ev("pow(2, 10)")).toEqual({ ok: true, value: 1024 });
+    expect(ev("pow(9, 0.5)")).toEqual({ ok: true, value: 3 });
+    expect(ev("pow(2, -1)")).toEqual({ ok: true, value: 0.5 });
+    expect(ev("pow(x, 0)", { x: 7 })).toEqual({ ok: true, value: 1 });
+    // A $300,000, 30-year loan at 6.5%: the standard monthly payment.
+    const r = "rate / 1200", n = "years * 12";
+    const payment = ev(`round(amount * ${r} * pow(1 + ${r}, ${n}) / (pow(1 + ${r}, ${n}) - 1), 2)`, { amount: 300000, rate: 6.5, years: 30 });
+    expect(payment).toEqual({ ok: true, value: 1896.2 });
+  });
+
+  it("gives nothing, not Infinity, when pow() has no showable answer", () => {
+    for (const bad of ["pow(10, 400)", "pow(-8, 0.5)", "pow('a', 2)", "pow(0, -1)"]) {
+      const out = ev(bad);
+      expect(out.ok && Number.isNaN(out.value), bad).toBe(true);
+    }
+  });
+
   it("rejects anything that could reach JavaScript", () => {
     for (const bad of ["alert(1)", "constructor.constructor('x')()", "window", "this", "a.b", "x = 1", "`t`"]) {
       expect(ev(bad, { a: { b: 1 } }).ok, bad).toBe(false);

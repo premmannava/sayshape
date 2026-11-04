@@ -24,9 +24,9 @@ function fakeModel(byRequest: (request: string, attempt: number) => string) {
 const config = { url: "http://model.test/v1", model: "fake" };
 
 describe("evaluation set", () => {
-  it("has 41 requests with unique ids, expecting only elements that exist", () => {
-    expect(cases).toHaveLength(41);
-    expect(new Set(cases.map((c) => c.id)).size).toBe(41);
+  it("has 42 requests with unique ids, expecting only elements that exist", () => {
+    expect(cases).toHaveLength(42);
+    expect(new Set(cases.map((c) => c.id)).size).toBe(42);
     for (const c of cases) for (const e of (c.expect ?? []).flat()) expect(registry.has(e), `${c.id}: ${e}`).toBe(true);
   });
 });
@@ -185,6 +185,26 @@ card
       `card
   text "Log in" style=title
   button "Log in" on=emit:login
+`,
+    ],
+    "int-mortgage": [
+      `state amount=300000 rate=6.5 years=30
+derive r={rate / 1200}
+derive n={years * 12}
+derive payment={amount * r * pow(1 + r, n) / (pow(1 + r, n) - 1)}
+card
+  slider "Loan: {money(amount)}" bind=amount min=50000 max=1000000 step=5000
+  slider "Rate: {rate}%" bind=rate min=1 max=12 step=0.1
+  slider "Term: {years} years" bind=years min=5 max=40
+  stat label="Monthly payment" value="{money(payment)}"
+`,
+      // Without pow() a model can only guess: simple interest spread over the term.
+      `state amount=300000 rate=6.5 years=30
+card
+  slider "Loan: {money(amount)}" bind=amount min=50000 max=1000000 step=5000
+  slider "Rate: {rate}%" bind=rate min=1 max=12 step=0.1
+  slider "Term: {years} years" bind=years min=5 max=40
+  stat label="Monthly payment" value="{money((amount + amount * rate / 100 * years) / (years * 12))}"
 `,
     ],
     "hard-celebrate": [
