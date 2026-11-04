@@ -9,9 +9,7 @@ import GalleryItem from "./GalleryItem.vue";
     <header class="gallery-head">
       <h1>Examples</h1>
       <p>
-        Each example is a saved SayShape spec rendered by the real engine in your browser. They were written for this site, not generated
-        live, and every name, price and record in them is made up. Nothing here is connected to a backend: when a spec emits an event,
-        this page shows it and stops there.
+        Saved SayShape specs, running on the real engine in your browser. Press, type and drag: everything works. Names and numbers are made up.
       </p>
       <nav class="gallery-index" aria-label="Examples on this page">
         <a v-for="e in examples" :key="e.id" :href="`#${e.id}`">{{ e.title }}</a>
