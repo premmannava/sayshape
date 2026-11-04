@@ -91,7 +91,9 @@ tabs bind=view
       g.fillText(fitText(g, cell.label, Math.max(0, cell.w - 8)), cell.x + cell.w / 2, box.y + BAR_H / 2);
       if (on) {
         // A slim accent rule on the baseline, rounded at its ends.
-        ctx.roundRect(cell.x + 8, box.y + BAR_H - 2, Math.max(0, cell.w - 16), 2, 1);
+        const underlineX = ctx.tween(box.node, "tabs:underline:x", cell.x + 8, 240);
+        const underlineW = ctx.tween(box.node, "tabs:underline:w", Math.max(0, cell.w - 16), 240);
+        ctx.roundRect(underlineX, box.y + BAR_H - 2, underlineW, 2, 1);
         g.fillStyle = c.accent;
         g.fill();
       }
