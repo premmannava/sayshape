@@ -109,7 +109,8 @@ export const tasks: Task[] = [
   // Dashboards
   { id: "d1", category: "dashboard", request: "Sales dashboard. Orders: A101 Acme NA Direct Shipped $12,400; A102 Globex EU Partner Pending $8,600; A103 Initech NA Online Shipped $23,100; A104 Umbrella APAC Direct Cancelled $4,100; A105 Stark NA Direct Pending $31,500; A106 Wayne EU Online Shipped $17,800; A107 Tyrell APAC Partner Shipped $9,900; A108 Soylent APAC Online Pending $14,300. Include a region filter (All, NA, EU, APAC), a customer search, KPIs for revenue, order count, average order and pending count that follow the filter, a chart of the top customers, and a sortable orders table.",
     checks: [
-      { label: "revenue for all regions ($121,700)", shows: [/121[.,]7/] },
+      // $117,600 leaves out the cancelled order, which is a fair reading of revenue.
+      { label: "revenue for all regions ($121,700, or $117,600 without the cancelled order)", shows: [/121[.,]7|117[.,]6/] },
       { label: "EU shows $26,400 and hides NA orders", steps: [{ press: /^\s*EU\s*$/ }], shows: [/26[.,]4/], hides: [/Stark/] },
     ] },
   { id: "d2", category: "dashboard", request: "Support dashboard. Tickets per day Mon-Fri: 34, 41, 29, 38, 45. Open tickets: #201 'Login fails' High Ana; #202 'Slow export' Medium Ben; #203 'Typo on page' Low Ana; #204 'Data missing' High Chen; #205 'Billing error' Medium Chen. Show open count, high-priority count, a chart of tickets per day, and the open tickets table with a priority filter (All, High, Medium, Low).",

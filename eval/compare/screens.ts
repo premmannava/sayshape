@@ -36,15 +36,33 @@ export function sayshapeScreen(spec: string): Screen {
   const errors = ui.diagnostics.filter((d) => d.severity === "error").map((d) => `line ${d.line}: ${d.message}`);
 
   // Text drawn inside a region, for regions with no text of their own (table headers, segmented options).
-  const textIn = (b: { x: number; y: number; w: number; h: number }): string =>
+  const piecesIn = (b: { x: number; y: number; w: number; h: number }): string[] =>
     ui.drawOps
       .filter((o) => o.op === "fillText")
       .filter((o) => {
         const x = Number(o.args[1]), y = Number(o.args[2]);
         return x >= b.x - 1 && x <= b.x + b.w + 1 && y >= b.y - 1 && y <= b.y + b.h + 1;
       })
-      .map((o) => String(o.args[0]))
-      .join(" ");
+      .map((o) => String(o.args[0]));
+  // Each piece on its own and all together: a popup's option sits over other text, and a label can span pieces.
+  const labelsIn = (b: { x: number; y: number; w: number; h: number }): string[] => { const p = piecesIn(b); return [...p, p.join(" ")]; };
+
+  /** Choose an option by its text in any select on screen: open it, press the option, or close it again. */
+  const chooseOption = (label: RegExp): boolean => {
+    for (const f of ui.findAll("select").filter((x) => x.box)) {
+      const b = f.box!;
+      ui.click(b.x + b.w / 2, b.y + b.h - 18);
+      ui.loom.renderNow();
+      const option = ui.popup?.regions.find((r) => piecesIn(r.box).some((t) => label.test(t)));
+      if (option) {
+        ui.click(option.box.x + option.box.w / 2, option.box.y + option.box.h / 2);
+        ui.loom.renderNow();
+        return true;
+      }
+      if (ui.popup) { ui.key("Escape"); ui.loom.renderNow(); }
+    }
+    return false;
+  };
 
   return {
     errors,
@@ -63,15 +81,17 @@ export function sayshapeScreen(spec: string): Screen {
           const detail = typeof h.detail === "string" || typeof h.detail === "number" ? String(h.detail).replace(/^[a-z]+:/, "") : "";
           const own = ui.findAll({ id: h.box.node.id })[0]?.shownText ?? "";
           // Each source on its own, so ^…$ patterns work: the element's text, its part's name, or text drawn inside it.
-          return { h, labels: [own, detail, textIn(h.box)].filter(Boolean) };
+          return { h, labels: [own, detail, ...labelsIn(h.box)].filter(Boolean) };
         })
         .filter((m) => m.labels.some((l) => label.test(l)))
         .sort((a, b) => a.h.box.w * a.h.box.h - b.h.box.w * b.h.box.h);
       const hit = matches[0]?.h;
-      if (!hit) return false;
-      ui.click(hit.box.x + hit.box.w / 2, hit.box.y + hit.box.h / 2);
-      ui.loom.renderNow();
-      return true;
+      if (hit) {
+        ui.click(hit.box.x + hit.box.w / 2, hit.box.y + hit.box.h / 2);
+        ui.loom.renderNow();
+        return true;
+      }
+      return chooseOption(label);
     },
     injected: () => false,
     destroy: () => ui.destroy(),
@@ -164,17 +184,31 @@ export async function htmlScreen(html: string): Promise<Screen> {
     },
     async press(label) {
       // Text with a space between elements, so a row reads "A3 Initech", not "A3Initech".
-      const spaced = (el: Element): string => [...el.childNodes].map((n) => (n.nodeType === 3 ? n.textContent ?? "" : n.nodeType === 1 ? spaced(n as Element) : "")).join(" ");
+      // A dropdown's options aren't part of the text around it: they're chosen, not pressed.
+      const spaced = (el: Element): string => [...el.childNodes].map((n) => (n.nodeType === 3 ? n.textContent ?? "" : n.nodeType === 1 && (n as Element).tagName !== "SELECT" ? spaced(n as Element) : "")).join(" ");
       const labels = (el: Element) => [spaced(el), el.getAttribute("aria-label") ?? "", el.tagName === "INPUT" ? (el as HTMLInputElement).value : "", el.getAttribute("title") ?? "", el.id ? d.querySelector(`label[for="${el.id}"]`)?.textContent ?? "" : ""]
         .map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean);
-      const candidates = [...d.querySelectorAll(pressable)]
-        .filter((el) => !(el as HTMLButtonElement).disabled && labels(el).some((l) => label.test(l)))
+      const matching = [...d.querySelectorAll(pressable)].filter((el) => !(el as HTMLButtonElement).disabled && labels(el).some((l) => label.test(l)));
+      // The innermost match: a button inside a header cell, not the cell; a label inside a list row, not the row.
+      const candidates = matching
+        .filter((el) => !matching.some((other) => other !== el && el.contains(other)))
         .sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0));
       const el = candidates[0] as HTMLElement | undefined;
-      if (!el) return false;
-      el.click();
-      await pause();
-      return true;
+      if (el) {
+        el.click();
+        await pause();
+        return true;
+      }
+      // Otherwise choose a matching option in a dropdown, as a person would.
+      for (const sel of d.querySelectorAll("select")) {
+        const opt = [...sel.options].find((o) => label.test(o.textContent?.replace(/\s+/g, " ").trim() ?? ""));
+        if (!opt || sel.disabled) continue;
+        sel.value = opt.value;
+        for (const ev of ["input", "change"]) sel.dispatchEvent(new w.Event(ev, { bubbles: true }));
+        await pause();
+        return true;
+      }
+      return false;
     },
     injected: () => d.querySelector(INJECTED) !== null,
     destroy: () => w.close(),
