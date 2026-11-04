@@ -383,7 +383,8 @@ ${comps.map((c) => componentBlock(c, examples && ctx.valid(componentExampleSpec(
 
   const rules = [
     "- Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.",
-    ...(has("card") ? ["- Start with a card unless the screen needs several."] : []),
+    ...(has("card") ? ["- Use cards to group related content, not around every title or section. Keep page headings outside a decorative hero card."] : []),
+    ...(has("card") && has("grid") ? ["- Dashboards: put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Avoid wrapping an already framed table inside another card unless it also needs controls."] : []),
     "- Keep screens focused: one task per screen, short labels, real-looking values.",
     ...(has("grid") || has("stat") ? [`- Screens may be narrow (a phone, a chat).${has("grid") ? " For side-by-side figures use grid min=140 rather than row." : ""}${has("stat") ? " Keep stat values short: compact() for large numbers." : ""}`] : []),
   ];
@@ -458,7 +459,8 @@ ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty
 ${comps.map((c) => `- ${compactLine(c)}${showExample(c) ? `\n    example:\n${indent(c.example!, "      ")}` : ""}`).join("\n")}`);
   const rules = [
     "- Use only these elements and props. No colors, sizes or fonts: choose roles with tone=, variant= and style=; for \"red\" or \"big\", use the closest role.",
-    `- ${has("card") ? "Start with a card unless the screen needs several. " : ""}One task per screen, short labels, realistic values.`,
+    `- ${has("card") ? "Cards group related content; leave page titles outside decorative cards. " : ""}One task per screen, short labels, realistic values.`,
+    ...(has("card") && has("grid") ? ["- Dashboards: grid min=170 gap=12 for peer KPI/chart cards (equal heights per row); card pad=18 gap=10 for tighter panels; avoid nested framed tables and giant outer wrapper cards."] : []),
     ...(has("grid") || has("stat") ? [`- Screens may be narrow.${has("grid") ? " Side-by-side figures: grid min=140, not row." : ""}${has("stat") ? " Short stat values: compact() for large numbers." : ""}`] : []),
     ...(has("screen") ? ["- For several screens, write the starting screen first."] : []),
   ];

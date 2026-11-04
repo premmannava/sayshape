@@ -107,14 +107,14 @@ ELEMENTS
     pad=<number>  Inner padding in pixels (default 0).
     children: any elements
 
-  row  — Places its children side by side, splitting the width equally. On a narrow screen, children that don't fit move onto the next line.
+  row  — Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.
     gap=<number>  Space between children in pixels (default 10).
     pad=<number>  Inner padding in pixels (default 0).
     align=<top|center|bottom>  Vertical alignment of children: top, center or bottom.
     wrap=<boolean>  Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line.
     children: any elements
 
-  grid  — Places children in as many equal columns as fit, so the same screen works on a phone and a desktop.
+  grid  — Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
     min=<number>  Narrowest a column may be, in pixels (default 200).
     gap=<number>  Space between children in pixels (default 14).
     children: any elements
@@ -405,7 +405,8 @@ ELEMENTS
 
 RULES
 - Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.
-- Start with a card unless the screen needs several.
+- Use cards to group related content, not around every title or section. Keep page headings outside a decorative hero card.
+- Dashboards: put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Avoid wrapping an already framed table inside another card unless it also needs controls.
 - Keep screens focused: one task per screen, short labels, real-looking values.
 - Screens may be narrow (a phone, a chat). For side-by-side figures use grid min=140 rather than row. Keep stat values short: compact() for large numbers.
 - For several screens, write the starting screen first: it shows as soon as it arrives.

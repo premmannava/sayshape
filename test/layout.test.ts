@@ -34,6 +34,48 @@ describe("layout", () => {
     expect(button!.y - stat!.y).toBe((54 - lightTheme.control.height) / 2);
   });
 
+  it("gives sibling grid cards equal height without shifting their content", () => {
+    const { box } = lay(`grid min=140 gap=12
+  card
+    text "Revenue"
+    text "Monthly trend"
+    text "Renewals"
+  card
+    text "Churn"`);
+    const [tall, short] = box.children[0]!.children;
+    expect(tall!.h).toBe(short!.h);
+    expect(tall!.y).toBe(short!.y);
+    expect(short!.children[0]!.y).toBe(short!.y + 22);
+    expect(short!.h).toBeGreaterThan(short!.children[0]!.h + 44);
+  });
+
+  it("aligns sibling card rows but preserves explicit bottom alignment", () => {
+    const spec = `row gap=12
+  card
+    text "Revenue"
+    text "Trend"
+  card
+    text "Churn"`;
+    const [tall, short] = lay(spec).box.children[0]!.children;
+    expect(tall!.h).toBe(short!.h);
+    expect(tall!.y).toBe(short!.y);
+    const [bottomTall, bottomShort] = lay(spec.replace("row gap=12", "row gap=12 align=bottom")).box.children[0]!.children;
+    expect(bottomTall!.h).toBeGreaterThan(bottomShort!.h);
+    expect(bottomShort!.y).toBeGreaterThan(bottomTall!.y);
+  });
+
+  it("marks embedded tables for a single outer frame", () => {
+    const spec = `state items=[{name: "One"}, {name: "Two"}]
+card
+  table items=items
+    table-column "Name" field=name`;
+    const nested = lay(spec).box.children[0]!.children[0]!;
+    expect(nested.node.type).toBe("table");
+    expect(nested.data?.embeddedInCard).toBe(true);
+    const standalone = lay(spec.replace("card\n  table", "table").replace("    table-column", "  table-column")).box.children[0]!;
+    expect(standalone.data?.embeddedInCard).toBeUndefined();
+  });
+
   it("wraps long text and grows taller", () => {
     const short = lay(`text "Short"\n`, 300).box.children[0]!.h;
     const long = lay(`text "${"word ".repeat(40)}"\n`, 300).box.children[0]!.h;

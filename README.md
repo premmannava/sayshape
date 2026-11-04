@@ -469,7 +469,7 @@ column gap=6
 
 ### `row`
 
-Places its children side by side, splitting the width equally. On a narrow screen, children that don't fit move onto the next line.
+Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -488,7 +488,7 @@ row gap=10
 
 ### `grid`
 
-Places children in as many equal columns as fit, so the same screen works on a phone and a desktop.
+Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
 
 | Prop | Type | Description |
 |---|---|---|
