@@ -91,17 +91,21 @@ card on=emit:open_order
     g.save();
     g.fillStyle = c.raised;
     g.shadowColor = c.shadow;
-    g.shadowBlur = hovered ? 24 : 14;
-    g.shadowOffsetY = hovered ? 6 : 3;
+    g.shadowBlur = hovered ? 18 : 10;
+    g.shadowOffsetY = hovered ? 4 : 2;
     g.fill();
-    g.shadowBlur = 1.5;
+    g.shadowBlur = 1;
     g.shadowOffsetY = 1;
     g.fill();
     g.restore();
     if (hovered && ctx.isPressed(box.node)) fillTint(g, c.ink, 0.03);
     g.strokeStyle = c.line;
     g.lineWidth = 1;
+    // Softer perimeter; elevation and spacing separate cards from the canvas.
+    g.save();
+    g.globalAlpha *= 0.72;
     g.stroke();
+    g.restore();
     if (hovered) {
       // The border firms up toward the ink rather than turning the accent: quieter, and still clear.
       g.save();
