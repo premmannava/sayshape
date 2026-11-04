@@ -102,6 +102,7 @@ Publishing: `npm publish` from this folder runs the tests and the build first (`
 
 ```bash
 npm test           # server and helpers, against an in-memory MCP client
+npm run eval       # a real model through this server: right first time, retries, top mistakes
 npm run typecheck
 npm run build
 npm run test:e2e   # the built view in Chromium, inside a sandboxed iframe driven by the MCP Apps host bridge
@@ -110,3 +111,14 @@ npm run test:e2e   # the built view in Chromium, inside a sandboxed iframe drive
 `test:e2e` runs two browser checks. The first streams a spec into the view, checks the canvas was painted and the height reported, presses an `emit:` button with the keyboard, checks the message that comes back and switches to dark mode. The second (`scripts/e2e-data.mjs [database.db]`) starts the built server with `--data`, plays the model (describe, query, show), lets the view fetch the dataset through the host bridge, and checks the rows in the interface match the database exactly. Screenshots go to `e2e-output/`.
 
 The server bundles the engine from `../src`, so the guide, the parser and the view always match the library they were built with. The MCP packages (`@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `zod`) are dependencies of this package only. The SayShape library itself still has none.
+
+### Measuring a model
+
+`npm run eval` sends every request in `../eval/cases.ts` to a model the way a chat app does: the server's instructions and tools, with the model calling `sayshape_docs` and `show_interface` until it answers in text. The report (in `../eval/results/mcp-<date>-<model>/`) says how often the first interface had nothing to fix, how many extra calls it took, and which mistakes caused them, grouped and counted, so the common ones can be fixed at the source.
+
+```bash
+OPENAI_API_KEY=sk-... npm run eval                    # GPT-4.1
+npm run eval -- --model gpt-4.1-mini --only dash,shop # another model, some requests
+```
+
+The key can also go in `LOOM_API_KEY` in `../.env.local`. Any OpenAI-compatible server works through `LOOM_MODEL_URL` and `LOOM_MODEL`.
