@@ -82,24 +82,34 @@ card on=emit:open_order
   },
   paint(box, ctx) {
     const { g, theme } = ctx;
+    const c = theme.colors;
+    const pressable = ctx.props(box.node).has("on");
+    const hovered = pressable && ctx.isHovered(box.node);
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
-    // Two soft shadows, a wide one and a close one, so the card sits above the page rather than
-    // being outlined on it. They stay inside the screen's 20px padding.
+    // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
+    // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
     g.save();
-    g.fillStyle = theme.colors.surface;
-    g.shadowColor = theme.colors.shadow;
-    g.shadowBlur = 16;
-    g.shadowOffsetY = 4;
+    g.fillStyle = c.raised;
+    g.shadowColor = c.shadow;
+    g.shadowBlur = hovered ? 24 : 14;
+    g.shadowOffsetY = hovered ? 6 : 3;
     g.fill();
-    g.shadowBlur = 2;
+    g.shadowBlur = 1.5;
     g.shadowOffsetY = 1;
     g.fill();
     g.restore();
-    const pressable = ctx.props(box.node).has("on");
-    if (pressable && ctx.isHovered(box.node)) fillTint(g, theme.colors.accent, ctx.isPressed(box.node) ? 0.1 : 0.05);
-    g.strokeStyle = pressable && ctx.isHovered(box.node) ? theme.colors.accent : theme.colors.line;
+    if (hovered && ctx.isPressed(box.node)) fillTint(g, c.ink, 0.03);
+    g.strokeStyle = c.line;
     g.lineWidth = 1;
     g.stroke();
+    if (hovered) {
+      // The border firms up toward the ink rather than turning the accent: quieter, and still clear.
+      g.save();
+      g.globalAlpha *= 0.18;
+      g.strokeStyle = c.ink;
+      g.stroke();
+      g.restore();
+    }
     if (pressable) ctx.addHit(box);
   },
 };
@@ -181,13 +191,20 @@ export const list: ComponentDef = {
   paint(box, ctx) {
     const { g, theme } = ctx;
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
-    g.fillStyle = theme.colors.surface;
+    g.fillStyle = theme.colors.raised;
     g.fill();
   },
   paintOver(box, ctx) {
     const { g, theme } = ctx;
+    // Separators are lighter than the frame, so rows read as one group.
+    g.save();
+    g.globalAlpha *= 0.7;
     g.fillStyle = theme.colors.line;
-    box.children.slice(1).forEach((k) => g.fillRect(k.x + 16, k.y, k.w - 16, 1));
+    box.children.slice(1).forEach((k) => {
+      const inset = ITEM_PAD_X + ((k.data as { iconW?: number } | undefined)?.iconW ?? 0);
+      g.fillRect(k.x + inset, k.y, k.w - inset, 1);
+    });
+    g.restore();
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
     g.strokeStyle = theme.colors.line;
     g.lineWidth = 1;
@@ -236,7 +253,7 @@ export const listItem: ComponentDef = {
     if (pressable && ctx.isHovered(box.node)) {
       g.beginPath();
       g.rect(box.x + 1, box.y + 1, box.w - 2, box.h - 2);
-      fillTint(g, c.accent, ctx.isPressed(box.node) ? 0.1 : 0.05);
+      fillTint(g, c.ink, ctx.isPressed(box.node) ? 0.07 : 0.035);
     }
     // A leading icon in the accent, level with the title's first line.
     const name = p.str("icon");
@@ -312,8 +329,8 @@ accordion "Shipping" bind=shipping
     const d = box.data as { lines: string[]; font: string; lh: number; headerH: number; open: boolean };
     const header = partBox(box, box.x, box.y, box.w, d.headerH);
     if (ctx.isHovered(box.node, "header")) {
-      ctx.roundRect(header.x, header.y + 2, header.w, header.h - 4, theme.radius.sm);
-      fillTint(g, c.accent, 0.05);
+      ctx.roundRect(header.x - 6, header.y + 2, header.w + 12, header.h - 4, theme.radius.sm);
+      fillTint(g, c.ink, 0.035);
     }
     g.font = d.font;
     g.fillStyle = c.ink;

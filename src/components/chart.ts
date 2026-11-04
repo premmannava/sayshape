@@ -418,6 +418,8 @@ const plotHeight = (w: number) => Math.round(Math.max(140, Math.min(260, w * 0.4
 const pieSize = (w: number) => Math.min(w, Math.round(Math.max(140, Math.min(220, w * 0.45))));
 /** Room inside the plot so dots at the top and bottom stay within it. */
 const INSET = 5;
+/** A donut's hole as a share of its radius: a slim ring reads as more refined than a thick one. */
+const DONUT_INNER = 0.68;
 /** Legend swatches: size, and the space between a swatch and its name. */
 const SWATCH = 10;
 const SWATCH_GAP = 6;
@@ -534,8 +536,8 @@ function axisGeometry(
   const widest = Math.min(Math.max(...widths), 120);
   const every = Math.max(1, Math.ceil((widest + t.space.sm) / slotW));
   const room = slotW * every - t.space.xs;
-  const barW = Math.min(slotW * 0.7, 56);
-  const group = grouped ? Math.min(slotW * 0.8, ns * 40 + (ns - 1) * BAR_GAP) : barW;
+  const barW = Math.min(slotW * 0.6, 44);
+  const group = grouped ? Math.min(slotW * 0.74, ns * 34 + (ns - 1) * BAR_GAP) : barW;
   const each = grouped ? (group - (ns - 1) * BAR_GAP) / ns : barW;
 
   const slots: ChartSlot[] = d.slots.map((s, i) => {
@@ -723,13 +725,13 @@ function roundGeometry(box: { w: number }, d: PieData, kind: "pie" | "donut", fo
     a = slice.end;
     return slice;
   });
-  const inner = kind === "donut" ? Math.round(r * 0.6) : 0;
+  const inner = kind === "donut" ? Math.round(r * DONUT_INNER) : 0;
 
   let center: NonNullable<ChartGeometry["pie"]>["center"];
   if (inner) {
     const text = valueText(d.total, format);
     const width = inner * 2 * 0.85;
-    const fonts = [themeFont(t, 700, t.text.title), themeFont(t, 600, t.text.lead), themeFont(t, 600, t.text.body)];
+    const fonts = [themeFont(t, 600, t.text.title), themeFont(t, 600, t.text.lead), themeFont(t, 600, t.text.body)];
     const font = fonts.find((f) => m.width(text, f) <= width) ?? fonts[fonts.length - 1]!;
     const fontSize = font === fonts[0] ? t.text.title : font === fonts[1] ? t.text.lead : t.text.body;
     const captionFont = themeFont(t, 400, t.text.caption);
@@ -806,8 +808,8 @@ function paintChartLoading(box: Box, ctx: PaintCtx): void {
         // A ring: the outer circle, then the hole the other way round.
         s.g.moveTo(cx + r, cy);
         s.g.arc(cx, cy, r, 0, Math.PI * 2);
-        s.g.moveTo(cx + r * 0.6, cy);
-        s.g.arc(cx, cy, r * 0.6, Math.PI * 2, 0, true);
+        s.g.moveTo(cx + r * DONUT_INNER, cy);
+        s.g.arc(cx, cy, r * DONUT_INNER, Math.PI * 2, 0, true);
         s.g.closePath();
       } else s.circle(cx, cy, r);
       for (let i = 0; i < GHOST_LEGEND_ROWS; i++) {
@@ -939,7 +941,7 @@ function paintHbar(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, colo
       if (w <= 0.25) return;
       const right = full.x >= zero - 0.01;
       const b = { x: right ? full.x : full.x + full.w - w, y: full.y, w, h: full.h };
-      ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, Math.min(theme.radius.sm, b.w / 2, b.h / 2));
+      ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, Math.min(4, b.w / 2, b.h / 2));
       g.fillStyle = colorOf(k);
       g.fill();
     });
@@ -1108,19 +1110,23 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       g.strokeStyle = c.line;
       // Lighter than other lines: the grid is a guide, not part of the data.
       g.save();
-      g.globalAlpha *= 0.6;
+      g.globalAlpha *= 0.55;
       g.stroke();
       g.restore();
       g.fillStyle = c.muted;
-      g.fillText(tk.label, px - theme.space.sm / 2 - 2, oy + tk.y);
+      g.fillText(tk.label, px - theme.space.sm, oy + tk.y);
     }
     if (d.zeroY !== null) {
       const zy = Math.round(oy + d.zeroY) + 0.5;
       g.beginPath();
       g.moveTo(px, zy);
       g.lineTo(px + pw, zy);
+      // The zero line anchors the bars: firmer than the grid, quieter than the data.
       g.strokeStyle = c.muted;
+      g.save();
+      g.globalAlpha *= 0.45;
       g.stroke();
+      g.restore();
     }
 
     g.globalAlpha = base;
@@ -1137,8 +1143,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           const h = full.h * grow;
           if (h <= 0.25) return;
           const b = { x: full.x, y: up ? full.y + full.h - h : full.y, w: full.w, h };
-          const r = Math.min(theme.radius.md / 2 + 1, b.w / 2, b.h / 2);
-          ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, r);
+          barPath(g, ox + b.x, oy + b.y, b.w, b.h, Math.min(4, b.w / 2, b.h), up);
           g.fillStyle = colorOf(k);
           g.fill();
         });
@@ -1166,7 +1171,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           fillTint(g, color, 0.08);
         }
       }
-      g.lineWidth = 2.5;
+      g.lineWidth = 2;
       g.lineJoin = "round";
       g.lineCap = "round";
       d.seriesSegments.forEach((runs, k) => {
@@ -1185,10 +1190,10 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           for (const pt of run) {
             if (slotW < 10 && run.length > 1) continue;
             g.beginPath();
-            g.arc(ox + pt.x, oy + pt.y, run.length === 1 ? 4 : 3, 0, Math.PI * 2);
-            g.fillStyle = c.surface;
+            g.arc(ox + pt.x, oy + pt.y, run.length === 1 ? 3.5 : 2.75, 0, Math.PI * 2);
+            g.fillStyle = c.raised;
             g.fill();
-            g.lineWidth = 2;
+            g.lineWidth = 1.75;
             g.strokeStyle = colorOf(k);
             g.stroke();
           }
@@ -1209,6 +1214,28 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
 };
 
 type PaintCtx = Parameters<NonNullable<ComponentDef["paint"]>>[1];
+
+/** A bar rounded only at its free end (the top of a rising bar, the bottom of a falling one), square on the axis. */
+function barPath(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, up: boolean): void {
+  const rr = Math.max(0, Math.min(r, w / 2, h));
+  g.beginPath();
+  if (up) {
+    g.moveTo(x, y + h);
+    g.lineTo(x, y + rr);
+    g.arcTo(x, y, x + rr, y, rr);
+    g.lineTo(x + w - rr, y);
+    g.arcTo(x + w, y, x + w, y + rr, rr);
+    g.lineTo(x + w, y + h);
+  } else {
+    g.moveTo(x, y);
+    g.lineTo(x + w, y);
+    g.lineTo(x + w, y + h - rr);
+    g.arcTo(x + w, y + h, x + w - rr, y + h, rr);
+    g.lineTo(x + rr, y + h);
+    g.arcTo(x, y + h, x, y + h - rr, rr);
+  }
+  g.closePath();
+}
 
 function paintRound(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, palette: readonly string[], reveal = 1): void {
   const { g, theme } = ctx;
@@ -1239,7 +1266,7 @@ function paintRound(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, pal
   if (pie.slices.length > 1) {
     g.lineWidth = 2;
     g.lineCap = "butt";
-    g.strokeStyle = c.surface;
+    g.strokeStyle = c.raised;
     for (const s of pie.slices) {
       if (s.start >= sweep) break;
       const a = at(s.start);
@@ -1273,7 +1300,7 @@ function paintLegend(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, co
   g.font = d.legendFont;
   g.textBaseline = "middle";
   for (const it of d.legend) {
-    ctx.roundRect(ox + it.swatch.x, oy + it.swatch.y, it.swatch.w, it.swatch.h, 2);
+    ctx.roundRect(ox + it.swatch.x, oy + it.swatch.y, it.swatch.w, it.swatch.h, 3);
     g.fillStyle = colorOf(it.color);
     g.fill();
     g.textAlign = "left";

@@ -6,7 +6,14 @@
 export interface Theme {
   name: string;
   colors: {
+    /** The base the interface sits on: the page, and inset fields such as inputs. */
     surface: string;
+    /**
+     * Lifted surfaces: cards, lists and popups. The same as surface in light
+     * themes (cards are set apart by a border and a soft shadow); a step
+     * lighter in dark ones, so elevation reads as layered charcoal.
+     */
+    raised: string;
     ink: string;
     muted: string;
     line: string;
@@ -43,13 +50,13 @@ export interface Theme {
 
 const base = {
   space: { xs: 4, sm: 8, md: 14, lg: 22, xl: 32 },
-  radius: { sm: 5, md: 10, lg: 16 },
+  radius: { sm: 6, md: 8, lg: 12 },
   font: {
     family: '"Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif',
     mono: '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace',
   },
-  text: { caption: 12, body: 15, lead: 18, title: 24, display: 32 },
-  control: { height: 42 },
+  text: { caption: 12, body: 14, lead: 16, title: 20, display: 30 },
+  control: { height: 40 },
 };
 
 export const lightTheme: Theme = {
@@ -57,21 +64,22 @@ export const lightTheme: Theme = {
   ...base,
   colors: {
     surface: "#FFFFFF",
-    ink: "#172030",
-    muted: "#5B6577",
-    line: "#D3D8E0",
-    accent: "#0E7C76",
+    raised: "#FFFFFF",
+    ink: "#14171C",
+    muted: "#5E6573",
+    line: "#E1E4E9",
+    accent: "#0F766E",
     onAccent: "#FFFFFF",
-    good: "#2E7D32",
+    good: "#15803D",
     warn: "#B45309",
-    bad: "#C62828",
+    bad: "#D32F2F",
     focus: "#2563EB",
-    land: "#D3D9E2",
+    land: "#DCE0E6",
     landHighlight: "#A6D6D1",
-    landHover: "#B3BDCB",
+    landHover: "#BCC3CD",
     debug: "#C2410C",
-    shadow: "rgba(16, 24, 40, 0.07)",
-    series1: "#0E7C76",
+    shadow: "rgba(15, 20, 30, 0.06)",
+    series1: "#0F766E",
     series2: "#A2461A",
     series3: "#64399D",
     series4: "#AD8B1C",
@@ -84,22 +92,23 @@ export const darkTheme: Theme = {
   name: "dark",
   ...base,
   colors: {
-    surface: "#1C222D",
-    ink: "#E6EAF0",
-    muted: "#98A2B3",
-    line: "#2A3240",
-    accent: "#3CC2B8",
-    onAccent: "#06211F",
-    good: "#6CCB74",
-    warn: "#F5B454",
-    bad: "#F87171",
+    surface: "#111316",
+    raised: "#191B1F",
+    ink: "#ECEDEF",
+    muted: "#9BA1AB",
+    line: "#2C2F35",
+    accent: "#2EC4B6",
+    onAccent: "#04211E",
+    good: "#5CC98A",
+    warn: "#EDB04D",
+    bad: "#F2777E",
     focus: "#7AA7FF",
-    land: "#2C3443",
-    landHighlight: "#1E5B57",
-    landHover: "#3D495C",
+    land: "#2A2E35",
+    landHighlight: "#1D5753",
+    landHover: "#3A3F48",
     debug: "#FB923C",
-    shadow: "rgba(0, 0, 0, 0.32)",
-    series1: "#3CC2B8",
+    shadow: "rgba(0, 0, 0, 0.45)",
+    series1: "#2EC4B6",
     series2: "#B74C05",
     series3: "#7C61A8",
     series4: "#B08E26",
@@ -126,6 +135,51 @@ function followAccent(from: Theme["colors"], to: Theme["colors"], patch: Partial
   if (patch.accent !== undefined && patch.series1 === undefined && from.series1 === from.accent) to.series1 = to.accent;
 }
 
+/**
+ * A color as red, green, blue and alpha, from #rgb, #rrggbb, #rrggbbaa or
+ * rgb()/rgba() (what browsers give back for a resolved CSS color), or null.
+ */
+export function parseColor(v: string): [number, number, number, number] | null {
+  const s = v.trim().toLowerCase();
+  let m = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/.exec(s);
+  if (m) {
+    const h = m[1]!.length === 3 ? [...m[1]!].map((c) => c + c).join("") : m[1]!;
+    const n = (i: number) => parseInt(h.slice(i, i + 2), 16);
+    return [n(0), n(2), n(4), h.length === 8 ? n(6) / 255 : 1];
+  }
+  m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/.exec(s);
+  if (!m) return null;
+  const a = m[4] === undefined ? 1 : m[4].endsWith("%") ? Number(m[4].slice(0, -1)) / 100 : Number(m[4]);
+  const out: [number, number, number, number] = [Number(m[1]), Number(m[2]), Number(m[3]), a];
+  return out.every((x) => Number.isFinite(x)) ? out : null;
+}
+
+/** a mixed toward b by t (0 = a, 1 = b), as #rrggbb; null if either isn't an opaque color. */
+export function mixColors(a: string, b: string, t: number): string | null {
+  const x = parseColor(a), y = parseColor(b);
+  if (!x || !y || x[3] < 1 || y[3] < 1) return null;
+  const c = (i: number) => Math.round(x[i]! + (y[i]! - x[i]!) * t).toString(16).padStart(2, "0");
+  return `#${c(0)}${c(1)}${c(2)}`;
+}
+
+/** Whether a color is dark (low luminance), for choosing how surfaces layer. */
+export function isDark(color: string): boolean {
+  const c = parseColor(color);
+  if (!c) return false;
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] < 128;
+}
+
+/**
+ * When an override changes the surface but says nothing about raised, raised
+ * follows it: equal on a light surface, a step toward the ink on a dark one.
+ * So a host's or a brand's background keeps SayShape's layering.
+ */
+export function followSurface(to: Theme["colors"], patch: Partial<Theme["colors"]>): void {
+  if (patch.surface === undefined || patch.raised !== undefined) return;
+  if (!isDark(to.surface)) { to.raised = to.surface; return; }
+  to.raised = mixColors(to.surface, to.ink, 0.045) ?? to.surface;
+}
+
 /** Build a theme by overriding parts of another. */
 export function extendTheme(from: Theme, patch: DeepPartial<Theme>): Theme {
   const out = structuredClone(from) as Theme;
@@ -134,7 +188,10 @@ export function extendTheme(from: Theme, patch: DeepPartial<Theme>): Theme {
     if (v && typeof v === "object") Object.assign(out[key] as object, v);
     else (out as unknown as Record<string, unknown>)[key] = v;
   }
-  if (patch.colors) followAccent(from.colors, out.colors, patch.colors);
+  if (patch.colors) {
+    followAccent(from.colors, out.colors, patch.colors);
+    followSurface(out.colors, patch.colors);
+  }
   return out;
 }
 
@@ -155,5 +212,11 @@ export function themeFromCSS(el: Element, from: Theme): Theme {
     if (v) colors[key] = patch[key] = v;
   }
   followAccent(from.colors, colors, patch);
+  followSurface(colors, patch);
   return { ...from, colors };
+}
+
+/** Whether a theme is dark: its surface is. Hosts can supply any surface, so this is read from the color, not the name. */
+export function isDarkTheme(theme: Theme): boolean {
+  return isDark(theme.colors.surface);
 }

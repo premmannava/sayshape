@@ -44,7 +44,7 @@ skeleton shape=block height=80`,
   },
 };
 
-const ICON = 40, BUTTON_H = 42;
+const ICON = 40, BUTTON_H = 36;
 
 export const empty: ComponentDef = {
   type: "empty",
@@ -76,18 +76,30 @@ export const empty: ComponentDef = {
     const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number };
     const cx = box.x + box.w / 2;
     let y = box.y + 24;
-    // An empty tray: a rounded box with an open top edge.
+    // An empty tray on a quiet tile: a box with an open top edge, in the muted color.
+    ctx.roundRect(cx - ICON / 2 + 0.5, y + 0.5, ICON - 1, ICON - 1, theme.radius.md);
+    fillTint(g, c.ink, 0.04);
+    g.save();
+    g.globalAlpha *= 0.8;
+    g.strokeStyle = c.line;
+    g.lineWidth = 1;
+    g.stroke();
+    g.restore();
     g.beginPath();
-    g.arc(cx, y + ICON / 2, ICON / 2, 0, Math.PI * 2);
-    fillTint(g, c.accent, 0.1);
-    g.beginPath();
-    g.moveTo(cx - 10, y + 15);
-    g.lineTo(cx - 10, y + 25);
-    g.lineTo(cx + 10, y + 25);
-    g.lineTo(cx + 10, y + 15);
-    g.strokeStyle = c.accent;
-    g.lineWidth = 1.8;
+    g.moveTo(cx - 9, y + 15);
+    g.lineTo(cx - 9, y + 25);
+    g.lineTo(cx + 9, y + 25);
+    g.lineTo(cx + 9, y + 15);
+    g.moveTo(cx - 9, y + 20);
+    g.lineTo(cx - 4, y + 20);
+    g.lineTo(cx - 2, y + 22);
+    g.lineTo(cx + 2, y + 22);
+    g.lineTo(cx + 4, y + 20);
+    g.lineTo(cx + 9, y + 20);
+    g.strokeStyle = c.muted;
+    g.lineWidth = 1.6;
     g.lineJoin = "round";
+    g.lineCap = "round";
     g.stroke();
     y += ICON + 14;
     g.textAlign = "center";
@@ -107,14 +119,22 @@ export const empty: ComponentDef = {
     g.font = ctx.font(600, 14);
     const w = Math.min(box.w, g.measureText(label).width + 40);
     const btn = partBox(box, cx - w / 2, y, w, BUTTON_H);
+    // Drawn like a secondary button, so it's clearly pressable without competing with the message.
     ctx.roundRect(btn.x + 0.5, btn.y + 0.5, btn.w - 1, btn.h - 1, theme.radius.md);
-    g.fillStyle = c.surface;
+    g.save();
+    g.shadowColor = c.shadow;
+    g.shadowBlur = 2;
+    g.shadowOffsetY = 1;
+    g.fillStyle = c.raised;
     g.fill();
-    if (ctx.isHovered(box.node, "action")) fillTint(g, c.accent, 0.1);
-    g.strokeStyle = c.accent;
+    g.restore();
+    const hot = ctx.isHovered(box.node, "action");
+    if (hot) fillTint(g, c.ink, 0.04);
+    g.strokeStyle = c.line;
     g.lineWidth = 1;
     g.stroke();
-    g.fillStyle = c.accent;
+    if (hot) { g.save(); g.globalAlpha *= 0.22; g.strokeStyle = c.ink; g.stroke(); g.restore(); }
+    g.fillStyle = c.ink;
     g.fillText(fitText(g, label, w - 16), cx, btn.y + BUTTON_H / 2 + 1);
     if (p.has("on")) ctx.addHit(btn, { detail: "action" });
   },

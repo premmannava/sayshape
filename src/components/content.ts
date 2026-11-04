@@ -18,7 +18,7 @@ export const text: ComponentDef = {
   text: { description: "The words to show. May include {expressions}.", required: true },
   props: {
     style: { type: "enum", values: TEXT_STYLES, default: "body", description: "display, title, lead, body or caption." },
-    weight: { type: "enum", values: WEIGHTS, description: "regular, semibold or bold. Titles default to bold." },
+    weight: { type: "enum", values: WEIGHTS, description: "regular, semibold or bold. Titles default to semibold." },
     tone: toneProp,
     align: { type: "enum", values: ALIGN, default: "left", description: "left, center or right." },
     strike: { type: "boolean", default: false, description: "Draw a line through the text, e.g. for an old price." },
@@ -127,9 +127,9 @@ stat label="Total" value="\${price*qty}"`,
   minWidth(node, ctx) {
     // What its label and its value need at the smallest size, so "Days 2" stays small; long values wrap below 110.
     const p = ctx.props(node);
-    const label = p.str("label").toUpperCase();
-    const labelW = textWidth(ctx, label, 600, STAT_LABEL) + label.length;
-    const valueW = textWidth(ctx, p.str("value"), 700, STAT_SIZES[STAT_SIZES.length - 1]!);
+    const label = p.str("label");
+    const labelW = textWidth(ctx, label, 400, STAT_LABEL);
+    const valueW = textWidth(ctx, p.str("value"), STAT_WEIGHT, STAT_SIZES[STAT_SIZES.length - 1]!);
     return Math.max(40, Math.min(110, Math.max(labelW, valueW)));
   },
   paint(box, ctx) {
@@ -140,11 +140,9 @@ stat label="Total" value="\${price*qty}"`,
     const x = center ? box.x + box.w / 2 : box.x;
     g.textAlign = center ? "center" : "left";
     g.textBaseline = "alphabetic";
-    g.font = ctx.font(600, STAT_LABEL);
-    if ("letterSpacing" in g) (g as unknown as { letterSpacing: string }).letterSpacing = "1px";
+    g.font = ctx.font(400, STAT_LABEL);
     g.fillStyle = ctx.theme.colors.muted;
     d.label.forEach((l, i) => g.fillText(l, x, box.y + 12 + i * STAT_LABEL_LH));
-    if ("letterSpacing" in g) (g as unknown as { letterSpacing: string }).letterSpacing = "0px";
     const extra = (box.data as Partial<StatExtras>).extras ? (box.data as unknown as StatExtras) : null;
     if (ctx.isLoading(box.node)) {
       // The figure is on its way: a placeholder where it will be.
@@ -162,7 +160,7 @@ stat label="Total" value="\${price*qty}"`,
     const base = g.globalAlpha;
     g.globalAlpha = base * easeOut(reveal * 1.6);
     const rise = (1 - easeOut(reveal * 1.6)) * 6;
-    g.font = ctx.font(700, d.size);
+    g.font = ctx.font(STAT_WEIGHT, d.size);
     g.fillStyle = toneColor(ctx.theme, p.oneOf("tone", TONES, "default"));
     // A change beside a centred value: centre the pair, so the value starts left of the middle.
     const inline = extra?.change?.inline ?? false;
@@ -198,26 +196,27 @@ export function countUp(text: string, progress: number): string {
 
 /** Value sizes a stat tries, largest first, before it wraps the value at the smallest. */
 const STAT_SIZES = [28, 24, 20, 18];
-const STAT_LABEL = 11, STAT_LABEL_LH = 14;
+/** Figures are semibold: confident without the heaviness of bold at display sizes. */
+const STAT_WEIGHT = 600;
+/** The label is a quiet sentence-case caption above the figure. */
+const STAT_LABEL = 13, STAT_LABEL_LH = 17;
 
 interface StatLayout { label: string[]; value: string[]; size: number; valueLH: number; valueTop: number; height: number }
 
 /**
- * A stat's lines: the label (upper case, at most two lines) and the value at
+ * A stat's lines: the label (at most two lines) and the value at
  * the largest size that fits on one line, or wrapped at the smallest (at most
  * three lines). With a one-line label and value at full size it's 54 px tall.
  */
 export function statLayout(label: string, value: string, width: number, theme: Theme, m: TextMeasurer): StatLayout {
   const w = Math.max(20, width);
-  // Labels are drawn with 1px letter spacing, which the measurer doesn't know about.
-  const spaced: TextMeasurer = { width: (t, f) => m.width(t, f) + t.length };
-  const labelLines = label ? fitLines(label.toUpperCase(), w, themeFont(theme, 600, STAT_LABEL), spaced, 2) : [];
+  const labelLines = label ? fitLines(label, w, themeFont(theme, 400, STAT_LABEL), m, 2) : [];
   let size = STAT_SIZES[STAT_SIZES.length - 1]!;
   let lines: string[] | null = null;
   for (const s of STAT_SIZES) {
-    if (m.width(value, themeFont(theme, 700, s)) <= w) { size = s; lines = [value]; break; }
+    if (m.width(value, themeFont(theme, STAT_WEIGHT, s)) <= w) { size = s; lines = [value]; break; }
   }
-  lines ??= fitLines(value, w, themeFont(theme, 700, size), m, 3);
+  lines ??= fitLines(value, w, themeFont(theme, STAT_WEIGHT, size), m, 3);
   const valueLH = Math.round(size * 1.3);
   const valueTop = 12 + Math.max(0, labelLines.length - 1) * STAT_LABEL_LH;
   return { label: labelLines, value: lines, size, valueLH, valueTop, height: valueTop + lines.length * valueLH + 6 };
@@ -226,7 +225,7 @@ export function statLayout(label: string, value: string, width: number, theme: T
 /** Space between a value and a change beside it. */
 const STAT_CHANGE_GAP = 10;
 /** The change's pill: text size, height and padding either side. */
-const STAT_PILL_TEXT = 13, STAT_PILL_H = 22, STAT_PILL_X = 8;
+const STAT_PILL_TEXT = 12, STAT_PILL_H = 20, STAT_PILL_X = 7;
 /** A sparkline's height and its widest; it's a hint of a trend, not a chart. */
 export const SPARK_H = 28;
 const SPARK_MAX_W = 200;
@@ -297,7 +296,7 @@ function statExtras(box: Box, d: StatLayout, ctx: LayoutContext): StatExtras & {
     const arrow = dir ? ARROWS[dir] : "";
     const full = raw ? (arrow ? `${arrow} ${raw}` : raw) : "";
     // While loading, the size the placeholders take.
-    const valueW = loading ? Math.min(w, Math.max(56, d.size * 3.2)) : m.width(d.value[0] ?? "", themeFont(t, 700, d.size));
+    const valueW = loading ? Math.min(w, Math.max(56, d.size * 3.2)) : m.width(d.value[0] ?? "", themeFont(t, STAT_WEIGHT, d.size));
     // The change sits in a tinted pill, so it reads as one figure beside the value.
     const natural = loading ? 48 : m.width(full, font) + STAT_PILL_X * 2;
     const inline = d.value.length === 1 && valueW + STAT_CHANGE_GAP + natural <= w;
@@ -356,8 +355,8 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     const left = c.inline ? (at.center ? at.vx : at.x) + c.valueW + STAT_CHANGE_GAP : at.center ? at.x - c.width / 2 : at.x;
     const mid = box.y + c.y + at.rise;
     const color = e.tone === "muted" ? theme.colors.muted : statToneColor(theme, e.tone);
-    ctx.roundRect(left, mid - STAT_PILL_H / 2, c.width, STAT_PILL_H, STAT_PILL_H / 2);
-    fillTint(g, color, 0.13);
+    ctx.roundRect(left, mid - STAT_PILL_H / 2, c.width, STAT_PILL_H, ctx.theme.radius.sm);
+    fillTint(g, color, 0.12);
     g.font = ctx.font(600, STAT_PILL_TEXT);
     g.fillStyle = color;
     g.textAlign = "center";
@@ -426,6 +425,9 @@ function paintStatExtrasLoading(box: Box, ctx: PaintContext, e: StatExtras, v: {
   });
 }
 
+/** A slim track: it's a measure, not a control. */
+const PROGRESS_H = 6;
+
 export const progress: ComponentDef = {
   type: "progress",
   category: "feedback",
@@ -439,7 +441,7 @@ export const progress: ComponentDef = {
   example: `state done=3
 progress value={done} max=5 label="{done} of 5 steps"`,
   layout(box, ctx) {
-    box.h = ctx.props(box.node).has("label") ? 30 : 10;
+    box.h = ctx.props(box.node).has("label") ? 20 + PROGRESS_H : PROGRESS_H;
   },
   minWidth: () => 80,
   paint(box, ctx) {
@@ -456,11 +458,10 @@ progress value={done} max=5 label="{done} of 5 steps"`,
     }
     const max = p.num("max", 100) || 1;
     const f = Math.max(0, Math.min(1, p.num("value", 0) / max));
-    ctx.roundRect(box.x, y, box.w, 10, 5);
-    g.fillStyle = ctx.theme.colors.line;
-    g.fill();
+    ctx.roundRect(box.x, y, box.w, PROGRESS_H, PROGRESS_H / 2);
+    fillTint(g, ctx.theme.colors.ink, 0.1);
     if (f > 0) {
-      ctx.roundRect(box.x, y, Math.max(10, box.w * f), 10, 5);
+      ctx.roundRect(box.x, y, Math.max(PROGRESS_H, box.w * f), PROGRESS_H, PROGRESS_H / 2);
       const tone = p.oneOf("tone", TONES, "accent");
       g.fillStyle = tone === "default" ? ctx.theme.colors.accent : toneColor(ctx.theme, tone);
       g.fill();
@@ -479,25 +480,39 @@ export const badge: ComponentDef = {
     tone: { type: "enum", values: BADGE_TONES, default: "accent", description: "Color role: accent, good, warn, bad or muted." },
   },
   example: `badge "Shipped" tone=good`,
-  layout(box) {
-    box.h = 24;
+  layout(box, ctx) {
+    box.h = BADGE_H;
+    // A badge takes its label's width, so rows keep tags together instead of spreading them out.
+    box.w = Math.min(box.w, badgeWidth(ctx.props(box.node).text(), ctx));
   },
-  minWidth: (node, ctx) => Math.min(140, textWidth(ctx, ctx.props(node).text(), 600, 12) + 20),
+  minWidth: (node, ctx) => Math.min(140, badgeWidth(ctx.props(node).text(), ctx)),
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
-    const color = toneColor(theme, p.oneOf("tone", BADGE_TONES, "accent"));
+    const tone = p.oneOf("tone", BADGE_TONES, "accent");
+    const color = toneColor(theme, tone);
     g.font = ctx.font(600, 12);
     const label = p.text();
-    const w = Math.min(box.w, g.measureText(label).width + 20);
-    ctx.roundRect(box.x, box.y, w, box.h, box.h / 2);
-    fillTint(g, color, 0.16);
+    // Layout already sized the box to the label.
+    const w = box.w;
+    ctx.roundRect(box.x, box.y, w, box.h, theme.radius.sm);
+    fillTint(g, color, tone === "muted" ? 0.1 : 0.12);
+    // A status dot leads the label, so the color reads at a glance even where tints are faint.
+    g.beginPath();
+    g.arc(box.x + BADGE_PAD + 3, box.y + box.h / 2, 3, 0, Math.PI * 2);
     g.fillStyle = color;
-    g.textAlign = "center";
+    g.fill();
+    g.textAlign = "left";
     g.textBaseline = "middle";
-    g.fillText(fitText(g, label, w - 12), box.x + w / 2, box.y + box.h / 2 + 1);
+    g.fillText(fitText(g, label, w - BADGE_PAD * 2 - BADGE_DOT_ROOM), box.x + BADGE_PAD + BADGE_DOT_ROOM, box.y + box.h / 2 + 1);
   },
 };
+
+const BADGE_H = 22, BADGE_PAD = 8, BADGE_DOT_ROOM = 12;
+
+function badgeWidth(label: string, ctx: LayoutContext): number {
+  return Math.ceil(textWidth(ctx, label, 600, 12) + BADGE_PAD * 2 + BADGE_DOT_ROOM);
+}
 
 const ICON_SIZES = { sm: 16, md: 20, lg: 28 } as const;
 const ICON_SIZE_NAMES = ["sm", "md", "lg"] as const;

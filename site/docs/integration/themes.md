@@ -40,12 +40,14 @@ ui.setTheme(brand);
 
 | Token | Used for |
 |---|---|
-| `surface` | The background the screen is drawn on |
+| `surface` | The background the screen is drawn on, and inset fields such as inputs |
+| `raised` | Cards, lists, tables and popups. Equal to `surface` in light; a step lighter in dark, so surfaces layer. Change `surface` without `raised` and it follows |
 | `ink`, `muted` | Text, and quieter text |
 | `line` | Field borders, dividers and table rules |
 | `accent`, `onAccent` | Primary buttons, selections and focus of attention; the label color on the accent |
 | `good`, `warn`, `bad` | Status roles (`tone=good`, …) |
 | `focus` | The keyboard focus ring |
+| `shadow` | The soft shadow under cards, buttons and popups |
 | `land`, `landHighlight`, `landHover` | The world map |
 | `debug` | The inspector's overlays |
 

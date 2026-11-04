@@ -25,7 +25,7 @@ import { parse, type ParseResult } from "./parser";
 import { Registry } from "./registry";
 import { Store } from "./state";
 import { CanvasMeasurer, font as fontString, wrapText } from "./text";
-import { darkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
+import { darkTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
@@ -547,10 +547,16 @@ export class SayShape {
   }
 
   private paintFocusRing(g: CanvasRenderingContext2D, b: Box): void {
+    // A crisp ring with a soft halo outside it: clear on any surface without looking heavy.
     g.save();
     g.strokeStyle = this.theme.colors.focus;
-    g.lineWidth = 2;
-    roundRectPath(g, b.x - 3, b.y - 3, b.w + 6, b.h + 6, this.theme.radius.md + 3);
+    roundRectPath(g, b.x - 3.5, b.y - 3.5, b.w + 7, b.h + 7, this.theme.radius.md + 3.5);
+    g.globalAlpha = 0.22;
+    g.lineWidth = 4;
+    g.stroke();
+    g.globalAlpha = 1;
+    g.lineWidth = 1.75;
+    roundRectPath(g, b.x - 2.5, b.y - 2.5, b.w + 5, b.h + 5, this.theme.radius.md + 2.5);
     g.stroke();
     g.restore();
   }
@@ -681,15 +687,25 @@ export class SayShape {
     const screenHits = this.hits;
     this.hits = [];
     g.save();
-    // A soft edge under the panel, then the panel, then its content clipped to it.
-    roundRectPath(g, a.x, a.y + 2, a.w, a.h, t.radius.md);
-    g.globalAlpha = 0.12;
-    g.fillStyle = t.colors.ink;
-    g.fill();
-    g.globalAlpha = 1;
+    // The panel floats: a raised surface with a wide soft shadow, then its content clipped to it.
     roundRectPath(g, a.x + 0.5, a.y + 0.5, a.w - 1, a.h - 1, t.radius.md);
-    g.fillStyle = t.colors.surface;
+    g.save();
+    g.shadowColor = t.colors.shadow;
+    g.shadowBlur = 24;
+    g.shadowOffsetY = 8;
+    g.fillStyle = t.colors.raised;
     g.fill();
+    g.shadowBlur = 3;
+    g.shadowOffsetY = 1;
+    g.fill();
+    g.restore();
+    // In dark themes a floating panel is lighter still than the card under it.
+    if (isDarkTheme(t)) {
+      g.globalAlpha = 0.05;
+      g.fillStyle = t.colors.ink;
+      g.fill();
+      g.globalAlpha = 1;
+    }
     g.strokeStyle = t.colors.line;
     g.lineWidth = 1;
     g.stroke();

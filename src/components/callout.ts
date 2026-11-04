@@ -1,6 +1,6 @@
 /**
- * callout: the one thing to notice in an answer, on a tinted panel with a bar
- * in its tone's color down the left edge and an optional icon.
+ * callout: the one thing to notice in an answer, on a softly tinted panel with
+ * a hairline border in its tone's color and an optional icon.
  *
  *   callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true
  */
@@ -15,9 +15,9 @@ import { fillTint, themeFont } from "./util";
 const CALLOUT_TONES = ["info", "accent", "good", "warn", "bad"] as const;
 type CalloutTone = (typeof CALLOUT_TONES)[number];
 
-/** The bar down the left edge, and the icon's diameter. */
-const BAR = 4;
-const ICON = 20;
+/** Room before the content where a left bar used to be (none: the border carries the tone), and the icon's diameter. */
+const BAR = 0;
+const ICON = 18;
 
 function calloutColor(theme: Theme, tone: CalloutTone): string {
   const c = theme.colors;
@@ -40,7 +40,7 @@ interface CalloutLayout {
 function measure(box: Box, ctx: LayoutContext): CalloutLayout & { height: number } {
   const p = ctx.props(box.node);
   const t = ctx.theme;
-  const padX = t.space.md, padY = t.space.sm + t.space.xs;
+  const padX = t.space.md, padY = t.space.md - 2;
   const icon = p.bool("icon", false);
   const textX = BAR + padX + (icon ? ICON + t.space.sm : 0);
   const width = Math.max(20, box.w - textX - padX);
@@ -58,16 +58,16 @@ function measure(box: Box, ctx: LayoutContext): CalloutLayout & { height: number
   return { lines, detail, font, detailFont, lh, detailLH, padX, padY, textX, icon, height: padY * 2 + Math.max(body, icon ? ICON : 0) };
 }
 
-/** The panel: a tint of the tone over the whole box, and the bar down its left edge. */
+/** The panel: a faint tint of the tone, outlined by a hairline of the same tone. */
 function paintPanel(box: Box, ctx: PaintContext, color: string): void {
   const { g, theme } = ctx;
-  ctx.roundRect(box.x, box.y, box.w, box.h, theme.radius.md);
-  fillTint(g, color, 0.1);
+  ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
+  fillTint(g, color, 0.07);
   g.save();
-  ctx.roundRect(box.x, box.y, box.w, box.h, theme.radius.md);
-  g.clip();
-  g.fillStyle = color;
-  g.fillRect(box.x, box.y, BAR, box.h);
+  g.globalAlpha *= 0.24;
+  g.strokeStyle = color;
+  g.lineWidth = 1;
+  g.stroke();
   g.restore();
 }
 
@@ -82,7 +82,7 @@ function paintIcon(ctx: PaintContext, tone: CalloutTone, cx: number, cy: number,
   g.save();
   g.strokeStyle = theme.colors.onAccent;
   g.fillStyle = theme.colors.onAccent;
-  g.lineWidth = 2;
+  g.lineWidth = 1.8;
   g.lineCap = "round";
   g.lineJoin = "round";
   g.beginPath();

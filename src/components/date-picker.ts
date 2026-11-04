@@ -29,7 +29,7 @@ import {
 } from "../dates";
 import type { PopupState } from "../popup";
 import type { Box, Rect } from "../types";
-import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE } from "./input";
+import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE, paintField } from "./input";
 import { chevron, fillTint, onProp, partBox, runOn } from "./util";
 
 const PAD = 8;
@@ -271,11 +271,7 @@ date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
       g.fillText(fitText(g, label, box.w), box.x, box.y);
     }
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
-    g.fillStyle = c.surface;
-    g.fill();
-    g.strokeStyle = isOpen ? c.accent : !disabled && ctx.isHovered(box.node) ? c.muted : c.line;
-    g.lineWidth = isOpen ? 1.5 : 1;
-    g.stroke();
+    paintField(g, c, isOpen, !disabled && ctx.isHovered(box.node));
     const text = v.kind === "date" ? displayDate(v.date) : v.kind === "invalid" ? "Invalid date" : p.str("placeholder", "Choose a date");
     g.font = ctx.font(400, FIELD_TEXT);
     g.textAlign = "left";

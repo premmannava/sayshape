@@ -242,7 +242,7 @@ ELEMENTS
   text "<text>"  — A paragraph or heading that wraps to the available width. Use {expressions} to show state.
     "<text>" (required)  The words to show. May include {expressions}.
     style=<display|title|lead|body|caption>  display, title, lead, body or caption.
-    weight=<regular|semibold|bold>  regular, semibold or bold. Titles default to bold.
+    weight=<regular|semibold|bold>  regular, semibold or bold. Titles default to semibold.
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     align=<left|center|right>  left, center or right.
     strike=<boolean>  Draw a line through the text, e.g. for an old price.

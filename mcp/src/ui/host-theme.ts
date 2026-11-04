@@ -6,8 +6,10 @@
  * any other host. Anything the host leaves out keeps SayShape's own value.
  *
  * The accent stays SayShape's: hosts don't send a brand or accent color.
+ * Cards and popups (raised) follow the host's background: the same on a
+ * light one, a step lighter on a dark one.
  */
-import type { Theme } from "../../../src/theme";
+import { followSurface, type Theme } from "../../../src/theme";
 
 /** Reads one host variable as a value the canvas can use, or undefined. */
 export type ReadVar = (name: string, kind: "color" | "length" | "font") => string | undefined;
@@ -49,10 +51,13 @@ function fontStack(v: string | undefined): string | undefined {
 
 export function hostTheme(base: Theme, read: ReadVar): Theme {
   const colors = { ...base.colors };
+  const patch: Partial<Theme["colors"]> = {};
   for (const [slot, name] of COLOR_VARS) {
     const v = read(name, "color");
-    if (v) colors[slot] = v;
+    if (v) colors[slot] = patch[slot] = v;
   }
+  // Cards keep SayShape's layering over the host's background.
+  followSurface(colors, patch);
   const radius = { ...base.radius };
   for (const [slot, name] of RADIUS_VARS) {
     const v = px(read(name, "length"));

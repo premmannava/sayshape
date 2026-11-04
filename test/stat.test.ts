@@ -175,7 +175,7 @@ describe("stat while loading", () => {
     const ui = render(SPEC);
     ui.loom.setLoading(["sales", "growth", "weekly"]);
     ui.loom.renderNow();
-    expect(texts(ui)).toEqual(["REVENUE"]);
+    expect(texts(ui)).toEqual(["Revenue"]);
     // One placeholder path, holding the value, the change and the line's area.
     expect(ui.drawOps.filter((o) => o.op === "fill").length).toBe(plainFills);
     expect(ui.drawOps.filter((o) => o.op === "stroke")).toHaveLength(0);

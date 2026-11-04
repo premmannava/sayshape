@@ -34,6 +34,18 @@ describe("matching the host's look", () => {
     expect(t.radius.lg).toBe(24);
   });
 
+  it("keeps cards layered over the host's background", () => {
+    // On a dark background, cards and popups sit a step lighter, toward the host's text color.
+    const dark = hostTheme(darkTheme, reader({ "--color-background-primary": "rgb(31, 31, 30)", "--color-text-primary": "rgb(250, 249, 245)" }));
+    expect(dark.colors.raised).toBe("#292928");
+    // On a light one they match it, set apart by their border and shadow.
+    const light = hostTheme(lightTheme, reader({ "--color-background-primary": "rgb(250, 249, 245)" }));
+    expect(light.colors.raised).toBe("rgb(250, 249, 245)");
+    // A background the canvas can't mix (translucent) is used for both.
+    const glass = hostTheme(darkTheme, reader({ "--color-background-primary": "rgba(0, 0, 0, 0.5)" }));
+    expect(glass.colors.raised).toBe("rgba(0, 0, 0, 0.5)");
+  });
+
   it("keeps SayShape's accent: hosts don't send one", () => {
     const t = hostTheme(lightTheme, reader({ "--color-background-primary": "#fff" }));
     expect(t.colors.accent).toBe(lightTheme.colors.accent);

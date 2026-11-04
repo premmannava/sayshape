@@ -2,6 +2,7 @@ import { toNumber } from "../data";
 import type { ComponentDef, LayoutContext, PropReader } from "../component";
 import type { Box, SayShapeNode } from "../types";
 import { INPUT_KINDS } from "../editor";
+import { isDarkTheme, type Theme } from "../theme";
 import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
 
 const VARIANTS = ["primary", "secondary", "danger"] as const;
@@ -45,26 +46,28 @@ button "Back" variant=secondary on=dec:step`,
     const hot = !disabled && ctx.isHovered(box.node);
     const down = !disabled && ctx.isPressed(box.node);
     const color = variant === "danger" ? c.bad : c.accent;
+    const secondary = variant === "secondary";
     if (disabled) g.globalAlpha *= 0.45;
-    const inset = down ? 1 : 0;
-    ctx.roundRect(box.x + 0.5 + inset, box.y + 0.5 + inset, box.w - 1 - inset * 2, box.h - 1 - inset * 2, theme.radius.md);
-    // A close, soft shadow lifts the button off the surface; it goes when the button is held down.
+    ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
+    // A close, crisp shadow lifts the button a hair off the surface; it goes while held down.
     g.save();
-    if (!down && !disabled) { g.shadowColor = c.shadow; g.shadowBlur = 3; g.shadowOffsetY = 1; }
-    g.fillStyle = variant === "secondary" ? c.surface : color;
+    if (!down && !disabled) { g.shadowColor = c.shadow; g.shadowBlur = 2; g.shadowOffsetY = 1; }
+    g.fillStyle = secondary ? c.raised : color;
     g.fill();
     g.restore();
-    if (variant === "secondary") {
-      // Quiet beside the primary: a neutral outline and ink text, tinted on hover.
-      if (hot) fillTint(g, c.ink, 0.05);
-      g.strokeStyle = hot ? c.muted : c.line;
+    // Hover and press move toward the ink: a filled button deepens on a light theme and
+    // brightens on a dark one, so it always gains contrast instead of washing out.
+    if (secondary) {
+      if (hot) fillTint(g, c.ink, down ? 0.08 : 0.04);
+      g.strokeStyle = c.line;
       g.lineWidth = 1;
       g.stroke();
-    } else if (hot) fillTint(g, c.onAccent, 0.14);
+      if (hot) { g.save(); g.globalAlpha *= 0.22; g.strokeStyle = c.ink; g.stroke(); g.restore(); }
+    } else if (hot) fillTint(g, c.ink, down ? 0.2 : 0.12);
     g.font = ctx.font(600, 14);
     g.textAlign = "center";
     g.textBaseline = "middle";
-    g.fillStyle = variant === "secondary" ? c.ink : c.onAccent;
+    g.fillStyle = secondary ? c.ink : c.onAccent;
     g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
     if (!disabled) ctx.addHit(box);
   },
@@ -92,7 +95,7 @@ check "I agree to the terms" bind=agreed`,
     const c = theme.colors;
     const on = !!p.bound();
     const hot = ctx.isHovered(box.node);
-    ctx.roundRect(box.x + 0.5, box.y + 4.5, 18, 18, theme.radius.sm);
+    ctx.roundRect(box.x + 0.5, box.y + 4.5, 18, 18, Math.min(5, theme.radius.sm));
     if (on) {
       g.fillStyle = c.accent;
       g.fill();
@@ -108,9 +111,12 @@ check "I agree to the terms" bind=agreed`,
     } else {
       g.fillStyle = c.surface;
       g.fill();
+      g.save();
+      if (!hot) g.globalAlpha *= 0.6;
       g.strokeStyle = hot ? c.accent : c.muted;
-      g.lineWidth = 1.4;
+      g.lineWidth = 1.25;
       g.stroke();
+      g.restore();
     }
     g.font = ctx.font(400, theme.text.body);
     g.textAlign = "left";
@@ -149,7 +155,7 @@ switch "Email me order updates" bind=updates`,
     const c = theme.colors;
     const on = !!p.bound();
     // The toggle sits beside the first line of the label, however many lines it wraps to.
-    const tw = 40, th = 24, tx = box.x + box.w - tw, ty = box.y + (28 - th) / 2;
+    const tw = 36, th = 20, tx = box.x + box.w - tw, ty = box.y + (28 - th) / 2;
     g.font = ctx.font(400, theme.text.body);
     g.fillStyle = c.ink;
     g.textAlign = "left";
@@ -157,13 +163,19 @@ switch "Email me order updates" bind=updates`,
     const l = box.data as { lines: string[]; lh: number };
     l.lines.forEach((line, i) => g.fillText(line, box.x, box.y + 15 + i * l.lh));
     ctx.roundRect(tx, ty, tw, th, th / 2);
-    g.fillStyle = on ? c.accent : c.line;
-    g.fill();
+    // Off is a quiet ink tint, so it reads on any surface; on is the accent.
+    if (on) { g.fillStyle = c.accent; g.fill(); } else fillTint(g, c.ink, 0.16);
     if (ctx.isHovered(box.node)) fillTint(g, c.ink, 0.08);
+    // The knob is the lightest color in the theme, with a hairline shadow.
     g.beginPath();
-    g.arc(on ? tx + tw - th / 2 : tx + th / 2, ty + th / 2, th / 2 - 3, 0, Math.PI * 2);
-    g.fillStyle = on ? c.onAccent : c.surface;
+    g.arc(on ? tx + tw - th / 2 : tx + th / 2, ty + th / 2, th / 2 - 2.5, 0, Math.PI * 2);
+    g.save();
+    g.shadowColor = c.shadow;
+    g.shadowBlur = 2;
+    g.shadowOffsetY = 1;
+    g.fillStyle = isDarkTheme(theme) ? c.ink : c.surface;
     g.fill();
+    g.restore();
     ctx.addHit(box);
   },
   press(ctx) {
@@ -204,12 +216,16 @@ radio "Large" bind=size value=l`,
     g.arc(cx, cy, 9, 0, Math.PI * 2);
     g.fillStyle = c.surface;
     g.fill();
-    g.strokeStyle = chosen || ctx.isHovered(box.node) ? c.accent : c.muted;
-    g.lineWidth = chosen ? 2 : 1.4;
+    g.save();
+    const strong = chosen || ctx.isHovered(box.node);
+    if (!strong) g.globalAlpha *= 0.6;
+    g.strokeStyle = strong ? c.accent : c.muted;
+    g.lineWidth = chosen ? 1.75 : 1.25;
     g.stroke();
+    g.restore();
     if (chosen) {
       g.beginPath();
-      g.arc(cx, cy, 4.5, 0, Math.PI * 2);
+      g.arc(cx, cy, 4, 0, Math.PI * 2);
       g.fillStyle = c.accent;
       g.fill();
     }
@@ -297,9 +313,12 @@ stepper "Quantity" bind=qty min=1 max=10`,
     g.strokeStyle = c.line;
     g.lineWidth = 1;
     g.stroke();
+    g.save();
+    g.globalAlpha *= 0.7;
     g.fillStyle = c.line;
-    g.fillRect(x0 + STEP_W, top + 8, 1, h - 16);
-    g.fillRect(x0 + STEP_W + VALUE_W, top + 8, 1, h - 16);
+    g.fillRect(x0 + STEP_W, top + 10, 1, h - 20);
+    g.fillRect(x0 + STEP_W + VALUE_W, top + 10, 1, h - 20);
+    g.restore();
     const parts = [
       { name: "dec", x: x0, enabled: value - 1e-9 > min, sign: "−" },
       { name: "inc", x: x0 + STEP_W + VALUE_W, enabled: value + 1e-9 < max, sign: "+" },
@@ -309,13 +328,13 @@ stepper "Quantity" bind=qty min=1 max=10`,
     for (const part of parts) {
       const pb = partBox(box, part.x, top, STEP_W, h);
       if (part.enabled && ctx.isHovered(box.node, part.name)) {
-        ctx.roundRect(pb.x + 3, pb.y + 3, pb.w - 6, pb.h - 6, theme.radius.sm);
-        fillTint(g, c.accent, 0.1);
+        ctx.roundRect(pb.x + 4, pb.y + 4, pb.w - 8, pb.h - 8, theme.radius.sm);
+        fillTint(g, c.ink, 0.06);
       }
       g.save();
       if (!part.enabled) g.globalAlpha *= 0.35;
-      g.font = ctx.font(600, 20);
-      g.fillStyle = c.accent;
+      g.font = ctx.font(400, 18);
+      g.fillStyle = c.ink;
       g.fillText(part.sign, pb.x + STEP_W / 2, top + h / 2 + 1);
       g.restore();
       if (part.enabled) ctx.addHit(pb, { detail: part.name });
@@ -428,7 +447,7 @@ export const link: ComponentDef = {
   },
 };
 
-const THUMB_R = 10, TRACK_H = 6, SLIDER_AREA = 32;
+const THUMB_R = 9, TRACK_H = 4, SLIDER_AREA = 32;
 
 /** A slider's range and current value, read the same way when painting, dragging and on keys. */
 function sliderState(p: PropReader) {
@@ -491,23 +510,28 @@ slider "Up to \${maxPrice}" bind=maxPrice min=20 max=300 step=10`,
     const frac = max > min ? (value - min) / (max - min) : 0;
     const cx = left + frac * width, cy = y + SLIDER_AREA / 2;
     ctx.roundRect(box.x, cy - TRACK_H / 2, box.w, TRACK_H, TRACK_H / 2);
-    g.fillStyle = c.line;
-    g.fill();
+    fillTint(g, c.ink, 0.12);
     ctx.roundRect(box.x, cy - TRACK_H / 2, Math.max(TRACK_H, cx - box.x), TRACK_H, TRACK_H / 2);
     g.fillStyle = c.accent;
     g.fill();
     const active = ctx.isPressed(box.node) || ctx.isHovered(box.node);
     if (active) {
       g.beginPath();
-      g.arc(cx, cy, THUMB_R + 6, 0, Math.PI * 2);
-      fillTint(g, c.accent, 0.14);
+      g.arc(cx, cy, THUMB_R + 5, 0, Math.PI * 2);
+      fillTint(g, c.accent, 0.16);
     }
+    // A light knob with a close shadow and an accent rim, like the switch's.
     g.beginPath();
     g.arc(cx, cy, THUMB_R, 0, Math.PI * 2);
-    g.fillStyle = c.surface;
+    g.save();
+    g.shadowColor = c.shadow;
+    g.shadowBlur = 4;
+    g.shadowOffsetY = 1;
+    g.fillStyle = isDarkTheme(theme) ? c.ink : c.surface;
     g.fill();
+    g.restore();
     g.strokeStyle = c.accent;
-    g.lineWidth = 2;
+    g.lineWidth = 1.5;
     g.stroke();
     ctx.addHit(area, { detail: "track" });
   },
@@ -541,6 +565,33 @@ slider "Up to \${maxPrice}" bind=maxPrice min=20 max=300 step=10`,
 };
 
 /** Field text size: at least 16 px, or phones zoom the page when the field is focused. */
+/**
+ * Fill and outline a field whose path is current: an inset surface with a hairline border that
+ * firms up under the pointer, and an accent border with a soft halo while it's being typed in.
+ * Shared by input, select and date-picker so every field looks the same.
+ */
+export function paintField(g: CanvasRenderingContext2D, c: Theme["colors"], active: boolean, hot: boolean): void {
+  g.fillStyle = c.surface;
+  g.fill();
+  g.save();
+  if (active) {
+    g.strokeStyle = c.accent;
+    g.globalAlpha *= 0.2;
+    g.lineWidth = 6;
+    g.stroke();
+    g.globalAlpha /= 0.2;
+    g.lineWidth = 1.25;
+    g.stroke();
+  } else {
+    g.strokeStyle = c.line;
+    g.lineWidth = 1;
+    g.stroke();
+    if (hot) { g.globalAlpha *= 0.25; g.strokeStyle = c.ink; g.stroke(); }
+  }
+  g.restore();
+}
+
+/** 16px keeps phones from zooming in when the typing field opens over it. */
 export const FIELD_TEXT = 16;
 export const FIELD_PAD = 12;
 export const LABEL_SIZE = 13;
@@ -610,11 +661,7 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       g.fillText(fitText(g, label, box.w), box.x, box.y);
     }
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
-    g.fillStyle = c.surface;
-    g.fill();
-    g.strokeStyle = editing ? c.accent : hot ? c.muted : c.line;
-    g.lineWidth = editing ? 1.5 : 1;
-    g.stroke();
+    paintField(g, c, editing, hot);
     if (!editing) {
       const value = fieldValue(p);
       const kind = p.oneOf("kind", INPUT_KINDS, "text");
@@ -622,6 +669,7 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       g.font = ctx.font(400, FIELD_TEXT);
       g.textBaseline = "middle";
       g.fillStyle = value ? c.ink : c.muted;
+      if (!value) g.globalAlpha *= 0.8;
       g.fillText(fitText(g, shown, field.w - FIELD_PAD * 2), field.x + FIELD_PAD, field.y + field.h / 2 + 1);
     }
     g.restore();
