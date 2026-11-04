@@ -2,6 +2,7 @@
 import { withBase } from "vitepress";
 import { generationAvailable } from "../loom/generate";
 import Hero from "./Hero.vue";
+import elements from "../../../.generated/elements.json";
 import { highlightSpec } from "../loom/highlight";
 
 const REPO = "https://github.com/premmannava/sayshape";
@@ -19,7 +20,7 @@ const concepts = [
   },
   {
     name: "Components",
-    text: "48 built-in elements, from rows and cards to tables, charts, selects and date pickers. Each is reviewed TypeScript; a spec can only use them.",
+    text: `${elements.elements.length} built-in elements, from rows and cards to tables, charts, selects and date pickers. Each is reviewed TypeScript; a spec can only use them.`,
     code: `table items=orders key=id sort=by direction=dir\n  table-column "Total" field=total format=money`,
   },
   {
