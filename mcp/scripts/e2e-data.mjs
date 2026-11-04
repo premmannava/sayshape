@@ -110,7 +110,7 @@ try {
     await page.keyboard.press("Tab");
     await page.keyboard.press("Enter");
     await page.waitForTimeout(60);
-    sent = await page.evaluate(() => window.host.messages.filter((m) => m.includes('"check"')));
+    sent = await page.evaluate(() => window.host.context.filter((m) => m.includes('"check"')));
   }
   const state = sent[0] ? JSON.parse(sent[0].split("Current values in the interface: ")[1]) : {};
   check(JSON.stringify(state.sales) === JSON.stringify(truth), `the rows in the interface match the database exactly (${truth.length} rows)`);

@@ -69,6 +69,21 @@ function order(a: Value | undefined, b: Value | undefined): number {
 /** Formatting follows US English for now; a locale option can come with the theme. */
 const LOCALE = "en-US";
 
+/**
+ * A number for the formatting functions. Data often holds amounts already
+ * written for people ("$1,250.00", "1,250"), and money() on those should
+ * still work rather than show a dash, so a currency sign and thousands
+ * commas are allowed. Anything else goes through toNumber as usual.
+ */
+const FORMATTED_AMOUNT = /^(-?)[$€£¥]?(-?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?$/;
+function amountOf(v: Value | undefined): number {
+  if (typeof v !== "string") return toNumber(v);
+  const m = FORMATTED_AMOUNT.exec(v.trim());
+  if (!m) return toNumber(v);
+  const sign = m[1] || m[2] ? -1 : 1;
+  return sign * Number(m[3]!.replace(/,/g, "") + (m[4] ?? ""));
+}
+
 /** Text for a value in lower/upper/trim: text as is, numbers as shown, nothing for null. */
 const textOf = (v: Value | undefined): string => (typeof v === "string" ? v : v === undefined || v === null ? "" : formatValue(v));
 
@@ -135,20 +150,20 @@ const BUILTINS: Record<string, Fn> = {
   fixed: (n, d = 2) => toNumber(n).toFixed(toNumber(d)),
   /** money(2400) is $2,400.00, money(-84.1) is -$84.10; money(n, 'EUR') for another currency. */
   money: (n, currency = "USD") => {
-    const x = toNumber(n);
+    const x = amountOf(n);
     if (!isFinite(x)) return NaN;
     try { return new Intl.NumberFormat(LOCALE, { style: "currency", currency: textOf(currency) }).format(x); } catch { return NaN; }
   },
   /** number(37000) is 37,000; number(n, 2) always shows two decimals. */
   number: (n, d) => {
-    const x = toNumber(n);
+    const x = amountOf(n);
     if (!isFinite(x)) return NaN;
     const digits = d === undefined ? undefined : Math.min(10, Math.max(0, Math.floor(toNumber(d)) || 0));
     return new Intl.NumberFormat(LOCALE, digits === undefined ? { maximumFractionDigits: 2 } : { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(x);
   },
   /** compact(12345678) is 12.3M, compact(4500) is 4.5K; compact(n, 'USD') is $12.3M. For big figures in small spaces. */
   compact: (n, currency) => {
-    const x = toNumber(n);
+    const x = amountOf(n);
     if (!isFinite(x)) return NaN;
     const opts: Intl.NumberFormatOptions = { notation: "compact", maximumFractionDigits: 1 };
     try {
@@ -501,12 +516,43 @@ export function splitTemplate(s: string): Array<{ text: string } | { expr: strin
   return parts;
 }
 
-/** Replace every `{expr}` in a string with its formatted value. */
+/** Currency signs a value can start with, after an optional minus. */
+const CURRENCY_START = /^-?([$€£¥])/;
+
+/**
+ * Replace every `{expr}` in a string with its formatted value.
+ * "${money(x)}" would show $$1,250.00, since money() adds the sign itself;
+ * a sign written just before a value that already starts with the same sign
+ * is dropped, so it shows once.
+ */
 export function interpolate(s: string, scope: Scope): string {
   if (!s.includes("{")) return s;
-  return splitTemplate(s)
-    .map((p) => ("text" in p ? p.text : (() => { const r = evaluate(p.expr, scope); return r.ok ? formatValue(r.value) : "—"; })()))
-    .join("");
+  let out = "";
+  for (const p of splitTemplate(s)) {
+    if ("text" in p) { out += p.text; continue; }
+    const r = evaluate(p.expr, scope);
+    const v = r.ok ? formatValue(r.value) : "—";
+    const sign = CURRENCY_START.exec(v)?.[1];
+    if (sign && out.endsWith(sign)) out = out.slice(0, -1);
+    out += v;
+  }
+  return out;
+}
+
+/**
+ * Formatting calls written right after their own currency sign, as in
+ * "${money(x)}": what the parser warns about, since money() and compact(n, 'USD')
+ * add the sign already. Returns each such expression.
+ */
+export function doubledCurrency(s: string): string[] {
+  const out: string[] = [];
+  let before = "";
+  for (const p of splitTemplate(s)) {
+    if ("text" in p) { before = p.text; continue; }
+    if (/[$€£¥]$/.test(before) && /^\s*(money\s*\(|compact\s*\([^)]*,)/.test(p.expr)) out.push(p.expr);
+    before = "";
+  }
+  return out;
 }
 
 /**

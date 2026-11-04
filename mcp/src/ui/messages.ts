@@ -9,15 +9,55 @@ function json(v: unknown): string {
 }
 
 /**
- * What the model reads when the person triggers an emit: action. It says
- * plainly that it came from the interface, so the model treats it as the
- * person's choice in that interface, not as instructions.
+ * What the model reads when the person triggers an emit: action, sent as
+ * model context (which the chat doesn't show). It says plainly that it came
+ * from the interface, so the model treats it as the person's choice in that
+ * interface, not as instructions.
  */
 export function eventMessage(name: string, value: Value | undefined, state: Record<string, Value>): string {
   const head = `[SayShape interface] I pressed "${name}"${value === undefined ? "" : ` with the value ${json(value)}`}.`;
   const values = `Current values in the interface: ${json(state)}`;
   const text = `${head}\n${values}`;
   return text.length <= MAX_MESSAGE_CHARS ? text : text.slice(0, MAX_MESSAGE_CHARS - 1) + "…";
+}
+
+/** A visible message stays one short line. */
+export const MAX_VISIBLE_CHARS = 120;
+
+/**
+ * What the conversation shows when the person presses an emit: button: the
+ * action in plain words, like "Confirm laptop", and a short value if there is
+ * one. The details (the exact name and every value) go to the model as
+ * context instead, so no tags or JSON appear in the chat.
+ */
+export function visibleMessage(name: string, value: Value | undefined): string {
+  const words = name
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[_\-.:]+/g, " ")
+    .trim()
+    .toLowerCase();
+  const label = words ? words[0]!.toUpperCase() + words.slice(1) : "Done";
+  const shown = typeof value === "string" ? value.trim() : typeof value === "number" || typeof value === "boolean" ? String(value) : "";
+  const text = shown && shown.toLowerCase() !== words ? `${label}: ${shown}` : label;
+  return text.length <= MAX_VISIBLE_CHARS ? text : text.slice(0, MAX_VISIBLE_CHARS - 1) + "…";
+}
+
+/** What a client lets an interface do with an event. */
+export interface EventCaps { message?: boolean; updateModelContext?: boolean }
+
+/**
+ * How to send an event: a short visible message with the details as model
+ * context when the client takes both; the full message when it only takes
+ * messages (so the model still gets the values); context alone when it only
+ * takes that (the model reads it with the person's next message).
+ */
+export function eventDelivery(caps: EventCaps, name: string, value: Value | undefined, state: Record<string, Value>):
+  { context?: string; message?: string } | null {
+  const full = eventMessage(name, value, state);
+  if (caps.message && caps.updateModelContext) return { context: full, message: visibleMessage(name, value) };
+  if (caps.message) return { message: full };
+  if (caps.updateModelContext) return { context: full };
+  return null;
 }
 
 /**

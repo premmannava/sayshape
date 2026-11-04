@@ -15,7 +15,7 @@
 import { actionExpressions, parseActions } from "./actions";
 import { COMMON_PROPS, type ComponentDef, type PropDef } from "./component";
 import { looksLikeData, parseData } from "./data";
-import { bareExpression, checkSyntax, identifiers, splitTemplate, wholeExpression } from "./expr";
+import { bareExpression, checkSyntax, doubledCurrency, identifiers, splitTemplate, wholeExpression } from "./expr";
 import { actionTargets } from "./actions";
 import { loopNames } from "./each";
 import { PATH } from "./paths";
@@ -197,9 +197,18 @@ export function tokenizeLine(body: string): LineTokens {
   return out;
 }
 
-function parseStateLine(body: string, line: number, diags: Diagnostic[]): Array<{ key: string; value: Value; line: number }> {
+/**
+ * One state line: name=value pairs. A value that couldn't be read adds its
+ * name to `skipped`, so the lines that use it aren't also told it doesn't
+ * exist: the state line's own warning is the one to fix.
+ */
+function parseStateLine(body: string, line: number, diags: Diagnostic[], skipped: Set<string>): Array<{ key: string; value: Value; line: number }> {
   const t = tokenizeLine("state " + body);
-  for (const p of t.problems) diags.push({ line, severity: "warning", message: p });
+  for (const p of t.problems) {
+    diags.push({ line, severity: "warning", message: p });
+    const unclosed = /^Unclosed value for "([^"]+)"/.exec(p);
+    if (unclosed) skipped.add(unclosed[1]!);
+  }
   if (t.text !== undefined) diags.push({ line, severity: "warning", message: `state lines take name=value pairs, not quoted text` });
   const out: Array<{ key: string; value: Value; line: number }> = [];
   for (const [key, raw] of Object.entries(t.props)) {
@@ -207,6 +216,7 @@ function parseStateLine(body: string, line: number, diags: Diagnostic[]): Array<
       const r = parseData(raw);
       if ("error" in r) {
         diags.push({ line, severity: "warning", message: `State "${key}" wasn't set: ${r.error}. Write lists like [1, 2] and records like {name: "Ada", age: 36}, on one line` });
+        skipped.add(key);
         continue;
       }
       out.push({ key, value: r.value, line });
@@ -300,6 +310,11 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
   return out;
 }
 
+/** The warning for "${money(x)}": shown once on screen, but the spec should drop its own sign. */
+function currencyMessage(where: string, expr: string): string {
+  return `In ${where}: ${expr.trim().split("(")[0]}() already adds the currency sign, so the sign before {${expr}} is extra (it shows once). Write {${expr}} on its own`;
+}
+
 function checkProp(name: string, raw: string, def: PropDef, line: number, diags: Diagnostic[]): void {
   const warn = (message: string) => diags.push({ line, severity: "warning", message });
   const whole = wholeExpression(raw);
@@ -342,6 +357,7 @@ function checkProp(name: string, raw: string, def: PropDef, line: number, diags:
       for (const part of splitTemplate(raw)) {
         if ("expr" in part) { const err = checkSyntax(part.expr); if (err) warn(`In ${name}: ${err}`); }
       }
+      for (const e of doubledCurrency(raw)) warn(currencyMessage(name, e));
       break;
   }
 }
@@ -360,6 +376,8 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   let last: SayShapeNode | null = null;
   // A state line whose list or record was left open: the lines after it are probably the rest of it.
   let openState: { line: number; reported: boolean } | null = null;
+  // State names whose value couldn't be read; their own line already says why.
+  const skippedState = new Set<string>();
   // Names each line reads that it isn't inside the each for, checked once every each is known.
   const outsideUses: Array<{ line: number; names: string[] }> = [];
   const eaches: SayShapeNode[] = [];
@@ -397,7 +415,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
 
     if (/^state(\s|$)/.test(body)) {
       if (indent > 0) diagnostics.push({ line: lineNo, severity: "warning", message: `state lines should not be indented` });
-      state.push(...parseStateLine(body.slice(5), lineNo, diagnostics));
+      state.push(...parseStateLine(body.slice(5), lineNo, diagnostics, skippedState));
       openState = openBrackets(body) > 0 ? { line: lineNo, reported: false } : null;
       return;
     }
@@ -487,6 +505,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
           if (err) diagnostics.push({ line: lineNo, severity: "warning", message: `In text: ${err}` });
         }
       }
+      for (const e of doubledCurrency(tok.text)) diagnostics.push({ line: lineNo, severity: "warning", message: currencyMessage("text", e) });
     }
     for (const [name, rawValue] of Object.entries(tok.props)) {
       const pdef = def.props[name] ?? COMMON_PROPS[name];
@@ -548,7 +567,8 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   // Derived names count as defined, even ones left out for a cycle (that's reported already).
   for (const d of derivedLines) if (d.reads.length) outsideUses.push({ line: d.line, names: d.reads });
   const defined = new Set([...state.map((s) => s.key), ...derivedLines.map((d) => d.name)]);
-  checkNames(outsideUses, eaches, defined, written, diagnostics);
+  // A state value that couldn't be read is reported on its own line; saying again on every line that uses it hides that.
+  checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics);
   // Stable sort keeps each line's diagnostics in the order they were found.
   diagnostics.sort((a, b) => a.line - b.line);
   return { root, state, derived, diagnostics, nodeCount, lines: lines.length };

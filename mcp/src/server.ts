@@ -56,7 +56,7 @@ const CHAT_NOTES = `This guide calls the language Loom, its earlier name: it is 
 You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
 Keep it to one focused screen: a card or column with a title, then the content. Prefer row and grid for side-by-side numbers; avoid more than three columns.
 Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption.
-When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. You will receive a message naming the action, its value and every state value, and you can reply or call show_interface again with an updated spec.
+When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.
 Output only the spec in show_interface's spec argument, with no Markdown fences.`;
 
 /** How to show a database's rows, added to the guide when the server has one. */
@@ -151,7 +151,7 @@ export function checkSpec(spec: string, hostNames: readonly string[] = []): Spec
  * Every other warning (a bad expression, a value outside a prop's choices, a
  * name nothing defines) leaves part of the interface wrong, so it needs a fix.
  */
-const HARMLESS = /has no prop "|doesn't take quoted text; it was ignored|state lines should not be indented/;
+const HARMLESS = /has no prop "|already adds the currency sign|doesn't take quoted text; it was ignored|state lines should not be indented/;
 export const isHarmless = (d: Diagnostic) => d.severity !== "error" && HARMLESS.test(d.message);
 
 function describeCheck(c: SpecCheck): string {

@@ -13,6 +13,8 @@ declare global {
       ready: Promise<void>;
       bridge: AppBridge;
       messages: string[];
+      /** Every model-context update the view sent, oldest first. */
+      context: string[];
       sizes: number[];
       /** Server tools the view called (with serverTools on). */
       calls: Array<{ name: string; arguments: Record<string, unknown> }>;
@@ -31,6 +33,7 @@ export function mount(html: string, theme: "light" | "dark", styles?: Record<str
     hostContext: { theme, platform: "web", displayMode: "inline", ...(styles ? { styles: { variables: styles as unknown as McpUiStyles } } : {}) },
   });
   const messages: string[] = [];
+  const context: string[] = [];
   const sizes: number[] = [];
   const calls: Array<{ name: string; arguments: Record<string, unknown> }> = [];
   if (serverTools) {
@@ -40,6 +43,10 @@ export function mount(html: string, theme: "light" | "dark", styles?: Record<str
       return window.callServer(params.name, params.arguments ?? {});
     };
   }
+  bridge.onupdatemodelcontext = async ({ content }) => {
+    for (const c of content ?? []) if (c.type === "text") context.push(c.text);
+    return {};
+  };
   bridge.onmessage = async ({ content }) => {
     for (const c of content) if (c.type === "text") messages.push(c.text);
     return {};
@@ -50,5 +57,5 @@ export function mount(html: string, theme: "light" | "dark", styles?: Record<str
   const ready = new Promise<void>((done) => { bridge.oninitialized = () => done(); });
   iframe.srcdoc = html;
   void bridge.connect(new PostMessageTransport(iframe.contentWindow!, iframe.contentWindow!));
-  window.host = { ready, bridge, messages, sizes, calls };
+  window.host = { ready, bridge, messages, context, sizes, calls };
 }

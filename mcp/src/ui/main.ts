@@ -17,7 +17,7 @@ import { coreComponents } from "../../../src/components";
 import { darkTheme, lightTheme, type Theme } from "../../../src/theme";
 import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
-import { eventMessage, nextChunk } from "./messages";
+import { eventDelivery, nextChunk } from "./messages";
 import { firstFamily, hostTheme, type ReadVar } from "./host-theme";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
@@ -218,21 +218,25 @@ app.onteardown = async () => {
 };
 
 /**
- * Send an event to the model: as a message when the client allows it (the
- * model answers straight away), otherwise as context for its next reply.
+ * Send an event to the model. When the client allows both, the details go in
+ * as model context (not shown in the chat) and the conversation shows only a
+ * short line like "Confirm laptop", which also makes the model answer straight
+ * away. The context is sent first, so it is there when the model answers.
  */
-async function deliver(text: string): Promise<void> {
+async function deliver(name: string, value: Value | undefined, state: Record<string, Value>): Promise<void> {
   const caps = app.getHostCapabilities();
-  const content = [{ type: "text" as const, text }];
+  const plan = eventDelivery({ message: !!caps?.message, updateModelContext: !!caps?.updateModelContext }, name, value, state);
+  if (!plan) { loom?.notify("This chat app can't receive actions from interfaces"); return; }
+  const content = (text: string) => [{ type: "text" as const, text }];
   try {
-    if (caps?.message) {
-      const r = await app.sendMessage({ role: "user", content });
+    if (plan.context !== undefined) {
+      await app.updateModelContext({ content: content(plan.context), structuredContent: { action: name, value: value ?? null, state } });
+    }
+    if (plan.message !== undefined) {
+      const r = await app.sendMessage({ role: "user", content: content(plan.message) });
       loom?.notify(r?.isError ? "Couldn't send that to the assistant" : "Sent to the assistant");
-    } else if (caps?.updateModelContext) {
-      await app.updateModelContext({ content });
-      loom?.notify("Saved for the assistant's next reply");
     } else {
-      loom?.notify("This chat app can't receive actions from interfaces");
+      loom?.notify("Saved for the assistant's next reply");
     }
   } catch {
     loom?.notify("Couldn't send that to the assistant");
@@ -251,7 +255,7 @@ async function start(): Promise<void> {
   });
   loom.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
     if (!loom) return;
-    void deliver(eventMessage(name, value, loom.state.snapshot()));
+    void deliver(name, value, loom.state.snapshot());
   });
   syncLoading();
   if (pending) { const p = pending; pending = null; show(p.spec, p.final); }

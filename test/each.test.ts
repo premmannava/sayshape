@@ -325,6 +325,36 @@ card
     expect(d[1]!.message).toMatch(/more of the state value on line 1.*Write the whole value on line 1/);
   });
 
+  it("doesn't also say a skipped list isn't state where it's used", () => {
+    const d = diags(`state items=[
+  {"name":"Laptop","price":1200},
+  {"name":"Monitor","price":300}
+]
+table items={items}
+  table-column field=name
+each items=items as=i
+  text "{i.name} {count(items)}"
+`);
+    expect(d.map((x) => x.line)).toEqual([1, 2]);
+    expect(d.some((x) => /isn't state/.test(x.message))).toBe(false);
+  });
+
+  it("does the same for a list that wasn't set for another reason", () => {
+    const d = diags(`state items=[1, 2,, 3]
+text "{count(items)}"
+`);
+    expect(d).toHaveLength(1);
+    expect(d[0]!.message).toMatch(/State "items" wasn't set/);
+  });
+
+  it("still warns about names nothing declares", () => {
+    const d = diags(`state items=[
+]
+text "{others}"
+`);
+    expect(d.filter((x) => /"others" isn't state/.test(x.message))).toHaveLength(1);
+  });
+
   it("ignores any other prop written on a line of its own, keeping the lines under it", () => {
     const ui = render(`state todos=[{text: "Milk"}, {text: "Eggs"}]
 list
