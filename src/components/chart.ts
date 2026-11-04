@@ -1313,13 +1313,17 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
             g.save();
             g.font = ctx.font(600, 11);
             const slotRoom = pw / d.slots.length - 8;
-            const labelY = up ? b.y - 9 : b.y + b.h + 9;
-            const withinPlot = labelY >= d.plot.y + 8 && labelY <= d.plot.y + d.plot.h - 8;
-            if (withinPlot && g.measureText(label).width < slotRoom) {
+            const outside = up ? b.y - 9 : b.y + b.h + 9;
+            const roomOutside = outside >= d.plot.y + 8 && outside <= d.plot.y + d.plot.h - 8;
+            // Near the plot edge, place the value inside a tall bar instead
+            // of dropping the label or letting it clip above the chart.
+            const inside = !roomOutside && b.h >= 30;
+            const labelY = roomOutside ? outside : up ? b.y + 14 : b.y + b.h - 14;
+            if ((roomOutside || inside) && g.measureText(label).width < slotRoom) {
               g.textAlign = "center";
               g.textBaseline = "middle";
-              g.fillStyle = c.muted;
-              g.globalAlpha *= 0.88;
+              g.fillStyle = inside ? c.onAccent : c.muted;
+              g.globalAlpha *= 0.9;
               g.fillText(label, ox + b.x + b.w / 2, oy + labelY);
             }
             g.restore();
