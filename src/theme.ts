@@ -30,10 +30,10 @@ export interface Theme {
     /** The soft shadow under cards and raised controls, so surfaces sit above the page instead of being outlined on it. */
     shadow: string;
     /**
-     * Muted series colors for line and bar charts, in order. The first
-     * series uses the brand accent, followed by slate, sage and stone tones.
-     * Pie and donut charts use separate neutral shades generated from the
-     * theme's own surfaces and ink, so they never become rainbow charts.
+     * Harmonized, low-saturation series for lines and bars. The first uses
+     * the accent; steel, sage, stone, blue and moss follow. Keep strokes
+     * visible against the chart surface, not pastel or rainbow-colored.
+     * Pie and donut charts soften these same families for broader segments.
      */
     series1: string;
     series2: string;
@@ -81,11 +81,11 @@ export const lightTheme: Theme = {
     debug: "#A86C3A",
     shadow: "rgba(25, 43, 45, 0.065)",
     series1: "#176F69",
-    series2: "#536A79",
-    series3: "#858D93",
-    series4: "#788A7A",
-    series5: "#A09688",
-    series6: "#708496",
+    series2: "#557887",
+    series3: "#638777",
+    series4: "#967D61",
+    series5: "#5E798C",
+    series6: "#767F71",
   },
 };
 
@@ -110,11 +110,11 @@ export const darkTheme: Theme = {
     debug: "#DEA36C",
     shadow: "rgba(0, 0, 0, 0.38)",
     series1: "#72C6BB",
-    series2: "#A0B4C1",
-    series3: "#C0C7CB",
-    series4: "#96B09E",
-    series5: "#C3B19B",
-    series6: "#859CAF",
+    series2: "#9DB8C4",
+    series3: "#A6C4B1",
+    series4: "#CDBC9F",
+    series5: "#91B1C2",
+    series6: "#ADB8A0",
   },
 };
 
@@ -128,18 +128,29 @@ export function seriesColors(theme: Theme): string[] {
 export const SERIES_COUNT = 6;
 
 /**
- * Pie and donut charts should be quiet when idle: six distinct tonal shades
- * from the surrounding raised surface toward its ink. This follows custom
- * host colors too, while active slices can use the theme accent on hover.
- * No fixed rainbow colors or new styling language are necessary.
+ * A little color, not a rainbow: one deep teal and supporting steel, sage,
+ * warm stone, dusty blue and moss. The same six configurable series tokens
+ * feed every chart; broad pie slices are softer than thin line-chart strokes.
+ * Hover still uses the unmuted accent, and custom host series colors follow.
  */
 export function sliceColors(theme: Theme): string[] {
-  const dark = isDarkTheme(theme);
-  const weights = dark ? [0.77, 0.65, 0.54, 0.44, 0.35, 0.27] : [0.80, 0.67, 0.54, 0.43, 0.33, 0.24];
-  const fallback = dark
-    ? ["#C3CED0", "#A7B6BA", "#8B9EA3", "#71878D", "#586F75", "#445A60"]
-    : ["#444F54", "#677479", "#89969A", "#ABB5B8", "#CAD1D3", "#E0E5E6"];
-  return weights.map((weight, i) => mixColors(theme.colors.raised, theme.colors.ink, weight) ?? fallback[i]!);
+  const [accent, steel, sage, stone, blue, moss] = seriesColors(theme);
+  const { raised, ink } = theme.colors;
+  if (isDarkTheme(theme)) {
+    return [
+      mixColors(raised, accent!, 0.77) ?? accent!,
+      steel!, sage!, stone!, blue!, moss!,
+    ];
+  }
+  const deep = mixColors(accent!, steel!, 0.6) ?? accent!;
+  return [
+    mixColors(deep, ink, 0.25) ?? deep,
+    mixColors(steel!, raised, 0.18) ?? steel!,
+    mixColors(sage!, raised, 0.32) ?? sage!,
+    mixColors(stone!, raised, 0.40) ?? stone!,
+    mixColors(blue!, raised, 0.25) ?? blue!,
+    mixColors(moss!, raised, 0.24) ?? moss!,
+  ];
 }
 
 /**

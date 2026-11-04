@@ -285,15 +285,15 @@ describe.each(Object.entries(SPECS))("%s", (_name, spec) => {
   });
 });
 
-describe("neutral-first pie and donut colors", () => {
-  it.each([lightTheme, darkTheme].map((t) => [t.name, t] as const))("uses six distinct neutral tones in %s", (_name, theme: Theme) => {
+describe("harmonized pie and donut colors", () => {
+  it.each([lightTheme, darkTheme].map((t) => [t.name, t] as const))("uses six complementary muted colors in %s", (_name, theme: Theme) => {
     const shades = sliceColors(theme);
     expect(shades).toHaveLength(6);
     expect(new Set(shades).size).toBe(6);
     expect(shades).not.toContain(theme.colors.accent);
   });
 
-  it.each(["pie", "donut"] as const)("paints %s segments and legend markers with the neutral palette", (kind) => {
+  it.each(["pie", "donut"] as const)("paints %s segments and legend markers with the muted palette", (kind) => {
     for (const theme of [lightTheme, darkTheme]) {
       const spec = `state rows=[{k:"A",v:6},{k:"B",v:3},{k:"C",v:1}]
 chart kind=${kind} items=rows x=k y=v`;
@@ -306,6 +306,24 @@ chart kind=${kind} items=rows x=k y=v`;
 });
 
 describe("series colors in the theme", () => {
+  it("keeps all chart strokes readable on their default panels", () => {
+    const luminance = (hex: string) => {
+      const rgb = parseInt(hex.slice(1), 16);
+      const channels = [(rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255].map((v) => {
+        const s = v / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return channels[0]! * 0.2126 + channels[1]! * 0.7152 + channels[2]! * 0.0722;
+    };
+    const contrast = (a: string, b: string) => {
+      const x = luminance(a), y = luminance(b);
+      return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    };
+    for (const theme of [lightTheme, darkTheme]) {
+      for (const color of seriesColors(theme)) expect(contrast(color, theme.colors.raised)).toBeGreaterThanOrEqual(3);
+    }
+  });
+
   it("has 6 per mode, with the accent first", () => {
     for (const t of [lightTheme, darkTheme]) {
       const s = seriesColors(t);
