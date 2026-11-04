@@ -67,7 +67,7 @@ each items=xs as=x
   it("are checked like each: their lines must suit the container around them", () => {
     const diags = (spec: string) => parse(spec, registry).diagnostics;
     expect(diags(`state t="a" on=true\ntabs bind=t\n  if=on\n    tab "A" value=a\n      text "x"\n`)).toEqual([]);
-    expect(diags(`state t="a" on=true\ntabs bind=t\n  if=on\n    text "x"\n`)).toEqual([{ line: 4, severity: "error", message: `"tabs" (line 2) can't contain "text"` }]);
+    expect(diags(`state t="a" on=true\ntabs bind=t\n  if=on\n    text "x"\n`)).toEqual([{ line: 4, severity: "error", message: `"tabs" (line 2) can't contain "text"; it holds tab` }]);
     expect(diags(`text "a"\n  if=on\n`)[0]!.message).toMatch(/can't contain anything/);
   });
 

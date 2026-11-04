@@ -87,6 +87,12 @@ export function parseActions(src: string): { actions: Action[] } | { error: stri
     const arg = second < 0 ? undefined : rest.slice(second + 1);
     // State-changing actions take paths (t.done); names elsewhere are plain.
     const writes = op === "inc" || op === "dec" || op === "toggle" || op === "set" || op === "add" || op === "remove" || op === "clear";
+    // emit:choose_{item.name} is the natural guess for "which one": names are fixed words, and the value goes after them.
+    if (!writes && key.includes("{")) {
+      const base = key.slice(0, key.indexOf("{")).replace(/[_\-.]+$/, "") || "choose";
+      const value = key.slice(key.indexOf("{"));
+      return { error: `Action names can't contain {…}. Keep the name a plain word and put the value after it: ${op}:${base}:${value}` };
+    }
     if (!(writes ? PATH : NAME).test(key)) {
       return { error: `"${key}" is not a valid ${writes ? "state name or path, like count or t.done," : "name"} in action "${part}"` };
     }

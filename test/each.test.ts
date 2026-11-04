@@ -293,13 +293,13 @@ tabs bind=t
 tabs bind=t
   each items=xs
     text "{item}"
-`)).toEqual([{ line: 4, severity: "error", message: `"tabs" (line 2) can't contain "text"` }]);
+`)).toEqual([{ line: 4, severity: "error", message: `"tabs" (line 2) can't contain "text"; it holds tab` }]);
     expect(diags(`state xs=[1]
 list
   each items=xs
     each items=xs
       button "x"
-`)).toEqual([{ line: 5, severity: "error", message: `"list" (line 2) can't contain "button"` }]);
+`)).toEqual([{ line: 5, severity: "error", message: `"list" (line 2) can't contain "button"; it holds list-item. Make the row itself pressable, like list-item "{item.name}" on=emit:choose:{item.name}, or use a column of cards for rows with buttons` }]);
     expect(diags(`state xs=[1]
 column
   each items=xs

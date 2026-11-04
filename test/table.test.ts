@@ -43,7 +43,7 @@ describe("table specs", () => {
     const msgs = (spec: string) => parse(`${equipment}\n${spec}\n`, registry).diagnostics.map((d) => `${d.severity}: ${d.message}`);
     expect(msgs(`table-column "Name" field=name`)).toEqual([`error: "table-column" only goes inside table`]);
     expect(msgs(`card\n  table-column "Name" field=name`)).toEqual([`error: "table-column" only goes inside table`]);
-    expect(msgs(`table items=equipment\n  text "Hi"`)).toEqual([`error: "table" (line 2) can't contain "text"`]);
+    expect(msgs(`table items=equipment\n  text "Hi"`)).toEqual([`error: "table" (line 2) can't contain "text"; it holds table-column`]);
   });
 
   it("explains bad props", () => {
