@@ -2,6 +2,7 @@ import type { ComponentDef } from "../component";
 import type { Box } from "../types";
 import { wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
+import { mixColors } from "../theme";
 import { chevron, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, partBox, row as rowLayout, ROW_ALIGN, rowMinWidth, runOn, stack, themeFont } from "./util";
 
 /** A parent card is already the frame; let nested tables use its surface. */
@@ -101,7 +102,10 @@ card on=emit:open_order
     // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
     // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
     g.save();
-    g.fillStyle = c.raised;
+    const finish = g.createLinearGradient(box.x, box.y, box.x, box.y + box.h);
+    finish.addColorStop(0, c.raised);
+    finish.addColorStop(1, mixColors(c.raised, c.ink, 0.018) ?? c.raised);
+    g.fillStyle = finish;
     g.shadowColor = c.shadow;
     g.shadowBlur = 10 + 8 * lift - 3 * press;
     g.shadowOffsetY = 2 + 2 * lift - press;
@@ -111,6 +115,18 @@ card on=emit:open_order
     g.fill();
     g.restore();
     if (press > 0) fillTint(g, c.ink, 0.035 * press);
+    // A fine upper highlight adds depth without a second container or extra layout.
+    if (box.w > 36 && box.h > 10) {
+      g.save();
+      g.beginPath();
+      g.moveTo(box.x + 16, box.y + 1.5);
+      g.lineTo(box.x + box.w - 16, box.y + 1.5);
+      g.strokeStyle = c.ink;
+      g.globalAlpha *= 0.055 + 0.045 * lift;
+      g.lineWidth = 1;
+      g.stroke();
+      g.restore();
+    }
     g.strokeStyle = c.line;
     g.lineWidth = 1;
     // Softer perimeter; elevation and spacing separate cards from the canvas.
@@ -273,10 +289,14 @@ export const listItem: ComponentDef = {
     const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number };
     const p = ctx.props(box.node);
     const pressable = p.has("on");
-    if (pressable && ctx.isHovered(box.node)) {
-      g.beginPath();
-      g.rect(box.x + 1, box.y + 1, box.w - 2, box.h - 2);
-      fillTint(g, c.ink, ctx.isPressed(box.node) ? 0.07 : 0.035);
+    if (pressable) {
+      const hovered = ctx.isHovered(box.node);
+      const highlight = ctx.tween(box.node, "list:hover", hovered ? 1 : 0, 180);
+      const pressed = ctx.tween(box.node, "list:press", ctx.isPressed(box.node) ? 1 : 0, 120);
+      if (highlight || pressed) {
+        ctx.roundRect(box.x + 2, box.y + 1, box.w - 4, box.h - 2, theme.radius.sm);
+        fillTint(g, c.ink, 0.03 * highlight + 0.045 * pressed);
+      }
     }
     // A leading icon in the accent, level with the title's first line.
     const name = p.str("icon");

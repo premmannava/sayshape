@@ -2,7 +2,7 @@ import { toNumber } from "../data";
 import type { ComponentDef, LayoutContext, PropReader } from "../component";
 import type { Box, SayShapeNode } from "../types";
 import { INPUT_KINDS } from "../editor";
-import { isDarkTheme, type Theme } from "../theme";
+import { isDarkTheme, mixColors, type Theme } from "../theme";
 import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
 
 const VARIANTS = ["primary", "secondary", "danger"] as const;
@@ -64,9 +64,28 @@ button "Back" variant=secondary on=dec:step`,
       g.shadowBlur = (2 + 4 * hoverProgress) * (1 - pressProgress);
       g.shadowOffsetY = (1 + hoverProgress) * (1 - pressProgress);
     }
-    g.fillStyle = secondary ? c.raised : color;
+    if (secondary) {
+      g.fillStyle = c.raised;
+    } else {
+      const finish = g.createLinearGradient(0, box.y, 0, box.y + box.h);
+      finish.addColorStop(0, color);
+      finish.addColorStop(1, mixColors(color, c.raised, 0.19) ?? color);
+      g.fillStyle = finish;
+    }
     g.fill();
     g.restore();
+    if (!secondary && box.w > 30) {
+      // A restrained top-edge reflection, independent from content and hit geometry.
+      g.save();
+      g.beginPath();
+      g.moveTo(box.x + 14, box.y + 2);
+      g.lineTo(box.x + box.w - 14, box.y + 2);
+      g.strokeStyle = c.onAccent;
+      g.lineWidth = 1;
+      g.globalAlpha *= 0.17 * (1 - pressProgress);
+      g.stroke();
+      g.restore();
+    }
     // Hover and press move toward the ink: a filled button deepens on a light theme and
     // brightens on a dark one, so it always gains contrast instead of washing out.
     if (secondary) {
@@ -108,8 +127,14 @@ check "I agree to the terms" bind=agreed`,
     const c = theme.colors;
     const on = !!p.bound();
     const hot = ctx.isHovered(box.node);
+    const selected = ctx.tween(box.node, "check:marked", on ? 1 : 0, 175);
+    const hover = ctx.tween(box.node, "check:hover", hot ? 1 : 0, 145);
     ctx.roundRect(box.x + 0.5, box.y + 4.5, 18, 18, Math.min(5, theme.radius.sm));
-    if (on) {
+    g.fillStyle = c.surface;
+    g.fill();
+    if (selected > 0) {
+      g.save();
+      g.globalAlpha *= selected;
       g.fillStyle = c.accent;
       g.fill();
       g.strokeStyle = c.onAccent;
@@ -121,16 +146,15 @@ check "I agree to the terms" bind=agreed`,
       g.lineTo(box.x + 8.5, box.y + 17);
       g.lineTo(box.x + 14.5, box.y + 10);
       g.stroke();
-    } else {
-      g.fillStyle = c.surface;
-      g.fill();
-      g.save();
-      if (!hot) g.globalAlpha *= 0.6;
-      g.strokeStyle = hot ? c.accent : c.muted;
-      g.lineWidth = 1.25;
-      g.stroke();
       g.restore();
     }
+    ctx.roundRect(box.x + 0.5, box.y + 4.5, 18, 18, Math.min(5, theme.radius.sm));
+    g.save();
+    g.globalAlpha *= (0.6 + 0.4 * hover) * (1 - selected);
+    g.strokeStyle = hot ? c.accent : c.muted;
+    g.lineWidth = 1.25;
+    g.stroke();
+    g.restore();
     g.font = ctx.font(400, theme.text.body);
     g.textAlign = "left";
     g.textBaseline = "middle";
@@ -232,6 +256,7 @@ radio "Large" bind=size value=l`,
     const { g, theme } = ctx;
     const c = theme.colors;
     const chosen = p.bound() === (p.value("value") ?? "");
+    const progress = ctx.tween(box.node, "radio:selected", chosen ? 1 : 0, 170);
     const cx = box.x + 9.5, cy = box.y + 13;
     g.beginPath();
     g.arc(cx, cy, 9, 0, Math.PI * 2);
@@ -244,9 +269,9 @@ radio "Large" bind=size value=l`,
     g.lineWidth = chosen ? 1.75 : 1.25;
     g.stroke();
     g.restore();
-    if (chosen) {
+    if (progress > 0.02) {
       g.beginPath();
-      g.arc(cx, cy, 4, 0, Math.PI * 2);
+      g.arc(cx, cy, 4 * progress, 0, Math.PI * 2);
       g.fillStyle = c.accent;
       g.fill();
     }
@@ -535,11 +560,11 @@ slider "Up to \${maxPrice}" bind=maxPrice min=20 max=300 step=10`,
     ctx.roundRect(box.x, cy - TRACK_H / 2, Math.max(TRACK_H, cx - box.x), TRACK_H, TRACK_H / 2);
     g.fillStyle = c.accent;
     g.fill();
-    const active = ctx.isPressed(box.node) || ctx.isHovered(box.node);
-    if (active) {
+    const active = ctx.tween(box.node, "slider:active", ctx.isPressed(box.node) || ctx.isHovered(box.node) ? 1 : 0, 145);
+    if (active > 0) {
       g.beginPath();
-      g.arc(cx, cy, THUMB_R + 5, 0, Math.PI * 2);
-      fillTint(g, c.accent, 0.16);
+      g.arc(cx, cy, THUMB_R + 5 * active, 0, Math.PI * 2);
+      fillTint(g, c.accent, 0.16 * active);
     }
     // A light knob with a close shadow and an accent rim, like the switch's.
     g.beginPath();
@@ -591,23 +616,38 @@ slider "Up to \${maxPrice}" bind=maxPrice min=20 max=300 step=10`,
  * firms up under the pointer, and an accent border with a soft halo while it's being typed in.
  * Shared by input, select and date-picker so every field looks the same.
  */
-export function paintField(g: CanvasRenderingContext2D, c: Theme["colors"], active: boolean, hot: boolean): void {
+export function paintField(g: CanvasRenderingContext2D, c: Theme["colors"], active: boolean | number, hot: boolean | number): void {
+  // Numeric progress lets input, select and date-picker share one soft focus
+  // transition, while callers without animation keep boolean compatibility.
+  const focus = Math.min(1, Math.max(0, Number(active)));
+  const hover = Math.min(1, Math.max(0, Number(hot)));
   g.fillStyle = c.surface;
   g.fill();
   g.save();
-  if (active) {
-    g.strokeStyle = c.accent;
-    g.globalAlpha *= 0.2;
-    g.lineWidth = 6;
-    g.stroke();
-    g.globalAlpha /= 0.2;
-    g.lineWidth = 1.25;
-    g.stroke();
-  } else {
-    g.strokeStyle = c.line;
+  g.strokeStyle = c.line;
+  g.lineWidth = 1;
+  g.stroke();
+  if (hover > 0) {
+    g.save();
+    g.globalAlpha *= hover * 0.26;
+    g.strokeStyle = c.ink;
     g.lineWidth = 1;
     g.stroke();
-    if (hot) { g.globalAlpha *= 0.25; g.strokeStyle = c.ink; g.stroke(); }
+    g.restore();
+  }
+  if (focus > 0) {
+    g.save();
+    g.globalAlpha *= 0.18 * focus;
+    g.strokeStyle = c.accent;
+    g.lineWidth = 6;
+    g.stroke();
+    g.restore();
+    g.save();
+    g.globalAlpha *= focus;
+    g.strokeStyle = c.accent;
+    g.lineWidth = 1.35;
+    g.stroke();
+    g.restore();
   }
   g.restore();
 }
@@ -682,7 +722,9 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       g.fillText(fitText(g, label, box.w), box.x, box.y);
     }
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
-    paintField(g, c, editing, hot);
+    const focus = ctx.tween(box.node, "field:focus", !disabled && (editing || ctx.isFocused(box.node)) ? 1 : 0, 175);
+    const hover = ctx.tween(box.node, "field:hover", hot ? 1 : 0, 150);
+    paintField(g, c, focus, hover);
     if (!editing) {
       const value = fieldValue(p);
       const kind = p.oneOf("kind", INPUT_KINDS, "text");

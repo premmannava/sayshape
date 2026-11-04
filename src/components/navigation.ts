@@ -83,9 +83,13 @@ tabs bind=view
     for (const cell of cells) {
       const on = cell.node.id === selected;
       const part = partBox(box, cell.x, box.y, cell.w, BAR_H);
-      if (!on && ctx.isHovered(box.node, cell.value)) {
-        ctx.roundRect(part.x + 2, part.y + 5, part.w - 4, part.h - 12, theme.radius.sm);
-        fillTint(g, c.ink, 0.045);
+      const hover = ctx.tween(box.node, "tab:hover:" + String(cell.value),
+        !on && ctx.isHovered(box.node, cell.value) ? 1 : 0, 175);
+      const selectedBg = ctx.tween(box.node, "tab:selected:" + String(cell.value), on ? 1 : 0, 210);
+      if (hover > 0 || selectedBg > 0) {
+        ctx.roundRect(part.x + 2, part.y + 5, Math.max(0, part.w - 4), BAR_H - 11, theme.radius.sm);
+        if (hover > 0) fillTint(g, c.ink, 0.042 * hover);
+        if (selectedBg > 0) fillTint(g, c.accent, 0.05 * selectedBg);
       }
       g.fillStyle = on ? c.ink : c.muted;
       g.fillText(fitText(g, cell.label, Math.max(0, cell.w - 8)), cell.x + cell.w / 2, box.y + BAR_H / 2);
@@ -183,7 +187,14 @@ breadcrumb "Shop / Shoes / Trail runners" bind=at`,
         g.fillText(SEP, cr.x + cr.w, cr.y + CRUMB_H / 2);
       }
       if (active) {
-        if (ctx.isHovered(box.node, cr.text)) { g.fillStyle = c.accent; g.fillRect(cr.x, cr.y + CRUMB_H - 3, cr.w, 1.5); }
+        const hover = ctx.tween(box.node, "crumb:hover:" + cr.text, ctx.isHovered(box.node, cr.text) ? 1 : 0, 160);
+    if (hover > 0) {
+      g.fillStyle = c.accent;
+      g.save();
+      g.globalAlpha *= hover;
+      g.fillRect(cr.x, cr.y + CRUMB_H - 3, cr.w, 1.5);
+      g.restore();
+    }
         ctx.addHit(partBox(box, cr.x, cr.y, cr.w, CRUMB_H), { detail: cr.text });
       }
     }
@@ -252,9 +263,13 @@ pagination bind=page pages=12`,
         ctx.roundRect(x, y, size, size, theme.radius.sm);
         g.fillStyle = c.accent;
         g.fill();
-      } else if (enabled && ctx.isHovered(box.node, detail)) {
-        ctx.roundRect(x, y, size, size, theme.radius.sm);
-        fillTint(g, c.ink, 0.05);
+      } else {
+        const hover = ctx.tween(box.node, "pagination:hover:" + String(detail),
+          enabled && ctx.isHovered(box.node, detail) ? 1 : 0, 155);
+        if (hover > 0) {
+          ctx.roundRect(x, y, size, size, theme.radius.sm);
+          fillTint(g, c.ink, 0.055 * hover);
+        }
       }
       if (slot.kind === "prev" || slot.kind === "next") {
         g.save();
