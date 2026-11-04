@@ -6,7 +6,8 @@ export interface Reply {
   content: string[];
   /** Reasoning chunks sent in a separate field first, as some servers do. */
   reasoning?: string[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number; completion_tokens_details?: { reasoning_tokens: number } };
+  /** Sent as the server's usage, in whatever shape the test needs (cache fields included). */
+  usage?: Record<string, unknown>;
 }
 
 /** A fake OpenAI-compatible server: each request gets the next reply, as server-sent events split at odd places. */

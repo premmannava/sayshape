@@ -112,6 +112,41 @@ describe("streamChat", () => {
     expect(usage).toEqual({ promptTokens: 900, completionTokens: 12 });
   });
 
+  it("marks the system prompt for caching only when asked", async () => {
+    const messages: ChatMessage[] = [{ role: "system", content: "GUIDE" }, { role: "user", content: "a form" }];
+    const drain = async (cache?: true | "1h") => {
+      const m = fakeModel([{ content: ["card\n"] }]);
+      for await (const _ of streamChat({ ...config, cache }, messages, { fetch: m.fetch })) { /* drain */ }
+      return m.requests[0]!.body.messages as unknown[];
+    };
+    expect(await drain()).toEqual(messages);
+    expect(await drain(true)).toEqual([
+      { role: "system", content: [{ type: "text", text: "GUIDE", cache_control: { type: "ephemeral" } }] },
+      { role: "user", content: "a form" },
+    ]);
+    expect((await drain("1h"))[0]).toEqual({ role: "system", content: [{ type: "text", text: "GUIDE", cache_control: { type: "ephemeral", ttl: "1h" } }] });
+  });
+
+  it("records cache reads and writes in any of the shapes servers use", async () => {
+    const read = async (u: Record<string, unknown>) => {
+      const m = fakeModel([{ content: ["card\n"], usage: u }]);
+      const usage = {};
+      for await (const _ of streamChat(config, [], { fetch: m.fetch, usage })) { /* drain */ }
+      return usage;
+    };
+    // OpenAI: reads only.
+    expect(await read({ prompt_tokens: 11000, completion_tokens: 150, prompt_tokens_details: { cached_tokens: 10496 } }))
+      .toEqual({ promptTokens: 11000, completionTokens: 150, cachedTokens: 10496 });
+    // OpenRouter: reads and writes.
+    expect(await read({ prompt_tokens: 11000, completion_tokens: 150, prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 10500 } }))
+      .toEqual({ promptTokens: 11000, completionTokens: 150, cachedTokens: 0, cacheWriteTokens: 10500 });
+    // Anthropic's own field names.
+    expect(await read({ prompt_tokens: 11000, completion_tokens: 150, cache_read_input_tokens: 10500, cache_creation_input_tokens: 0 }))
+      .toEqual({ promptTokens: 11000, completionTokens: 150, cachedTokens: 10500, cacheWriteTokens: 0 });
+    // Not reported: unknown, not zero.
+    expect(await read({ prompt_tokens: 11000, completion_tokens: 150 })).toEqual({ promptTokens: 11000, completionTokens: 150 });
+  });
+
   it("explains server errors and unreachable servers", async () => {
     const failing = (async () => new Response("model not loaded", { status: 404, statusText: "Not Found" })) as unknown as typeof fetch;
     await expect(streamChat(config, [], { fetch: failing }).next()).rejects.toThrow(/answered 404 Not Found: model not loaded/);

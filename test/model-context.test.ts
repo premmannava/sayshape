@@ -99,7 +99,7 @@ describe("usage", () => {
     const r = await generateSpec({ config, registry, request: "x", fetch: m.fetch });
     expect(r.first.usage).toEqual({ promptTokens: 1000, completionTokens: 50, reasoningTokens: 20 });
     expect(r.usage).toMatchObject({ promptTokens: 2100, completionTokens: 80, reasoningTokens: 25 });
-    expect(r.usage.reported).toEqual({ promptTokens: 2, completionTokens: 2, reasoningTokens: 2, attempts: 2 });
+    expect(r.usage.reported).toEqual({ promptTokens: 2, completionTokens: 2, reasoningTokens: 2, cachedTokens: 0, cacheWriteTokens: 0, attempts: 2 });
   });
 
   it("leaves a total unknown, not zero, when any attempt didn't report it", async () => {
@@ -108,7 +108,7 @@ describe("usage", () => {
     expect(r.usage.promptTokens).toBeUndefined();
     expect(r.usage.completionTokens).toBeUndefined();
     expect(r.usage.reasoningTokens).toBeUndefined();
-    expect(r.usage.reported).toEqual({ promptTokens: 1, completionTokens: 1, reasoningTokens: 0, attempts: 2 });
+    expect(r.usage.reported).toEqual({ promptTokens: 1, completionTokens: 1, reasoningTokens: 0, cachedTokens: 0, cacheWriteTokens: 0, attempts: 2 });
     expect(r.repair!.usage).toEqual({});
   });
 

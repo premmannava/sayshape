@@ -6,6 +6,8 @@
  *   npm run compare -- --runs 3                      each task three times per model and format
  *   npm run compare -- --only kpi,d1                 some categories or task ids
  *   npm run compare -- --guide compact               SayShape's compact guide instead of the full one
+ *   npm run compare -- --cache 1h                    mark the guide for prompt caching (1h, 5m or off;
+ *                                                    default LOOM_PROMPT_CACHE)
  *
  * Settings come from .env.local like `npm run eval` (LOOM_MODEL_URL,
  * LOOM_API_KEY). With OpenRouter, each model's prices are looked up so the
@@ -22,7 +24,7 @@ import type { GuideMode } from "../src/prompt";
 import { Registry } from "../src/registry";
 import { HTML_PROMPT, report, runCompare, summarize, systemPrompt, type Format, type Prices } from "../eval/compare/run";
 import { tasks } from "../eval/compare/tasks";
-import { readModelEnv } from "./model-env";
+import { parseCache, readModelEnv } from "./model-env";
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -35,11 +37,16 @@ async function pricesFor(url: string, models: string[]): Promise<Record<string, 
   if (!/openrouter\.ai/.test(url)) return {};
   const res = await fetch(`${url}/models`).catch(() => null);
   if (!res?.ok) return {};
-  const json = (await res.json()) as { data?: Array<{ id: string; pricing?: { prompt?: string; completion?: string } }> };
+  const json = (await res.json()) as { data?: Array<{ id: string; pricing?: { prompt?: string; completion?: string; input_cache_read?: string; input_cache_write?: string } }> };
   const out: Record<string, Prices> = {};
   for (const m of json.data ?? []) {
     if (models.includes(m.id) && m.pricing?.prompt !== undefined && m.pricing.completion !== undefined) {
-      out[m.id] = { prompt: Number(m.pricing.prompt), completion: Number(m.pricing.completion) };
+      const p = m.pricing;
+      out[m.id] = {
+        prompt: Number(p.prompt), completion: Number(p.completion),
+        ...(p.input_cache_read !== undefined ? { cacheRead: Number(p.input_cache_read) } : {}),
+        ...(p.input_cache_write !== undefined ? { cacheWrite: Number(p.input_cache_write) } : {}),
+      };
     }
   }
   return out;
@@ -59,14 +66,18 @@ async function main(): Promise<void> {
 
   const registry = new Registry([...coreComponents, ...mapComponents]);
   const guide = { imageHosts: [], mode };
+  const cacheArg = arg("cache");
+  const cache = cacheArg === undefined ? env.cache : cacheArg === "off" ? undefined : parseCache(cacheArg);
+  if (cacheArg !== undefined && cacheArg !== "off" && !cache) throw new Error(`--cache takes 1h, 5m or off, not "${cacheArg}"`);
   const prices = await pricesFor(env.url, models);
   const total = chosen.length * formats.length * models.length * runs;
+  if (cache) console.log(`Prompt caching: the guide is marked for ${cache === "1h" ? "an hour" : "about 5 minutes"}.`);
   console.log(`SayShape vs HTML: ${chosen.length} tasks × ${formats.join(" and ")} × ${models.length} model${models.length === 1 ? "" : "s"} × ${runs} run${runs === 1 ? "" : "s"} = ${total} requests at ${env.url}`);
   for (const m of models) console.log(`  ${m}: ${prices[m] ? `$${(prices[m].prompt * 1e6).toFixed(2)} / $${(prices[m].completion * 1e6).toFixed(2)} per million tokens in / out` : "price unknown"}`);
   console.log("");
 
   const results = await runCompare(chosen, {
-    config: { url: env.url, apiKey: env.apiKey || undefined, streamUsage: true, maxTokens: 8000 },
+    config: { url: env.url, apiKey: env.apiKey || undefined, streamUsage: true, maxTokens: 8000, cache },
     models,
     formats,
     runs,
@@ -86,9 +97,9 @@ async function main(): Promise<void> {
   const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
   const dir = resolve(__dirname, "..", "eval", "compare", "results", stamp);
   mkdirSync(resolve(dir, "answers"), { recursive: true });
-  const md = report(results, { date: new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC", url: env.url, runs, guideChars: systemPrompt("sayshape", registry, guide).length, htmlPromptChars: HTML_PROMPT.length });
+  const md = report(results, { date: new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC", url: env.url, runs, guideChars: systemPrompt("sayshape", registry, guide).length, htmlPromptChars: HTML_PROMPT.length, cache });
   writeFileSync(resolve(dir, "report.md"), md);
-  writeFileSync(resolve(dir, "results.json"), JSON.stringify({ url: env.url, models, runs, guide, prices, summary: summarize(results), results }, null, 2));
+  writeFileSync(resolve(dir, "results.json"), JSON.stringify({ url: env.url, models, runs, guide, cache: cache ?? null, prices, summary: summarize(results), results }, null, 2));
   for (const r of results) {
     if (!r.output) continue;
     writeFileSync(resolve(dir, "answers", `${r.model.replace(/[^\w.-]+/g, "_")}.${r.task}.${r.run}.${r.format === "sayshape" ? "loom" : "html"}`), r.output);
