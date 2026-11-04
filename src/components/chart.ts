@@ -953,7 +953,7 @@ function paintHbarLoading(ctx: PaintCtx, d: ChartGeometry, box: Box, bounds: Rec
 }
 
 /** Draw horizontal bars: labels on the left, bars growing from the zero line, values at their ends. */
-function paintHbar(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, colorOf: (k: number) => string, reveal: number): void {
+function paintHbar(box: Box, ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, colorOf: (k: number) => string, reveal: number): void {
   const { g, theme } = ctx;
   const c = theme.colors;
   const base = g.globalAlpha;
@@ -979,7 +979,7 @@ function paintHbar(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, colo
     const grow = reveal < 1 ? staggered(reveal, i, n) : 1;
     (s.bars ?? []).forEach((full, k) => {
       if (!full || full.w <= 0) return;
-      const w = full.w * grow;
+      const w = ctx.tween(box.node, `hbar:${i}:${k}`, full.w, 440) * grow;
       if (w <= 0.25) return;
       const right = full.x >= zero - 0.01;
       const b = { x: right ? full.x : full.x + full.w - w, y: full.y, w, h: full.h };
@@ -1146,7 +1146,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     }
 
     if (d.kind === "hbar") {
-      paintHbar(ctx, d, ox, oy, colorOf, reveal);
+      paintHbar(box, ctx, d, ox, oy, colorOf, reveal);
       g.globalAlpha = base;
       if (reveal >= 1) paintChartHover(box, ctx, d);
       return;
@@ -1196,7 +1196,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
         (s.bars ?? []).forEach((full, k) => {
           if (!full || full.h <= 0) return;
           const up = full.y + full.h / 2 < zero;
-          const h = full.h * grow;
+          const h = ctx.tween(box.node, `bar:${i}:${k}`, full.h, 440) * grow;
           if (h <= 0.25) return;
           const b = { x: full.x, y: up ? full.y + full.h - h : full.y, w: full.w, h };
           barPath(g, ox + b.x, oy + b.y, b.w, b.h, Math.min(4, b.w / 2, b.h), up);
@@ -1212,12 +1212,19 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
         g.rect(px - 6, oy + d.plot.y - 6, (pw + 12) * easeOut(reveal), d.plot.h + 12);
         g.clip();
       }
+      // Smooth state-driven point updates on one shared canvas clock.
+      // Layout and pointer hit testing retain the authoritative new geometry.
+      const drawnPoints = new Map<{ x: number; y: number }, { x: number; y: number }>();
+      d.slots.forEach((s, i) => s.points?.forEach((pt, k) => {
+        if (pt) drawnPoints.set(pt, { x: pt.x, y: ctx.tween(box.node, `line:${i}:${k}`, pt.y, 440) });
+      }));
+      const drawnSeries = d.seriesSegments.map((runs) => runs.map((run) => run.map((pt) => drawnPoints.get(pt) ?? pt)));
       // One line gets a soft wash under it down to the axis, which gives it weight; with several
       // the washes would muddy each other, so they stay plain lines.
-      if (d.seriesSegments.length === 1) {
+      if (drawnSeries.length === 1) {
         const floor = oy + (d.zeroY ?? d.plot.y + d.plot.h);
         const color = colorOf(0);
-        for (const run of d.seriesSegments[0]!) {
+        for (const run of drawnSeries[0]!) {
           if (run.length < 2) continue;
           g.beginPath();
           run.forEach((pt, i) => (i ? g.lineTo(ox + pt.x, oy + pt.y) : g.moveTo(ox + pt.x, oy + pt.y)));
@@ -1230,7 +1237,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       g.lineWidth = 2;
       g.lineJoin = "round";
       g.lineCap = "round";
-      d.seriesSegments.forEach((runs, k) => {
+      drawnSeries.forEach((runs, k) => {
         for (const run of runs) {
           if (run.length < 2) continue;
           g.beginPath();
@@ -1241,7 +1248,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       });
       // Dots: on every point when there's room, and always on a point with no neighbours.
       const slotW = pw / Math.max(1, d.slots.length);
-      d.seriesSegments.forEach((runs, k) => {
+      drawnSeries.forEach((runs, k) => {
         for (const run of runs) {
           for (const pt of run) {
             if (slotW < 10 && run.length > 1) continue;
@@ -1424,8 +1431,9 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
     });
     if (d.kind === "line") {
       g.beginPath();
-      g.moveTo(ox + s.cx + 0.5, oy + d.plot.y);
-      g.lineTo(ox + s.cx + 0.5, oy + d.plot.y + d.plot.h);
+      const guideX = ctx.tween(box.node, "chart:crosshair", s.cx, 105);
+      g.moveTo(ox + guideX + 0.5, oy + d.plot.y);
+      g.lineTo(ox + guideX + 0.5, oy + d.plot.y + d.plot.h);
       g.strokeStyle = c.muted;
       g.globalAlpha *= 0.65;
       g.lineWidth = 1;
@@ -1436,7 +1444,7 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
       s.points?.forEach((pt, k) => {
         if (!pt) return;
         g.beginPath();
-        g.arc(ox + pt.x, oy + pt.y, 5, 0, Math.PI * 2);
+        g.arc(ox + pt.x, oy + ctx.tween(box.node, `line:${hover.index}:${k}`, pt.y, 440), 5, 0, Math.PI * 2);
         g.fillStyle = c.raised;
         g.fill();
         g.lineWidth = 2.5;
