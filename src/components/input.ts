@@ -1,10 +1,18 @@
 import { toNumber } from "../data";
-import type { ComponentDef, PropReader } from "../component";
-import type { Box } from "../types";
+import type { ComponentDef, LayoutContext, PropReader } from "../component";
+import type { Box, SayShapeNode } from "../types";
 import { INPUT_KINDS } from "../editor";
 import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
 
 const VARIANTS = ["primary", "secondary", "danger"] as const;
+
+/** Wider than this, a button takes its label's width instead of all the space it's given. */
+export const BUTTON_FULL_UNDER = 360;
+
+/** A button's own width: its label with room either side. */
+function buttonWidth(node: SayShapeNode, ctx: LayoutContext): number {
+  return Math.max(96, Math.ceil(textWidth(ctx, ctx.props(node).text(), 600, 14) + 44));
+}
 
 export const button: ComponentDef = {
   type: "button",
@@ -20,6 +28,9 @@ export const button: ComponentDef = {
 button "Back" variant=secondary on=dec:step`,
   layout(box, ctx) {
     box.h = ctx.theme.control.height;
+    // On a phone a button takes the full width, which is easy to tap. Anywhere wider it takes the
+    // width of its label, like buttons in apps and on the web, instead of a long slab.
+    if (box.w > BUTTON_FULL_UNDER) box.w = Math.min(box.w, buttonWidth(box.node, ctx));
   },
   minWidth(node, ctx) {
     const w = textWidth(ctx, ctx.props(node).text(), 600, 14) + 24;
@@ -37,22 +48,23 @@ button "Back" variant=secondary on=dec:step`,
     if (disabled) g.globalAlpha *= 0.45;
     const inset = down ? 1 : 0;
     ctx.roundRect(box.x + 0.5 + inset, box.y + 0.5 + inset, box.w - 1 - inset * 2, box.h - 1 - inset * 2, theme.radius.md);
+    // A close, soft shadow lifts the button off the surface; it goes when the button is held down.
+    g.save();
+    if (!down && !disabled) { g.shadowColor = c.shadow; g.shadowBlur = 3; g.shadowOffsetY = 1; }
+    g.fillStyle = variant === "secondary" ? c.surface : color;
+    g.fill();
+    g.restore();
     if (variant === "secondary") {
-      g.fillStyle = c.surface;
-      g.fill();
-      if (hot) { g.save(); g.globalAlpha *= 0.1; g.fillStyle = color; g.fill(); g.restore(); }
-      g.strokeStyle = color;
+      // Quiet beside the primary: a neutral outline and ink text, tinted on hover.
+      if (hot) fillTint(g, c.ink, 0.05);
+      g.strokeStyle = hot ? c.muted : c.line;
       g.lineWidth = 1;
       g.stroke();
-    } else {
-      g.fillStyle = color;
-      g.fill();
-      if (hot) { g.save(); g.globalAlpha *= 0.14; g.fillStyle = c.onAccent; g.fill(); g.restore(); }
-    }
+    } else if (hot) fillTint(g, c.onAccent, 0.14);
     g.font = ctx.font(600, 14);
     g.textAlign = "center";
     g.textBaseline = "middle";
-    g.fillStyle = variant === "secondary" ? color : c.onAccent;
+    g.fillStyle = variant === "secondary" ? c.ink : c.onAccent;
     g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
     if (!disabled) ctx.addHit(box);
   },

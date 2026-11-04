@@ -1734,6 +1734,8 @@ canvas {
 
 Charts color their series and pie slices with six categorical tokens, `series1` to `series6` (`--loom-series-1` to `--loom-series-6` in CSS). `series1` is the accent: change only the accent and it follows. The defaults are checked against the card surface in both modes, and the first four stay distinguishable with protanopia and deuteranopia.
 
+Cards and buttons sit on a soft shadow in the `shadow` color (`--loom-shadow`), a low-opacity color such as `rgba(16, 24, 40, 0.07)`. Set it to `transparent` for a flat look.
+
 Or build a theme in code:
 
 ```ts

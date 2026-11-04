@@ -393,13 +393,26 @@ function paintTable(box: Box, ctx: PaintContext): void {
     return;
   }
 
-  const rule = (y: number) => {
+  // A faint band behind the header sets it apart from the rows, inside the frame's rounded corners.
+  g.save();
+  ctx.roundRect(ox + f.x + 1, oy + f.y + 1, f.w - 2, f.h - 2, theme.radius.md - 1);
+  g.clip();
+  g.beginPath();
+  g.rect(ox + f.x, oy + f.y, f.w, d.headerH);
+  fillTint(g, c.ink, 0.035);
+  g.restore();
+
+  // Rules between rows are lighter than the frame: they guide the eye without boxing every row.
+  const rule = (y: number, light = true) => {
     g.beginPath();
     g.moveTo(ox + f.x + 1, Math.round(oy + y) + 0.5);
     g.lineTo(ox + f.x + f.w - 1, Math.round(oy + y) + 0.5);
     g.strokeStyle = c.line;
     g.lineWidth = 1;
+    g.save();
+    if (light) g.globalAlpha *= 0.6;
     g.stroke();
+    g.restore();
   };
   const focusRing = (x: number, y: number, w: number, h: number) => {
     ctx.roundRect(x + 2, y + 2, w - 4, h - 4, theme.radius.sm);
@@ -429,7 +442,7 @@ function paintTable(box: Box, ctx: PaintContext): void {
     }
     if (d.sortable && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
   }
-  rule(f.y + d.headerH);
+  rule(f.y + d.headerH, false);
 
   if (d.loading) {
     // Placeholder cells, a little shorter than their columns and of varied lengths.

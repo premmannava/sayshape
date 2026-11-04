@@ -63,7 +63,9 @@ describe("stat layout", () => {
     const ui = render(`stat label="Revenue" value="$12,400" change="+12%"\n`);
     expect(texts(ui)).toContain("▲ +12%");
     const value = textOp(ui, "$12,400")!, change = textOp(ui, "▲ +12%")!;
-    expect(change.args[2]).toBe(value.args[2]);
+    // In a pill centred on the value's capitals: above the value's baseline, within its line.
+    expect(Number(change.args[2])).toBeLessThan(Number(value.args[2]));
+    expect(Number(change.args[2])).toBeGreaterThan(Number(value.args[2]) - 32);
     expect(Number(change.args[1])).toBeGreaterThan(Number(value.args[1]));
     ui.destroy();
   });

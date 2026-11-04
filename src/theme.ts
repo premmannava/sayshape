@@ -20,6 +20,8 @@ export interface Theme {
     landHighlight: string;
     landHover: string;
     debug: string;
+    /** The soft shadow under cards and raised controls, so surfaces sit above the page instead of being outlined on it. */
+    shadow: string;
     /**
      * Categorical colors for chart series and pie slices, used in this order.
      * series1 is the accent. The first four stay apart under common color
@@ -68,6 +70,7 @@ export const lightTheme: Theme = {
     landHighlight: "#A6D6D1",
     landHover: "#B3BDCB",
     debug: "#C2410C",
+    shadow: "rgba(16, 24, 40, 0.07)",
     series1: "#0E7C76",
     series2: "#A2461A",
     series3: "#64399D",
@@ -95,6 +98,7 @@ export const darkTheme: Theme = {
     landHighlight: "#1E5B57",
     landHover: "#3D495C",
     debug: "#FB923C",
+    shadow: "rgba(0, 0, 0, 0.32)",
     series1: "#3CC2B8",
     series2: "#B74C05",
     series3: "#7C61A8",
