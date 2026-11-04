@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { createServer, checkSpec, guideText, quickStart, UI_URI, MAX_SPEC_CHARS } from "../src/server";
+import { createServer, checkSpec, guideText, interfaceKey, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, UI_URI, MAX_SPEC_CHARS } from "../src/server";
 
-async function connect() {
-  const server = createServer({ uiHtml: () => "<!doctype html><title>view</title>" });
+async function connect(now?: () => number) {
+  const server = createServer({ uiHtml: () => "<!doctype html><title>view</title>", now });
   const client = new Client({ name: "test", version: "1.0.0" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -117,7 +117,8 @@ describe("SayShape MCP server", () => {
     const spec = `state rows=[{m: "Jan", v: 3}]\ncard\n  text "Best: {argmax(rows).m}"\n  chart "Sales" kind=area items=rows x=m y=v\n`;
     const r = await client.callTool({ name: "show_interface", arguments: { spec } });
     const t = text(r);
-    expect(t).toMatch(/2 problems leave part of it wrong/);
+    expect(t).toMatch(/2 problems leave part of this interface wrong/);
+    expect(t).toMatch(/"being fixed" note/);
     expect(t).toMatch(/call show_interface again/);
     expect(t).toMatch(/Use first\(sort\(list, 'field', 'desc'\)\)/);
     expect(r.structuredContent).toMatchObject({ toFix: 2 });
@@ -155,5 +156,61 @@ describe("SayShape MCP server", () => {
     for (const spec of ["\u0000", "card\n".repeat(200) + "  ".repeat(500) + "text", "{constructor.constructor('x')()}", "state a={b}\nderive b={a}\n"]) {
       expect(() => checkSpec(spec)).not.toThrow();
     }
+  });
+
+  describe("the same interface twice", () => {
+    const show = (client: Client, spec: string) => client.callTool({ name: "show_interface", arguments: { spec } });
+
+    it("tells the model a repeat is already showing, and marks it so the view hides it", async () => {
+      const client = await connect();
+      expect((await show(client, GOOD)).structuredContent).toMatchObject({ repeat: false });
+      const again = await show(client, GOOD);
+      expect(again.isError).toBeFalsy();
+      expect(text(again)).toBe(REPEAT_TEXT);
+      expect(again.structuredContent).toMatchObject({ repeat: true, toFix: 0 });
+    });
+
+    it("counts blank lines and trailing spaces as the same interface", async () => {
+      const client = await connect();
+      await show(client, GOOD);
+      const spaced = GOOD.split("\n").map((l) => l + "  ").join("\n\n");
+      expect((await show(client, spaced)).structuredContent).toMatchObject({ repeat: true });
+    });
+
+    it("shows a changed interface as usual", async () => {
+      const client = await connect();
+      await show(client, GOOD);
+      const r = await show(client, GOOD.replace("Weekend hike", "Weekend trip"));
+      expect(r.structuredContent).toMatchObject({ repeat: false });
+      expect(text(r)).toMatch(/no problems/);
+    });
+
+    it("shows a corrected interface after one that needed fixing", async () => {
+      const client = await connect();
+      const broken = `card\n  sparkle "nope"\n  text "Hi"\n`;
+      expect((await show(client, broken)).structuredContent).toMatchObject({ toFix: 1, repeat: false });
+      // The same flawed spec again isn't hidden: it still needs fixing.
+      expect((await show(client, broken)).structuredContent).toMatchObject({ toFix: 1, repeat: false });
+      expect((await show(client, `card\n  text "Hi"\n`)).structuredContent).toMatchObject({ toFix: 0, repeat: false });
+    });
+
+    it("shows it again once enough time has passed", async () => {
+      let t = 1_000;
+      const client = await connect(() => t);
+      await show(client, GOOD);
+      t += REPEAT_WINDOW_MS + 1;
+      expect((await show(client, GOOD)).structuredContent).toMatchObject({ repeat: false });
+    });
+
+    it("keeps each conversation's last interface to itself", async () => {
+      const a = await connect(), b = await connect();
+      await show(a, GOOD);
+      expect((await show(b, GOOD)).structuredContent).toMatchObject({ repeat: false });
+    });
+
+    it("treats different datasets as different interfaces", () => {
+      expect(interfaceKey("table items=s\n", { s: "d1" })).not.toBe(interfaceKey("table items=s\n", { s: "d2" }));
+      expect(interfaceKey("a\n\n  b  \n", {})).toBe(interfaceKey("a\n  b\n", {}));
+    });
   });
 });

@@ -138,6 +138,42 @@ try {
   });
   check(Math.abs(cardPixel[0] - 48) <= 3 && Math.abs(cardPixel[1] - 48) <= 3 && Math.abs(cardPixel[2] - 46) <= 3, `the card uses the host's dark background from light-dark() (got rgb(${cardPixel.join(", ")}))`);
 
+  // A view whose result says the spec needs fixing folds into a short note, and comes back on request;
+  // one whose result says it repeats the interface above folds into a single line.
+  const foldPage = async (structuredContent) => {
+    const p = await browser.newPage({ viewport: { width: 680, height: 900 }, deviceScaleFactor: 2 });
+    p.on("pageerror", (e) => errors.push(e.message));
+    p.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+    await p.setContent(`<!doctype html><body style="margin:20px;background:#fff"><script>${hostJs}</script></body>`);
+    await p.evaluate((html) => window.TestHost.mount(html, "light"), uiHtml);
+    await p.evaluate(() => window.host.ready);
+    await p.evaluate((spec) => window.host.bridge.sendToolInput({ arguments: { spec } }), SPEC);
+    await p.waitForTimeout(500);
+    const full = await p.evaluate(() => window.host.sizes.at(-1));
+    await p.evaluate((sc) => window.host.bridge.sendToolResult({ content: [{ type: "text", text: "result" }], structuredContent: sc }), structuredContent);
+    await p.waitForTimeout(500);
+    return { p, full, folded: await p.evaluate(() => window.host.sizes.at(-1)) };
+  };
+  const fixing = await foldPage({ toFix: 2, repeat: false });
+  await fixing.p.screenshot({ path: out + "7-fixing.png" });
+  check(fixing.folded < 120 && fixing.full > 300, `a view whose spec needs fixing folds into a short note (${fixing.full}px → ${fixing.folded}px)`);
+  const foldedFrame = fixing.p.frames().find((f) => f !== fixing.p.mainFrame());
+  await foldedFrame.locator("canvas").focus();
+  let restored = fixing.folded;
+  for (let i = 0; i < 4 && restored < 300; i++) {
+    await fixing.p.keyboard.press("Tab");
+    await fixing.p.keyboard.press("Enter");
+    await fixing.p.waitForTimeout(300);
+    restored = await fixing.p.evaluate(() => window.host.sizes.at(-1));
+  }
+  check(restored > 300, `"Show this version" brings it back (${restored}px)`);
+  check((await fixing.p.evaluate(() => window.host.messages)).length === 0, "and sends nothing to the model");
+  const repeat = await foldPage({ toFix: 0, repeat: true });
+  await repeat.p.screenshot({ path: out + "8-repeat.png" });
+  check(repeat.folded < 80, `a repeat of the interface above folds into one line (${repeat.folded}px)`);
+  const kept = await foldPage({ toFix: 0, repeat: false });
+  check(kept.folded > 300, `a good interface stays as it is (${kept.folded}px)`);
+
   check(errors.length === 0, `no errors in the page${errors.length ? ": " + errors.join(" | ") : ""}`);
   writeFileSync(out + "messages.json", JSON.stringify(await page.evaluate(() => window.host.messages), null, 2));
 } finally {

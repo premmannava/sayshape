@@ -163,7 +163,7 @@ function describeCheck(c: SpecCheck): string {
   const listed = [...fix, ...minor].slice(0, MAX_REPORTED).map((d) => `line ${d.line} (${isHarmless(d) ? "ignored" : d.severity}): ${d.message}`);
   if (all.length > MAX_REPORTED) listed.push(`…and ${all.length - MAX_REPORTED} more.`);
   const lead = fix.length
-    ? `The interface is showing, but ${fix.length} problem${fix.length === 1 ? "" : "s"} leave${fix.length === 1 ? "s" : ""} part of it wrong or missing. Fix ${fix.length === 1 ? "it" : "them"} and call show_interface again with the whole corrected spec:`
+    ? `${fix.length} problem${fix.length === 1 ? "" : "s"} leave${fix.length === 1 ? "s" : ""} part of this interface wrong or missing, so the person sees a short "being fixed" note in its place. Fix ${fix.length === 1 ? "it" : "them"} and call show_interface again with the whole corrected spec:`
     : "The interface is showing correctly. The parser ignored these small things, which change nothing on screen, so there's no need to call show_interface again:";
   return `${lead}\n${listed.join("\n")}`;
 }
@@ -173,7 +173,24 @@ export interface ServerOptions {
   uiHtml: () => string | Promise<string>;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;
+  /** The clock, for tests of how long a repeat counts as one. */
+  now?: () => number;
 }
+
+/** How long after a good interface the same spec again counts as a repeat, not a new request. */
+export const REPEAT_WINDOW_MS = 10 * 60_000;
+
+/** What makes two calls the same interface: the spec without blank lines or trailing spaces, and the datasets it shows. */
+export function interfaceKey(spec: string, data: Record<string, string>): string {
+  const lines = spec.split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => l.trim() !== "");
+  const sets = Object.keys(data).sort().map((k) => `${k}=${data[k]}`);
+  return `${lines.join("\n")}\n--\n${sets.join(",")}`;
+}
+
+/** What the model is told when it sends an interface that is already showing. */
+export const REPEAT_TEXT =
+  "This exact interface is already showing in the conversation, just above, so this copy is hidden. " +
+  "Don't call show_interface again unless the person asks for a change; answer them in text if they need more.";
 
 /** Names a dataset can be shown under: plain state names. */
 const DATA_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,40}$/;
@@ -182,6 +199,11 @@ const text = (t: string, isError = false) => ({ content: [{ type: "text" as cons
 
 export function createServer(opts: ServerOptions): McpServer {
   const data = opts.data;
+  const now = opts.now ?? Date.now;
+  // The last interface shown with nothing to fix. Smaller models often send the same one again
+  // to "confirm" it, which would leave a second copy in the chat. Kept per server, so per
+  // conversation over stdio; the stateless HTTP mode makes a server per request and never repeats.
+  let lastGood: { key: string; at: number } | null = null;
   const server = new McpServer(
     { name: "sayshape", title: "SayShape", version: VERSION },
     {
@@ -262,6 +284,16 @@ export function createServer(opts: ServerOptions): McpServer {
         ...(declared.length ? [`Remove ${declared.join(", ")} from the state line: the interface fills ${declared.length === 1 ? "it" : "them"} in from the dataset.`] : []),
       ];
       // A wrong guess comes back with the docs it needed, instead of the model reading every element up front.
+      const toFix = [...check.errors, ...check.warnings].filter((d) => !isHarmless(d)).length;
+      const key = interfaceKey(spec, wanted);
+      const repeat = toFix === 0 && lastGood !== null && lastGood.key === key && now() - lastGood.at < REPEAT_WINDOW_MS;
+      if (toFix === 0) lastGood = { key, at: now() };
+      if (repeat) {
+        return {
+          content: [{ type: "text", text: REPEAT_TEXT }],
+          structuredContent: { datasets, title: title ?? null, errors: 0, warnings: check.warnings.length, toFix: 0, repeat: true, diagnostics: [] },
+        };
+      }
       const failing = elementsOnLines(spec, [...check.errors, ...check.warnings].filter((d) => !isHarmless(d)));
       if (failing.length) notes.push(`\nDocs for ${failing.join(", ")}:\n${elementGuide(registry, failing).text}`);
       return {
@@ -271,7 +303,8 @@ export function createServer(opts: ServerOptions): McpServer {
           title: title ?? null,
           errors: check.errors.length,
           warnings: check.warnings.length,
-          toFix: [...check.errors, ...check.warnings].filter((d) => !isHarmless(d)).length,
+          toFix,
+          repeat: false,
           diagnostics: [...check.errors, ...check.warnings].slice(0, MAX_REPORTED).map((d) => ({ line: d.line, severity: d.severity, message: d.message })),
         },
       };

@@ -28,6 +28,8 @@ Interfaces match the chat app they're in. The view follows its light or dark mod
 
 A model never reads the whole language guide (about 7,500 tokens). It gets a quick start in `show_interface`'s description (about 450) and asks `sayshape_docs` for only the elements it's about to use: about 140 tokens for a button, 700 for a chart and a table, 1,200 for a six-element dashboard. If it guesses an element wrong, the result of `show_interface` brings that element's docs, so a wrong guess costs one retry, not the whole guide. Retries are the expensive part, because each call resends the whole conversation, so the server avoids the needless ones: it quietly fixes Markdown fences and typographic quotes (the view tidies the same way), tells the model when a problem was only an ignored prop and needs no new call, and answers an unknown function like `argmax` with the one to use instead (`first(sort(rows, 'revenue', 'desc'))`). With a database, the rows go from the database to the interface, so the model's tokens don't grow with the data either.
 
+Each call makes a new interface in the chat, so the server and view keep the chat tidy when a model calls more than it should, which smaller models often do. An interface with problems the model was asked to fix folds into a one-line "Fixing this interface" note, with a button to show it anyway in case no correction comes. The same interface sent again within ten minutes, without changes, is answered with "already showing" and folds into "Same interface as above". Repeats are tracked per conversation over stdio; the stateless HTTP mode doesn't track them.
+
 ## Show data from a database
 
 Start the server with `--data` and a SQLite file, and the model can answer questions about it with interfaces:

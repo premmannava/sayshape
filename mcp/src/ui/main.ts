@@ -17,7 +17,7 @@ import { coreComponents } from "../../../src/components";
 import { darkTheme, lightTheme, type Theme } from "../../../src/theme";
 import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
-import { eventDelivery, nextChunk } from "./messages";
+import { eventDelivery, FIXING_SPEC, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
 import { firstFamily, hostTheme, type ReadVar } from "./host-theme";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
@@ -52,6 +52,31 @@ const INTRO = `card
   skeleton lines=2
 `;
 let introShowing = false;
+
+/**
+ * The spec behind a "being fixed" note, kept so "Show this version" can bring
+ * it back. Smaller models send flawed or repeated interfaces more often, and
+ * each call makes a new view in the chat, so a view folds itself away once
+ * its result says a corrected or identical one is coming or already shown.
+ */
+let folded: string | null = null;
+let pendingOutcome: "fixing" | "repeat" | null = null;
+
+function fold(outcome: "fixing" | "repeat"): void {
+  if (!loom) { pendingOutcome = outcome; return; }
+  folded = loom.spec;
+  loadingData.clear();
+  awaiting = false;
+  syncLoading();
+  loom.setSpec(outcome === "fixing" ? FIXING_SPEC : REPEAT_SPEC, { resetState: true });
+}
+
+function unfold(): void {
+  if (!loom || folded === null) return;
+  loom.setSpec(folded, { resetState: true });
+  folded = null;
+  applyHostData();
+}
 
 function syncLoading(): void {
   loom?.setLoading(loadingData);
@@ -200,12 +225,16 @@ app.ontoolinput = (p) => {
   if (spec !== null) show(tidySpec(spec), true);
   if (data) void loadData(data);
 };
-// A refused call (an unknown dataset, say) never sends rows: stop waiting for them.
 app.ontoolresult = (r) => {
-  if (!r.isError) return;
-  loadingData.clear();
-  awaiting = false;
-  syncLoading();
+  // A refused call (an unknown dataset, say) never sends rows: stop waiting for them.
+  if (r.isError) {
+    loadingData.clear();
+    awaiting = false;
+    syncLoading();
+    return;
+  }
+  const outcome = outcomeOf(r);
+  if (outcome !== "show") fold(outcome);
 };
 app.onhostcontextchanged = () => {
   // getHostContext() holds the whole context with this change merged in.
@@ -255,12 +284,14 @@ async function start(): Promise<void> {
   });
   loom.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
     if (!loom) return;
+    if (name === SHOW_ANYWAY) { unfold(); return; }
     void deliver(name, value, loom.state.snapshot());
   });
   syncLoading();
   if (pending) { const p = pending; pending = null; show(p.spec, p.final); }
   else { loom.setSpec(INTRO); introShowing = true; }
   if (pendingData) { const d = pendingData; pendingData = null; void loadData(d); }
+  if (pendingOutcome) { const o = pendingOutcome; pendingOutcome = null; fold(o); }
 }
 
 void start();
