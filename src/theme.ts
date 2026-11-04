@@ -30,9 +30,10 @@ export interface Theme {
     /** The soft shadow under cards and raised controls, so surfaces sit above the page instead of being outlined on it. */
     shadow: string;
     /**
-     * Categorical colors for chart series and pie slices, used in this order.
-     * series1 is the accent. The first four stay apart under common color
-     * blindness (protanopia, deuteranopia), checked with every pair against each other.
+     * Muted series colors for line and bar charts, in order. The first
+     * series uses the brand accent, followed by slate, sage and stone tones.
+     * Pie and donut charts use separate neutral shades generated from the
+     * theme's own surfaces and ink, so they never become rainbow charts.
      */
     series1: string;
     series2: string;
@@ -65,26 +66,26 @@ export const lightTheme: Theme = {
   colors: {
     surface: "#FFFFFF",
     raised: "#FFFFFF",
-    ink: "#14171C",
-    muted: "#5E6573",
-    line: "#E1E4E9",
-    accent: "#0F766E",
+    ink: "#1B262A",
+    muted: "#5C6B72",
+    line: "#E1E7E8",
+    accent: "#176F69",
     onAccent: "#FFFFFF",
-    good: "#15803D",
-    warn: "#B45309",
-    bad: "#D32F2F",
-    focus: "#2563EB",
-    land: "#DCE0E6",
-    landHighlight: "#A6D6D1",
-    landHover: "#BCC3CD",
-    debug: "#C2410C",
-    shadow: "rgba(15, 20, 30, 0.06)",
-    series1: "#0F766E",
-    series2: "#A2461A",
-    series3: "#64399D",
-    series4: "#AD8B1C",
-    series5: "#C74C8E",
-    series6: "#2F8EFC",
+    good: "#277253",
+    warn: "#9A641D",
+    bad: "#B14E50",
+    focus: "#277E79",
+    land: "#DEE5E3",
+    landHighlight: "#B4D7D0",
+    landHover: "#C2CECB",
+    debug: "#A86C3A",
+    shadow: "rgba(25, 43, 45, 0.065)",
+    series1: "#176F69",
+    series2: "#536A79",
+    series3: "#858D93",
+    series4: "#788A7A",
+    series5: "#A09688",
+    series6: "#708496",
   },
 };
 
@@ -92,28 +93,28 @@ export const darkTheme: Theme = {
   name: "dark",
   ...base,
   colors: {
-    surface: "#111316",
-    raised: "#191B1F",
-    ink: "#ECEDEF",
-    muted: "#9BA1AB",
-    line: "#2C2F35",
-    accent: "#2EC4B6",
-    onAccent: "#04211E",
-    good: "#5CC98A",
-    warn: "#EDB04D",
-    bad: "#F2777E",
-    focus: "#7AA7FF",
-    land: "#2A2E35",
-    landHighlight: "#1D5753",
-    landHover: "#3A3F48",
-    debug: "#FB923C",
-    shadow: "rgba(0, 0, 0, 0.45)",
-    series1: "#2EC4B6",
-    series2: "#B74C05",
-    series3: "#7C61A8",
-    series4: "#B08E26",
-    series5: "#DD569F",
-    series6: "#2F8EFC",
+    surface: "#12191C",
+    raised: "#1D2629",
+    ink: "#EDF2F1",
+    muted: "#ACBABC",
+    line: "#344348",
+    accent: "#72C6BB",
+    onAccent: "#112825",
+    good: "#88CEAA",
+    warn: "#E5B77A",
+    bad: "#EB9393",
+    focus: "#82C9C0",
+    land: "#29373B",
+    landHighlight: "#315F59",
+    landHover: "#36494E",
+    debug: "#DEA36C",
+    shadow: "rgba(0, 0, 0, 0.38)",
+    series1: "#72C6BB",
+    series2: "#A0B4C1",
+    series3: "#C0C7CB",
+    series4: "#96B09E",
+    series5: "#C3B19B",
+    series6: "#859CAF",
   },
 };
 
@@ -125,6 +126,21 @@ export function seriesColors(theme: Theme): string[] {
 
 /** How many series colors a theme has: the most series one chart draws. */
 export const SERIES_COUNT = 6;
+
+/**
+ * Pie and donut charts should be quiet when idle: six distinct tonal shades
+ * from the surrounding raised surface toward its ink. This follows custom
+ * host colors too, while active slices can use the theme accent on hover.
+ * No fixed rainbow colors or new styling language are necessary.
+ */
+export function sliceColors(theme: Theme): string[] {
+  const dark = isDarkTheme(theme);
+  const weights = dark ? [0.77, 0.65, 0.54, 0.44, 0.35, 0.27] : [0.80, 0.67, 0.54, 0.43, 0.33, 0.24];
+  const fallback = dark
+    ? ["#C3CED0", "#A7B6BA", "#8B9EA3", "#71878D", "#586F75", "#445A60"]
+    : ["#444F54", "#677479", "#89969A", "#ABB5B8", "#CAD1D3", "#E0E5E6"];
+  return weights.map((weight, i) => mixColors(theme.colors.raised, theme.colors.ink, weight) ?? fallback[i]!);
+}
 
 /**
  * Series 1 is the accent: when an override changes the accent but says
