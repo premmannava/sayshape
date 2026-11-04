@@ -130,7 +130,8 @@ describe("stat colors", () => {
   it("draws the sparkline in the trend's color, or the accent without one", () => {
     const ui = render(`stat label="A" value=1 change="+4%" spark={[1, 2, 3]}\nstat label="B" value=1 spark={[1, 2, 3]}\n`);
     const strokes = ui.drawOps.filter((o) => o.op === "stroke").map((o) => o.strokeStyle);
-    expect(strokes).toEqual([c.good, c.accent]);
+    // The trend pill gains a subtle hairline before the two sparklines.
+    expect(strokes).toEqual([c.good, c.good, c.accent]);
     ui.destroy();
   });
 
