@@ -13,6 +13,8 @@ export interface DrawOp {
   strokeStyle: string;
   font: string;
   globalAlpha: number;
+  /** Colors used by a CanvasGradient fill (when applicable). */
+  gradientStops?: Array<{ offset: number; color: string }>;
   /** For text: where x is on the text (left, center, right, start or end). */
   textAlign: string;
 }
@@ -21,8 +23,13 @@ export interface DrawOp {
 const DRAWING_OPS = new Set(["fill", "stroke", "fillRect", "strokeRect", "fillText", "strokeText", "drawImage"]);
 const USES_FILL = new Set(["fill", "fillRect", "fillText"]);
 
+interface FakeGradient {
+  stops: Array<{ offset: number; color: string }>;
+  addColorStop(offset: number, color: string): void;
+}
+
 interface Style {
-  fillStyle: string;
+  fillStyle: string | FakeGradient;
   strokeStyle: string;
   font: string;
   globalAlpha: number;
@@ -46,6 +53,10 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
   const stack: Style[] = [];
   let log: DrawOp[] = [];
 
+  const createGradient = (): FakeGradient => {
+    const stops: FakeGradient["stops"] = [];
+    return { stops, addColorStop(offset, color) { stops.push({ offset, color }); } };
+  };
   const methods: Record<string, (...args: unknown[]) => unknown> = {
     save: () => { stack.push({ ...style }); },
     restore: () => { style = stack.pop() ?? style; },
@@ -54,8 +65,8 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
     isPointInStroke: () => false,
     getLineDash: () => [],
     getTransform: () => ({ a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 }),
-    createLinearGradient: () => ({ addColorStop() {} }),
-    createRadialGradient: () => ({ addColorStop() {} }),
+    createLinearGradient: createGradient,
+    createRadialGradient: createGradient,
   };
 
   const target = {} as Record<string, unknown>;
@@ -69,10 +80,14 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
         if (!DRAWING_OPS.has(prop)) return undefined;
         const fill = USES_FILL.has(prop);
         const colored = prop !== "drawImage";
+        const gradient = fill && typeof style.fillStyle !== "string" ? style.fillStyle : null;
         log.push({
           op: prop,
           args,
-          fillStyle: colored && fill ? style.fillStyle : "",
+          // Keep the first stop as the representative color for older tests;
+          // expose the entire gradient for the new chart assertions.
+          fillStyle: colored && fill ? (gradient ? (gradient.stops[0]?.color ?? "") : style.fillStyle as string) : "",
+          ...(gradient ? { gradientStops: gradient.stops.map((stop) => ({ ...stop })) } : {}),
           strokeStyle: colored && !fill ? style.strokeStyle : "",
           font: prop.endsWith("Text") ? style.font : "",
           globalAlpha: style.globalAlpha,
@@ -82,7 +97,11 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
       };
     },
     set(_t, prop, value) {
-      if (typeof prop === "string") style[prop] = typeof value === "number" || typeof value === "string" ? value : String(value);
+      if (prop === "fillStyle" && value && typeof value === "object" && "addColorStop" in value) {
+        style.fillStyle = value as FakeGradient;
+      } else if (typeof prop === "string") {
+        style[prop] = typeof value === "number" || typeof value === "string" ? value : String(value);
+      }
       return true;
     },
     has(_t, prop) {
