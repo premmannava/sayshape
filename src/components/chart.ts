@@ -413,7 +413,7 @@ export function shareText(share: number): string {
 }
 
 /** Plot height for a width: wide enough to read, not taller than a phone screen wants. */
-const plotHeight = (w: number) => Math.round(Math.max(140, Math.min(260, w * 0.45)));
+const plotHeight = (w: number) => Math.round(Math.max(144, Math.min(238, w * 0.42)));
 /** A pie's diameter for a width: a little smaller than a plot, and never wider than the box. */
 const pieSize = (w: number) => Math.min(w, Math.round(Math.max(140, Math.min(220, w * 0.45))));
 /** Room inside the plot so dots at the top and bottom stay within it. */
@@ -436,7 +436,7 @@ function header(box: { w: number }, kind: Kind, title: string, ctx: Ctx) {
   const base: ChartGeometry = {
     kind, title: titleLines, titleFont, titleLH, labelFont,
     plot: { x: 0, y: top, w: box.w, h: 0 }, ticks: [], zeroY: null, min: 0, max: 0, slots: [], segments: [], seriesSegments: [],
-    series: [], labelY: 0, legend: [], legendFont: labelFont,
+    series: [], labelY: 0, legend: [], legendFont: themeFont(t, 400, t.text.caption + 1),
   };
   const say = (message: string): ChartGeometry => ({
     ...base, message, messageLines: fitLines(message, Math.max(0, box.w - 2 * t.space.sm), labelFont, m, 3), plot: { x: 0, y: top, w: box.w, h: 72 },
@@ -450,7 +450,7 @@ function header(box: { w: number }, kind: Kind, title: string, ctx: Ctx) {
  */
 function flowLegend(entries: Array<{ label: string; color: number }>, width: number, top: number, ctx: Ctx): { items: LegendItem[]; bottom: number } {
   const t = ctx.theme, m = ctx.measure;
-  const font = themeFont(t, 400, t.text.caption);
+  const font = themeFont(t, 400, t.text.caption + 1);
   const lh = Math.round(t.text.caption * 1.4);
   const lead = SWATCH + SWATCH_GAP;
   const items: LegendItem[] = [];
@@ -472,8 +472,8 @@ function flowLegend(entries: Array<{ label: string; color: number }>, width: num
  */
 function gridLegend(entries: Array<{ label: string; detail: string; color: number }>, width: number, top: number, ctx: Ctx): { items: LegendItem[]; bottom: number } {
   const t = ctx.theme, m = ctx.measure;
-  const font = themeFont(t, 400, t.text.caption);
-  const lh = Math.round(t.text.caption * 1.6);
+  const font = themeFont(t, 400, t.text.caption + 1);
+  const lh = Math.round((t.text.caption + 1) * 1.7);
   const lead = SWATCH + SWATCH_GAP, between = t.space.sm, colGap = t.space.md;
   const natural = Math.max(...entries.map((e) => lead + m.width(e.label, font) + between + m.width(e.detail, font)));
   const cols = Math.max(1, Math.min(entries.length, Math.floor((width + colGap) / (Math.min(width, natural) + colGap))));
@@ -531,11 +531,15 @@ function axisGeometry(
   const y = (v: number) => plot.y + INSET + (plot.h - 2 * INSET) * (1 - (v / 2 - scale.min / 2) / (scale.max / 2 - scale.min / 2));
   const zeroY = scale.min <= 0 && scale.max >= 0 ? y(0) : null;
 
-  // Category labels: thin them out evenly when they'd overlap, never the data.
+  // Prefer showing every category, shortened to its slot if necessary. Only thin labels
+  // when slots are too small to show a useful name; a single long label should not
+  // hide its neighbours (e.g. North America should not hide EMEA in a five-bar chart).
   const widths = d.slots.map((s) => m.width(s.label, labelFont));
   const widest = Math.min(Math.max(...widths), 120);
-  const every = Math.max(1, Math.ceil((widest + t.space.sm) / slotW));
-  const room = slotW * every - t.space.xs;
+  const every = slotW >= Math.max(52, t.text.caption * 4)
+    ? 1
+    : Math.max(1, Math.ceil((widest + t.space.sm) / slotW));
+  const room = Math.max(0, slotW * every - t.space.sm);
   const barW = Math.min(slotW * 0.6, 44);
   const group = grouped ? Math.min(slotW * 0.74, ns * 34 + (ns - 1) * BAR_GAP) : barW;
   const each = grouped ? (group - (ns - 1) * BAR_GAP) / ns : barW;

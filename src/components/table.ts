@@ -385,7 +385,10 @@ function paintTable(box: Box, ctx: PaintContext): void {
   g.fill();
   g.strokeStyle = c.line;
   g.lineWidth = 1;
+  g.save();
+  g.globalAlpha *= 0.72;
   g.stroke();
+  g.restore();
 
   if (d.message) {
     g.font = d.cellFont;
@@ -401,7 +404,7 @@ function paintTable(box: Box, ctx: PaintContext): void {
   g.clip();
   g.beginPath();
   g.rect(ox + f.x, oy + f.y, f.w, d.headerH);
-  fillTint(g, c.ink, 0.035);
+  fillTint(g, c.ink, 0.018);
   g.restore();
 
   // Rules between rows are lighter than the frame: they guide the eye without boxing every row.
@@ -412,7 +415,7 @@ function paintTable(box: Box, ctx: PaintContext): void {
     g.strokeStyle = c.line;
     g.lineWidth = 1;
     g.save();
-    if (light) g.globalAlpha *= 0.6;
+    g.globalAlpha *= light ? 0.42 : 0.7;
     g.stroke();
     g.restore();
   };
@@ -476,10 +479,10 @@ function paintTable(box: Box, ctx: PaintContext): void {
     if (row.selected || (row.detail && ctx.isHovered(box.node, row.detail))) {
       if (last) ctx.roundRect(ox + f.x + 1, ry, f.w - 2, row.h - 1, theme.radius.md - 1);
       else { g.beginPath(); g.rect(ox + f.x + 1, ry, f.w - 2, row.h); }
-      fillTint(g, row.selected ? c.accent : c.ink, row.selected ? 0.09 : 0.035);
+      fillTint(g, row.selected ? c.accent : c.ink, row.selected ? 0.065 : 0.025);
     }
     if (row.selected) {
-      ctx.roundRect(ox + f.x + 3, ry + 7, 2.5, row.h - 14, 1.25);
+      ctx.roundRect(ox + f.x + 3, ry + 7, 2, row.h - 14, 1);
       g.fillStyle = c.accent;
       g.fill();
     }

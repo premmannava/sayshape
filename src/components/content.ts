@@ -223,9 +223,9 @@ export function statLayout(label: string, value: string, width: number, theme: T
 }
 
 /** Space between a value and a change beside it. */
-const STAT_CHANGE_GAP = 10;
+const STAT_CHANGE_GAP = 8;
 /** The change's pill: text size, height and padding either side. */
-const STAT_PILL_TEXT = 12, STAT_PILL_H = 20, STAT_PILL_X = 7;
+const STAT_PILL_TEXT = 12, STAT_PILL_H = 20, STAT_PILL_X = 6;
 /** A sparkline's height and its widest; it's a hint of a trend, not a chart. */
 export const SPARK_H = 28;
 const SPARK_MAX_W = 200;
@@ -356,7 +356,7 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     const mid = box.y + c.y + at.rise;
     const color = e.tone === "muted" ? theme.colors.muted : statToneColor(theme, e.tone);
     ctx.roundRect(left, mid - STAT_PILL_H / 2, c.width, STAT_PILL_H, ctx.theme.radius.sm);
-    fillTint(g, color, 0.12);
+    fillTint(g, color, 0.085);
     g.font = ctx.font(600, STAT_PILL_TEXT);
     g.fillStyle = color;
     g.textAlign = "center";
