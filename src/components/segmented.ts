@@ -92,6 +92,18 @@ text "Showing the {lower(view)}" tone=muted`,
         g.fillStyle = c.raised;
         g.fill();
         g.restore();
+        // Tiny upper highlight adds material definition to the moving tile.
+        if (tileW > 22) {
+          g.beginPath();
+          g.moveTo(tileX + 10, part.y + 1.5);
+          g.lineTo(tileX + tileW - 10, part.y + 1.5);
+          g.save();
+          g.strokeStyle = c.ink;
+          g.lineWidth = 1;
+          g.globalAlpha *= 0.075;
+          g.stroke();
+          g.restore();
+        }
         if (isDarkTheme(theme)) fillTint(g, c.ink, 0.1);
         g.save();
         g.globalAlpha *= isDarkTheme(theme) ? 0.5 : 0.8;
@@ -99,9 +111,13 @@ text "Showing the {lower(view)}" tone=muted`,
         g.strokeStyle = c.line;
         g.stroke();
         g.restore();
-      } else if (ctx.isHovered(box.node, cell.option)) {
-        ctx.roundRect(part.x, part.y, part.w, part.h, Math.max(2, theme.radius.md - INSET));
-        fillTint(g, c.ink, 0.05);
+      } else {
+        const hover = ctx.tween(box.node, "segmented:hover:" + cell.option,
+          ctx.isHovered(box.node, cell.option) ? 1 : 0, 155);
+        if (hover > 0) {
+          ctx.roundRect(part.x, part.y, part.w, part.h, Math.max(2, theme.radius.md - INSET));
+          fillTint(g, c.ink, 0.05 * hover);
+        }
       }
       g.fillStyle = on ? c.ink : c.muted;
       g.fillText(fitText(g, cell.option, Math.max(0, cell.w - 10)), part.x + part.w / 2, part.y + part.h / 2 + 1);

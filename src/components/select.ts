@@ -196,9 +196,12 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
     const detail = `opt:${opt.key}`;
     if (opt.available) ctx.addHit(row, { detail, focusable: false });
     const isChosen = opt.value === chosen;
-    if (i === hi || (opt.available && ctx.isHovered(owner.node, detail))) {
+    const hover = ctx.tween(owner.node, "select:option:hover:" + opt.key,
+      opt.available && ctx.isHovered(owner.node, detail) ? 1 : 0, 145);
+    if (i === hi || hover > 0) {
       ctx.roundRect(row.x, row.y + 1, row.w, row.h - 2, theme.radius.sm);
-      fillTint(g, i === hi ? c.accent : c.ink, i === hi ? 0.14 : 0.05);
+      if (i === hi) fillTint(g, c.accent, 0.14);
+      else fillTint(g, c.ink, 0.05 * hover);
     }
     g.font = ctx.font(isChosen ? 600 : 400, FIELD_TEXT);
     g.fillStyle = opt.available ? c.ink : c.muted;
@@ -265,7 +268,9 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
       g.fillText(fitText(g, label, box.w), box.x, box.y);
     }
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
-    paintField(g, c, isOpen, hot);
+    const focus = ctx.tween(box.node, "select:field:focus", isOpen || ctx.isFocused(box.node) ? 1 : 0, 175);
+    const hover = ctx.tween(box.node, "select:field:hover", hot ? 1 : 0, 150);
+    paintField(g, c, focus, hover);
     g.font = ctx.font(400, FIELD_TEXT);
     g.textAlign = "left";
     g.textBaseline = "middle";

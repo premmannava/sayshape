@@ -367,6 +367,14 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
 
 // ---------------------------------------------------------------- paint
 
+/** Explicitly signed numeric values get semantic ink; unsigned data stays neutral. */
+export function tableValueTone(value: string, format: "text" | "number" | "money"): "positive" | "negative" | null {
+  if (format === "text" || value === EMPTY_CELL) return null;
+  if (/^[−-]\s*(?:[$€£¥])?\d/.test(value)) return "negative";
+  if (/^\+\s*(?:[$€£¥])?\d/.test(value)) return "positive";
+  return null;
+}
+
 function paintTable(box: Box, ctx: PaintContext): void {
   const d = box.data as TableGeometry | undefined;
   if (!d) return;
@@ -438,6 +446,11 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const detail = sortDetail(col.field);
     const hovered = d.sortable && ctx.isHovered(box.node, detail);
     if (d.sortable) ctx.addHit(cell, { detail });
+    const headerHighlight = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, 170);
+    if (headerHighlight) {
+      ctx.roundRect(cell.x + 3, cell.y + 3, Math.max(0, cell.w - 6), cell.h - 6, theme.radius.sm);
+      fillTint(g, col.sorted ? c.accent : c.ink, headerHighlight * (col.sorted ? 0.075 : 0.035));
+    }
     g.fillStyle = col.sorted || hovered ? c.ink : c.muted;
     // The label lines up with the cells; the arrow goes on its far side from that edge.
     const right = col.align === "right";
@@ -448,6 +461,14 @@ function paintTable(box: Box, ctx: PaintContext): void {
       const labelW = g.measureText(col.shownLabel).width;
       const ax = right ? tx - labelW - 9 : tx + labelW + 9;
       chevron(g, ax, hy + d.headerH / 2, 8, col.sorted === "desc" ? "down" : "up", col.sorted ? c.accent : c.muted);
+    }
+    if (col.sorted) {
+      ctx.roundRect(cell.x + pad, cell.y + cell.h - 3, Math.max(0, cell.w - pad * 2), 2, 1);
+      g.fillStyle = c.accent;
+      g.save();
+      g.globalAlpha *= headerHighlight;
+      g.fill();
+      g.restore();
     }
     if (d.sortable && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
   }
@@ -482,20 +503,28 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const last = r === d.rows.length - 1;
     const hovered = row.detail ? ctx.isHovered(box.node, row.detail) : false;
     const highlight = row.detail ? ctx.tween(box.node, "table:hover:" + String(row.detail), hovered ? 1 : 0, 170) : 0;
-    if (row.selected || highlight > 0) {
+    const selected = row.detail ? ctx.tween(box.node, "table:selected:" + String(row.detail), row.selected ? 1 : 0, 210) : 0;
+    if (r % 2 || highlight > 0 || selected > 0) {
       if (last) ctx.roundRect(ox + f.x + 1, ry, f.w - 2, row.h - 1, theme.radius.md - 1);
       else { g.beginPath(); g.rect(ox + f.x + 1, ry, f.w - 2, row.h); }
-      fillTint(g, row.selected ? c.accent : c.ink, row.selected ? 0.065 : 0.025 * highlight);
+      if (r % 2) fillTint(g, c.ink, 0.012);
+      if (highlight) fillTint(g, c.ink, 0.032 * highlight);
+      if (selected) fillTint(g, c.accent, 0.075 * selected);
     }
-    if (row.selected) {
-      ctx.roundRect(ox + f.x + 3, ry + 7, 2, row.h - 14, 1);
+    if (selected > 0 || row.selected) {
+      ctx.roundRect(ox + f.x + 3, ry + 7, 2, Math.max(0, row.h - 14), 1);
+      g.save();
+      // Keep the selection rail fully visible immediately; tint eases in.
+      g.globalAlpha *= row.selected ? 1 : selected;
       g.fillStyle = c.accent;
       g.fill();
+      g.restore();
     }
     if (row.detail) ctx.addHit(partBox(box, ox + f.x, ry, f.w, row.h), { detail: row.detail });
     d.columns.forEach((col, ci) => {
       const cell = row.cells[ci]!;
-      g.fillStyle = cell.full === EMPTY_CELL ? c.muted : c.ink;
+      const tone = tableValueTone(cell.full, col.format);
+      g.fillStyle = cell.full === EMPTY_CELL ? c.muted : tone === "negative" ? c.bad : tone === "positive" ? c.good : c.ink;
       const right = col.align === "right";
       g.textAlign = right ? "right" : "left";
       g.fillText(cell.text, right ? ox + col.x + col.w - pad : ox + col.x + pad, ry + row.h / 2);
