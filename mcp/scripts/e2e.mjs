@@ -136,7 +136,13 @@ try {
     const d = c.getContext("2d").getImageData(Math.round(c.width * 0.1), Math.round(c.height * 0.06), 1, 1).data;
     return [d[0], d[1], d[2]];
   });
-  check(Math.abs(cardPixel[0] - 48) <= 3 && Math.abs(cardPixel[1] - 48) <= 3 && Math.abs(cardPixel[2] - 46) <= 3, `the card uses the host's dark background from light-dark() (got rgb(${cardPixel.join(", ")}))`);
+  // Cards follow the host's background with a 4.5% lift toward its ink in
+  // dark mode. The old E2E expected the raw background and was inconsistent
+  // with the intentionally raised surfaces and the host-theme unit tests.
+  const expectedRaised = [48, 48, 46].map((channel, i) =>
+    Math.round(channel + ([250, 249, 245][i] - channel) * 0.045));
+  check(cardPixel.every((channel, i) => Math.abs(channel - expectedRaised[i]) <= 3),
+    `the card matches the raised host light-dark() surface (expected rgb(${expectedRaised.join(", ")}), got rgb(${cardPixel.join(", ")})`);
 
   // A view whose result says the spec needs fixing folds into a short note, and comes back on request;
   // one whose result says it repeats the interface above folds into a single line.

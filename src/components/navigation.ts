@@ -1,4 +1,5 @@
 import { toNumber } from "../data";
+import { MOTION } from "../design";
 import type { ComponentDef, LayoutContext, PropReader } from "../component";
 import type { Box, SayShapeNode, Value } from "../types";
 import { wrapText } from "../text";
@@ -84,8 +85,8 @@ tabs bind=view
       const on = cell.node.id === selected;
       const part = partBox(box, cell.x, box.y, cell.w, BAR_H);
       const hover = ctx.tween(box.node, "tab:hover:" + String(cell.value),
-        !on && ctx.isHovered(box.node, cell.value) ? 1 : 0, 175);
-      const selectedBg = ctx.tween(box.node, "tab:selected:" + String(cell.value), on ? 1 : 0, 210);
+        !on && ctx.isHovered(box.node, cell.value) ? 1 : 0, MOTION.hover);
+      const selectedBg = ctx.tween(box.node, "tab:selected:" + String(cell.value), on ? 1 : 0, MOTION.selection);
       if (hover > 0 || selectedBg > 0) {
         ctx.roundRect(part.x + 2, part.y + 5, Math.max(0, part.w - 4), BAR_H - 11, theme.radius.sm);
         if (hover > 0) fillTint(g, c.ink, 0.042 * hover);
@@ -95,8 +96,8 @@ tabs bind=view
       g.fillText(fitText(g, cell.label, Math.max(0, cell.w - 8)), cell.x + cell.w / 2, box.y + BAR_H / 2);
       if (on) {
         // A slim accent rule on the baseline, rounded at its ends.
-        const underlineX = ctx.tween(box.node, "tabs:underline:x", cell.x + 8, 240);
-        const underlineW = ctx.tween(box.node, "tabs:underline:w", Math.max(0, cell.w - 16), 240);
+        const underlineX = ctx.tween(box.node, "tabs:underline:x", cell.x + 8, MOTION.navigation);
+        const underlineW = ctx.tween(box.node, "tabs:underline:w", Math.max(0, cell.w - 16), MOTION.navigation);
         ctx.roundRect(underlineX, box.y + BAR_H - 2, underlineW, 2, 1);
         g.fillStyle = c.accent;
         g.fill();
@@ -187,7 +188,7 @@ breadcrumb "Shop / Shoes / Trail runners" bind=at`,
         g.fillText(SEP, cr.x + cr.w, cr.y + CRUMB_H / 2);
       }
       if (active) {
-        const hover = ctx.tween(box.node, "crumb:hover:" + cr.text, ctx.isHovered(box.node, cr.text) ? 1 : 0, 160);
+        const hover = ctx.tween(box.node, "crumb:hover:" + cr.text, ctx.isHovered(box.node, cr.text) ? 1 : 0, MOTION.hover);
     if (hover > 0) {
       g.fillStyle = c.accent;
       g.save();
@@ -265,7 +266,7 @@ pagination bind=page pages=12`,
         g.fill();
       } else {
         const hover = ctx.tween(box.node, "pagination:hover:" + String(detail),
-          enabled && ctx.isHovered(box.node, detail) ? 1 : 0, 155);
+          enabled && ctx.isHovered(box.node, detail) ? 1 : 0, MOTION.hover);
         if (hover > 0) {
           ctx.roundRect(x, y, size, size, theme.radius.sm);
           fillTint(g, c.ink, 0.055 * hover);

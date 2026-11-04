@@ -33,7 +33,7 @@ $("copyGuide").addEventListener("click", async (e) => {
   setTimeout(() => { b.textContent = "Copy guide"; }, 1500);
 });
 
-let current = "map";
+let current = "designShowcase";
 let streamId = 0;
 let selectedLine = 0;
 let diagnostics: Diagnostic[] = [];
@@ -75,7 +75,7 @@ function stream(key: string) {
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const tick = () => {
     if (id !== streamId) return;
-    const n = reduce ? full.length : Math.min(full.length, i + 2 + Math.floor(Math.random() * 5));
+    const n = reduce ? full.length : Math.min(full.length, i + (key === "designShowcase" ? 24 : 2) + Math.floor(Math.random() * 5));
     const chunk = full.slice(i, n);
     i = n;
     loom.push(chunk);
@@ -231,7 +231,7 @@ loom.on("render", (m) => {
 });
 
 const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
-fontsReady.then(() => stream("map"));
+fontsReady.then(() => stream("designShowcase"));
 
 // ------------------------------------------------------------ ask a model
 

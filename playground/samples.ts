@@ -5,6 +5,72 @@ export interface Sample {
 }
 
 export const samples: Record<string, Sample> = {
+  designShowcase: {
+    label: "Design showcase",
+    prompt: "Show the full SayShape design system: premium analytics, interactive charts, customers, form controls and light/dark styling.",
+    spec: `state view="Overview" period="Month" boost=0 query="" plan="all" onlyActive=false selected="acme" by="name" dir="asc" target=72 reportDate="2026-11-04" alerts=true page=2 channel="email"
+state months=[{month:"Jun",revenue:18000,goal:17000},{month:"Jul",revenue:22000,goal:20000},{month:"Aug",revenue:20500,goal:22000},{month:"Sep",revenue:25800,goal:23000},{month:"Oct",revenue:28000,goal:26000},{month:"Nov",revenue:31200,goal:30000}]
+state sources=[{name:"Direct",revenue:42000},{name:"Partners",revenue:31000},{name:"Online",revenue:28000},{name:"Other",revenue:12000}]
+state customers=[{id:"acme",name:"Acme Co",plan:"Pro",revenue:18400,status:"Active"},{id:"atlas",name:"Atlas Studio",plan:"Team",revenue:12800,status:"Active"},{id:"lumen",name:"Lumen Labs",plan:"Pro",revenue:9200,status:"Paused"},{id:"north",name:"Northstar",plan:"Team",revenue:15300,status:"Active"},{id:"oak",name:"Oak Works",plan:"Basic",revenue:3800,status:"Active"}]
+state plans=[{id:"all",name:"All plans"},{id:"Basic",name:"Basic"},{id:"Pro",name:"Pro"},{id:"Team",name:"Team"}]
+derive eligible={onlyActive ? filter(customers, 'status', 'Active') : customers}
+derive shown={plan == 'all' ? search(eligible, 'name', query) : filter(search(eligible, 'name', query), 'plan', plan)}
+card
+  row align=top
+    column gap=4
+      text "Executive overview" style=title
+      text "A living reference for SayShape's visual language" tone=muted
+    badge "LIVE DEMO" tone=good
+  row
+    segmented bind=period options="Month,Quarter,Year"
+    button "Increase revenue" on=inc:boost
+    button "Reset" variant=secondary on=set:boost:0 disabled={boost == 0}
+  grid min=165 gap=12
+    card pad=16 gap=8
+      stat label="Revenue" value="{money((125000 + boost * 1000) * (period == 'Year' ? 12 : period == 'Quarter' ? 3 : 1))}" change="+18.4%" spark={[78,88,84,96,110,125]}
+    card pad=16 gap=8
+      stat label="Customers" value="1,840" change="+7.2%" spark={[12,14,13,15,17,19]}
+    card pad=16 gap=8
+      stat label="Conversion" value="12.5%" change="+2.1%" spark={[8,10,9,11,12,13]}
+    card pad=16 gap=8
+      stat label="Refund rate" value="1.8%" change="-0.4%" good=down spark={[12,11,10,10,9,8]}
+  tabs bind=view
+    tab "Overview" value=Overview
+      card
+        text "Revenue trend" style=lead weight=semibold
+        chart "Revenue and target" kind=line items=months x=month y=revenue,goal labels="Revenue,Target" format=money
+      card
+        text "Revenue sources" style=lead weight=semibold
+        chart "Source mix" kind=donut items=sources x=name y=revenue format=money
+      callout "Above target this month" detail="Performance is up across core channels." tone=good icon=true
+    tab "Customers" value=Customers
+      card
+        text "Customer directory" style=lead weight=semibold
+        row
+          input "Find customer" bind=query kind=search placeholder="Search by name"
+          select "Plan" items=plans value=id label=name bind=plan
+        check "Active customers only" bind=onlyActive
+        text "{plural(len(shown), 'customer')} in this view" tone=muted
+        table items=shown key=id bind=selected sort=by direction=dir
+          table-column "Customer" field=name
+          table-column "Revenue" field=revenue format=money
+        button "Clear filters" variant=secondary on="set:query:'';set:plan:'all';set:onlyActive:false"
+    tab "Controls" value=Controls
+      card
+        text "Interaction details" style=lead weight=semibold
+        text "Controls use one motion rhythm, the same spacing, and accessible states." tone=muted
+        slider "Sales target" bind=target min=0 max=100 step=1
+        progress value={target} max=100 label="Target progress"
+        switch "Email alerts" bind=alerts
+        date-picker "Report date" bind=reportDate min="2026-01-01" max="2027-12-31"
+        radio "Email updates" bind=channel value=email
+        radio "Push updates" bind=channel value=push
+        pagination bind=page pages=5
+        row
+          button "Save settings" on=emit:settings_saved
+          button "Reset settings" variant=secondary on="set:target:72;set:alerts:true;set:channel:'email'"
+`,
+  },
   map: {
     label: "World map",
     prompt: "Show me a world map with a few cities pinned, and let me pick a country.",

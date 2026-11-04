@@ -4,6 +4,7 @@
  * (Week | Month | Year), lighter than tabs or a select.
  */
 import { isDarkTheme } from "../theme";
+import { MOTION } from "../design";
 import type { ComponentDef, PressContext } from "../component";
 import { fitText } from "./input";
 import { fillTint, onProp, partBox, runOn, themeFont } from "./util";
@@ -82,8 +83,8 @@ text "Showing the {lower(view)}" tone=muted`,
       const part = partBox(box, box.x + cell.x, box.y + INSET, cell.w, H - INSET * 2);
       if (on) {
         // The chosen option is a small raised tile: lighter than the track in both themes.
-        const tileX = ctx.tween(box.node, "segmented:x", part.x, 250);
-        const tileW = ctx.tween(box.node, "segmented:w", part.w, 250);
+        const tileX = ctx.tween(box.node, "segmented:x", part.x, MOTION.navigation);
+        const tileW = ctx.tween(box.node, "segmented:w", part.w, MOTION.navigation);
         ctx.roundRect(tileX, part.y, tileW, part.h, Math.max(2, theme.radius.md - INSET));
         g.save();
         g.shadowColor = c.shadow;
@@ -113,7 +114,7 @@ text "Showing the {lower(view)}" tone=muted`,
         g.restore();
       } else {
         const hover = ctx.tween(box.node, "segmented:hover:" + cell.option,
-          ctx.isHovered(box.node, cell.option) ? 1 : 0, 155);
+          ctx.isHovered(box.node, cell.option) ? 1 : 0, MOTION.hover);
         if (hover > 0) {
           ctx.roundRect(part.x, part.y, part.w, part.h, Math.max(2, theme.radius.md - INSET));
           fillTint(g, c.ink, 0.05 * hover);

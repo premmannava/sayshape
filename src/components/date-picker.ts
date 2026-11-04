@@ -22,6 +22,7 @@
  *   runs on= if the date changed. Clear (unless required=true) writes "".
  * - US English month and day names; weeks start on Sunday.
  */
+import { MOTION } from "../design";
 import type { ComponentDef, LayoutContext, PaintContext, PopupContext, PressContext, PropReader } from "../component";
 import {
   addDays, addMonths, clampDate, compareDates, daysInMonth, displayDate, FIRST_DATE, formatDate, LAST_DATE, MONTHS, parseDate, WEEKDAYS, weekday,
@@ -271,8 +272,8 @@ date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
       g.fillText(fitText(g, label, box.w), box.x, box.y);
     }
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
-    const focus = ctx.tween(box.node, "date:field:focus", isOpen || ctx.isFocused(box.node) ? 1 : 0, 175);
-    const hover = ctx.tween(box.node, "date:field:hover", !disabled && ctx.isHovered(box.node) ? 1 : 0, 150);
+    const focus = ctx.tween(box.node, "date:field:focus", isOpen || ctx.isFocused(box.node) ? 1 : 0, MOTION.selection);
+    const hover = ctx.tween(box.node, "date:field:hover", !disabled && ctx.isHovered(box.node) ? 1 : 0, MOTION.hover);
     paintField(g, c, focus, hover);
     const text = v.kind === "date" ? displayDate(v.date) : v.kind === "invalid" ? "Invalid date" : p.str("placeholder", "Choose a date");
     g.font = ctx.font(400, FIELD_TEXT);

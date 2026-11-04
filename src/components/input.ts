@@ -3,6 +3,7 @@ import type { ComponentDef, LayoutContext, PropReader } from "../component";
 import type { Box, SayShapeNode } from "../types";
 import { INPUT_KINDS } from "../editor";
 import { isDarkTheme, mixColors, type Theme } from "../theme";
+import { MOTION } from "../design";
 import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
 
 const VARIANTS = ["primary", "secondary", "danger"] as const;
@@ -45,8 +46,8 @@ button "Back" variant=secondary on=dec:step`,
     const disabled = p.cond("disabled");
     const hot = !disabled && ctx.isHovered(box.node);
     const down = !disabled && ctx.isPressed(box.node);
-    const hoverProgress = ctx.tween(box.node, "button:hover", hot ? 1 : 0, 180);
-    const pressProgress = ctx.tween(box.node, "button:press", down ? 1 : 0, 110);
+    const hoverProgress = ctx.tween(box.node, "button:hover", hot ? 1 : 0, MOTION.hover);
+    const pressProgress = ctx.tween(box.node, "button:press", down ? 1 : 0, MOTION.press);
     const color = variant === "danger" ? c.bad : c.accent;
     const secondary = variant === "secondary";
     if (disabled) g.globalAlpha *= 0.45;
@@ -127,8 +128,8 @@ check "I agree to the terms" bind=agreed`,
     const c = theme.colors;
     const on = !!p.bound();
     const hot = ctx.isHovered(box.node);
-    const selected = ctx.tween(box.node, "check:marked", on ? 1 : 0, 175);
-    const hover = ctx.tween(box.node, "check:hover", hot ? 1 : 0, 145);
+    const selected = ctx.tween(box.node, "check:marked", on ? 1 : 0, MOTION.selection);
+    const hover = ctx.tween(box.node, "check:hover", hot ? 1 : 0, MOTION.hover);
     ctx.roundRect(box.x + 0.5, box.y + 4.5, 18, 18, Math.min(5, theme.radius.sm));
     g.fillStyle = c.surface;
     g.fill();
@@ -191,7 +192,7 @@ switch "Email me order updates" bind=updates`,
     const { g, theme } = ctx;
     const c = theme.colors;
     const on = !!p.bound();
-    const position = ctx.tween(box.node, "switch:position", on ? 1 : 0, 210);
+    const position = ctx.tween(box.node, "switch:position", on ? 1 : 0, MOTION.selection);
     // The toggle sits beside the first line of the label, however many lines it wraps to.
     const tw = 36, th = 20, tx = box.x + box.w - tw, ty = box.y + (28 - th) / 2;
     g.font = ctx.font(400, theme.text.body);
@@ -256,7 +257,7 @@ radio "Large" bind=size value=l`,
     const { g, theme } = ctx;
     const c = theme.colors;
     const chosen = p.bound() === (p.value("value") ?? "");
-    const progress = ctx.tween(box.node, "radio:selected", chosen ? 1 : 0, 170);
+    const progress = ctx.tween(box.node, "radio:selected", chosen ? 1 : 0, MOTION.selection);
     const cx = box.x + 9.5, cy = box.y + 13;
     g.beginPath();
     g.arc(cx, cy, 9, 0, Math.PI * 2);
@@ -560,7 +561,7 @@ slider "Up to \${maxPrice}" bind=maxPrice min=20 max=300 step=10`,
     ctx.roundRect(box.x, cy - TRACK_H / 2, Math.max(TRACK_H, cx - box.x), TRACK_H, TRACK_H / 2);
     g.fillStyle = c.accent;
     g.fill();
-    const active = ctx.tween(box.node, "slider:active", ctx.isPressed(box.node) || ctx.isHovered(box.node) ? 1 : 0, 145);
+    const active = ctx.tween(box.node, "slider:active", ctx.isPressed(box.node) || ctx.isHovered(box.node) ? 1 : 0, MOTION.hover);
     if (active > 0) {
       g.beginPath();
       g.arc(cx, cy, THUMB_R + 5 * active, 0, Math.PI * 2);
@@ -722,8 +723,8 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       g.fillText(fitText(g, label, box.w), box.x, box.y);
     }
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
-    const focus = ctx.tween(box.node, "field:focus", !disabled && (editing || ctx.isFocused(box.node)) ? 1 : 0, 175);
-    const hover = ctx.tween(box.node, "field:hover", hot ? 1 : 0, 150);
+    const focus = ctx.tween(box.node, "field:focus", !disabled && (editing || ctx.isFocused(box.node)) ? 1 : 0, MOTION.selection);
+    const hover = ctx.tween(box.node, "field:hover", hot ? 1 : 0, MOTION.hover);
     paintField(g, c, focus, hover);
     if (!editing) {
       const value = fieldValue(p);

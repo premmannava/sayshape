@@ -37,6 +37,7 @@ import type { Theme } from "../theme";
 import type { Box, SayShapeNode, Value } from "../types";
 import { chevron, fillTint, onProp, partBox, runOn, themeFont } from "./util";
 import { paintGhost, staggered } from "../ghost";
+import { MOTION } from "../design";
 
 /** The most rows one table shows. Larger lists show a message: page them with take() or pagination. */
 export const MAX_TABLE_ROWS = 200;
@@ -446,7 +447,7 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const detail = sortDetail(col.field);
     const hovered = d.sortable && ctx.isHovered(box.node, detail);
     if (d.sortable) ctx.addHit(cell, { detail });
-    const headerHighlight = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, 170);
+    const headerHighlight = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, MOTION.hover);
     if (headerHighlight) {
       ctx.roundRect(cell.x + 3, cell.y + 3, Math.max(0, cell.w - 6), cell.h - 6, theme.radius.sm);
       fillTint(g, col.sorted ? c.accent : c.ink, headerHighlight * (col.sorted ? 0.075 : 0.035));
@@ -502,8 +503,8 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const ry = oy + row.y + (1 - shown) * 6;
     const last = r === d.rows.length - 1;
     const hovered = row.detail ? ctx.isHovered(box.node, row.detail) : false;
-    const highlight = row.detail ? ctx.tween(box.node, "table:hover:" + String(row.detail), hovered ? 1 : 0, 170) : 0;
-    const selected = row.detail ? ctx.tween(box.node, "table:selected:" + String(row.detail), row.selected ? 1 : 0, 210) : 0;
+    const highlight = row.detail ? ctx.tween(box.node, "table:hover:" + String(row.detail), hovered ? 1 : 0, MOTION.hover) : 0;
+    const selected = row.detail ? ctx.tween(box.node, "table:selected:" + String(row.detail), row.selected ? 1 : 0, MOTION.selection) : 0;
     if (r % 2 || highlight > 0 || selected > 0) {
       if (last) ctx.roundRect(ox + f.x + 1, ry, f.w - 2, row.h - 1, theme.radius.md - 1);
       else { g.beginPath(); g.rect(ox + f.x + 1, ry, f.w - 2, row.h); }
