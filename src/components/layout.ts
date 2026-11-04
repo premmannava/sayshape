@@ -3,6 +3,7 @@ import type { Box } from "../types";
 import { wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
 import { mixColors } from "../theme";
+import { MOTION } from "../design";
 import { chevron, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, partBox, row as rowLayout, ROW_ALIGN, rowMinWidth, runOn, stack, themeFont } from "./util";
 
 /** A parent card is already the frame; let nested tables use its surface. */
@@ -96,8 +97,8 @@ card on=emit:open_order
     const c = theme.colors;
     const pressable = ctx.props(box.node).has("on");
     const hovered = pressable && ctx.isHovered(box.node);
-    const lift = ctx.tween(box.node, "card:hover", hovered ? 1 : 0, 200);
-    const press = ctx.tween(box.node, "card:press", pressable && ctx.isPressed(box.node) ? 1 : 0, 130);
+    const lift = ctx.tween(box.node, "card:hover", hovered ? 1 : 0, MOTION.hover);
+    const press = ctx.tween(box.node, "card:press", pressable && ctx.isPressed(box.node) ? 1 : 0, MOTION.press);
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
     // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
     // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
@@ -291,8 +292,8 @@ export const listItem: ComponentDef = {
     const pressable = p.has("on");
     if (pressable) {
       const hovered = ctx.isHovered(box.node);
-      const highlight = ctx.tween(box.node, "list:hover", hovered ? 1 : 0, 180);
-      const pressed = ctx.tween(box.node, "list:press", ctx.isPressed(box.node) ? 1 : 0, 120);
+      const highlight = ctx.tween(box.node, "list:hover", hovered ? 1 : 0, MOTION.hover);
+      const pressed = ctx.tween(box.node, "list:press", ctx.isPressed(box.node) ? 1 : 0, MOTION.press);
       if (highlight || pressed) {
         ctx.roundRect(box.x + 2, box.y + 1, box.w - 4, box.h - 2, theme.radius.sm);
         fillTint(g, c.ink, 0.03 * highlight + 0.045 * pressed);

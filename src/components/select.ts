@@ -21,6 +21,7 @@
  *   popup's own, kept by the engine, never in state. Choosing writes bind=,
  *   closes the list (focus back on the field), then runs on=.
  */
+import { MOTION } from "../design";
 import type { ComponentDef, LayoutContext, PaintContext, PopupContext, PressContext, PropReader } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import type { PopupState } from "../popup";
@@ -197,7 +198,7 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
     if (opt.available) ctx.addHit(row, { detail, focusable: false });
     const isChosen = opt.value === chosen;
     const hover = ctx.tween(owner.node, "select:option:hover:" + opt.key,
-      opt.available && ctx.isHovered(owner.node, detail) ? 1 : 0, 145);
+      opt.available && ctx.isHovered(owner.node, detail) ? 1 : 0, MOTION.hover);
     if (i === hi || hover > 0) {
       ctx.roundRect(row.x, row.y + 1, row.w, row.h - 2, theme.radius.sm);
       if (i === hi) fillTint(g, c.accent, 0.14);
@@ -268,8 +269,8 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
       g.fillText(fitText(g, label, box.w), box.x, box.y);
     }
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
-    const focus = ctx.tween(box.node, "select:field:focus", isOpen || ctx.isFocused(box.node) ? 1 : 0, 175);
-    const hover = ctx.tween(box.node, "select:field:hover", hot ? 1 : 0, 150);
+    const focus = ctx.tween(box.node, "select:field:focus", isOpen || ctx.isFocused(box.node) ? 1 : 0, MOTION.selection);
+    const hover = ctx.tween(box.node, "select:field:hover", hot ? 1 : 0, MOTION.hover);
     paintField(g, c, focus, hover);
     g.font = ctx.font(400, FIELD_TEXT);
     g.textAlign = "left";
