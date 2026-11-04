@@ -44,10 +44,11 @@ const docsSidebar: DefaultTheme.SidebarItem[] = [
     ],
   },
   {
-    text: "Components",
+    text: "Elements",
     items: [
-      { text: "Overview", link: "/docs/components/" },
-      ...CATEGORIES.map((c) => ({ text: cap(c), link: `/docs/components/${c}` })),
+      { text: "Atlas: all elements, live", link: "/docs/elements/" },
+      { text: "Reference overview", link: "/docs/components/" },
+      ...CATEGORIES.map((c) => ({ text: `${cap(c)} reference`, link: `/docs/components/${c}` })),
     ],
   },
   {
@@ -113,7 +114,8 @@ export default defineConfig({
       ...(HAS_MODEL ? [{ text: "Build with AI", link: "/chat", activeMatch: "^/chat" }] : []),
       { text: "Playground", link: "/playground", activeMatch: "^/playground" },
       { text: "Examples", link: "/examples/", activeMatch: "^/examples" },
-      { text: "Docs", link: "/docs/", activeMatch: "^/docs/(?!architecture/limitations)" },
+      { text: "Elements", link: "/docs/elements/", activeMatch: "^/docs/elements/" },
+      { text: "Docs", link: "/docs/", activeMatch: "^/docs/(?!architecture/limitations|elements/)" },
       { text: "Status", link: "/docs/architecture/limitations", activeMatch: "^/docs/architecture/limitations" },
     ],
     socialLinks: [{ icon: "github", link: REPO, ariaLabel: "SayShape on GitHub" }],
