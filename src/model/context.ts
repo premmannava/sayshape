@@ -120,8 +120,11 @@ export interface UsageTotals {
   completionTokens?: number;
   /** Part of completionTokens, when the server reports it. Not added again. */
   reasoningTokens?: number;
+  /** Parts of promptTokens read from and written to the prompt cache, when the server reports them. */
+  cachedTokens?: number;
+  cacheWriteTokens?: number;
   /** How many attempts reported each figure, out of attempts. */
-  reported: { promptTokens: number; completionTokens: number; reasoningTokens: number; attempts: number };
+  reported: { promptTokens: number; completionTokens: number; reasoningTokens: number; cachedTokens: number; cacheWriteTokens: number; attempts: number };
 }
 
 export function sumUsage(usages: readonly Usage[]): UsageTotals {
@@ -131,10 +134,13 @@ export function sumUsage(usages: readonly Usage[]): UsageTotals {
     return { value: n === usages.length && n > 0 ? sum : undefined, n };
   };
   const p = total("promptTokens"), c = total("completionTokens"), r = total("reasoningTokens");
+  const cr = total("cachedTokens"), cw = total("cacheWriteTokens");
   return {
     promptTokens: p.value,
     completionTokens: c.value,
     reasoningTokens: r.value,
-    reported: { promptTokens: p.n, completionTokens: c.n, reasoningTokens: r.n, attempts: usages.length },
+    cachedTokens: cr.value,
+    cacheWriteTokens: cw.value,
+    reported: { promptTokens: p.n, completionTokens: c.n, reasoningTokens: r.n, cachedTokens: cr.n, cacheWriteTokens: cw.n, attempts: usages.length },
   };
 }

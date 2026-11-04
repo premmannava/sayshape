@@ -3,17 +3,19 @@ import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { Registry } from "../src/registry";
 import { broken, reference } from "../eval/compare/reference";
-import { cleanHtml, codeStats, report, runCompare, score, summarize, type Format } from "../eval/compare/run";
+import { cleanHtml, codeStats, costOf, report, runCompare, score, summarize, type Format } from "../eval/compare/run";
+import { parseCache } from "../scripts/model-env";
 import { tasks } from "../eval/compare/tasks";
 
 const registry = new Registry([...coreComponents, ...mapComponents]);
 
 /** A model server that answers each request with the reference answer in the format its system prompt asks for. */
-function fakeModel(answer: (request: string, format: Format) => string, usage = { prompt_tokens: 1000, completion_tokens: 200 }) {
+function fakeModel(answer: (request: string, format: Format) => string, usage: Record<string, unknown> = { prompt_tokens: 1000, completion_tokens: 200 }) {
   return (async (_url: string, init: RequestInit) => {
     const body = JSON.parse(init.body as string) as { messages: Array<{ role: string; content: string }> };
-    const format: Format = body.messages[0]!.content.startsWith("You write interactive UI") ? "html" : "sayshape";
-    const request = body.messages.find((m) => m.role === "user")!.content;
+    const system = body.messages[0]!.content as unknown;
+    const format: Format = (typeof system === "string" ? system : JSON.stringify(system)).includes("You write interactive UI") ? "html" : "sayshape";
+    const request = body.messages.find((m) => m.role === "user")!.content as string;
     const text = answer(request, format);
     const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: ${JSON.stringify({ choices: [], usage })}\n\ndata: [DONE]\n\n`;
     return new Response(sse, { status: 200 });
@@ -95,6 +97,43 @@ describe("reading answers", () => {
     const c = codeStats("html", `<script src="x.js"></script><script>el.innerHTML = a; el.insertAdjacentHTML('beforeend', b); eval(c); el.style.color = '#ff0000';</script>`);
     expect(c).toMatchObject({ htmlInserts: 2, codeFromStrings: 1, externalScripts: 1, fixedColors: 1 });
     expect(codeStats("sayshape", "text \"#ff0000 innerHTML\"")).toMatchObject({ htmlInserts: 0, fixedColors: 0 });
+  });
+});
+
+describe("prompt caching", () => {
+  const prices = { prompt: 3e-6, completion: 15e-6, cacheRead: 0.3e-6, cacheWrite: 3.75e-6 };
+
+  it("charges cached and cache-written input at their own prices", () => {
+    // 10,500 of 11,000 input tokens read from the cache.
+    expect(costOf({ promptTokens: 11000, completionTokens: 200, cachedTokens: 10500 }, prices)).toBeCloseTo(500 * 3e-6 + 10500 * 0.3e-6 + 200 * 15e-6);
+    // The first request writes the cache.
+    expect(costOf({ promptTokens: 11000, completionTokens: 200, cachedTokens: 0, cacheWriteTokens: 10500 }, prices)).toBeCloseTo(500 * 3e-6 + 10500 * 3.75e-6 + 200 * 15e-6);
+    // No cache prices listed: cache tokens at the input price.
+    expect(costOf({ promptTokens: 11000, completionTokens: 200, cachedTokens: 10500 }, { prompt: 3e-6, completion: 15e-6 })).toBeCloseTo(11000 * 3e-6 + 200 * 15e-6);
+    expect(costOf({ promptTokens: 11000 }, prices)).toBeUndefined();
+  });
+
+  it("reads the LOOM_PROMPT_CACHE setting", () => {
+    expect(parseCache("1h")).toBe("1h");
+    for (const on of ["1", "true", "on", "yes", "5m", " 1 "]) expect(parseCache(on)).toBe(true);
+    for (const off of [undefined, "", "0", "false", "off", "2h"]) expect(parseCache(off)).toBeUndefined();
+  });
+
+  it("marks the guide for caching and reports how much input came from the cache", async () => {
+    const some = tasks.filter((t) => t.id === "k3");
+    const sent: unknown[] = [];
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { messages: Array<{ content: unknown }> };
+      sent.push(body.messages[0]!.content);
+      const html = typeof body.messages[0]!.content === "string" ? (body.messages[0]!.content as string).startsWith("You write") : JSON.stringify(body.messages[0]!.content).includes("You write");
+      return fakeModel(() => reference.k3![html ? "html" : "sayshape"], { prompt_tokens: 11000, completion_tokens: 200, prompt_tokens_details: { cached_tokens: 10500 } } as never)(url, init);
+    }) as typeof fetch;
+    const results = await runCompare(some, { config: { url: "http://model.test/v1", cache: true }, models: ["fake"], registry, prices: { fake: prices }, fetch: fetchImpl });
+    expect(sent[0]).toEqual([expect.objectContaining({ type: "text", cache_control: { type: "ephemeral" } })]);
+    const s = summarize(results)[0]!;
+    expect(s.cachedShare).toBeCloseTo(10500 / 11000);
+    expect(results[0]!.cost).toBeCloseTo(500 * 3e-6 + 10500 * 0.3e-6 + 200 * 15e-6);
+    expect(report(results, { date: "d", url: "u", runs: 1, guideChars: 1, htmlPromptChars: 1, cache: true })).toContain("Prompt caching: marked, about 5 minutes");
   });
 });
 

@@ -80,7 +80,7 @@ async function main(): Promise<void> {
 
   let sentOne = false;
   const results = await runEval(list, {
-    config: { url: env.url, model, apiKey: env.apiKey || undefined, streamUsage },
+    config: { url: env.url, model, apiKey: env.apiKey || undefined, streamUsage, cache: env.cache },
     registry,
     guide,
     variants: variants.length ? variants : undefined,

@@ -1477,6 +1477,7 @@ npm run compare -- --models openai/gpt-4.1,qwen/qwen3-32b # several models on th
 npm run compare -- --runs 3                               # each request three times per model and format
 npm run compare -- --only dashboard,s1                    # some categories or request ids
 npm run compare -- --guide compact                        # SayShape's compact guide
+npm run compare -- --cache 1h                             # mark the guide for prompt caching
 ```
 
 The requests (`eval/compare/tasks.ts`) cover KPIs, charts, tables, forms, calculators, dashboards and two security cases, where data that looks like HTML must stay text. Every figure a check looks for is in the request. SayShape answers are rendered by the real engine and HTML answers run in jsdom; checks type into fields, press things by their visible text and read the visible text, so they mean the same for both. `eval/compare/reference.ts` holds a working answer to every request in both formats, and the tests check that each passes every check.
@@ -1572,6 +1573,26 @@ It sends the original task, the `requirements` that must always hold, the change
 #### Usage and timing
 
 `result.usage` adds up the server's token counts over the first try and the repair: `promptTokens`, `completionTokens`, and `reasoningTokens` (part of the completion tokens, not added again). A total is `undefined`, meaning unknown, when any attempt didn't report it; `usage.reported` says how many did. Each attempt also has `inputChars` and `estimatedInputTokens` (characters / 4), `estimatedThinkingTokens`, the guide it used and how long it took. Many servers only report usage while streaming when asked; set `config.streamUsage: true` for those that support `stream_options` (OpenAI, vLLM, recent LM Studio and llama.cpp).
+
+#### Prompt caching
+
+The guide is the same on every request and comes first, so a provider's prompt cache can serve it: after the first request, those tokens cost a fraction of the input price. With the full guide at about 10,500 tokens of input per request, this is most of the cost of a request.
+
+```ts
+const result = await generateSpec({
+  config: { url: "https://openrouter.ai/api/v1", model, apiKey, cache: true }, // or cache: "1h"
+  registry, request,
+});
+result.usage.cachedTokens;      // input tokens read from the cache (part of promptTokens)
+result.usage.cacheWriteTokens;  // input tokens written to it, usually on the first request
+```
+
+- **Anthropic models** (directly or through OpenRouter) cache only what's marked: `cache: true` sends the guide as a text block with `cache_control`, kept about 5 minutes; `cache: "1h"` keeps it an hour. A cache read costs about a tenth of the input price; writing it costs more than a normal read (more for an hour).
+- **OpenAI** caches prompts over 1,024 tokens on its own, so leave `cache` off. Gemini 2.5 and later also cache on their own.
+- The cache only pays when requests keep coming before it expires. Don't add anything that changes per request (a date, a user's name) before or inside the guide: put it in the request.
+- `cachedTokens` and `cacheWriteTokens` are read from whichever fields the server uses (`prompt_tokens_details`, or Anthropic's `cache_read_input_tokens` and `cache_creation_input_tokens`), and stay `undefined` when it reports neither.
+
+`npm run eval` and `npm run compare` turn it on with `LOOM_PROMPT_CACHE=1` (or `1h`) in `.env.local`; `npm run compare -- --cache 1h` overrides that for one run, and the report shows how much input came from the cache and prices cache reads and writes at the model's own rates.
 
 Putting the guide first and the request last means requests with the same guide options share a prefix, which servers with prefix caching (vLLM, llama.cpp, many hosted APIs) can reuse. That's the server's doing: SayShape builds the same text each time, but doesn't cache anything itself.
 

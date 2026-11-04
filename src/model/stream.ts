@@ -30,6 +30,17 @@ export interface ModelConfig {
    * Without it, usage is whatever the server sends on its own, or unknown.
    */
   streamUsage?: boolean;
+  /**
+   * Mark the system prompt (the SayShape guide) for prompt caching, so later
+   * requests that start with the same guide pay a fraction of the input price
+   * for it. Sends it as a text block with cache_control, which Anthropic models
+   * need (directly or through OpenRouter) and Gemini accepts. true caches for
+   * about 5 minutes, "1h" for an hour (a cache write costs more for longer).
+   * Off by default: OpenAI caches long prompts on its own, and some servers
+   * reject a system prompt sent as blocks. The guide is generated the same way
+   * every time and sent first, so it's a stable prefix either way.
+   */
+  cache?: boolean | "1h";
 }
 
 export interface StreamPart {
@@ -44,6 +55,10 @@ export interface Usage {
   completionTokens?: number;
   /** Thinking tokens, when reported (completion_tokens_details). Already counted in completionTokens. */
   reasoningTokens?: number;
+  /** Input tokens read from the server's prompt cache. Already counted in promptTokens. */
+  cachedTokens?: number;
+  /** Input tokens written to the prompt cache on this request. Already counted in promptTokens. */
+  cacheWriteTokens?: number;
 }
 
 export class ModelError extends Error {
@@ -57,7 +72,17 @@ type Fetch = typeof fetch;
 
 interface ChunkJSON {
   choices?: Array<{ delta?: { content?: string | null; reasoning_content?: string | null; reasoning?: string | null } }>;
-  usage?: { prompt_tokens?: number; completion_tokens?: number; completion_tokens_details?: { reasoning_tokens?: number } | null } | null;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    completion_tokens_details?: { reasoning_tokens?: number } | null;
+    /** OpenAI and OpenRouter: cache reads, and on OpenRouter cache writes. */
+    prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } | null;
+    cache_write_tokens?: number;
+    /** Anthropic's own names, which some compatible servers pass through. */
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  } | null;
   error?: { message?: string } | string;
 }
 
@@ -82,7 +107,7 @@ export async function* streamChat(
       },
       body: JSON.stringify({
         model: config.model,
-        messages,
+        messages: config.cache ? withCachedSystem(messages, config.cache) : messages,
         stream: true,
         temperature: config.temperature ?? 0.2,
         max_tokens: config.maxTokens ?? 4000,
@@ -138,10 +163,22 @@ function* parseLine(line: string, usage: Usage | undefined): Generator<StreamPar
     if (json.usage.completion_tokens !== undefined) usage.completionTokens = json.usage.completion_tokens;
     const reasoning = json.usage.completion_tokens_details?.reasoning_tokens;
     if (reasoning !== undefined) usage.reasoningTokens = reasoning;
+    const cached = json.usage.prompt_tokens_details?.cached_tokens ?? json.usage.cache_read_input_tokens;
+    if (cached !== undefined) usage.cachedTokens = cached;
+    const written = json.usage.prompt_tokens_details?.cache_write_tokens ?? json.usage.cache_write_tokens ?? json.usage.cache_creation_input_tokens;
+    if (written !== undefined) usage.cacheWriteTokens = written;
   }
   const delta = json.choices?.[0]?.delta;
   if (!delta) return;
   const reasoning = delta.reasoning_content ?? delta.reasoning;
   if (reasoning) yield { kind: "reasoning", text: reasoning };
   if (delta.content) yield { kind: "content", text: delta.content };
+}
+
+/** The first system message as a text block marked for caching; everything else as it was. */
+function withCachedSystem(messages: ChatMessage[], cache: true | "1h"): unknown[] {
+  const i = messages.findIndex((m) => m.role === "system");
+  return messages.map((m, j) =>
+    j === i ? { role: m.role, content: [{ type: "text", text: m.content, cache_control: cache === "1h" ? { type: "ephemeral", ttl: "1h" } : { type: "ephemeral" } }] } : m,
+  );
 }

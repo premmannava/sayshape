@@ -34,6 +34,21 @@ export interface Prices {
   /** Dollars per input token and per output token. */
   prompt: number;
   completion: number;
+  /** Dollars per input token read from or written to the prompt cache, when the server lists them. */
+  cacheRead?: number;
+  cacheWrite?: number;
+}
+
+/**
+ * What an answer cost. Cached and cache-written input tokens are part of the
+ * prompt tokens; they're charged at their own prices when those are known, and
+ * at the normal input price when they aren't (which overstates a cache read).
+ */
+export function costOf(u: Usage, p: Prices): number | undefined {
+  if (u.promptTokens === undefined || u.completionTokens === undefined) return undefined;
+  const read = u.cachedTokens ?? 0, written = u.cacheWriteTokens ?? 0;
+  const plain = Math.max(0, u.promptTokens - read - written);
+  return plain * p.prompt + read * (p.cacheRead ?? p.prompt) + written * (p.cacheWrite ?? p.prompt) + u.completionTokens * p.completion;
 }
 
 export interface CheckResult {
@@ -252,7 +267,7 @@ async function answerOne(task: Task, format: Format, model: string, run: number,
   }
   const s = await score(format, task, a.output);
   const p = o.prices?.[model];
-  const cost = p && a.usage.promptTokens !== undefined && a.usage.completionTokens !== undefined ? a.usage.promptTokens * p.prompt + a.usage.completionTokens * p.completion : undefined;
+  const cost = p ? costOf(a.usage, p) : undefined;
   return {
     ...base, ok: true, output: a.output, raw: a.raw, usage: a.usage, cost, firstTokenMs: a.firstTokenMs, totalMs: a.totalMs, inputChars: a.inputChars,
     valid: s.valid, problems: s.problems, checks: s.checks, success: s.valid && s.checks.every((c) => c.passed),
@@ -285,6 +300,8 @@ export interface Summary {
   checkRate: number;
   /** Medians over answered requests; undefined when the server didn't report them. */
   inputTokens?: number;
+  /** Share of input tokens, over all answers, read from the prompt cache; undefined when never reported. */
+  cachedShare?: number;
   outputTokens?: number;
   firstTokenMs?: number;
   totalMs?: number;
@@ -299,6 +316,12 @@ export interface Summary {
   /** Security tasks whose markup stayed text, of those answered. */
   safe: number;
   safeOf: number;
+}
+
+function cachedShare(rs: AnswerResult[]): number | undefined {
+  const reported = rs.filter((r) => r.usage.cachedTokens !== undefined && r.usage.promptTokens);
+  if (!reported.length) return undefined;
+  return reported.reduce((t, r) => t + r.usage.cachedTokens!, 0) / reported.reduce((t, r) => t + r.usage.promptTokens!, 0);
 }
 
 export function summarize(results: AnswerResult[]): Summary[] {
@@ -320,6 +343,7 @@ export function summarize(results: AnswerResult[]): Summary[] {
       successRate: answered.length ? successes / answered.length : 0,
       checkRate: checks.length ? checks.filter((c) => c.passed).length / checks.length : 0,
       inputTokens: median(known(answered.map((r) => r.usage.promptTokens))),
+      cachedShare: cachedShare(answered),
       outputTokens: median(known(answered.map((r) => r.usage.completionTokens))),
       firstTokenMs: median(known(answered.map((r) => r.firstTokenMs))),
       totalMs: median(answered.map((r) => r.totalMs)),
@@ -341,18 +365,18 @@ const num = (x: number | undefined, unit = "") => (x === undefined ? "?" : `${Ma
 const secs = (ms: number | undefined) => (ms === undefined ? "?" : `${(ms / 1000).toFixed(1)} s`);
 const usd = (x: number | undefined) => (x === undefined ? "?" : x < 0.01 ? `$${x.toFixed(4)}` : `$${x.toFixed(3)}`);
 
-export function report(results: AnswerResult[], meta: { date: string; url: string; runs: number; guideChars: number; htmlPromptChars: number }): string {
+export function report(results: AnswerResult[], meta: { date: string; url: string; runs: number; guideChars: number; htmlPromptChars: number; cache?: true | "1h" }): string {
   const sums = summarize(results);
   const lines: string[] = [];
   lines.push(`# SayShape vs HTML`, "", `${meta.date} · ${meta.url} · ${meta.runs} run${meta.runs === 1 ? "" : "s"} per task · first tries only, no repair`, "");
-  lines.push(`System prompts: SayShape guide ${meta.guideChars.toLocaleString("en-US")} characters, HTML instructions ${meta.htmlPromptChars} characters.`, "");
+  lines.push(`System prompts: SayShape guide ${meta.guideChars.toLocaleString("en-US")} characters, HTML instructions ${meta.htmlPromptChars} characters. Prompt caching: ${meta.cache === "1h" ? "marked, 1 hour" : meta.cache ? "marked, about 5 minutes" : "not marked (servers that cache on their own still may)"}.`, "");
   lines.push("## Summary", "");
-  lines.push("| Model | Format | Works (all checks) | Checks passed | Renders cleanly | Input tokens | Output tokens | First token | Total time | Cost | Cost per working UI |");
-  lines.push("|---|---|---|---|---|---|---|---|---|---|---|");
+  lines.push("| Model | Format | Works (all checks) | Checks passed | Renders cleanly | Input tokens | From cache | Output tokens | First token | Total time | Cost | Cost per working UI |");
+  lines.push("|---|---|---|---|---|---|---|---|---|---|---|---|");
   for (const s of sums) {
-    lines.push(`| ${s.model} | ${s.format} | ${pct(s.successRate)} | ${pct(s.checkRate)} | ${pct(s.validRate)} | ${num(s.inputTokens)} | ${num(s.outputTokens)} | ${secs(s.firstTokenMs)} | ${secs(s.totalMs)} | ${usd(s.cost)} | ${usd(s.costPerSuccess)} |`);
+    lines.push(`| ${s.model} | ${s.format} | ${pct(s.successRate)} | ${pct(s.checkRate)} | ${pct(s.validRate)} | ${num(s.inputTokens)} | ${s.cachedShare === undefined ? "?" : pct(s.cachedShare)} | ${num(s.outputTokens)} | ${secs(s.firstTokenMs)} | ${secs(s.totalMs)} | ${usd(s.cost)} | ${usd(s.costPerSuccess)} |`);
   }
-  lines.push("", "Token and time figures are medians per answer; cost is the total over all answers.", "");
+  lines.push("", "Token and time figures are medians per answer; From cache is the share of all input tokens the server read from its prompt cache; cost is the total over all answers.", "");
   lines.push("## Code", "");
   lines.push("| Model | Format | Median size | HTML inserted as strings | Code from strings | External scripts | Fixed colors | Security tasks kept safe |");
   lines.push("|---|---|---|---|---|---|---|---|");
