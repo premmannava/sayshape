@@ -19,16 +19,25 @@ describe("theme surfaces", () => {
     expect(extendTheme(darkTheme, { colors: { accent: "#ff0000" } }).colors.raised).toBe(darkTheme.colors.raised);
   });
 
-  it("derives neutral donut shades from host surfaces without inventing bright colors", () => {
+  it("gives pies a coordinated muted palette in either theme", () => {
+    expect(sliceColors(lightTheme).slice(0, 4)).toEqual(["#346167", "#74909d", "#95ada3", "#c0b1a0"]);
+    expect(sliceColors(darkTheme).slice(0, 4)).toEqual(["#5ea199", "#9DB8C4", "#A6C4B1", "#CDBC9F"]);
     for (const theme of [lightTheme, darkTheme]) {
       const shades = sliceColors(theme);
       expect(shades).toHaveLength(6);
       expect(new Set(shades).size).toBe(6);
+      expect(shades).not.toContain(theme.colors.accent); // accent is reserved for hover
       for (const shade of shades) expect(parseColor(shade)).not.toBeNull();
     }
-    const host = extendTheme(darkTheme, { colors: { surface: "#222428", ink: "#f5f4ee" } });
-    expect(sliceColors(host)[0]).toBe(mixColors(host.colors.raised, host.colors.ink, 0.77));
+  });
+
+  it("keeps the chart palette customizable through existing series tokens", () => {
+    const host = extendTheme(darkTheme, { colors: { surface: "#222428", ink: "#f5f4ee", accent: "#b8b1e9" } });
+    expect(sliceColors(host)[0]).toBe(mixColors(host.colors.raised, host.colors.series1, 0.77));
     expect(sliceColors(host)).not.toEqual(sliceColors(darkTheme));
+    const custom = extendTheme(lightTheme, { colors: { series2: "#576e98", series3: "#719276" } });
+    expect(sliceColors(custom)[1]).not.toBe(sliceColors(lightTheme)[1]);
+    expect(sliceColors(custom)[2]).not.toBe(sliceColors(lightTheme)[2]);
   });
 
   it("read the colors browsers hand back", () => {
