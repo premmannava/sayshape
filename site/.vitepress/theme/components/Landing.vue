@@ -61,7 +61,7 @@ const href = (p: string) => withBase(p);
           <a class="loom-btn quiet" :href="href('/docs/')">Read the docs</a>
           <a v-if="generationAvailable" class="loom-btn quiet" :href="href('/chat.html')">Build with AI</a>
         </div>
-        <a class="hero-status" :href="href('/docs/architecture/limitations.html')">v0.1 prototype · open source · Status</a>
+        <a class="hero-status" :href="href('/docs/architecture/limitations.html')">v0.1 prototype · not yet screen-reader accessible · Status</a>
       </div>
     </header>
 

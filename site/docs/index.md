@@ -45,7 +45,7 @@ These are design properties, not benchmark results. SayShape hasn't been measure
 
 ## Status
 
-SayShape is an **early prototype, version 0.1**: the engine, the language, 48 elements, a model client and the tests work today. [Status and limits](./architecture/limitations) lists what isn't built yet.
+SayShape is an **early prototype, version 0.1**: the engine, the language, 48 elements, a model client and the tests work today. Canvas content isn't available to screen readers yet, so don't use it where accessibility is required. [Status and limits](./architecture/limitations) lists what else isn't built.
 
 ::: info Earlier working name
 SayShape was called Loom while it was being built, and a few names still say so: the package (`loom-ui`), the CSS variables (`--loom-*`), the ` ```loom ` code fence, and the model guide, which tells models they're writing "Loom". These will be renamed before the first npm release.
