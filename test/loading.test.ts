@@ -75,7 +75,7 @@ describe("elements while their data loads", () => {
     expect(shown.some((t) => t.startsWith("Best:"))).toBe(false);
     expect(shown).not.toContain("—");
     // Titles and headers are real: they don't depend on the data.
-    expect(shown).toEqual(expect.arrayContaining(["Revenue", "Months", "Month", "TOTAL"]));
+    expect(shown).toEqual(expect.arrayContaining(["Revenue", "Months", "Month", "Total"]));
     expect(ui.warnings).toEqual([]);
     // No rows to press while there are none.
     expect(ui.hits.some((h) => h.box.node.type === "table")).toBe(false);

@@ -57,7 +57,7 @@ describe("callout", () => {
     expect(hs[1]).toBeGreaterThanOrEqual(hs[2]!);
   });
 
-  it("draws the text in ink, the detail in muted, and the bar and tint in the tone's color", () => {
+  it("draws the text in ink, the detail in muted, and the border and tint in the tone's color", () => {
     const ui = render(`callout "Watch costs" detail="Up 8%" tone=warn\n`);
     const ops = ui.drawOps;
     expect(ops.find((o) => o.op === "fillText" && o.args[0] === "Watch costs")!.fillStyle).toBe(c.ink);
@@ -65,7 +65,9 @@ describe("callout", () => {
     const tint = ops.find((o) => o.op === "fill")!;
     expect(tint.fillStyle).toBe(c.warn);
     expect(tint.globalAlpha).toBeLessThan(1);
-    expect(ops.find((o) => o.op === "fillRect")!.fillStyle).toBe(c.warn);
+    // The hairline border carries the tone, faintly.
+    const border = ops.find((o) => o.op === "stroke" && o.strokeStyle === c.warn)!;
+    expect(border.globalAlpha).toBeLessThan(1);
     ui.destroy();
   });
 
@@ -103,8 +105,8 @@ describe("callout while loading", () => {
     ui.loom.renderNow();
     expect(texts(ui)).toEqual([]);
     expect(ui.warnings).toEqual([]);
-    // The tint and the bar are real; the text, detail and icon are one placeholder.
-    expect(ui.drawOps.find((o) => o.op === "fillRect")!.fillStyle).toBe(c.accent);
+    // The tint and the border are real; the text, detail and icon are one placeholder.
+    expect(ui.drawOps.find((o) => o.op === "stroke" && o.strokeStyle === c.accent)).toBeDefined();
     expect(ui.drawOps.some((o) => o.op === "fill" && o.fillStyle === c.line)).toBe(true);
     const loadingH = ui.find("callout").box!.h;
     ui.loom.state.set("sales", [{ month: "Jan", revenue: 3 }, { month: "Feb", revenue: 5 }]);

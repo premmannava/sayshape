@@ -3,6 +3,7 @@
  * The everyday way to switch a view (Chart | Table) or a period
  * (Week | Month | Year), lighter than tabs or a select.
  */
+import { isDarkTheme } from "../theme";
 import type { ComponentDef, PressContext } from "../component";
 import { fitText } from "./input";
 import { fillTint, onProp, partBox, runOn, themeFont } from "./util";
@@ -80,12 +81,22 @@ text "Showing the {lower(view)}" tone=muted`,
       const on = cell.option === current;
       const part = partBox(box, box.x + cell.x, box.y + INSET, cell.w, H - INSET * 2);
       if (on) {
+        // The chosen option is a small raised tile: lighter than the track in both themes.
         ctx.roundRect(part.x, part.y, part.w, part.h, Math.max(2, theme.radius.md - INSET));
-        g.fillStyle = c.surface;
+        g.save();
+        g.shadowColor = c.shadow;
+        g.shadowBlur = 2;
+        g.shadowOffsetY = 1;
+        g.fillStyle = c.raised;
         g.fill();
+        g.restore();
+        if (isDarkTheme(theme)) fillTint(g, c.ink, 0.1);
+        g.save();
+        g.globalAlpha *= isDarkTheme(theme) ? 0.5 : 0.8;
         g.lineWidth = 1;
         g.strokeStyle = c.line;
         g.stroke();
+        g.restore();
       } else if (ctx.isHovered(box.node, cell.option)) {
         ctx.roundRect(part.x, part.y, part.w, part.h, Math.max(2, theme.radius.md - INSET));
         fillTint(g, c.ink, 0.05);

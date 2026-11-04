@@ -109,14 +109,18 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
   box.h = y - box.y + pad;
 }
 
+/** Elements that take their content's width in a row rather than their whole share. */
+const PACKED = new Set(["button", "badge"]);
+
 /**
- * Buttons narrower than their share of a row (see button's layout) would sit
- * apart in the middle of empty slots. Keep them together instead: a row of only
- * buttons starts at the left, like a form's actions; buttons at the end of a
- * row with other content go to its right edge, like a price and "Add to cart".
+ * Buttons and badges narrower than their share of a row (see their layouts)
+ * would sit apart in the middle of empty slots. Keep them together instead: a
+ * row of only these starts at the left, like a form's actions or a set of tags;
+ * a run of them at the end of a row with other content goes to its right edge,
+ * like a price and "Add to cart", or a heading and its status.
  */
 function packButtons(placed: Box[], widths: number[], left: number, innerW: number, gap: number, ctx: LayoutContext): void {
-  const shrunk = placed.map((kb, j) => kb.node.type === "button" && kb.w < widths[j]! - 1);
+  const shrunk = placed.map((kb, j) => PACKED.has(kb.node.type) && kb.w < widths[j]! - 1);
   let first = shrunk.length;
   while (first > 0 && shrunk[first - 1]) first--;
   if (first === shrunk.length) return;
@@ -142,9 +146,11 @@ export const WEIGHTS = ["regular", "semibold", "bold"] as const;
 
 export function textMetrics(theme: Theme, style: TextStyle, weight?: (typeof WEIGHTS)[number]) {
   const size = theme.text[style];
-  const w = weight ?? (style === "display" || style === "title" ? "bold" : "regular");
+  // Headings are semibold by default: firm without shouting. They sit tighter than reading text.
+  const w = weight ?? (style === "display" || style === "title" ? "semibold" : "regular");
   const numeric = { regular: 400, semibold: 600, bold: 700 }[w];
-  return { size, weight: numeric, lineHeight: Math.round(size * 1.35 * 10) / 10 };
+  const leading = style === "display" ? 1.2 : style === "title" ? 1.3 : style === "lead" ? 1.4 : 1.45;
+  return { size, weight: numeric, lineHeight: Math.round(size * leading * 10) / 10 };
 }
 
 /** A CSS font string from the theme's family. */

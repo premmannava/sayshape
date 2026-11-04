@@ -31,7 +31,7 @@ describe("layout", () => {
     expect(stat!.w).toBe(275);
     expect(button!.x).toBe(20 + 275 + 10);
     expect(stat!.h).toBe(54);
-    expect(button!.y - stat!.y).toBe((54 - 42) / 2);
+    expect(button!.y - stat!.y).toBe((54 - lightTheme.control.height) / 2);
   });
 
   it("wraps long text and grows taller", () => {

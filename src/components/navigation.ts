@@ -72,8 +72,11 @@ tabs bind=view
     const { g, theme } = ctx;
     const c = theme.colors;
     const { cells, font, selected } = box.data as { cells: TabCell[]; font: string; selected?: string };
+    g.save();
+    g.globalAlpha *= 0.8;
     g.fillStyle = c.line;
     g.fillRect(box.x, box.y + BAR_H - 1, box.w, 1);
+    g.restore();
     g.font = font;
     g.textAlign = "center";
     g.textBaseline = "middle";
@@ -81,14 +84,16 @@ tabs bind=view
       const on = cell.node.id === selected;
       const part = partBox(box, cell.x, box.y, cell.w, BAR_H);
       if (!on && ctx.isHovered(box.node, cell.value)) {
-        ctx.roundRect(part.x + 2, part.y + 4, part.w - 4, part.h - 10, theme.radius.sm);
-        fillTint(g, c.accent, 0.06);
+        ctx.roundRect(part.x + 2, part.y + 5, part.w - 4, part.h - 12, theme.radius.sm);
+        fillTint(g, c.ink, 0.045);
       }
       g.fillStyle = on ? c.ink : c.muted;
       g.fillText(fitText(g, cell.label, Math.max(0, cell.w - 8)), cell.x + cell.w / 2, box.y + BAR_H / 2);
       if (on) {
+        // A slim accent rule on the baseline, rounded at its ends.
+        ctx.roundRect(cell.x + 8, box.y + BAR_H - 2, Math.max(0, cell.w - 16), 2, 1);
         g.fillStyle = c.accent;
-        g.fillRect(cell.x + 6, box.y + BAR_H - 3, Math.max(0, cell.w - 12), 3);
+        g.fill();
       }
       ctx.addHit(part, { detail: cell.value });
     }
@@ -247,7 +252,7 @@ pagination bind=page pages=12`,
         g.fill();
       } else if (enabled && ctx.isHovered(box.node, detail)) {
         ctx.roundRect(x, y, size, size, theme.radius.sm);
-        fillTint(g, c.accent, 0.1);
+        fillTint(g, c.ink, 0.05);
       }
       if (slot.kind === "prev" || slot.kind === "next") {
         g.save();
@@ -255,7 +260,7 @@ pagination bind=page pages=12`,
         chevron(g, x + size / 2, y + size / 2, 10, slot.kind === "prev" ? "left" : "right", c.ink);
         g.restore();
       } else {
-        g.font = ctx.font(slot.page === current ? 700 : 500, 14);
+        g.font = ctx.font(slot.page === current ? 600 : 400, 14);
         g.fillStyle = slot.page === current ? c.onAccent : slot.kind === "gap" ? c.muted : c.ink;
         g.fillText(slot.kind === "gap" ? "…" : String(slot.page), x + size / 2, y + size / 2 + 1, size - 4);
       }
@@ -305,7 +310,7 @@ screen name=checkout title="Checkout"
     const t = ctx.theme;
     let y = box.y;
     if (p.has("title")) {
-      const font = themeFont(t, 700, t.text.title);
+      const font = themeFont(t, 600, t.text.title);
       const lh = Math.round(t.text.title * 1.35);
       const lines = wrapText(p.str("title"), box.w, font, ctx.measure);
       box.data = { lines, font, lh };

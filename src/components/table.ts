@@ -381,6 +381,8 @@ function paintTable(box: Box, ctx: PaintContext): void {
 
   const f = d.frame;
   ctx.roundRect(ox + f.x + 0.5, oy + f.y + 0.5, f.w - 1, f.h - 1, theme.radius.md);
+  g.fillStyle = c.raised;
+  g.fill();
   g.strokeStyle = c.line;
   g.lineWidth = 1;
   g.stroke();
@@ -474,11 +476,10 @@ function paintTable(box: Box, ctx: PaintContext): void {
     if (row.selected || (row.detail && ctx.isHovered(box.node, row.detail))) {
       if (last) ctx.roundRect(ox + f.x + 1, ry, f.w - 2, row.h - 1, theme.radius.md - 1);
       else { g.beginPath(); g.rect(ox + f.x + 1, ry, f.w - 2, row.h); }
-      fillTint(g, row.selected ? c.accent : c.ink, row.selected ? 0.12 : 0.04);
+      fillTint(g, row.selected ? c.accent : c.ink, row.selected ? 0.09 : 0.035);
     }
     if (row.selected) {
-      g.beginPath();
-      g.rect(ox + f.x + 1, ry + 4, 3, row.h - 8);
+      ctx.roundRect(ox + f.x + 3, ry + 7, 2.5, row.h - 14, 1.25);
       g.fillStyle = c.accent;
       g.fill();
     }

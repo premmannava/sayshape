@@ -25,7 +25,7 @@ import type { ComponentDef, LayoutContext, PaintContext, PopupContext, PressCont
 import { fieldOf, isList, isRecord } from "../data";
 import type { PopupState } from "../popup";
 import type { Box, Rect, Value } from "../types";
-import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE } from "./input";
+import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE, paintField } from "./input";
 import { chevron, fillTint, onProp, partBox, runOn } from "./util";
 
 /** The most options one select offers. Narrow longer lists with filter() or search(). */
@@ -265,11 +265,7 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
       g.fillText(fitText(g, label, box.w), box.x, box.y);
     }
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
-    g.fillStyle = c.surface;
-    g.fill();
-    g.strokeStyle = isOpen ? c.accent : hot ? c.muted : c.line;
-    g.lineWidth = isOpen ? 1.5 : 1;
-    g.stroke();
+    paintField(g, c, isOpen, hot);
     g.font = ctx.font(400, FIELD_TEXT);
     g.textAlign = "left";
     g.textBaseline = "middle";

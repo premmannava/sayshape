@@ -423,7 +423,7 @@ describe("chart themes", () => {
     for (const kind of ["bar", "line"]) {
       const ui = render(`${sales}\nchart "Revenue" kind=${kind} items=sales x=month y=revenue\n`, { theme });
       const c = theme.colors;
-      const allowed = new Set([c.accent, c.ink, c.muted, c.line, c.surface]);
+      const allowed = new Set([c.accent, c.ink, c.muted, c.line, c.surface, c.raised]);
       const ops = ui.drawOps.filter((o) => o.op !== "fillRect"); // the engine's own background
       for (const o of ops) {
         const used = o.op.startsWith("fill") || o.op === "fill" ? o.fillStyle : o.strokeStyle;
