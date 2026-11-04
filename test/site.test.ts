@@ -123,23 +123,75 @@ describe("gallery examples", () => {
     expect(ui.warnings).toEqual([]);
   });
 
-  it("equipment request: submit is disabled until ready, then simulated", () => {
-    const ui = render(ex("equipment-request"), { today: TODAY });
-    expect(() => ui.press({ type: "button", text: "Submit request" })).toThrow(/isn't pressable/);
-    expect(ui.emitted).toEqual([]);
-    ui.set("item", "monitor");
-    ui.set("qty", 2);
-    expect(shown(ui)).toContain("2 27-inch monitors");
-    expect(shown(ui)).toContain("Choose a date to continue");
-    ui.set("needBy", "2026-11-20");
-    ui.type({ type: "input" }, "Design team");
-    ui.press({ type: "button", text: "Submit request" });
-    expect(ui.emitted).toEqual([{ name: "request", value: { item: "monitor", qty: 2, needBy: "2026-11-20", note: "Design team" } }]);
-    expect(shown(ui)).toContain("Request recorded");
-    expect(shown(ui)).toContain("Simulated");
-    ui.press({ type: "button", text: "Start a new request" });
-    expect(ui.state.item).toBe("");
-    expect(present(ui, { type: "select" })).toBe(true);
+
+  it("every example has a short title, a prompt and a look", () => {
+    for (const e of examples) {
+      expect(e.title.split(" ").length, e.id).toBeLessThanOrEqual(3);
+      expect(e.prompt.length, e.id).toBeGreaterThan(10);
+      expect(["light", "dark"]).toContain(e.look.scheme);
+    }
+  });
+
+
+  it("coffee order: size, extras and cups change the total", () => {
+    const ui = render(ex("coffee-order"));
+    expect(shown(ui)).toContain("$4.85"); // medium 4.25 + oat 0.60
+    ui.set("size", "Large");
+    ui.set("sweet", true);
+    expect(shown(ui)).toContain("$6.10");
+    ui.set("cups", 2);
+    expect(shown(ui)).toContain("$12.20");
+    expect(shown(ui)).toContain("Order 2 cups");
+    ui.press({ type: "button", text: /Order/ });
+    expect(ui.emitted.at(-1)?.name).toBe("order");
+  });
+
+  it("book a cabin: price follows nights, too many guests warns, reserve needs a date", () => {
+    const ui = render(ex("book-a-cabin"), { today: TODAY });
+    expect(shown(ui)).toContain("$298.00"); // 149 x 2
+    expect(shown(ui)).toContain("$333.76"); // + 12%
+    expect(() => ui.press({ type: "button", text: "Reserve" })).toThrow(/isn't pressable/);
+    ui.set("guests", 5);
+    expect(shown(ui)).toContain("Pine sleeps 4");
+    ui.set("cabin", "Ridge");
+    expect(shown(ui)).not.toContain("Ridge fits up to 6");
+    ui.set("checkin", "2026-11-20");
+    ui.press({ type: "button", text: "Reserve" });
+    expect(ui.emitted.at(-1)?.name).toBe("reserve");
+  });
+
+  it("pick a laptop: the recommendation follows the use", () => {
+    const ui = render(ex("pick-a-laptop"));
+    expect(shown(ui)).toContain("Air 13 for travel");
+    ui.set("use", "Video");
+    expect(shown(ui)).toContain("Pro 14 for video");
+    ui.set("use", "Office");
+    expect(shown(ui)).toContain("Flex 15 for office");
+  });
+
+  it("sales this week: totals and the best day come from the data", () => {
+    const ui = render(ex("sales-this-week"));
+    expect(shown(ui)).toContain("$31.7K");
+    expect(shown(ui)).toContain("Best day: Sun");
+  });
+
+  it("trip planner: days switch and packing counts up", () => {
+    const ui = render(ex("trip-planner"));
+    expect(shown(ui)).toContain("Cathedral Rock");
+    expect(shown(ui)).toContain("2 of 4 packed");
+    ui.set("day", "Day 2");
+    expect(shown(ui)).toContain("Devil's Bridge");
+    ui.press({ type: "check", text: "Sunscreen" });
+    expect(shown(ui)).toContain("3 of 4 packed");
+  });
+
+  it("order tracking: updates move the order to delivered", () => {
+    const ui = render(ex("order-tracking"));
+    expect(shown(ui)).toContain("On the way");
+    ui.press({ type: "button", text: "Next update" });
+    ui.press({ type: "button", text: "Next update" });
+    expect(shown(ui)).toContain("Delivered");
+    expect(() => ui.press({ type: "button", text: "Next update" })).toThrow(/isn't pressable/);
   });
 
   it("product builder: configure, add, change quantities, remove and check out", () => {
@@ -168,34 +220,7 @@ describe("gallery examples", () => {
     expect(shown(ui)).toContain("Your cart is empty");
   });
 
-  it("equipment table: search, filter, sort, select and clear", () => {
-    const ui = render(ex("equipment-table"));
-    expect(shown(ui)).toContain("8 of 8 items");
-    ui.type({ type: "input" }, "monitor");
-    expect(shown(ui)).toContain("2 of 8 items");
-    ui.set("category", "Audio");
-    expect(shown(ui)).toContain("No equipment matches");
-    ui.press({ type: "empty" });
-    expect(ui.state.query).toBe("");
-    expect(ui.state.category).toBe("All");
-    pressPart(ui, "sort:price");
-    expect(ui.state.sortField).toBe("price");
-    pressPart(ui, "sort:price");
-    expect(ui.state.sortDirection).toBe("desc");
-    ui.set("selected", "mon32");
-    expect(shown(ui)).toContain("Out of stock");
-  });
 
-  it("store metrics: steppers change the bars, buttons change the line", () => {
-    const ui = render(ex("store-metrics"));
-    expect(shown(ui)).toContain("1,680 units across 4 departments");
-    ui.set("depts", [{ name: "Footwear", units: 700 }]);
-    expect(shown(ui)).toContain("700 units across 1 departments");
-    ui.press({ type: "button", text: "Add November" });
-    expect(shown(ui)).toContain("7 months");
-    ui.press({ type: "button", text: "Drop oldest month" });
-    expect(shown(ui)).toContain("6 months");
-  });
 });
 
 // ----------------------------------------------------------------- docs
