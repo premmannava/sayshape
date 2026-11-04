@@ -24,6 +24,7 @@ const docsSidebar: DefaultTheme.SidebarItem[] = [
     text: "Getting started",
     items: [
       { text: "What SayShape is", link: "/docs/" },
+      { text: "Build-along: a store in 5 steps", link: "/learn/" },
       { text: "Local setup", link: "/docs/getting-started/setup" },
       { text: "Your first interface", link: "/docs/getting-started/first-interface" },
       { text: "From spec to pixels", link: "/docs/getting-started/pipeline" },
@@ -112,6 +113,7 @@ export default defineConfig({
     siteTitle: "SayShape",
     nav: [
       ...(HAS_MODEL ? [{ text: "Build with AI", link: "/chat", activeMatch: "^/chat" }] : []),
+      { text: "Learn", link: "/learn/", activeMatch: "^/learn/" },
       { text: "Playground", link: "/playground", activeMatch: "^/playground" },
       { text: "Examples", link: "/examples/", activeMatch: "^/examples" },
       { text: "Elements", link: "/docs/elements/", activeMatch: "^/docs/elements/" },

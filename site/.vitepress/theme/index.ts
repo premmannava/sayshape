@@ -18,6 +18,7 @@ import EngineDiagram from "./components/EngineDiagram.vue";
 import Chat from "./components/Chat.vue";
 import Atlas from "./components/Atlas.vue";
 import ElementPage from "./components/ElementPage.vue";
+import Learn from "./components/Learn.vue";
 
 export default {
   extends: DefaultTheme,
@@ -30,5 +31,6 @@ export default {
     app.component("Chat", Chat);
     app.component("Atlas", Atlas);
     app.component("ElementPage", ElementPage);
+    app.component("Learn", Learn);
   },
 } satisfies Theme;
