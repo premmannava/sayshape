@@ -37,7 +37,7 @@
 import type { ComponentDef, LayoutContext } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import { ellipsize, fitLines, wrapText, type TextMeasurer } from "../text";
-import { SERIES_COUNT, seriesColors, type Theme } from "../theme";
+import { SERIES_COUNT, seriesColors, sliceColors, type Theme } from "../theme";
 import type { Box, Value } from "../types";
 import { easeOut, paintGhost, staggered } from "../ghost";
 import { fillTint, themeFont } from "./util";
@@ -1102,6 +1102,8 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     if (d.loading) return paintChartLoading(box, ctx);
     const ox = box.x, oy = box.y;
     const palette = seriesColors(theme);
+    // Segments are neutral by default; only hovered slices take the accent.
+    const slices = sliceColors(theme);
     // One series draws in the accent, exactly as before series existed.
     const colorOf = (k: number) => (d.series.length > 1 ? palette[k % palette.length]! : c.accent);
     g.textBaseline = "middle";
@@ -1135,9 +1137,9 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const base = g.globalAlpha;
 
     if (d.pie) {
-      paintRound(ctx, d, ox, oy, palette, reveal);
+      paintRound(ctx, d, ox, oy, slices, reveal);
       g.globalAlpha = base * fade;
-      paintLegend(ctx, d, ox, oy, (k) => palette[k % palette.length]!);
+      paintLegend(ctx, d, ox, oy, (k) => slices[k % slices.length]!);
       g.globalAlpha = base;
       if (reveal >= 1) paintChartHover(box, ctx, d);
       return;
@@ -1390,17 +1392,25 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
   if (hover.kind === "slice" && d.pie) {
     const s = d.pie.slices[hover.index]!;
     heading = s.label;
-    rows.push({ text: precise(s.value) + " · " + shareText(s.share), color: palette[s.color % palette.length]! });
+    rows.push({ text: precise(s.value) + " · " + shareText(s.share), color: c.accent });
     const p = d.pie, toCanvas = (a: number) => a - Math.PI / 2;
     g.beginPath();
     g.arc(ox + p.cx, oy + p.cy, p.r, toCanvas(s.start), toCanvas(s.end));
     if (p.inner) g.arc(ox + p.cx, oy + p.cy, p.inner, toCanvas(s.end), toCanvas(s.start), true);
     else g.lineTo(ox + p.cx, oy + p.cy);
     g.closePath();
-    g.strokeStyle = c.ink;
-    g.globalAlpha *= 0.75;
-    g.lineWidth = 2.5;
+    g.fillStyle = c.accent;
+    g.fill();
+    g.strokeStyle = c.raised;
+    g.lineWidth = 2;
     g.stroke();
+    // Keep the legend keyed to the active slice rather than leaving a gray marker.
+    const swatch = d.legend[hover.index]?.swatch;
+    if (swatch) {
+      ctx.roundRect(ox + swatch.x, oy + swatch.y, swatch.w, swatch.h, 3);
+      g.fillStyle = c.accent;
+      g.fill();
+    }
   } else if (hover.kind === "slot") {
     const s = d.slots[hover.index]!;
     heading = s.label;

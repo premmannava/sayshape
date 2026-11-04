@@ -10,7 +10,7 @@ import { walkBoxes } from "../src/layout";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render, type Rendered } from "../src/testing";
-import { cssVarOf, darkTheme, extendTheme, lightTheme, seriesColors, type Theme } from "../src/theme";
+import { cssVarOf, darkTheme, extendTheme, lightTheme, seriesColors, sliceColors, type Theme } from "../src/theme";
 import type { Box } from "../src/types";
 import { textOverflows } from "./overflow";
 
@@ -269,7 +269,7 @@ describe.each(Object.entries(SPECS))("%s", (_name, spec) => {
 
   it.each([lightTheme, darkTheme].map((t) => [t.name, t] as const))("paints only theme colors in %s", (_n, theme: Theme) => {
     const ui = render(spec, { theme });
-    const palette = new Set<string>(Object.values(theme.colors));
+    const palette = new Set<string>([...Object.values(theme.colors), ...sliceColors(theme)]);
     for (const op of ui.drawOps) expect(palette.has(op.fillStyle || op.strokeStyle)).toBe(true);
     ui.destroy();
   });
@@ -281,6 +281,26 @@ describe.each(Object.entries(SPECS))("%s", (_name, spec) => {
       expect(() => parse(prefix, registry)).not.toThrow();
       expect(parse(prefix, registry).diagnostics).toEqual([]);
       render(prefix).destroy();
+    }
+  });
+});
+
+describe("neutral-first pie and donut colors", () => {
+  it.each([lightTheme, darkTheme].map((t) => [t.name, t] as const))("uses six distinct neutral tones in %s", (_name, theme: Theme) => {
+    const shades = sliceColors(theme);
+    expect(shades).toHaveLength(6);
+    expect(new Set(shades).size).toBe(6);
+    expect(shades).not.toContain(theme.colors.accent);
+  });
+
+  it.each(["pie", "donut"] as const)("paints %s segments and legend markers with the neutral palette", (kind) => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const spec = `state rows=[{k:"A",v:6},{k:"B",v:3},{k:"C",v:1}]
+chart kind=${kind} items=rows x=k y=v`;
+      const ui = render(spec, { theme });
+      const painted = new Set(ui.drawOps.filter((o) => o.op === "fill").map((o) => o.fillStyle));
+      for (const shade of sliceColors(theme).slice(0, 3)) expect(painted.has(shade)).toBe(true);
+      ui.destroy();
     }
   });
 });

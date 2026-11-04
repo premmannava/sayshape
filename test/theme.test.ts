@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { darkTheme, extendTheme, isDarkTheme, lightTheme, mixColors, parseColor, themeFromCSS } from "../src/theme";
+import { darkTheme, extendTheme, isDarkTheme, lightTheme, mixColors, parseColor, sliceColors, themeFromCSS } from "../src/theme";
 
 const luma = (c: string) => { const [r, g, b] = parseColor(c)!; return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 
@@ -17,6 +17,18 @@ describe("theme surfaces", () => {
     expect(extendTheme(darkTheme, { colors: { surface: "#000000", raised: "#123456" } }).colors.raised).toBe("#123456");
     // Other changes leave it alone.
     expect(extendTheme(darkTheme, { colors: { accent: "#ff0000" } }).colors.raised).toBe(darkTheme.colors.raised);
+  });
+
+  it("derives neutral donut shades from host surfaces without inventing bright colors", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const shades = sliceColors(theme);
+      expect(shades).toHaveLength(6);
+      expect(new Set(shades).size).toBe(6);
+      for (const shade of shades) expect(parseColor(shade)).not.toBeNull();
+    }
+    const host = extendTheme(darkTheme, { colors: { surface: "#222428", ink: "#f5f4ee" } });
+    expect(sliceColors(host)[0]).toBe(mixColors(host.colors.raised, host.colors.ink, 0.77));
+    expect(sliceColors(host)).not.toEqual(sliceColors(darkTheme));
   });
 
   it("read the colors browsers hand back", () => {
