@@ -1467,6 +1467,22 @@ npm run guide:size                                        # guide size by sectio
 
 The report starts with a side-by-side table on the requests every variant can build. A request that needs an element a profile doesn't have (by its expected elements) isn't sent for that profile; it's listed as not supported. `results.json` records each result's guide mode, profile, repair guide and context policy.
 
+### Compare it with HTML
+
+`npm run compare` asks each model for the same 26 requests twice, once in SayShape and once as an HTML fragment (markup, CSS and JavaScript, with Chart.js allowed for charts), and judges both the same way: by what's on screen and what happens when it's used.
+
+```bash
+npm run compare                                           # the model from .env.local, every request once
+npm run compare -- --models openai/gpt-4.1,qwen/qwen3-32b # several models on the same server
+npm run compare -- --runs 3                               # each request three times per model and format
+npm run compare -- --only dashboard,s1                    # some categories or request ids
+npm run compare -- --guide compact                        # SayShape's compact guide
+```
+
+The requests (`eval/compare/tasks.ts`) cover KPIs, charts, tables, forms, calculators, dashboards and two security cases, where data that looks like HTML must stay text. Every figure a check looks for is in the request. SayShape answers are rendered by the real engine and HTML answers run in jsdom; checks type into fields, press things by their visible text and read the visible text, so they mean the same for both. `eval/compare/reference.ts` holds a working answer to every request in both formats, and the tests check that each passes every check.
+
+Every answer is a first try with no repair. The report gives, per model and format: how many answers worked, checks passed, input and output tokens as the server reported them, time to the first token and in total, cost (looked up for OpenRouter models), code size, and for HTML the patterns that cost safety or theming: HTML inserted as strings, code built from strings, external scripts and fixed colors. It's written to `eval/compare/results/<date>/` with every answer.
+
 ### In your own app
 
 `loom-ui/model` does what the playground does: it streams a spec from an OpenAI-compatible endpoint, removes thinking and code fences, checks the result with SayShape's parser, and asks once for a fix.

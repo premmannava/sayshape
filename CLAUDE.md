@@ -52,6 +52,7 @@ spec text → parse → tree → layout → boxes → paint → canvas pixels
 | Testing | `src/testing/` | `loom-ui/testing`: `render()` runs the real engine in Node against a recording canvas. |
 | Model | `src/model/` | `loom-ui/model`: streams a spec from an OpenAI-compatible endpoint, removes thinking and fences, checks it and repairs it once. `context.ts`: bounded refinement (`refine`) and usage totals (unknown stays `undefined`, never 0). |
 | Evaluation | `eval/`, `scripts/eval.ts` | 42 requests scored against a real model (`npm run eval`); `--guide full,compact`, `--profile`, `--repair-guide` compare prompting variants. `npm run guide:size` measures the guide. |
+| Comparison | `eval/compare/`, `scripts/compare.ts` | `npm run compare`: 26 requests answered in SayShape and as HTML by each model, scored the same way (SayShape through `render()`, HTML in jsdom) on what's shown and what happens when used; `reference.ts` has a working answer to each in both formats, and `test/compare.test.ts` checks every one passes. |
 | MCP server | `mcp/` | Its own package (`sayshape-mcp`, with its own dependencies): an MCP Apps server with `show_interface` (its description carries a short quick start) and `sayshape_docs` (props and examples for just the elements a model asks for, so it never reads the whole guide) (plus `describe_data`, `query_data` and the view-only `fetch_dataset` with `--data db.sqlite`, so rows go from the database to the view without passing through the model), and a one-file view (`mcp/src/ui`) that runs the engine inside chat apps such as Claude and ChatGPT. Bundles `../src`. `npm --prefix mcp test`, `npm --prefix mcp run test:e2e`. |
 
 Each stage reruns only when its inputs change: `invalidate("parse" | "layout" | "paint")`. A spec edit re-parses, a state change re-lays out, and hover only repaints.
@@ -80,6 +81,7 @@ npm run test:visual        # visual regression (Playwright); baselines come from
 npm run test:visual:docker #   VISUAL_ARGS=--update-snapshots npm run test:visual:docker
 npm run bench              # benchmarks
 npm run eval               # score a real model (settings in .env.local, see .env.example)
+npm run compare            # SayShape against HTML, same requests, same checks, per model
 npm run guide:size         # model guide size by section, per mode and profile
 npm run typecheck          # tsc --noEmit
 npm run build              # library → dist/
