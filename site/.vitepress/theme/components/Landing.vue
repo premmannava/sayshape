@@ -1,49 +1,23 @@
 <script setup lang="ts">
+/**
+ * The landing page. Show, don't explain: the live hero, three reasons in one
+ * line each, six examples running live, and one way to start. Anything
+ * longer lives in the build-along and the docs.
+ */
 import { withBase } from "vitepress";
-import { generationAvailable } from "../loom/generate";
+import { exampleById, type Example } from "../../../examples/catalog";
 import Hero from "./Hero.vue";
-import elements from "../../../.generated/elements.json";
-import { highlightSpec } from "../loom/highlight";
+import ExampleLive from "./ExampleLive.vue";
 
-const REPO = "https://github.com/premmannava/sayshape";
-
-const concepts = [
-  {
-    name: "State",
-    text: "Values the interface can change, declared on state lines. Controls write to them through bind=, and they can hold lists and records.",
-    code: `state qty=2 gift=false\nstepper "Quantity" bind=qty min=1`,
-  },
-  {
-    name: "Derived values",
-    text: "Read-only values worked out from state and kept current. Totals, filtered lists and chart data are written once and shared.",
-    code: `derive subtotal={qty * 24}\nderive total={subtotal + (gift ? 4 : 0)}`,
-  },
-  {
-    name: "Components",
-    text: `${elements.elements.length} built-in elements, from rows and cards to tables, charts, selects and date pickers. Each is reviewed TypeScript; a spec can only use them.`,
-    code: `table items=orders key=id sort=by direction=dir\n  table-column "Total" field=total format=money`,
-  },
-  {
-    name: "Themes",
-    text: "Specs choose roles like tone=good or variant=secondary, never colors or sizes. Your app picks the theme, so every generated screen matches it.",
-    code: `text "Paid" tone=good\nbutton "Cancel" variant=secondary`,
-  },
-  {
-    name: "Host actions",
-    text: "Local actions change state. emit: hands a choice to your app, which decides what actually happens: save, call an API, ask the model again.",
-    code: `button "Place order" on="emit:order:{qty}"`,
-  },
+const reasons = [
+  { title: "Safe", text: "Nothing in it can run code." },
+  { title: "Private", text: "It draws in the browser. Your data stays with your AI." },
+  { title: "Instant", text: "The screen appears while the AI is still writing." },
 ];
 
-const uses = [
-  { title: "Calculators and quotes", text: "Inputs, sliders and derived totals that update as people adjust them.", id: "tip-calculator" },
-  { title: "Checklists and editable lists", text: "Lists held in state that people tick off, add to and remove from.", id: "grocery-checklist" },
-  { title: "Dashboards over your data", text: "Bar and line charts, stats and sortable tables that read the same filtered list.", id: "monthly-budget" },
-  { title: "Forms and requests", text: "Selects, date pickers, text fields and steppers, with the result handed to your app.", id: "equipment-request" },
-  { title: "Multi-step flows", text: "Several screens sharing one state, like configure, then review a cart.", id: "product-builder" },
-  { title: "Lookup tables", text: "Search as you type, filter by category, sort any column, select a row.", id: "equipment-table" },
-];
-
+const picks = ["sales-this-week", "book-a-cabin", "trip-planner", "pick-a-laptop", "coffee-order", "order-tracking"]
+  .map((id) => exampleById(id))
+  .filter((e): e is Example => !!e);
 
 const href = (p: string) => withBase(p);
 </script>
@@ -52,80 +26,31 @@ const href = (p: string) => withBase(p);
   <div class="landing">
     <Hero />
 
-    <section class="block trust" aria-labelledby="trust">
-      <p class="ss-eyebrow">For teams with their own AI</p>
-      <h2 id="trust">Your data stays with your model.</h2>
-      <div class="trust-cols">
-        <div><strong>Your model writes it.</strong><p>The chatbot you already run, with the data access it already has, answers in SayShape instead of prose.</p></div>
-        <div><strong>The browser draws it.</strong><p>The engine runs on the page. No new service sees the data, the spec or the result.</p></div>
-        <div><strong>Nothing can run.</strong><p>A spec can't execute code or fetch anything. Expressions go through SayShape's own small evaluator.</p></div>
+    <section class="why" aria-label="Why SayShape">
+      <div v-for="r in reasons" :key="r.title" class="why-item">
+        <h2>{{ r.title }}</h2>
+        <p>{{ r.text }}</p>
       </div>
-      <a v-if="generationAvailable" class="trust-link" :href="href('/chat.html')">Try it with a model →</a>
-      <a v-else class="trust-link" :href="href('/docs/integration/model.html')">Connect your model →</a>
     </section>
 
-    <section class="block split" aria-labelledby="two-halves">
-      <div class="split-head">
-        <h2 id="two-halves">The model writes the spec. SayShape runs it.</h2>
-        <p>
-          These are separate jobs. A model only produces text in SayShape's language. It never writes code, styles or components.
-          SayShape's engine, running in the browser, turns that text into a working interface and keeps it working: totals recalculate,
-          lists change, screens switch, all without going back to the model.
-        </p>
+    <section class="build" aria-labelledby="build">
+      <div class="build-head">
+        <h2 id="build">What you can build</h2>
+        <a :href="href('/examples/')">All examples →</a>
       </div>
-      <ol class="pipeline" aria-label="From request to interface">
-        <li class="stage generated"><span class="stage-name">Request</span><span class="stage-text">Someone asks for an interface</span></li>
-        <li class="stage generated"><span class="stage-name">Model</span><span class="stage-text">Your model, guided by a reference generated from SayShape's components</span></li>
-        <li class="stage handoff"><span class="stage-name">SayShape spec</span><span class="stage-text">Plain text: elements, state, expressions, actions. No code</span></li>
-        <li class="stage engine"><span class="stage-name">Engine</span><span class="stage-text">Parses, validates, lays out and paints on a canvas</span></li>
-        <li class="stage engine"><span class="stage-name">Interactive interface</span><span class="stage-text">State and actions run locally; emit: events reach your app</span></li>
-      </ol>
-      <div class="pipeline-legend" aria-hidden="true">
-        <span class="lg generated">Written by a model</span>
-        <span class="lg engine">Rendered and run by SayShape</span>
+      <div class="build-grid">
+        <a v-for="e in picks" :key="e.id" class="build-card" :class="{ dark: e.look.scheme === 'dark' }" :href="href(`/examples/#${e.id}`)" :aria-label="`${e.title}: open the example`">
+          <div class="build-live" inert><ExampleLive :example="e" /></div>
+          <span class="build-title">{{ e.title }}</span>
+        </a>
       </div>
-      <p class="split-foot">
-        Because each line stands alone, a half-finished response is still a valid, smaller screen, so the interface can appear while the model is
-        still writing. Specs can't run JavaScript: expressions go through SayShape's own evaluator, which can only read state, do arithmetic and call
-        a fixed list of functions. <a :href="href('/docs/getting-started/pipeline.html')">How the pipeline works</a>
-      </p>
     </section>
 
-    <section class="block" aria-labelledby="concepts">
-      <h2 id="concepts">What a spec can say</h2>
-      <dl class="concepts">
-        <div v-for="c in concepts" :key="c.name" class="concept">
-          <dt>{{ c.name }}</dt>
-          <dd>
-            <p>{{ c.text }}</p>
-            <pre class="spec-view mini" tabindex="0" :aria-label="`${c.name} example`"><code v-html="highlightSpec(c.code)"></code></pre>
-          </dd>
-        </div>
-      </dl>
-      <p class="more"><a :href="href('/docs/language/elements.html')">Learn the language</a></p>
-    </section>
-
-    <section class="block" aria-labelledby="uses">
-      <h2 id="uses">What you can build with it today</h2>
-      <p class="block-intro">Each of these is a working example in the gallery, using only features that exist now. Data in the examples is fictional.</p>
-      <ul class="uses">
-        <li v-for="u in uses" :key="u.id">
-          <a :href="href(`/examples/#${u.id}`)">
-            <span class="use-title">{{ u.title }}</span>
-            <span class="use-text">{{ u.text }}</span>
-          </a>
-        </li>
-      </ul>
-    </section>
-
-
-    <section class="block closing" aria-labelledby="start">
-      <h2 id="start">Start with a spec</h2>
-      <div class="closing-links">
-        <a class="loom-btn primary" :href="href('/playground.html')">Try the playground</a>
-        <a class="loom-btn quiet" :href="href('/docs/getting-started/setup.html')">Quickstart</a>
-        <a class="loom-btn quiet" :href="href('/examples/')">Examples</a>
-        <a class="loom-btn quiet" :href="REPO">Source on GitHub</a>
+    <section class="start" aria-labelledby="start">
+      <h2 id="start">Try it in <span class="ss-mark">10 minutes.</span></h2>
+      <div class="start-links">
+        <a class="loom-btn primary" :href="href('/learn/')">Start the build-along →</a>
+        <a class="loom-btn quiet" :href="href('/playground.html')">Open the playground</a>
       </div>
     </section>
   </div>
@@ -134,99 +59,29 @@ const href = (p: string) => withBase(p);
 <style scoped>
 .landing { max-width: 1320px; margin: 0 auto; padding: 40px 32px 72px }
 
-.split-foot a, .more a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
+.why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 40px; padding: 32px 0; border-top: 2px solid var(--ss-rule) }
+.why h2 { margin: 0; font: 800 clamp(28px, 3.2vw, 40px)/1 var(--loom-display); letter-spacing: -0.035em }
+.why p { margin: 10px 0 0; font-size: 18px; line-height: 1.45; color: var(--vp-c-text-2) }
 
-.block { margin-top: 88px }
-.trust.block { margin-top: 0 }
-.block h2 {
-  font-family: var(--loom-display);
-  font-weight: 800;
-  font-size: clamp(26px, 3vw, 36px);
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  margin: 0 0 14px;
-}
-.block-intro { margin: 0 0 28px; color: var(--vp-c-text-2); max-width: 68ch; line-height: 1.6 }
+.build { padding: 40px 0 8px; border-top: 2px solid var(--ss-rule) }
+.build-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px }
+.build-head h2 { margin: 0; font: 800 clamp(32px, 4vw, 52px)/1 var(--loom-display); letter-spacing: -0.04em }
+.build-head a { flex: none; white-space: nowrap; font-weight: 600; color: var(--vp-c-brand-1); text-decoration: none }
+.build-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px }
+.build-card { color: var(--vp-c-text-1); display: flex; flex-direction: column; border: 1.5px solid var(--vp-c-divider); border-radius: 18px; overflow: hidden; background: var(--ss-card); text-decoration: none; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s }
+.build-card:hover, .build-card:focus-visible { border-color: var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow); transform: translate(-2px, -2px) }
+/* A preview, not a control: the card itself is the link, so the canvas inside ignores the pointer. */
+.build-live { height: 300px; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(#000 78%, transparent); mask-image: linear-gradient(#000 78%, transparent) }
+.build-title { padding: 12px 16px 14px; font: 800 20px/1.2 var(--loom-display); letter-spacing: -0.02em; border-top: 1px solid var(--vp-c-divider) }
 
-.split-head { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px 56px; align-items: start; margin-bottom: 36px }
-.split-head p { margin: 4px 0 0; color: var(--vp-c-text-2); line-height: 1.65; max-width: 66ch }
-
-.pipeline { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; position: relative }
-.stage { position: relative; padding: 18px 18px 18px 0; display: grid; gap: 6px; align-content: start }
-.stage::before {
-  content: "";
-  display: block;
-  height: 3px;
-  border-radius: 2px;
-  margin-bottom: 14px;
-  margin-right: 10px;
-  background: var(--vp-c-border);
-}
-.stage.engine::before { background: var(--vp-c-brand-1) }
-.stage.handoff::before { background: linear-gradient(90deg, var(--vp-c-border) 50%, var(--vp-c-brand-1) 50%) }
-.stage:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  top: 13px;
-  right: 2px;
-  width: 9px;
-  height: 9px;
-  border-top: 2px solid var(--vp-c-text-3);
-  border-right: 2px solid var(--vp-c-text-3);
-  transform: rotate(45deg);
-}
-.stage-name { font-weight: 700; font-size: 16px }
-.stage.handoff .stage-name { font-family: var(--vp-font-family-mono); font-weight: 500; color: var(--vp-c-brand-1) }
-.stage-text { font-size: 14px; color: var(--vp-c-text-2); line-height: 1.5; max-width: 24ch }
-.pipeline-legend { display: grid; grid-template-columns: 2fr 1fr 2fr; margin-top: 8px; font-size: 13px; color: var(--vp-c-text-2) }
-.pipeline-legend .engine { grid-column: 3 }
-.lg::before { content: ""; display: inline-block; width: 18px; height: 3px; border-radius: 2px; margin-right: 8px; vertical-align: middle; background: var(--vp-c-border) }
-.lg.engine::before { background: var(--vp-c-brand-1) }
-.split-foot { margin: 32px 0 0; color: var(--vp-c-text-2); line-height: 1.65; max-width: 80ch }
-
-.concepts { margin: 8px 0 0; border-top: 1px solid var(--vp-c-divider) }
-.concept { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 9fr); gap: 8px 40px; padding: 22px 0; border-bottom: 1px solid var(--vp-c-divider) }
-.concept dt { font-weight: 700; font-size: 17px }
-.concept dd { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 32px; align-items: start }
-.concept p { margin: 0; color: var(--vp-c-text-2); line-height: 1.6 }
-.spec-view.mini { background: var(--loom-code-bg); border: 1px solid var(--vp-c-divider); border-radius: 8px; padding: 10px 14px; overflow-x: auto; font-size: 12.5px }
-.more { margin: 20px 0 0 }
-
-.uses { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--vp-c-divider); border-left: 1px solid var(--vp-c-divider) }
-.uses li { border-right: 1px solid var(--vp-c-divider); border-bottom: 1px solid var(--vp-c-divider) }
-.uses a { display: grid; gap: 6px; padding: 20px 22px 22px; height: 100%; color: inherit; text-decoration: none }
-.uses a:hover { background: var(--loom-panel) }
-.uses a:hover .use-title { color: var(--vp-c-brand-1) }
-.use-title { font-weight: 700; font-size: 16px }
-.use-text { font-size: 14px; color: var(--vp-c-text-2); line-height: 1.55 }
-
-
-.closing { border-top: 2px solid var(--ss-rule); padding-top: 40px; display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: center; justify-content: space-between }
-.closing h2 { margin: 0 }
-.closing-links { display: flex; flex-wrap: wrap; gap: 10px }
+.start { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px 40px; margin-top: 56px; padding-top: 36px; border-top: 2px solid var(--ss-rule) }
+.start h2 { margin: 0; font: 800 clamp(34px, 4.6vw, 60px)/1 var(--loom-display); letter-spacing: -0.045em }
+.start-links { display: flex; flex-wrap: wrap; gap: 10px }
 
 @media (max-width: 960px) {
   .landing { padding: 28px 20px 56px }
-  .split-head { grid-template-columns: 1fr }
-  .pipeline { grid-template-columns: 1fr }
-  .stage { grid-template-columns: 22px 1fr; column-gap: 14px; padding: 0 0 22px }
-  .stage::before { grid-row: 1 / span 2; width: 3px; height: auto; margin: 4px 0 0 9px }
-  .stage:not(:last-child)::after { top: auto; bottom: 6px; left: 5px; right: auto; transform: rotate(135deg) }
-  .stage-text { max-width: none }
-  .pipeline-legend { grid-template-columns: 1fr; gap: 6px }
-  .pipeline-legend .engine { grid-column: 1 }
-  .concept, .concept dd { grid-template-columns: 1fr }
-  .uses { grid-template-columns: 1fr }
-  .block { margin-top: 72px }
+  .why, .build-grid { grid-template-columns: minmax(0, 1fr) }
+  .build-live { height: 240px }
 }
-@media (min-width: 961px) and (max-width: 1180px) {
-  .uses { grid-template-columns: repeat(2, minmax(0, 1fr)) }
-}
-.trust { display: grid; gap: 14px; padding: 36px 0; border-top: 2px solid var(--ss-rule) }
-.trust h2 { margin: 0; font: 800 clamp(34px, 4.6vw, 56px)/1 var(--loom-display); letter-spacing: -0.04em }
-.trust-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 40px; padding-top: 10px }
-.trust-cols strong { font-size: 17px }
-.trust-cols p { margin: 6px 0 0; color: var(--vp-c-text-2); line-height: 1.55 }
-.trust-link { justify-self: start; font-weight: 600; color: var(--vp-c-brand-1); text-underline-offset: 3px }
-@media (max-width: 760px) { .trust-cols { grid-template-columns: minmax(0, 1fr) } }
+@media (prefers-reduced-motion: reduce) { .build-card { transition: none } .build-card:hover { transform: none } }
 </style>

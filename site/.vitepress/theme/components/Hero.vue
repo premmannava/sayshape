@@ -32,7 +32,7 @@ const lines = computed(() => {
   return all.map((l, i) => ({ html: highlightLine(l), hot: phase.value === "writing" && i === all.length - 1 }));
 });
 const status = computed(() =>
-  phase.value === "typing" ? "waiting for the model…" : phase.value === "writing" ? `line ${lines.value.length} of ${total.value}` : `${total.value} lines · ${problems.value === 1 ? "1 problem" : `${problems.value} problems`}`,
+  phase.value === "typing" ? "thinking…" : phase.value === "writing" ? `line ${lines.value.length} of ${total.value}` : `${total.value} lines · ${problems.value === 1 ? "1 problem" : `${problems.value} problems`}`,
 );
 
 const motion = () => !prefersReducedMotion();
@@ -96,31 +96,31 @@ onBeforeUnmount(stop);
     <div class="hero-top">
       <h1 id="hero-title" class="hero-title">Say it.<br><span class="ss-mark">See it.</span></h1>
       <div class="hero-side">
-        <p class="hero-lede">Your model writes a few plain lines. SayShape draws each one into a working interface the moment it lands. Specs can't run code, and the engine sends nothing anywhere on its own.</p>
+        <p class="hero-lede">Your AI writes a few lines. SayShape turns them into a working screen.</p>
         <div class="hero-cta">
           <a class="loom-btn primary" :href="withBase('/learn/')">Start the build-along →</a>
           <a class="loom-btn quiet" :href="withBase('/playground.html')">Open the playground</a>
         </div>
-        <a class="hero-status" :href="withBase('/docs/architecture/limitations.html')">v0.1 prototype · not yet screen-reader accessible · Status</a>
+        <a class="hero-status" :href="withBase('/docs/architecture/limitations.html')">v0.1 · not screen-reader ready yet · Status</a>
       </div>
     </div>
 
     <div class="hero-demo" aria-label="Live demo">
       <div class="hd-left">
-        <p class="ss-eyebrow">01 · You ask</p>
+        <p class="ss-eyebrow">1 · You ask</p>
         <div class="hd-chips" role="group" aria-label="Pick a prompt">
           <button v-for="(h, i) in heroExamples" :key="h.example.id" type="button" :aria-pressed="i === active" @click="play(i, motion())">{{ h.label }}</button>
         </div>
         <p class="hd-prompt">“{{ typed }}<span v-if="phase === 'typing'" class="caret" aria-hidden="true"></span>”</p>
         <div class="hd-row">
-          <p class="ss-eyebrow">02 · The model writes</p>
+          <p class="ss-eyebrow">2 · AI writes</p>
           <span class="hd-status" aria-live="polite">{{ status }}</span>
         </div>
         <pre class="spec-view hd-spec" tabindex="0" :aria-label="`The SayShape spec for ${current.example.title}`"><code><span v-for="(l, i) in lines" :key="i" class="line" :class="{ hot: l.hot }" v-html="l.html"></span></code></pre>
       </div>
       <div class="hd-right">
         <div class="hd-row">
-          <p class="ss-eyebrow">03 · SayShape draws it</p>
+          <p class="ss-eyebrow">3 · You get</p>
           <span class="hd-actions">
             <button type="button" class="loom-btn-text" :disabled="!loom" @click="play(active, motion())">Replay</button>
             <button type="button" class="loom-btn-text" :disabled="!loom || phase !== 'done'" @click="reset">Reset</button>
@@ -131,7 +131,6 @@ onBeforeUnmount(stop);
             <div class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`${current.example.title}, drawn by SayShape on a canvas. The spec beside it is the readable source.`"></canvas></div>
           </div>
         </div>
-        <p class="hd-note">It's live: press, type and drag. Saved specs, replayed the way a model's answer streams in.</p>
       </div>
     </div>
   </section>
@@ -167,7 +166,6 @@ onBeforeUnmount(stop);
 .hd-actions { display: inline-flex; gap: 16px }
 .hd-card { overflow: hidden }
 .hd-stage { min-height: 340px }
-.hd-note { margin: 0; font-size: 13.5px; color: var(--vp-c-text-3) }
 
 @media (max-width: 960px) {
   .hero-top, .hero-demo { grid-template-columns: minmax(0, 1fr) }
