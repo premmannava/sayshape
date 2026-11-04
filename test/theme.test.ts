@@ -20,8 +20,8 @@ describe("theme surfaces", () => {
   });
 
   it("gives pies a coordinated muted palette in either theme", () => {
-    expect(sliceColors(lightTheme).slice(0, 4)).toEqual(["#346067", "#74909d", "#95ada3", "#c0b1a0"]);
-    expect(sliceColors(darkTheme).slice(0, 4)).toEqual(["#5ea199", "#9db8c4", "#a6c4b1", "#cdbc9f"]);
+    expect(sliceColors(lightTheme).slice(0, 4)).toEqual(["#346167", "#74909d", "#95ada3", "#c0b1a0"]);
+    expect(sliceColors(darkTheme).slice(0, 4)).toEqual(["#5ea199", "#9DB8C4", "#A6C4B1", "#CDBC9F"]);
     for (const theme of [lightTheme, darkTheme]) {
       const shades = sliceColors(theme);
       expect(shades).toHaveLength(6);
