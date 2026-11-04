@@ -242,7 +242,8 @@ describe("choosing", () => {
   });
 
   it("keeps clicks from reaching what's under the calendar", () => {
-    const ui = render(spec(), { today: TODAY });
+    // Phone width, where the button takes the full width and runs out past the calendar.
+    const ui = render(spec(), { today: TODAY, width: 360 });
     const button = ui.hits.find((h) => h.box.node.type === "button")!.box;
     open(ui);
     const a = ui.popup!.area!;

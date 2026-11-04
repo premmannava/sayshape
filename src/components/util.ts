@@ -97,6 +97,7 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
       tallest = Math.max(tallest, kb.h);
       x += widths[j]! + gap;
     });
+    packButtons(placed, widths, box.x + pad, innerW, gap, ctx);
     if (align !== "top") {
       for (const kb of placed) {
         const d = tallest - kb.h;
@@ -106,6 +107,26 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
     y += tallest;
   });
   box.h = y - box.y + pad;
+}
+
+/**
+ * Buttons narrower than their share of a row (see button's layout) would sit
+ * apart in the middle of empty slots. Keep them together instead: a row of only
+ * buttons starts at the left, like a form's actions; buttons at the end of a
+ * row with other content go to its right edge, like a price and "Add to cart".
+ */
+function packButtons(placed: Box[], widths: number[], left: number, innerW: number, gap: number, ctx: LayoutContext): void {
+  const shrunk = placed.map((kb, j) => kb.node.type === "button" && kb.w < widths[j]! - 1);
+  let first = shrunk.length;
+  while (first > 0 && shrunk[first - 1]) first--;
+  if (first === shrunk.length) return;
+  const run = placed.slice(first);
+  const runW = run.reduce((t, kb) => t + kb.w, 0) + gap * (run.length - 1);
+  let x = first === 0 ? left : left + innerW - runW;
+  for (const kb of run) {
+    ctx.shift(kb, x - kb.x, 0);
+    x += kb.w + gap;
+  }
 }
 
 /** The narrowest a row can be: its widest child when it may wrap, all of them side by side when it may not. */

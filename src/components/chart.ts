@@ -40,7 +40,7 @@ import { ellipsize, fitLines, wrapText, type TextMeasurer } from "../text";
 import { SERIES_COUNT, seriesColors, type Theme } from "../theme";
 import type { Box, Value } from "../types";
 import { easeOut, paintGhost, staggered } from "../ghost";
-import { themeFont } from "./util";
+import { fillTint, themeFont } from "./util";
 
 /** The most items one chart draws. Larger lists show a message instead. */
 export const MAX_CHART_ITEMS = 200;
@@ -608,7 +608,7 @@ function axisGeometry(
 
 /** Horizontal bars: how thick each bar is and how tall each row is, for ns series side by side. */
 export function hbarRows(t: Theme, ns: number): { rowH: number; barH: number; group: number } {
-  const barH = ns === 1 ? Math.round(t.text.caption * 1.5) : t.text.caption;
+  const barH = ns === 1 ? Math.round(t.text.caption * 1.25) : t.text.caption;
   const group = ns * barH + (ns - 1) * BAR_GAP;
   return { barH, group, rowH: Math.max(Math.round((t.control.height * 2) / 3), group + t.space.sm) };
 }
@@ -1106,7 +1106,11 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       g.moveTo(px, ty);
       g.lineTo(px + pw, ty);
       g.strokeStyle = c.line;
+      // Lighter than other lines: the grid is a guide, not part of the data.
+      g.save();
+      g.globalAlpha *= 0.6;
       g.stroke();
+      g.restore();
       g.fillStyle = c.muted;
       g.fillText(tk.label, px - theme.space.sm / 2 - 2, oy + tk.y);
     }
@@ -1133,7 +1137,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           const h = full.h * grow;
           if (h <= 0.25) return;
           const b = { x: full.x, y: up ? full.y + full.h - h : full.y, w: full.w, h };
-          const r = Math.min(theme.radius.sm, b.w / 2, b.h / 2);
+          const r = Math.min(theme.radius.md / 2 + 1, b.w / 2, b.h / 2);
           ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, r);
           g.fillStyle = colorOf(k);
           g.fill();
@@ -1147,7 +1151,22 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
         g.rect(px - 6, oy + d.plot.y - 6, (pw + 12) * easeOut(reveal), d.plot.h + 12);
         g.clip();
       }
-      g.lineWidth = 2;
+      // One line gets a soft wash under it down to the axis, which gives it weight; with several
+      // the washes would muddy each other, so they stay plain lines.
+      if (d.seriesSegments.length === 1) {
+        const floor = oy + (d.zeroY ?? d.plot.y + d.plot.h);
+        const color = colorOf(0);
+        for (const run of d.seriesSegments[0]!) {
+          if (run.length < 2) continue;
+          g.beginPath();
+          run.forEach((pt, i) => (i ? g.lineTo(ox + pt.x, oy + pt.y) : g.moveTo(ox + pt.x, oy + pt.y)));
+          g.lineTo(ox + run[run.length - 1]!.x, floor);
+          g.lineTo(ox + run[0]!.x, floor);
+          g.closePath();
+          fillTint(g, color, 0.08);
+        }
+      }
+      g.lineWidth = 2.5;
       g.lineJoin = "round";
       g.lineCap = "round";
       d.seriesSegments.forEach((runs, k) => {

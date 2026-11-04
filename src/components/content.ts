@@ -224,7 +224,9 @@ export function statLayout(label: string, value: string, width: number, theme: T
 }
 
 /** Space between a value and a change beside it. */
-const STAT_CHANGE_GAP = 8;
+const STAT_CHANGE_GAP = 10;
+/** The change's pill: text size, height and padding either side. */
+const STAT_PILL_TEXT = 13, STAT_PILL_H = 22, STAT_PILL_X = 8;
 /** A sparkline's height and its widest; it's a hint of a trend, not a chart. */
 export const SPARK_H = 28;
 const SPARK_MAX_W = 200;
@@ -239,7 +241,7 @@ interface StatChange {
   /** The value's width, to place a change beside it. */
   valueW: number;
   inline: boolean;
-  /** Baseline, relative to the box. */
+  /** The middle of its pill, relative to the box. */
   y: number;
 }
 
@@ -291,21 +293,22 @@ function statExtras(box: Box, d: StatLayout, ctx: LayoutContext): StatExtras & {
   let bottom = d.valueTop + d.value.length * d.valueLH;
   let change: StatChange | null = null;
   if (p.has("change") && (raw || loading)) {
-    const font = themeFont(t, 600, t.text.body);
-    const lh = Math.round(t.text.body * 1.35);
+    const font = themeFont(t, 600, STAT_PILL_TEXT);
     const arrow = dir ? ARROWS[dir] : "";
     const full = raw ? (arrow ? `${arrow} ${raw}` : raw) : "";
     // While loading, the size the placeholders take.
     const valueW = loading ? Math.min(w, Math.max(56, d.size * 3.2)) : m.width(d.value[0] ?? "", themeFont(t, 700, d.size));
-    const natural = loading ? 48 : m.width(full, font);
+    // The change sits in a tinted pill, so it reads as one figure beside the value.
+    const natural = loading ? 48 : m.width(full, font) + STAT_PILL_X * 2;
     const inline = d.value.length === 1 && valueW + STAT_CHANGE_GAP + natural <= w;
-    const text = inline ? full : ellipsize(full, w, font, m);
-    const width = loading ? natural : m.width(text, font);
-    if (inline) change = { text, width, valueW, inline, y: bottom };
+    const text = inline ? full : ellipsize(full, w - STAT_PILL_X * 2, font, m);
+    const width = loading ? natural : m.width(text, font) + STAT_PILL_X * 2;
+    // y is the pill's middle. Beside the value it lines up with the middle of the value's capitals.
+    if (inline) change = { text, width, valueW, inline, y: bottom - d.size * 0.36 };
     else {
       // A little space above, so the value's descenders stay clear of it.
-      change = { text, width, valueW, inline, y: bottom + t.space.xs + lh - 5 };
-      bottom += t.space.xs + lh;
+      change = { text, width, valueW, inline, y: bottom + t.space.xs + 2 + STAT_PILL_H / 2 };
+      bottom += t.space.xs + 2 + STAT_PILL_H;
     }
   }
 
@@ -349,16 +352,18 @@ function statToneColor(theme: Theme, tone: StatExtras["tone"]): string {
 function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: number; vx: number; center: boolean; reveal: number; rise: number; base: number }): void {
   const { g, theme } = ctx;
   if (e.change) {
-    g.font = ctx.font(600, theme.text.body);
-    g.fillStyle = statToneColor(theme, e.tone);
-    if (e.change.inline) {
-      g.textAlign = "left";
-      const left = at.center ? at.vx : at.x;
-      g.fillText(e.change.text, left + e.change.valueW + STAT_CHANGE_GAP, box.y + e.change.y + at.rise);
-    } else {
-      g.textAlign = at.center ? "center" : "left";
-      g.fillText(e.change.text, at.x, box.y + e.change.y + at.rise);
-    }
+    const c = e.change;
+    const left = c.inline ? (at.center ? at.vx : at.x) + c.valueW + STAT_CHANGE_GAP : at.center ? at.x - c.width / 2 : at.x;
+    const mid = box.y + c.y + at.rise;
+    const color = e.tone === "muted" ? theme.colors.muted : statToneColor(theme, e.tone);
+    ctx.roundRect(left, mid - STAT_PILL_H / 2, c.width, STAT_PILL_H, STAT_PILL_H / 2);
+    fillTint(g, color, 0.13);
+    g.font = ctx.font(600, STAT_PILL_TEXT);
+    g.fillStyle = color;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(c.text, left + c.width / 2, mid + 1);
+    g.textBaseline = "alphabetic";
   }
   const s = e.spark;
   if (s && s.points.length > 1) {
@@ -375,6 +380,14 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     g.lineJoin = "round";
     g.lineCap = "round";
     g.strokeStyle = color;
+    // A soft wash under the line gives it weight without a frame.
+    const first = s.points[0]!, end = s.points[s.points.length - 1]!, floor = box.y + s.y + s.h;
+    g.beginPath();
+    s.points.forEach((pt, i) => (i ? g.lineTo(box.x + pt.x, box.y + pt.y) : g.moveTo(box.x + pt.x, box.y + pt.y)));
+    g.lineTo(box.x + end.x, floor);
+    g.lineTo(box.x + first.x, floor);
+    g.closePath();
+    fillTint(g, color, 0.1);
     g.beginPath();
     s.points.forEach((pt, i) => (i ? g.lineTo(box.x + pt.x, box.y + pt.y) : g.moveTo(box.x + pt.x, box.y + pt.y)));
     g.stroke();

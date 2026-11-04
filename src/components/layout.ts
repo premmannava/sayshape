@@ -83,8 +83,18 @@ card on=emit:open_order
   paint(box, ctx) {
     const { g, theme } = ctx;
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
+    // Two soft shadows, a wide one and a close one, so the card sits above the page rather than
+    // being outlined on it. They stay inside the screen's 20px padding.
+    g.save();
     g.fillStyle = theme.colors.surface;
+    g.shadowColor = theme.colors.shadow;
+    g.shadowBlur = 16;
+    g.shadowOffsetY = 4;
     g.fill();
+    g.shadowBlur = 2;
+    g.shadowOffsetY = 1;
+    g.fill();
+    g.restore();
     const pressable = ctx.props(box.node).has("on");
     if (pressable && ctx.isHovered(box.node)) fillTint(g, theme.colors.accent, ctx.isPressed(box.node) ? 0.1 : 0.05);
     g.strokeStyle = pressable && ctx.isHovered(box.node) ? theme.colors.accent : theme.colors.line;
