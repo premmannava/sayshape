@@ -169,7 +169,14 @@ stat label="Total" value="\${price*qty}"`,
       g.textAlign = "left";
       vx = x - (extra.change.valueW + STAT_CHANGE_GAP + extra.change.width) / 2;
     }
-    d.value.forEach((l, i) => g.fillText(reveal < 1 && d.value.length === 1 ? countUp(l, easeOut(reveal)) : l, vx, box.y + d.valueTop + d.valueLH * (i + 1) + rise));
+    d.value.forEach((l, i) => {
+      const target = d.value.length === 1 ? statNumeric(l) : null;
+      const value = target !== null ? ctx.tween(box.node, "stat:number", target, 460) : null;
+      const shown = value !== null && value !== target
+        ? formatStatNumber(l, value)
+        : reveal < 1 && d.value.length === 1 ? countUp(l, easeOut(reveal)) : l;
+      g.fillText(shown, vx, box.y + d.valueTop + d.valueLH * (i + 1) + rise);
+    });
     if (extra) paintStatExtras(box, ctx, extra, { x, vx, center, reveal, rise, base });
     g.globalAlpha = base;
   },
@@ -192,6 +199,30 @@ export function countUp(text: string, progress: number): string {
   const [whole, frac] = now.split(".");
   const grouped = m[1]!.includes(",") ? whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : whole!;
   return text.slice(0, m.index) + grouped + (frac !== undefined ? "." + frac : "") + text.slice(m.index + m[0].length);
+}
+
+/**
+ * Only tween one unambiguous positive numeric figure. Leave identifiers,
+ * mixed-number labels, negatives and arbitrary strings untouched.
+ */
+function statNumeric(text: string): number | null {
+  if (text.includes("-")) return null;
+  const matches = [...text.matchAll(/(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?/g)];
+  if (matches.length !== 1) return null;
+  const m = matches[0]!;
+  const value = Number(m[1]!.replace(/,/g, "") + (m[2] ?? ""));
+  return Number.isFinite(value) && value <= 1e12 ? value : null;
+}
+
+/** Preserve metric prefixes, grouping, decimal precision and suffixes. */
+function formatStatNumber(text: string, value: number): string {
+  const m = /(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?/.exec(text);
+  if (!m) return text;
+  const decimals = m[2] ? m[2].length - 1 : 0;
+  const formatted = Math.max(0, value).toFixed(decimals);
+  const [whole, frac] = formatted.split(".");
+  const grouped = m[1]!.includes(",") ? whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ",") : whole!;
+  return text.slice(0, m.index) + grouped + (frac === undefined ? "" : "." + frac) + text.slice(m.index + m[0].length);
 }
 
 /** Value sizes a stat tries, largest first, before it wraps the value at the smallest. */
