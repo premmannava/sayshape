@@ -95,20 +95,22 @@ card on=emit:open_order
     const c = theme.colors;
     const pressable = ctx.props(box.node).has("on");
     const hovered = pressable && ctx.isHovered(box.node);
+    const lift = ctx.tween(box.node, "card:hover", hovered ? 1 : 0, 200);
+    const press = ctx.tween(box.node, "card:press", pressable && ctx.isPressed(box.node) ? 1 : 0, 130);
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
     // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
     // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
     g.save();
     g.fillStyle = c.raised;
     g.shadowColor = c.shadow;
-    g.shadowBlur = hovered ? 18 : 10;
-    g.shadowOffsetY = hovered ? 4 : 2;
+    g.shadowBlur = 10 + 8 * lift - 3 * press;
+    g.shadowOffsetY = 2 + 2 * lift - press;
     g.fill();
     g.shadowBlur = 1;
     g.shadowOffsetY = 1;
     g.fill();
     g.restore();
-    if (hovered && ctx.isPressed(box.node)) fillTint(g, c.ink, 0.03);
+    if (press > 0) fillTint(g, c.ink, 0.035 * press);
     g.strokeStyle = c.line;
     g.lineWidth = 1;
     // Softer perimeter; elevation and spacing separate cards from the canvas.
@@ -116,10 +118,10 @@ card on=emit:open_order
     g.globalAlpha *= 0.72;
     g.stroke();
     g.restore();
-    if (hovered) {
-      // The border firms up toward the ink rather than turning the accent: quieter, and still clear.
+    if (lift > 0) {
+      // Emphasize elevation and contrast, not content movement.
       g.save();
-      g.globalAlpha *= 0.18;
+      g.globalAlpha *= 0.18 * lift;
       g.strokeStyle = c.ink;
       g.stroke();
       g.restore();
