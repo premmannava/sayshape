@@ -203,7 +203,7 @@ export function smoothLineControls(points: readonly { x: number; y: number }[]):
   });
 }
 
-function traceSmoothLine(
+export function traceSmoothLine(
   g: CanvasRenderingContext2D,
   run: readonly { x: number; y: number }[],
   ox: number, oy: number,
