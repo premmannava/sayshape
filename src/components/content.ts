@@ -6,6 +6,7 @@ import { isList } from "../data";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
 import { easeOut, paintGhost } from "../ghost";
+import { traceSmoothLine } from "./chart";
 import { fillTint, iconProblems, iconProp, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, WEIGHTS } from "./util";
 import { drawIcon, ICON_NAMES, isIconName, type IconName } from "../icons";
 
@@ -388,6 +389,15 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     const color = e.tone === "muted" ? theme.colors.muted : statToneColor(theme, e.tone);
     ctx.roundRect(left, mid - STAT_PILL_H / 2, c.width, STAT_PILL_H, ctx.theme.radius.sm);
     fillTint(g, color, 0.085);
+    // The hairline and leading ink mark give the indicator a crisp, quiet edge.
+    g.save();
+    g.strokeStyle = color;
+    g.lineWidth = 1;
+    g.globalAlpha *= 0.16;
+    g.stroke();
+    g.restore();
+    ctx.roundRect(left + 2, mid - 5, 2, 10, 1);
+    fillTint(g, color, 0.62);
     g.font = ctx.font(600, STAT_PILL_TEXT);
     g.fillStyle = color;
     g.textAlign = "center";
@@ -406,24 +416,42 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
       g.clip();
     }
     g.globalAlpha = at.base;
-    g.lineWidth = 2;
     g.lineJoin = "round";
     g.lineCap = "round";
-    g.strokeStyle = color;
-    // A soft wash under the line gives it weight without a frame.
-    const first = s.points[0]!, end = s.points[s.points.length - 1]!, floor = box.y + s.y + s.h;
+    const points = s.points.map((pt, i) => ({
+      x: pt.x, y: ctx.tween(box.node, `stat:spark:y:${i}`, pt.y, 440),
+    }));
+    const first = points[0]!, end = points[points.length - 1]!;
+    const floor = box.y + s.y + s.h;
+    const gradient = g.createLinearGradient(0, box.y + s.y, 0, floor);
+    gradient.addColorStop(0, color);
+    gradient.addColorStop(1, theme.colors.raised);
+    // Curve through real values, with a faint wash that doesn't obscure text.
     g.beginPath();
-    s.points.forEach((pt, i) => (i ? g.lineTo(box.x + pt.x, box.y + pt.y) : g.moveTo(box.x + pt.x, box.y + pt.y)));
+    traceSmoothLine(g, points, box.x, box.y);
     g.lineTo(box.x + end.x, floor);
     g.lineTo(box.x + first.x, floor);
     g.closePath();
-    fillTint(g, color, 0.1);
+    g.save();
+    g.fillStyle = gradient;
+    g.globalAlpha *= 0.13;
+    g.fill();
+    g.restore();
+    // Glow is limited to the final point and doesn't require a running loop.
     g.beginPath();
-    s.points.forEach((pt, i) => (i ? g.lineTo(box.x + pt.x, box.y + pt.y) : g.moveTo(box.x + pt.x, box.y + pt.y)));
+    traceSmoothLine(g, points, box.x, box.y);
+    g.strokeStyle = color;
+    g.lineWidth = 2.15;
     g.stroke();
-    const last = s.points[s.points.length - 1]!;
     g.beginPath();
-    g.arc(box.x + last.x, box.y + last.y, 2.5, 0, Math.PI * 2);
+    g.arc(box.x + end.x, box.y + end.y, 6, 0, Math.PI * 2);
+    g.save();
+    g.globalAlpha *= 0.15;
+    g.fillStyle = color;
+    g.fill();
+    g.restore();
+    g.beginPath();
+    g.arc(box.x + end.x, box.y + end.y, 2.5, 0, Math.PI * 2);
     g.fillStyle = color;
     g.fill();
     g.restore();
