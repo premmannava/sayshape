@@ -12,6 +12,7 @@ import { highlightLine } from "../loom/highlight";
 import { useLoom } from "../loom/useLoom";
 import { onHostEvents, type HostEvent } from "../loom/events";
 import { toBase64Url } from "../loom/runtime";
+import elements from "../../../.generated/elements.json";
 
 const current = ref(0);
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -95,7 +96,7 @@ onBeforeUnmount(() => observer?.disconnect());
           <h2>That's a store in {{ chapters[chapters.length - 1]!.spec.split("\n").length }} lines.</h2>
           <p>A model writes lines like these from a plain request, and SayShape draws each one as it arrives.</p>
           <div class="ln-end-links">
-            <a class="loom-btn primary" :href="withBase('/docs/elements/')">Browse all 48 elements</a>
+            <a class="loom-btn primary" :href="withBase('/docs/elements/')">Browse all {{ elements.elements.length }} elements</a>
             <a class="loom-btn quiet" :href="withBase('/examples/')">See bigger examples</a>
           </div>
         </section>

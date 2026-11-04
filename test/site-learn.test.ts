@@ -34,10 +34,17 @@ describe("build-along chapters", () => {
     });
   }
 
-  it("state: + changes qty", () => {
+  it("state: pressing + raises qty, and - lowers it", () => {
     const ui = render(chapters[0]!.spec);
-    ui.press({ type: "stepper" });
-    expect([1, 2, 0]).toContain(ui.state.qty);
+    const part = (name: string) => {
+      const hit = ui.hits.find((h) => h.box.node.type === "stepper" && h.detail === name)!.box;
+      ui.click(hit.x + hit.w / 2, hit.y + hit.h / 2);
+    };
+    part("inc");
+    expect(ui.state.qty).toBe(2);
+    part("dec");
+    part("dec");
+    expect(ui.state.qty).toBe(0);
   });
 
   it("derive: the total follows the quantity", () => {
