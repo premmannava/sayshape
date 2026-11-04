@@ -46,6 +46,45 @@ describe("benchmark tasks", () => {
   }
 });
 
+describe("using answers the way people build them", () => {
+  const task = (id: string) => tasks.find((t) => t.id === id)!;
+
+  it("chooses a filter from an HTML dropdown", async () => {
+    const html = `<select id="p"><option>All</option><option>High</option><option>Medium</option><option>Low</option></select><ul id="l"></ul>
+<p>Mon Fri</p><script>const T=[['Login fails','High'],['Slow export','Medium'],['Typo on page','Low'],['Data missing','High'],['Billing error','Medium']];
+function draw(){const p=document.getElementById('p').value;document.getElementById('l').replaceChildren(...T.filter(t=>p==='All'||t[1]===p).map(t=>{const li=document.createElement('li');li.textContent=t[0];return li;}));}
+document.getElementById('p').onchange=draw;draw();</script>`;
+    const s = await score("html", task("d2"), html);
+    expect(s.checks.filter((c) => !c.passed)).toEqual([]);
+  });
+
+  it("doesn't take a dropdown's options for the text of the label around it", async () => {
+    const html = `<input id="v" value="10"><label>Direction <select id="m"><option value="k">km to miles</option><option value="m">miles to km</option></select></label><p id="o"></p>
+<script>function u(){const v=+document.getElementById('v').value;document.getElementById('o').textContent=document.getElementById('m').value==='k'?(v*0.621371).toFixed(2):(v/0.621371).toFixed(2);}
+document.getElementById('m').onchange=u;u();</script>`;
+    const s = await score("html", task("x3"), html);
+    expect(s.checks.filter((c) => !c.passed)).toEqual([]);
+  });
+
+  it("chooses an option from a SayShape select", async () => {
+    const spec = `state bill=84.5 tip=18 people=3 tips=[{pct: 15, label: "15%"}, {pct: 18, label: "18%"}, {pct: 20, label: "20%"}]
+card
+  select "Tip" items=tips value=pct label=label bind=tip
+  stat label="Tip" value="{money(bill * tip / 100)}"
+  stat label="Total" value="{money(bill * (1 + tip / 100))}"
+  stat label="Per person" value="{money(bill * (1 + tip / 100) / people)}"`;
+    const s = await score("sayshape", task("x2"), spec);
+    expect(s.checks.filter((c) => !c.passed)).toEqual([]);
+  });
+
+  it("presses the button inside a header cell, not the cell", async () => {
+    const html = reference.t1!.html.replace(/<th data-k="(\w+)">(\w+)<\/th>/g, '<th><button data-k="$1">$2</button></th>').replace("document.querySelectorAll('th').forEach(th=>th.onclick=()=>{dir=key===th.dataset.k?-dir:1;key=th.dataset.k;draw();});", "document.querySelectorAll('th button').forEach(b=>b.onclick=()=>{dir=key===b.dataset.k?-dir:1;key=b.dataset.k;draw();});");
+    expect(html).toContain("th button");
+    const s = await score("html", task("t1"), html);
+    expect(s.checks.filter((c) => !c.passed)).toEqual([]);
+  });
+});
+
 describe("reading answers", () => {
   it("takes HTML out of fences and thinking", () => {
     expect(cleanHtml("<think>hmm</think>\n```html\n<p>Hi</p>\n```\nEnjoy!")).toBe("<p>Hi</p>");
