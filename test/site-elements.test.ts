@@ -13,6 +13,8 @@ import { render } from "../src/testing";
 import { editLine, findElementLine, formatValue, readProp, readText, TYPO, writeProp, writeText } from "../site/.vitepress/theme/loom/specEdit";
 
 const all = [...coreComponents, ...mapComponents];
+type Node = ReturnType<typeof parse>["root"];
+const findNode = (n: Node, type: string): Node | undefined => (n.type === type ? n : n.children.map((c) => findNode(c, type)).find(Boolean));
 const registry = new Registry(all);
 const TODAY = "2026-10-21";
 
@@ -86,15 +88,30 @@ describe("element pages", () => {
       expect(problems.some((d) => d.message.includes(`"${TYPO.name}"`))).toBe(true);
     });
 
-    it(`${def.type}: every enum value the controls offer parses cleanly`, () => {
+    it(`${def.type}: every edit the controls make keeps the line parsing`, () => {
+      const noErrors = (edited: string, what: string) => {
+        const errors = parse(edited + "\n", registry).diagnostics.filter((d) => d.severity === "error");
+        expect(errors, what).toEqual([]);
+      };
+      const at = (edit: (l: string) => string) => editLine(spec, index, edit);
       for (const [name, p] of Object.entries(def.props)) {
-        if (p.type !== "enum" || !p.values) continue;
-        for (const v of p.values) {
-          const edited = editLine(spec, index, (l) => writeProp(l, name, v));
-          const errors = parse(edited + "\n", registry).diagnostics.filter((d) => d.severity === "error");
-          expect(errors, `${name}=${v}`).toEqual([]);
-        }
+        if (name === "bind") continue;
+        if (p.type === "enum" && p.values) for (const v of p.values) noErrors(at((l) => writeProp(l, name, v)), `${name}=${v}`);
+        if (p.type === "boolean") for (const v of [true, false]) noErrors(at((l) => writeProp(l, name, v)), `${name}=${v}`);
+        if (p.type === "number") for (const v of [0, 3, -1]) noErrors(at((l) => writeProp(l, name, v)), `${name}=${v}`);
+        if (p.type === "string") for (const v of ["", "Two words", 'say "hi"']) noErrors(at((l) => writeProp(l, name, v || null)), `${name}="${v}"`);
       }
+      if (def.text && readText(spec.split("\n")[index]!, def.type) !== null) {
+        for (const v of ["New label", 'with "quotes"', ""]) noErrors(at((l) => writeText(l, def.type, v)), `text "${v}"`);
+      }
+    });
+
+    it(`${def.type}: a control's edit is what the parser then reads`, () => {
+      const numberProp = Object.entries(def.props).find(([n, p]) => p.type === "number" && n !== "bind");
+      if (!numberProp) return;
+      const edited = editLine(spec, index, (l) => writeProp(l, numberProp[0], 7));
+      const node = parse(edited + "\n", registry).root.children.map((c) => findNode(c, def.type)).find(Boolean);
+      expect(node?.props[numberProp[0]]).toBe("7");
     });
   }
 });

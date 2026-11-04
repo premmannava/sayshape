@@ -5,7 +5,7 @@
  * "try a typo" button that shows a real diagnostic, the props, and the exact
  * guide entry a model gets. All content comes from site/.generated/elements.json.
  */
-import { computed, ref, shallowRef, watch } from "vue";
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { withBase } from "vitepress";
 import data from "../../../.generated/elements.json";
 import { useLoom } from "../loom/useLoom";
@@ -38,7 +38,8 @@ function setProp(name: string, value: string | number | boolean | null) {
 }
 function nudge(p: Prop, by: number) {
   const now = Number(current(p) ?? p.default ?? 0);
-  setProp(p.name, Number.isFinite(now) ? Math.max(0, now + by) : by);
+  // No clamping: a value the element can't use shows up as the parser's own diagnostic.
+  setProp(p.name, Number.isFinite(now) ? now + by : by);
 }
 const text = computed(() => readText(line.value, props.type));
 function setText(v: string) { spec.value = editLine(spec.value, lineIndex.value, (l) => writeText(l, props.type, v)); }
@@ -80,6 +81,7 @@ watch(spec, (s) => { loom.value?.setSpec(s); readState(); });
 const rows = computed(() => Math.min(18, spec.value.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 56)), 0) + 1));
 const playgroundHref = computed(() => withBase("/playground.html") + "#spec=" + toBase64Url(spec.value));
 const copied = ref("");
+let copyTimer: ReturnType<typeof setTimeout> | undefined;
 async function copy(what: "spec" | "guide") {
   try {
     await navigator.clipboard.writeText(what === "spec" ? spec.value : el.value.guide);
@@ -87,8 +89,10 @@ async function copy(what: "spec" | "guide") {
   } catch {
     copied.value = "failed";
   }
-  setTimeout(() => { copied.value = ""; }, 1800);
+  clearTimeout(copyTimer);
+  copyTimer = setTimeout(() => { copied.value = ""; }, 1800);
 }
+onBeforeUnmount(() => clearTimeout(copyTimer));
 
 const typeLabel = (p: Prop) => (p.type === "enum" && p.values ? p.values.join(" · ") : p.type);
 const defaultLabel = (p: Prop) => (p.required ? "required" : p.default === null ? "—" : String(p.default));
@@ -126,9 +130,10 @@ const defaultLabel = (p: Prop) => (p.required ? "required" : p.default === null 
         <div class="ep-result">
           <div class="ep-bar"><span class="ss-eyebrow">Result · try it</span><a class="loom-btn-text" :href="playgroundHref">Open in playground</a></div>
           <div class="loom-stage">
-            <div class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`Live ${el.type} example, drawn on a canvas`"></canvas></div>
+            <!-- Examples that load a photo point at a file this site doesn't ship, so they aren't drawn here. -->
+            <div v-if="el.live" class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`Live ${el.type} example, drawn on a canvas`"></canvas></div>
+            <p v-else class="ep-note">This example loads a photo from your app's own site, so it isn't drawn here. In your app, images load from your origin and the hosts you allow.</p>
             <p v-if="failed" class="loom-live__failed">The preview couldn't start: {{ failed }}</p>
-            <p v-if="!el.live" class="ep-note">This example loads an image this site doesn't have, so it shows a placeholder.</p>
           </div>
           <dl v-if="stateView.length" class="ep-state" aria-label="State right now">
             <div v-for="[k, v] in stateView" :key="k"><dt>{{ k }}</dt><dd>{{ v }}</dd></div>
@@ -185,8 +190,8 @@ const defaultLabel = (p: Prop) => (p.required ? "required" : p.default === null 
           <div v-for="p in el.props" :key="p.name" class="ep-row">
             <code class="nm">{{ p.name }}</code><span class="ty">{{ typeLabel(p) }}</span><span class="ds">{{ p.description }}</span><span class="df" :class="{ req: p.required }">{{ defaultLabel(p) }}</span>
           </div>
-          <div class="ep-row muted">
-            <code class="nm">if</code><span class="ty">condition</span><span class="ds">Every element: show only while this is true.</span><span class="df">—</span>
+          <div v-for="c in data.common" :key="c.name" class="ep-row muted">
+            <code class="nm">{{ c.name }}</code><span class="ty">{{ c.type }}</span><span class="ds">{{ c.description }} Every element takes it.</span><span class="df">—</span>
           </div>
         </div>
         <p v-if="el.children && el.children !== 'any'" class="ep-rel">Children:

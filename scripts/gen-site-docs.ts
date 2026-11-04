@@ -211,7 +211,8 @@ for (const cat of CATEGORIES) {
 }
 writeFileSync(resolve(ELEMENTS_DIR, "index.md"), atlasPage());
 for (const c of all) writeFileSync(resolve(ELEMENTS_DIR, `${c.type}.md`), elementPage(c));
-writeFileSync(resolve(GENERATED_DIR, "elements.json"), JSON.stringify({ categories: CATEGORIES.map((c) => ({ id: c, title: TITLES[c], intro: INTROS[c] })), elements: all.map(elementData) }, null, 2) + "\n");
+const common = Object.entries(COMMON_PROPS).map(([name, d]) => ({ name, type: d.type, description: d.description }));
+writeFileSync(resolve(GENERATED_DIR, "elements.json"), JSON.stringify({ categories: CATEGORIES.map((c) => ({ id: c, title: TITLES[c], intro: INTROS[c] })), common, elements: all.map(elementData) }, null, 2) + "\n");
 writeFileSync(resolve(GENERATED_DIR, "guide-sizes.md"), guideSizes());
 writeFileSync(resolve(GENERATED_DIR, "functions.md"), [NOTICE, "", [...EXPRESSION_FUNCTIONS].sort().map((f) => `\`${f}\``).join(", "), ""].join("\n"));
 writeFileSync(resolve(GENERATED_DIR, "guide-compact.md"), compactGuide());

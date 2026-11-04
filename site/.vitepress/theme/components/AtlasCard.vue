@@ -10,7 +10,8 @@ const props = defineProps<{ type: string; description: string; example: string; 
 
 const root = ref<HTMLElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
-const flipped = ref(false);
+// Examples that load a photo point at a file this site doesn't ship: show their spec instead of drawing them.
+const flipped = ref(!props.live);
 const html = computed(() => highlightSpec(props.example));
 const href = computed(() => withBase(`/docs/elements/${props.type}.html`));
 
@@ -27,11 +28,11 @@ function reset() { loom.value?.setSpec(props.example, { resetState: true }); }
       <a :href="href" class="ac-name">{{ type }}</a>
       <span class="ac-actions">
         <button v-if="!flipped && loom" type="button" class="ac-btn" :aria-label="`Reset the ${type} example`" @click="reset">↺</button>
-        <button type="button" class="ac-btn" :aria-pressed="flipped" :aria-label="flipped ? `Show the live ${type}` : `Show the spec for ${type}`" @click="flipped = !flipped">{{ flipped ? "Live" : "Spec" }}</button>
+        <button v-if="live" type="button" class="ac-btn" :aria-pressed="flipped" :aria-label="flipped ? `Show the live ${type}` : `Show the spec for ${type}`" @click="flipped = !flipped">{{ flipped ? "Live" : "Spec" }}</button>
       </span>
     </header>
     <div v-show="!flipped" class="loom-stage ac-stage">
-      <div class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`Live ${type} example`"></canvas></div>
+      <div v-if="live" class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`Live ${type} example`"></canvas></div>
       <p v-if="failed" class="loom-live__failed">Couldn't start: {{ failed }}</p>
     </div>
     <pre v-show="flipped" class="spec-view ac-spec" tabindex="0" :aria-label="`Spec for ${type}`"><code v-html="html"></code></pre>
