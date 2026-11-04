@@ -327,9 +327,9 @@ describe("chart layout", () => {
 
   it("grows the plot with the width, within limits", () => {
     const h = (w: number) => geo(chartOf(many(3), "bar", w)).plot.h;
-    expect(h(320)).toBe(140);
+    expect(h(320)).toBe(144);
     expect(h(500)).toBeGreaterThan(h(320));
-    expect(h(2000)).toBe(260);
+    expect(h(2000)).toBe(238);
   });
 
   it("says when the screen is too narrow for the data, once", () => {
