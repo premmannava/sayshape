@@ -52,6 +52,56 @@ Safety: the file is opened read-only, so SQLite refuses any write. Only a single
 
 To try it, the [Chinook sample database](https://github.com/lerocha/chinook-database) (a small music store, MIT licence) works well: ask *"Show revenue by country as a chart and a table"* or *"Top 10 artists by tracks sold"*.
 
+## Import structured MCP results (PR #44)
+
+SayShape now normalizes **trusted upstream MCP tool results** into datasets. The model sees only a dataset id, column names and types, while **full rows go to the interface** via the existing app-only `fetch_dataset` call. It works without a database or copying rows through the language model.
+
+### Try the bundled example (stdio)
+
+From the `mcp/` directory after `npm run build`:
+
+```bash
+node dist/server.js --mcp-result examples/github-prs.json
+```
+
+Connect your stdio MCP host to that command. Ask: *"Call list_datasets and show a bar chart of checks_passed by PR number plus a table of title, author_login, status and checks_failed."*
+
+The JSON file is a normal MCP tool result:
+
+```json
+{ "structuredContent": { "pull_requests": [{ "number": 44, "title": "Bridge", "author": { "login": "Ada" }, "checks_passed": 8 }] } }
+```
+
+Repeat `--mcp-result file.json` to import multiple results. The files come from a **trusted integration**; this is not a URL-fetching tool. Valid JSON text from an MCP tool's `content` array is also supported. The adapter preserves numeric and boolean fields, flattens nested fields (`author.login` becomes `author_login`), and normalizes unsafe names. Multiple potential arrays require an explicit `path` from the trusted caller. Imported results use `m1`, `m2` references, separate from the existing SQLite `d1`, `d2` references.
+
+```text
+model: list_datasets
+  -> m1 (github-prs): 4 rows; columns: number number, title text, ...
+model: show_interface({ spec: "chart ... items=prs ...", data: { prs: "m1" } })
+view:  fetch_dataset({ id: "m1" })   # app-only, contains complete normalized rows
+```
+
+### Trusted programmatic integration
+
+A trusted orchestrator that already talks to another MCP server can register its `client.callTool(...)` result directly, without feeding the rows back into the model:
+
+```ts
+import { McpResultStore } from "./src/mcp-results";
+import { createServer } from "./src/server";
+
+const store = new McpResultStore(); // one store per authorized user/session
+const upstream = await githubClient.callTool({ name: "list_pull_requests", arguments: {} });
+const dataset = store.ingest(upstream, { label: "GitHub PRs" });
+// For ambiguous payloads, pass { path: "data.pullRequests.nodes" }.
+const sayshape = createServer({ uiHtml: () => bundledUi, mcpResults: store });
+// Connect sayshape to a trusted transport. list_datasets exposes dataset.id
+// and fields; show_interface can render them without embedding rows.
+```
+
+This is a **source-level integration API**, not yet a published SDK. SayShape does **not** automatically discover, authorize or call other MCP servers, and buttons do not invoke arbitrary upstream tools. Those capabilities are separate work.
+
+**Safety:** imported results are capped at 500 rows, 32 columns and 9,000 cells; long text is shortened. Keep one store per authorized user/session because dataset ids are references, **not access-control secrets**. For now `--mcp-result` is deliberately **stdio-only**: the current stateless HTTP transport has no per-user dataset isolation. SQLite's existing read-only mode remains unchanged.
+
 ## Install
 
 You need Node.js 20 or later.
@@ -107,6 +157,6 @@ npm run build
 npm run test:e2e   # the built view in Chromium, inside a sandboxed iframe driven by the MCP Apps host bridge
 ```
 
-`test:e2e` runs two browser checks. The first streams a spec into the view, checks the canvas was painted and the height reported, presses an `emit:` button with the keyboard, checks the message that comes back and switches to dark mode. The second (`scripts/e2e-data.mjs [database.db]`) starts the built server with `--data`, plays the model (describe, query, show), lets the view fetch the dataset through the host bridge, and checks the rows in the interface match the database exactly. Screenshots go to `e2e-output/`.
+`test:e2e` runs the browser canvas/host-action test, the database-to-interface test, and the **stdio MCP result import test** (`scripts/e2e-import.mjs`). The last one starts the built server with `--mcp-result`, lists the imported schema, calls `show_interface` and verifies the exact rows delivered by app-only `fetch_dataset`. Screenshots from the browser tests go to `e2e-output/`.
 
 The server bundles the engine from `../src`, so the guide, the parser and the view always match the library they were built with. The MCP packages (`@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `zod`) are dependencies of this package only. The SayShape library itself still has none.

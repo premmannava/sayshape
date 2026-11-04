@@ -11,10 +11,12 @@
 import { readFile } from "node:fs/promises";
 import { createServer as createHttpServer, type IncomingMessage } from "node:http";
 import { fileURLToPath } from "node:url";
+import { basename } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "./server";
 import { DataSource } from "./data";
+import { McpResultStore } from "./mcp-results";
 
 // dist/server.js and dist/ui.html sit side by side.
 const UI_PATH = fileURLToPath(new URL("./ui.html", import.meta.url));
@@ -65,7 +67,7 @@ async function serveHttp(port: number, data: DataSource | undefined): Promise<vo
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
-    console.error("Usage: sayshape-mcp [--data database.db] [--http [port]]");
+    console.error("Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...] [--http [port]]");
     return;
   }
   const dataAt = args.indexOf("--data");
@@ -77,13 +79,37 @@ async function main(): Promise<void> {
     console.error(`SayShape: reading ${path} (read-only)`);
   }
   const httpAt = args.indexOf("--http");
+  const files: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] !== "--mcp-result") continue;
+    const path = args[++i];
+    if (!path || path.startsWith("--")) throw new Error("--mcp-result needs a JSON file path.");
+    files.push(path);
+  }
+  // Dataset references are not credentials. Do not expose imported private
+  // results to all HTTP callers until authenticated session isolation lands.
+  if (httpAt >= 0 && files.length) {
+    throw new Error("--mcp-result is stdio-only. Shared HTTP datasets need authenticated session isolation.");
+  }
+  let mcpResults: McpResultStore | undefined;
+  if (files.length) {
+    mcpResults = new McpResultStore();
+    for (const path of files) {
+      const raw = await readFile(path, "utf8");
+      if (raw.length > 5_000_000) throw new Error("MCP result JSON exceeds the 5 MB import limit.");
+      const value = JSON.parse(raw) as unknown;
+      const label = basename(path).replace(/\.json$/i, "");
+      const d = mcpResults.ingest(value, { label });
+      console.error("SayShape: imported " + label + " as " + d.id + " (" + d.rows.length + " rows)");
+    }
+  }
   if (httpAt >= 0) {
     const port = Number(args[httpAt + 1] ?? 3001);
     await serveHttp(Number.isInteger(port) && port > 0 ? port : 3001, data);
     return;
   }
   // stdout carries the protocol, so anything for people goes to stderr.
-  await createServer({ uiHtml, data }).connect(new StdioServerTransport());
+  await createServer({ uiHtml, data, mcpResults }).connect(new StdioServerTransport());
 }
 
 main().catch((e) => {

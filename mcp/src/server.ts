@@ -41,6 +41,7 @@ import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
 import { QueryError, summarize, type DataSource } from "./data";
+import { listMcpDatasets, type McpResultStore } from "./mcp-results";
 
 export const VERSION = "0.1.0";
 export const UI_URI = "ui://sayshape/interface.html";
@@ -66,6 +67,12 @@ const DATA_NOTES = `DATA FROM THE DATABASE
 - Show a dataset by naming it in show_interface's data argument and using that name in the spec: data={"sales": "d1"}, then chart "Sales by country" kind=bar items=sales x=Country y=Total, or table … items=sales with table-column field=… for each column. Each row is a record with the dataset's column names as fields.
 - Don't declare a dataset's name with state: the interface fills it in. You can still derive from it: derive top={take(sort(sales, 'Total', 'desc'), 5)}.`;
 
+const MCP_NOTES = `MCP RESULTS FROM A TRUSTED INTEGRATION
+- The host can ingest structured MCP tool results without pasting rows into the model context.
+- Call list_datasets to discover the available ids and columns, then show_interface with data={"name":"m1"} and items=name in the spec.
+- A dataset id is an opaque reference to the rows, not a new state declaration. Do not copy the rows into the spec.
+- Data ingestion is controlled by the host; the model cannot invoke tools on another MCP server through SayShape.`;
+
 /** The whole guide in one piece (the guide modes' full text plus these notes); kept for measuring and for clients that want it all. */
 export function guideText(withData = false): string {
   return languageGuide(registry, { mode: "full", imageHosts: [], notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES });
@@ -75,7 +82,7 @@ const sectionText = (mode: "full" | "compact", name: string) =>
   guideSections(registry, { mode, imageHosts: [] }).find((sec) => sec.name === name)?.text ?? "";
 
 /** Parts of the guide a model can ask for by name, all generated (DATA_NOTES only with a database). */
-function topics(withData: boolean): Record<string, string> {
+function topics(withData: boolean, withMcp = false): Record<string, string> {
   return {
     expressions: sectionText("full", "expressions"),
     actions: sectionText("full", "actions"),
@@ -84,6 +91,7 @@ function topics(withData: boolean): Record<string, string> {
     examples: sectionText("full", "example"),
     chat: CHAT_NOTES.split("\n").slice(1).join("\n"),
     ...(withData ? { database: DATA_NOTES } : {}),
+    ...(withMcp ? { datasets: MCP_NOTES } : {}),
   };
 }
 
@@ -92,7 +100,7 @@ function topics(withData: boolean): Record<string, string> {
  * syntax, every element's name, the rules for writing into a chat, and how
  * to ask for more. Simple interfaces need nothing else.
  */
-export function quickStart(withData = false): string {
+export function quickStart(withData = false, withMcp = false): string {
   return [
     "QUICK START (the language is also called Loom)",
     sectionText("compact", "format").replace(/^FORMAT\n/, ""),
@@ -101,14 +109,15 @@ export function quickStart(withData = false): string {
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue')`,
     `ELEMENTS\n${elementIndex(coreComponents)}`,
     "IN A CHAT: one card with a title; the column is about 600px wide, so use grid min=140 for side-by-side figures; say in a caption when numbers come from your own knowledge.",
-    `BEFORE YOU USE AN ELEMENT for the first time in a conversation, get its props and an example with sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData)).join(", ")}.`,
+    `BEFORE YOU USE AN ELEMENT for the first time in a conversation, get its props and an example with sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp)).join(", ")}.`,
+    ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");
 }
 
 /** Docs for exactly what was asked for, plus what it depends on. */
-export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false): string {
+export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false): string {
   const parts: string[] = [];
-  const t = topics(withData);
+  const t = topics(withData, withMcp);
   if (elements.length) {
     const { text, unknown } = elementGuide(registry, elements);
     if (text) parts.push(`ELEMENTS\n${text}`);
@@ -118,7 +127,7 @@ export function docsText(elements: readonly string[], topicNames: readonly strin
     const body = t[name];
     parts.push(body ? body : `No topic called ${name}. Topics: ${Object.keys(t).join(", ")}.`);
   }
-  return parts.length ? parts.join("\n\n") : quickStart(withData);
+  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp);
 }
 
 /** The elements on the lines that went wrong, so their docs can go back with the problems. */
@@ -174,6 +183,8 @@ export interface ServerOptions {
   uiHtml: () => string | Promise<string>;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;
+  /** In-memory MCP results ingested by a trusted host (one store per user/session). */
+  mcpResults?: McpResultStore;
   /** The clock, for tests of how long a repeat counts as one. */
   now?: () => number;
 }
@@ -200,6 +211,9 @@ const text = (t: string, isError = false) => ({ content: [{ type: "text" as cons
 
 export function createServer(opts: ServerOptions): McpServer {
   const data = opts.data;
+  const mcpResults = opts.mcpResults;
+  const hasDatasets = !!data || !!mcpResults;
+  const findDataset = (id: string) => id.startsWith("m") ? mcpResults?.get(id) : data?.get(id);
   const now = opts.now ?? Date.now;
   // The last interface shown with nothing to fix. Smaller models often send the same one again
   // to "confirm" it, which would leave a second copy in the chat. Kept per server, so per
@@ -216,7 +230,9 @@ export function createServer(opts: ServerOptions): McpServer {
         (data
           ? " A database is connected: answer questions about it with describe_data and query_data, then show the result with show_interface, " +
             "passing the dataset in its data argument instead of typing the numbers."
-          : ""),
+          : mcpResults
+            ? " Imported MCP result datasets are available: call list_datasets, then show_interface with data ids."
+            : ""),
     },
   );
 
@@ -229,11 +245,11 @@ export function createServer(opts: ServerOptions): McpServer {
         "Ask only for what you're about to use, e.g. elements: [\"chart\", \"table\"]. With nothing named, returns the quick start.",
       inputSchema: {
         elements: z.array(z.string().max(40)).max(12).optional().describe("Element names, e.g. [\"chart\", \"table\", \"stepper\"]."),
-        topics: z.array(z.string().max(40)).max(6).optional().describe(`Topics: ${Object.keys(topics(!!data)).join(", ")}.`),
+        topics: z.array(z.string().max(40)).max(6).optional().describe(`Topics: ${Object.keys(topics(!!data, !!mcpResults)).join(", ")}.`),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ elements, topics: names }) => text(docsText(elements ?? [], names ?? [], !!data)),
+    async ({ elements, topics: names }) => text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults)),
   );
 
   registerAppTool(
@@ -247,12 +263,13 @@ export function createServer(opts: ServerOptions): McpServer {
         "rather than writing HTML, React, SVG or chart code, or making an artifact. Specs can't run code or choose colors. " +
         "The result lists lines the parser skipped, with the docs for those elements, so you can fix them." +
         (data ? " To show rows from the database, pass data={\"name\": \"d1\"} with a dataset id from query_data and use that name in the spec (items=name)." : "") +
+        (mcpResults ? " For imported MCP results, call list_datasets then pass the selected id in data. The model never needs the full rows." : "") +
         "\n\n" +
-        quickStart(!!data),
+        quickStart(!!data, !!mcpResults),
       inputSchema: {
         spec: z.string().min(1).max(MAX_SPEC_CHARS).describe("The SayShape spec: plain lines, no Markdown fences."),
         title: z.string().max(120).optional().describe("A short name for the interface, e.g. 'Paris 2024 medal table'."),
-        ...(data
+        ...(hasDatasets
           ? {
               data: z
                 .record(z.string(), z.string())
@@ -272,8 +289,8 @@ export function createServer(opts: ServerOptions): McpServer {
       const datasets: Record<string, { id: string; rows: number }> = {};
       for (const [name, id] of Object.entries(wanted)) {
         if (!DATA_NAME.test(name)) return text(`"${name}" can't be used as a name in a spec. Use letters, digits and _, starting with a letter, like sales or top_artists.`, true);
-        const d = data?.get(id);
-        if (!d) return text(`There's no dataset "${id}". Run query_data first and use the id it returns (d1, d2…).`, true);
+        const d = findDataset(id);
+        if (!d) return text(`There's no dataset "${id}". ${mcpResults ? "Check list_datasets for imported MCP result ids (m1, m2…). " : ""}${data ? "Use query_data for SQL datasets (d1, d2…)." : ""}`, true);
         datasets[name] = { id, rows: d.rows.length };
       }
       const names = Object.keys(datasets);
@@ -342,6 +359,21 @@ export function createServer(opts: ServerOptions): McpServer {
       },
     );
 
+  }
+
+  if (mcpResults) {
+    server.registerTool(
+      "list_datasets",
+      {
+        title: "List imported MCP result datasets",
+        description: "Lists ids, column names and types for tool results ingested by the trusted host. Never returns full rows.",
+        annotations: { readOnlyHint: true, openWorldHint: false },
+      },
+      async () => text(listMcpDatasets(mcpResults)),
+    );
+  }
+
+  if (hasDatasets) {
     registerAppTool(
       server,
       "fetch_dataset",
@@ -354,7 +386,7 @@ export function createServer(opts: ServerOptions): McpServer {
         _meta: { ui: { resourceUri: UI_URI, visibility: ["app"] } },
       },
       async ({ id }) => {
-        const d = data.get(id);
+        const d = findDataset(id);
         if (!d) return text(`No dataset ${id}.`, true);
         return {
           content: [{ type: "text", text: `${d.rows.length} rows of ${d.id}.` }],

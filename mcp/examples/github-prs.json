@@ -1,0 +1,50 @@
+{
+  "structuredContent": {
+    "pull_requests": [
+      {
+        "number": 41,
+        "title": "Premium bars and KPIs",
+        "author": {
+          "login": "premmannava"
+        },
+        "checks_passed": 12,
+        "checks_failed": 0,
+        "status": "merged",
+        "draft": false
+      },
+      {
+        "number": 42,
+        "title": "Premium cards and controls",
+        "author": {
+          "login": "premmannava"
+        },
+        "checks_passed": 12,
+        "checks_failed": 0,
+        "status": "merged",
+        "draft": false
+      },
+      {
+        "number": 43,
+        "title": "Final visual consistency",
+        "author": {
+          "login": "premmannava"
+        },
+        "checks_passed": 11,
+        "checks_failed": 0,
+        "status": "merged",
+        "draft": false
+      },
+      {
+        "number": 44,
+        "title": "MCP results bridge",
+        "author": {
+          "login": "premmannava"
+        },
+        "checks_passed": 8,
+        "checks_failed": 1,
+        "status": "open",
+        "draft": true
+      }
+    ]
+  }
+}
