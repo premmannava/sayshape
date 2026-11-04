@@ -25,6 +25,8 @@ export interface Column {
 export interface Dataset {
   id: string;
   sql: string;
+  /** Optional label for imported MCP results; SQLite datasets leave it unset. */
+  source?: string;
   columns: Column[];
   rows: Row[];
   /** True when the query returned more rows than were kept. */
@@ -174,7 +176,8 @@ export class DataSource {
 /** What the model is told about a dataset: enough to design with, never the full rows. */
 export function summarize(d: Dataset): string {
   const cols = d.columns.map((c) => `${c.name} (${c.type})`).join(", ") || "none";
-  const size = d.truncated ? `the first ${d.rows.length} rows (the query returned more; aggregate with GROUP BY or add LIMIT)` : `${d.rows.length} row${d.rows.length === 1 ? "" : "s"}`;
+  const overflow = d.source ? "the source result was truncated; filter upstream or choose fewer fields" : "the query returned more; aggregate with GROUP BY or add LIMIT";
+  const size = d.truncated ? `the first ${d.rows.length} rows (${overflow})` : `${d.rows.length} row${d.rows.length === 1 ? "" : "s"}`;
   const sample = d.rows.slice(0, SAMPLE_ROWS).map((r) => JSON.stringify(r)).join("\n");
   return [
     `Dataset ${d.id}: ${size}.`,
