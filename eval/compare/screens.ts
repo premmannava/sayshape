@@ -1,0 +1,191 @@
+/**
+ * One way to look at and use a screen, whichever format drew it, so every
+ * benchmark check runs the same steps on SayShape and on HTML:
+ *
+ * - SayShape renders with the real engine in Node (src/testing). Text is what
+ *   the canvas drew; pressing clicks the centre of a pressable region.
+ * - HTML runs in jsdom with its scripts on. Text is what's visible (not inside
+ *   <script>, <style> or display:none), plus text drawn on a <canvas> and the
+ *   labels of Chart.js charts, which a stand-in Chart records, since jsdom has
+ *   no canvas and loads nothing from the network.
+ */
+import { JSDOM, VirtualConsole } from "jsdom";
+import { coreComponents } from "../../src/components";
+import { mapComponents } from "../../src/components/map";
+import { render, type Rendered } from "../../src/testing";
+
+export interface Screen {
+  /** Visible text, one entry per piece (a line on canvas, a text node in HTML). */
+  text(): string[];
+  /** Type into the nth text field (0 = first). False when there isn't one. */
+  type(nth: number, value: string): Promise<boolean>;
+  /** Press the smallest pressable thing whose text matches. False when nothing matches. */
+  press(label: RegExp): Promise<boolean>;
+  /** Problems found while loading or using the screen (script errors, parse errors). */
+  readonly errors: string[];
+  /** HTML only: whether text from the data became live markup (an injected element). */
+  injected(): boolean;
+  destroy(): void;
+}
+
+const FIELD_TYPES = new Set(["input"]);
+
+/** A SayShape spec rendered by the real engine. Errors are its error-level diagnostics. */
+export function sayshapeScreen(spec: string): Screen {
+  const ui: Rendered = render(spec, { components: [...coreComponents, ...mapComponents], width: 600, today: "2026-11-04" });
+  const errors = ui.diagnostics.filter((d) => d.severity === "error").map((d) => `line ${d.line}: ${d.message}`);
+
+  // Text drawn inside a region, for regions with no text of their own (table headers, segmented options).
+  const textIn = (b: { x: number; y: number; w: number; h: number }): string =>
+    ui.drawOps
+      .filter((o) => o.op === "fillText")
+      .filter((o) => {
+        const x = Number(o.args[1]), y = Number(o.args[2]);
+        return x >= b.x - 1 && x <= b.x + b.w + 1 && y >= b.y - 1 && y <= b.y + b.h + 1;
+      })
+      .map((o) => String(o.args[0]))
+      .join(" ");
+
+  return {
+    errors,
+    text: () => ui.text(),
+    async type(nth, value) {
+      const field = ui.findAll({}).filter((f) => f.box && FIELD_TYPES.has(f.node.type))[nth];
+      if (!field) return false;
+      ui.type({ id: field.node.id }, value, { replace: true });
+      ui.key("Escape");
+      return true;
+    },
+    async press(label) {
+      const matches = ui.hits
+        .map((h) => {
+          // A part's name, without an internal prefix: "sort:rating" is the Rating header, even when its text is cut to "Rati…".
+          const detail = typeof h.detail === "string" || typeof h.detail === "number" ? String(h.detail).replace(/^[a-z]+:/, "") : "";
+          const own = ui.findAll({ id: h.box.node.id })[0]?.shownText ?? "";
+          // Each source on its own, so ^…$ patterns work: the element's text, its part's name, or text drawn inside it.
+          return { h, labels: [own, detail, textIn(h.box)].filter(Boolean) };
+        })
+        .filter((m) => m.labels.some((l) => label.test(l)))
+        .sort((a, b) => a.h.box.w * a.h.box.h - b.h.box.w * b.h.box.h);
+      const hit = matches[0]?.h;
+      if (!hit) return false;
+      ui.click(hit.box.x + hit.box.w / 2, hit.box.y + hit.box.h / 2);
+      ui.loom.renderNow();
+      return true;
+    },
+    injected: () => false,
+    destroy: () => ui.destroy(),
+  };
+}
+
+/** Script set up before the model's HTML: stand-ins for what jsdom lacks. */
+const SHIMS = `
+window.__drawn = [];
+window.__charts = [];
+window.matchMedia = window.matchMedia || function (q) { return { matches: false, media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }; };
+window.ResizeObserver = window.ResizeObserver || function () { return { observe() {}, unobserve() {}, disconnect() {} }; };
+window.IntersectionObserver = window.IntersectionObserver || function () { return { observe() {}, unobserve() {}, disconnect() {} }; };
+window.HTMLCanvasElement.prototype.getContext = function () {
+  const drawn = window.__drawn;
+  const canvas = this;
+  const target = { canvas, measureText: (t) => ({ width: String(t).length * 7, actualBoundingBoxAscent: 8, actualBoundingBoxDescent: 2 }),
+    fillText: (t) => drawn.push(String(t)), strokeText: (t) => drawn.push(String(t)),
+    createLinearGradient: () => ({ addColorStop() {} }), createRadialGradient: () => ({ addColorStop() {} }), createPattern: () => ({}),
+    getImageData: () => ({ data: [] }), getLineDash: () => [], getTransform: () => ({}) };
+  return new Proxy(target, { get: (o, k) => (k in o ? o[k] : typeof k === "string" ? function () {} : undefined), set: () => true });
+};
+window.Chart = function (el, config) {
+  const data = (config && config.data) || {};
+  const pieces = [].concat(data.labels || []);
+  (data.datasets || []).forEach(function (d) { if (d.label) pieces.push(d.label); (d.data || []).forEach(function (v) { if (typeof v === "number") pieces.push(String(v)); }); });
+  const chart = { config: config, data: data, options: (config && config.options) || {}, pieces: pieces,
+    update: function () { chart.pieces = [].concat(chart.data.labels || []); (chart.data.datasets || []).forEach(function (d) { if (d.label) chart.pieces.push(d.label); (d.data || []).forEach(function (v) { if (typeof v === "number") chart.pieces.push(String(v)); }); }); },
+    destroy: function () { const i = window.__charts.indexOf(chart); if (i >= 0) window.__charts.splice(i, 1); }, resize: function () {} };
+  window.__charts.push(chart);
+  return chart;
+};
+window.Chart.register = function () {}; window.Chart.defaults = { plugins: { legend: {}, tooltip: {} }, scale: { grid: {}, ticks: {} }, font: {}, color: "" };
+`;
+
+/** Markup that only exists when text from data was inserted as HTML. */
+const INJECTED = "[onerror], [onload], [onclick][data-pwn], script[data-pwn], img[src='x']";
+
+/** An HTML fragment run in jsdom. Errors are uncaught script errors and errors logged to the console. */
+export async function htmlScreen(html: string): Promise<Screen> {
+  const errors: string[] = [];
+  const vc = new VirtualConsole();
+  vc.on("jsdomError", (e: Error) => { if (!/Not implemented/.test(e.message)) errors.push(e.message); });
+  vc.on("error", (...a: unknown[]) => errors.push(a.map(String).join(" ")));
+  // External scripts (a CDN's Chart.js) aren't fetched: the stand-in Chart is already there.
+  const body = html.replace(/<script\b[^>]*\bsrc=["'][^"']*["'][^>]*>\s*<\/script>/gi, "");
+  const dom = new JSDOM(`<!doctype html><html><head><script>${SHIMS}</script></head><body>${body}</body></html>`, {
+    runScripts: "dangerously",
+    pretendToBeVisual: true,
+    virtualConsole: vc,
+    url: "https://bench.invalid/",
+  });
+  const w = dom.window, d = w.document;
+  w.addEventListener("error", (e) => errors.push(e.message));
+  await settle(w);
+
+  const visible = (): string[] => {
+    const out: string[] = [];
+    const walk = (n: Node) => {
+      if (n.nodeType === 3) { const t = n.textContent?.trim(); if (t) out.push(t); return; }
+      if (n.nodeType !== 1) return;
+      const el = n as Element;
+      if (/^(SCRIPT|STYLE|TEMPLATE|NOSCRIPT)$/.test(el.tagName)) return;
+      if (w.getComputedStyle(el).display === "none" || el.hasAttribute("hidden")) return;
+      // A field's value is visible text too (an input showing a computed result).
+      if (el.tagName === "INPUT" && /^(text|number|search|email|)$/.test((el as HTMLInputElement).type) && (el as HTMLInputElement).value) out.push((el as HTMLInputElement).value);
+      if (el.tagName === "OUTPUT" && !el.textContent) out.push((el as HTMLOutputElement).value);
+      el.childNodes.forEach(walk);
+    };
+    walk(d.body);
+    const charts = (w as unknown as { __charts: Array<{ pieces: string[] }> }).__charts.flatMap((c) => c.pieces);
+    return [...out, ...(w as unknown as { __drawn: string[] }).__drawn, ...charts];
+  };
+
+  const pressable = "button, [role=button], [role=tab], [role=radio], [role=option], [role=switch], [onclick], a, label, summary, th, tr, li, input[type=checkbox], input[type=radio], input[type=submit], input[type=button], [tabindex]";
+
+  return {
+    errors,
+    text: visible,
+    async type(nth, value) {
+      const fields = [...d.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input:not([type]), input[type=text], input[type=search], input[type=email], input[type=number], textarea")]
+        .filter((f) => w.getComputedStyle(f).display !== "none");
+      const f = fields[nth];
+      if (!f) return false;
+      f.focus();
+      f.value = value;
+      for (const ev of ["input", "keyup", "change"]) f.dispatchEvent(new w.Event(ev, { bubbles: true }));
+      await pause();
+      return true;
+    },
+    async press(label) {
+      // Text with a space between elements, so a row reads "A3 Initech", not "A3Initech".
+      const spaced = (el: Element): string => [...el.childNodes].map((n) => (n.nodeType === 3 ? n.textContent ?? "" : n.nodeType === 1 ? spaced(n as Element) : "")).join(" ");
+      const labels = (el: Element) => [spaced(el), el.getAttribute("aria-label") ?? "", el.tagName === "INPUT" ? (el as HTMLInputElement).value : "", el.getAttribute("title") ?? "", el.id ? d.querySelector(`label[for="${el.id}"]`)?.textContent ?? "" : ""]
+        .map((t) => t.replace(/\s+/g, " ").trim()).filter(Boolean);
+      const candidates = [...d.querySelectorAll(pressable)]
+        .filter((el) => !(el as HTMLButtonElement).disabled && labels(el).some((l) => label.test(l)))
+        .sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0));
+      const el = candidates[0] as HTMLElement | undefined;
+      if (!el) return false;
+      el.click();
+      await pause();
+      return true;
+    },
+    injected: () => d.querySelector(INJECTED) !== null,
+    destroy: () => w.close(),
+  };
+}
+
+/** Let load handlers, timers of 0 and animation frames run. */
+async function settle(w: import("jsdom").DOMWindow): Promise<void> {
+  if (w.document.readyState !== "complete") await new Promise<void>((r) => w.addEventListener("load", () => r(), { once: true }));
+  await pause();
+}
+
+/** Long enough for a timer of 0 and an animation frame (about 16 ms with pretendToBeVisual). */
+const pause = () => new Promise((r) => setTimeout(r, 40));
