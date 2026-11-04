@@ -20,6 +20,12 @@ export const calls = (fn: string): Check => ({
   test: (spec) => new RegExp(`\\b${fn}\\(`).test(spec),
 });
 
+/** Some text on screen matches, like a computed figure the request can be checked against. */
+export const shows = (pattern: RegExp, what: string): Check => ({
+  label: `shows ${what}`,
+  test: (_spec, ui) => ui.text().some((t) => pattern.test(t)),
+});
+
 /** The spec uses an action, like remove: or add:. */
 export const acts = (op: string): Check => ({
   label: `has a ${op}: action`,

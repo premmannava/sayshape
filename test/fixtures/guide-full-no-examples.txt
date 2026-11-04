@@ -16,7 +16,7 @@ EXPRESSIONS
 - {…} reads state: {count}, {price*qty}, {done ? 'Yes' : 'No'}, {round(total, 2)}
 - Text can mix words and expressions: "Total: ${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! and a ? b : c
-- Functions: min, max, len, count, filter, find, search, sort, first, last, take, sum, avg, join, includes, round, floor, ceil, abs, fixed, money, number, compact, plural, lower, upper, trim
+- Functions: min, max, len, count, filter, find, search, sort, first, last, take, sum, avg, join, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim
 - Words inside {…} are state names. Quote text: {done ? 'Packed' : 'To pack'}, tone={late ? 'bad' : 'good'}
 
 ACTIONS (on=…)

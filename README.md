@@ -84,7 +84,7 @@ npm run dev        # opens the playground
 | `npm run test:visual` | Runs the visual regression tests (Playwright) |
 | `npm run test:visual:docker` | Same, in the Linux image the baselines come from; add `VISUAL_ARGS=--update-snapshots` to update them |
 | `npm run bench` | Benchmarks parse, layout and paint on 1,000- and 5,000-element specs |
-| `npm run eval` | Scores a real model on 41 requests ([Measure it](#measure-it)) |
+| `npm run eval` | Scores a real model on 42 requests ([Measure it](#measure-it)) |
 | `npm run guide:size` | Measures the model guide by section, per mode and profile |
 | `npm run typecheck` | Type-checks everything |
 | `npm run build` | Builds the library into `dist/` |
@@ -183,7 +183,8 @@ stat label="Each" value={round(price / 3, 2)}
 
 - Operators: `+ - * / %`, `== != < <= > >=`, `&& || !`, and `a ? b : c`
 - Text joins with `+`: `{'$' + price}` (use single quotes inside a quoted prop)
-- Functions: `min`, `max`, `round(n, digits)`, `floor`, `ceil`, `abs`, `fixed(n, digits)`, and the list and formatting functions in [Lists](#lists)
+- Functions: `min`, `max`, `round(n, digits)`, `floor`, `ceil`, `abs`, `pow(base, power)`, `fixed(n, digits)`, and the list and formatting functions in [Lists](#lists)
+- `pow` covers compound growth and loan payments: `{round(amount * r * pow(1 + r, n) / (pow(1 + r, n) - 1), 2)}`. A result too large to show, or with no real answer like `pow(-8, 0.5)`, shows as `—`
 - Fields and items: `{order.city}`, `{cart[0].price}`, `{todos.length}`
 - Words inside `{…}` are state names, so quote text: `{done ? 'Packed' : 'To pack'}`
 - There is no assignment, no calling methods and no global access, and `__proto__`, `constructor` and `prototype` can't be read. Anything that can't be read shows as `—` rather than guessing, and the parser warns about names nothing defines.
@@ -1439,13 +1440,13 @@ The playground uses the compact guide with equipment-order and numeric-calculato
 ### Measure it
 
 ```bash
-npm run eval                        # all 41 requests, with the model from .env.local
+npm run eval                        # all 42 requests, with the model from .env.local
 npm run eval -- --model qwen3-14b   # another model on the same server
 npm run eval -- --only data,hard    # some categories or request ids
 npm run eval -- --no-repair         # first tries only
 ```
 
-`eval/cases.ts` holds 41 requests: forms (a login and a sign-up among them), comparisons, dashboards, shopping, multi-screen flows, content, lists of data (a to-do list, a cart, a kanban board, orders with their lines, a search that filters as you type), harder multi-part requests, and traps like "a big red button" (SayShape has no colors).
+`eval/cases.ts` holds 42 requests: forms (a login and a sign-up among them), comparisons, dashboards, shopping, multi-screen flows, content, lists of data (a to-do list, a cart, a kanban board, orders with their lines, a search that filters as you type), harder multi-part requests, and traps like "a big red button" (SayShape has no colors).
 
 Some requests also have **behavior checks** (`eval/checks.ts`): the final spec is rendered with the real engine and used. Ticking a box must change the "X of Y done" count, changing a quantity must change the total, Remove must remove an item, typing in a search must filter the list. A spec can be valid and still not work, and these catch that.
 
