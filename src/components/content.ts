@@ -488,7 +488,8 @@ progress value={done} max=5 label="{done} of 5 steps"`,
       y += 20;
     }
     const max = p.num("max", 100) || 1;
-    const f = Math.max(0, Math.min(1, p.num("value", 0) / max));
+    const target = Math.max(0, Math.min(1, p.num("value", 0) / max));
+    const f = ctx.tween(box.node, "progress:fill", target, 480);
     ctx.roundRect(box.x, y, box.w, PROGRESS_H, PROGRESS_H / 2);
     fillTint(g, ctx.theme.colors.ink, 0.1);
     if (f > 0) {
