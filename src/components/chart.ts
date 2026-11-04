@@ -137,6 +137,84 @@ export interface PieSlice {
   other?: boolean;
 }
 
+/**
+ * Interpolate a slice's weight rather than its start/end independently.
+ * Normalize the visible weights before calculating boundaries: the ring
+ * remains closed and contiguous during rapid updates and structural changes.
+ * Targets, share labels and hit-test data remain authoritative in layout.
+ */
+export function morphPieSlices(
+  slices: readonly PieSlice[],
+  tween: (key: string, target: number) => number,
+): PieSlice[] {
+  if (!slices.length) return [];
+  const weights = slices.map((slice, i) => {
+    const value = tween(`pie:share:${i}:${slice.label}`, slice.share);
+    return Number.isFinite(value) ? Math.max(0, value) : slice.share;
+  });
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (!(sum > 0)) return slices.map((s) => ({ ...s }));
+  let angle = 0;
+  return slices.map((slice, i) => {
+    const start = angle;
+    angle = i === slices.length - 1 ? Math.PI * 2 : angle + (weights[i]! / sum) * Math.PI * 2;
+    return { ...slice, start, end: angle };
+  });
+}
+
+export interface LineControl {
+  cx1: number; cy1: number; cx2: number; cy2: number; x: number; y: number;
+}
+
+/**
+ * Shape-preserving cubic curve controls. Adjacent secant slopes use a
+ * weighted harmonic mean; local peaks and valleys get a zero tangent.
+ * The curve passes through every real data point without inventing a
+ * higher peak or lower trough between samples.
+ */
+export function smoothLineControls(points: readonly { x: number; y: number }[]): LineControl[] {
+  if (points.length < 2) return [];
+  const gaps: number[] = [];
+  const secants: number[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i + 1]!.x - points[i]!.x;
+    gaps.push(dx);
+    secants.push(dx > 0 ? (points[i + 1]!.y - points[i]!.y) / dx : 0);
+  }
+  const tangent = points.map((_p, i) => {
+    if (i === 0) return secants[0]!;
+    if (i === points.length - 1) return secants[secants.length - 1]!;
+    const before = secants[i - 1]!, after = secants[i]!;
+    if (before * after <= 0 || gaps[i - 1]! <= 0 || gaps[i]! <= 0) return 0;
+    const w1 = 2 * gaps[i]! + gaps[i - 1]!;
+    const w2 = gaps[i]! + 2 * gaps[i - 1]!;
+    return (w1 + w2) / (w1 / before + w2 / after);
+  });
+  return points.slice(1).map((point, i) => {
+    const from = points[i]!, dx = gaps[i]!;
+    if (!(dx > 0)) {
+      return { cx1: from.x, cy1: from.y, cx2: point.x, cy2: point.y, x: point.x, y: point.y };
+    }
+    return {
+      cx1: from.x + dx / 3, cy1: from.y + tangent[i]! * dx / 3,
+      cx2: point.x - dx / 3, cy2: point.y - tangent[i + 1]! * dx / 3,
+      x: point.x, y: point.y,
+    };
+  });
+}
+
+function traceSmoothLine(
+  g: CanvasRenderingContext2D,
+  run: readonly { x: number; y: number }[],
+  ox: number, oy: number,
+): void {
+  if (!run.length) return;
+  g.moveTo(ox + run[0]!.x, oy + run[0]!.y);
+  for (const s of smoothLineControls(run)) {
+    g.bezierCurveTo(ox + s.cx1, oy + s.cy1, ox + s.cx2, oy + s.cy2, ox + s.x, oy + s.y);
+  }
+}
+
 /** Everything paint needs, relative to the chart's box. */
 export type ChartGeometry = {
   kind: Kind;
@@ -1137,11 +1215,20 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const base = g.globalAlpha;
 
     if (d.pie) {
-      paintRound(ctx, d, ox, oy, slices, reveal);
+      // Only paint geometry is interpolated. The model's data and legend
+      // still reflect the latest values; hover resolves against visible arcs.
+      const shown = {
+        ...d,
+        pie: {
+          ...d.pie,
+          slices: morphPieSlices(d.pie.slices, (key, target) => ctx.tween(box.node, key, target, 520)),
+        },
+      };
+      paintRound(box, ctx, shown, ox, oy, slices, reveal);
       g.globalAlpha = base * fade;
       paintLegend(ctx, d, ox, oy, (k) => slices[k % slices.length]!);
       g.globalAlpha = base;
-      if (reveal >= 1) paintChartHover(box, ctx, d);
+      if (reveal >= 1) paintChartHover(box, ctx, shown);
       return;
     }
 
@@ -1219,30 +1306,44 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
         if (pt) drawnPoints.set(pt, { x: pt.x, y: ctx.tween(box.node, `line:${i}:${k}`, pt.y, 440) });
       }));
       const drawnSeries = d.seriesSegments.map((runs) => runs.map((run) => run.map((pt) => drawnPoints.get(pt) ?? pt)));
-      // One line gets a soft wash under it down to the axis, which gives it weight; with several
-      // the washes would muddy each other, so they stay plain lines.
-      if (drawnSeries.length === 1) {
-        const floor = oy + (d.zeroY ?? d.plot.y + d.plot.h);
-        const color = colorOf(0);
-        for (const run of drawnSeries[0]!) {
-          if (run.length < 2) continue;
-          g.beginPath();
-          run.forEach((pt, i) => (i ? g.lineTo(ox + pt.x, oy + pt.y) : g.moveTo(ox + pt.x, oy + pt.y)));
-          g.lineTo(ox + run[run.length - 1]!.x, floor);
-          g.lineTo(ox + run[0]!.x, floor);
-          g.closePath();
-          fillTint(g, color, 0.08);
-        }
+      // Restrained vertical gradient fills use only existing theme colors.
+      // Limit overlapping washes to two series so larger comparisons stay clear.
+      if (drawnSeries.length <= 2) {
+        const floor = oy + d.plot.y + d.plot.h;
+        drawnSeries.forEach((runs, k) => {
+          const gradient = g.createLinearGradient(0, oy + d.plot.y, 0, floor);
+          gradient.addColorStop(0, colorOf(k));
+          gradient.addColorStop(1, c.raised);
+          for (const run of runs) {
+            if (run.length < 2) continue;
+            g.beginPath();
+            traceSmoothLine(g, run, ox, oy);
+            g.lineTo(ox + run[run.length - 1]!.x, floor);
+            g.lineTo(ox + run[0]!.x, floor);
+            g.closePath();
+            g.save();
+            g.fillStyle = gradient;
+            g.globalAlpha *= drawnSeries.length === 1 ? 0.17 : 0.085;
+            g.fill();
+            g.restore();
+          }
+        });
       }
-      g.lineWidth = 2;
       g.lineJoin = "round";
       g.lineCap = "round";
       drawnSeries.forEach((runs, k) => {
         for (const run of runs) {
           if (run.length < 2) continue;
           g.beginPath();
-          run.forEach((pt, i) => (i ? g.lineTo(ox + pt.x, oy + pt.y) : g.moveTo(ox + pt.x, oy + pt.y)));
+          traceSmoothLine(g, run, ox, oy);
           g.strokeStyle = colorOf(k);
+          // A hair of colored depth below a crisp core, not a permanent glow.
+          g.save();
+          g.lineWidth = 5;
+          g.globalAlpha *= 0.11;
+          g.stroke();
+          g.restore();
+          g.lineWidth = 2.25;
           g.stroke();
         }
       });
@@ -1301,7 +1402,7 @@ function barPath(g: CanvasRenderingContext2D, x: number, y: number, w: number, h
   g.closePath();
 }
 
-function paintRound(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, palette: readonly string[], reveal = 1): void {
+function paintRound(box: Box, ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, palette: readonly string[], reveal = 1): void {
   const { g, theme } = ctx;
   const c = theme.colors;
   const pie = d.pie!;
@@ -1314,6 +1415,7 @@ function paintRound(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, pal
   for (const s of pie.slices) {
     if (s.start >= sweep) break;
     const end = Math.min(s.end, sweep);
+    if (end - s.start <= 1e-6) continue;
     g.beginPath();
     if (pie.inner) {
       g.arc(cx, cy, pie.r, at(s.start), at(end));
@@ -1333,6 +1435,7 @@ function paintRound(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, pal
     g.strokeStyle = c.raised;
     for (const s of pie.slices) {
       if (s.start >= sweep) break;
+      if (s.end - s.start <= 1e-6) continue;
       const a = at(s.start);
       g.beginPath();
       g.moveTo(cx + Math.cos(a) * pie.inner, cy + Math.sin(a) * pie.inner);
@@ -1349,7 +1452,10 @@ function paintRound(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, pal
     g.textBaseline = "middle";
     g.font = m.font;
     g.fillStyle = c.ink;
-    g.fillText(m.text, cx, cy - shift);
+    const total = ctx.tween(box.node, "pie:center:total", pie.total, 520);
+    const format = ctx.props(box.node).oneOf("format", FORMATS, "number");
+    const moving = total === pie.total ? m.text : valueText(total, format);
+    g.fillText(g.measureText(moving).width <= pie.inner * 1.7 ? moving : m.text, cx, cy - shift);
     if (m.caption) {
       g.font = m.captionFont;
       g.fillStyle = c.muted;
@@ -1443,8 +1549,17 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
       g.globalAlpha = 1;
       s.points?.forEach((pt, k) => {
         if (!pt) return;
+        const markerY = oy + ctx.tween(box.node, `line:${hover.index}:${k}`, pt.y, 440);
+        const color = d.series.length > 1 ? palette[k % palette.length]! : c.accent;
         g.beginPath();
-        g.arc(ox + pt.x, oy + ctx.tween(box.node, `line:${hover.index}:${k}`, pt.y, 440), 5, 0, Math.PI * 2);
+        g.arc(ox + pt.x, markerY, 10, 0, Math.PI * 2);
+        g.fillStyle = color;
+        const markerAlpha = g.globalAlpha;
+        g.globalAlpha = markerAlpha * 0.16;
+        g.fill();
+        g.globalAlpha = markerAlpha;
+        g.beginPath();
+        g.arc(ox + pt.x, markerY, 5.25, 0, Math.PI * 2);
         g.fillStyle = c.raised;
         g.fill();
         g.lineWidth = 2.5;
