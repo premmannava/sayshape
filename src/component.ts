@@ -98,6 +98,11 @@ export interface PaintContext {
   appear(node: SayShapeNode): number;
   /** Ask for another frame (for animation). */
   requestFrame(): void;
+  /**
+   * Interpolate a scalar as its target changes, on the shared render clock.
+   * On first paint or with reduced motion it returns the target immediately.
+   */
+  tween(node: SayShapeNode, key: string, target: number, duration?: number): number;
   /** Whether this element reads data that's still loading; paintLoading is drawing it. */
   isLoading(node: SayShapeNode): boolean;
   /**
