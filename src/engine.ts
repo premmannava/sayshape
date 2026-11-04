@@ -18,6 +18,7 @@ import { isList, makeList } from "./data";
 import { getIn, placeOf, setIn } from "./paths";
 import { createLayoutContext, isVisible } from "./layout";
 import { Loading, type LoadingView } from "./loading";
+import { MotionValues } from "./motion";
 import { easeOut, paintGenericGhost } from "./ghost";
 import { placePopup, POPUP_MARGIN, type PopupState, type Viewport } from "./popup";
 import { localToday, parseDate } from "./dates";
@@ -118,6 +119,7 @@ export class SayShape {
   private rootBox: Box | null = null;
   private hits: HitRegion[] = [];
   private seen = new Map<string, number>();
+  private transitions = new MotionValues();
   private loading: Loading;
   /** Screens visited before the current one, for back. */
   private history: string[] = [];
@@ -440,6 +442,8 @@ export class SayShape {
         return a;
       },
       requestFrame: () => this.invalidate("paint"),
+      tween: (node, key, target, duration = 220) =>
+        this.transitions.value(node, key, target, t, duration, animate, () => this.invalidate("paint")),
       isLoading: (n) => lv.isLoading(n, scopeOf(n, scope)),
       reveal: (n) => {
         if (!animate) return 1;

@@ -82,7 +82,9 @@ text "Showing the {lower(view)}" tone=muted`,
       const part = partBox(box, box.x + cell.x, box.y + INSET, cell.w, H - INSET * 2);
       if (on) {
         // The chosen option is a small raised tile: lighter than the track in both themes.
-        ctx.roundRect(part.x, part.y, part.w, part.h, Math.max(2, theme.radius.md - INSET));
+        const tileX = ctx.tween(box.node, "segmented:x", part.x, 250);
+        const tileW = ctx.tween(box.node, "segmented:w", part.w, 250);
+        ctx.roundRect(tileX, part.y, tileW, part.h, Math.max(2, theme.radius.md - INSET));
         g.save();
         g.shadowColor = c.shadow;
         g.shadowBlur = 2;

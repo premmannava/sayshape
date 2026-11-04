@@ -45,30 +45,43 @@ button "Back" variant=secondary on=dec:step`,
     const disabled = p.cond("disabled");
     const hot = !disabled && ctx.isHovered(box.node);
     const down = !disabled && ctx.isPressed(box.node);
+    const hoverProgress = ctx.tween(box.node, "button:hover", hot ? 1 : 0, 180);
+    const pressProgress = ctx.tween(box.node, "button:press", down ? 1 : 0, 110);
     const color = variant === "danger" ? c.bad : c.accent;
     const secondary = variant === "secondary";
     if (disabled) g.globalAlpha *= 0.45;
+    // Micro-scale the painted button only, never its layout or hit region.
+    g.save();
+    const scale = 1 - pressProgress * 0.018;
+    g.translate(box.x + box.w / 2, box.y + box.h / 2);
+    g.scale(scale, scale);
+    g.translate(-box.x - box.w / 2, -box.y - box.h / 2);
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
     // A close, crisp shadow lifts the button a hair off the surface; it goes while held down.
     g.save();
-    if (!down && !disabled) { g.shadowColor = c.shadow; g.shadowBlur = 2; g.shadowOffsetY = 1; }
+    if (!disabled) {
+      g.shadowColor = c.shadow;
+      g.shadowBlur = (2 + 4 * hoverProgress) * (1 - pressProgress);
+      g.shadowOffsetY = (1 + hoverProgress) * (1 - pressProgress);
+    }
     g.fillStyle = secondary ? c.raised : color;
     g.fill();
     g.restore();
     // Hover and press move toward the ink: a filled button deepens on a light theme and
     // brightens on a dark one, so it always gains contrast instead of washing out.
     if (secondary) {
-      if (hot) fillTint(g, c.ink, down ? 0.08 : 0.04);
+      if (hoverProgress || pressProgress) fillTint(g, c.ink, 0.04 * hoverProgress + 0.04 * pressProgress);
       g.strokeStyle = c.line;
       g.lineWidth = 1;
       g.stroke();
-      if (hot) { g.save(); g.globalAlpha *= 0.22; g.strokeStyle = c.ink; g.stroke(); g.restore(); }
-    } else if (hot) fillTint(g, c.ink, down ? 0.2 : 0.12);
+      if (hoverProgress) { g.save(); g.globalAlpha *= 0.22 * hoverProgress; g.strokeStyle = c.ink; g.stroke(); g.restore(); }
+    } else if (hoverProgress || pressProgress) fillTint(g, c.ink, 0.12 * hoverProgress + 0.08 * pressProgress);
     g.font = ctx.font(600, 14);
     g.textAlign = "center";
     g.textBaseline = "middle";
     g.fillStyle = secondary ? c.ink : c.onAccent;
     g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
+    g.restore();
     if (!disabled) ctx.addHit(box);
   },
 };
@@ -154,6 +167,7 @@ switch "Email me order updates" bind=updates`,
     const { g, theme } = ctx;
     const c = theme.colors;
     const on = !!p.bound();
+    const position = ctx.tween(box.node, "switch:position", on ? 1 : 0, 210);
     // The toggle sits beside the first line of the label, however many lines it wraps to.
     const tw = 36, th = 20, tx = box.x + box.w - tw, ty = box.y + (28 - th) / 2;
     g.font = ctx.font(400, theme.text.body);
@@ -163,12 +177,19 @@ switch "Email me order updates" bind=updates`,
     const l = box.data as { lines: string[]; lh: number };
     l.lines.forEach((line, i) => g.fillText(line, box.x, box.y + 15 + i * l.lh));
     ctx.roundRect(tx, ty, tw, th, th / 2);
-    // Off is a quiet ink tint, so it reads on any surface; on is the accent.
-    if (on) { g.fillStyle = c.accent; g.fill(); } else fillTint(g, c.ink, 0.16);
-    if (ctx.isHovered(box.node)) fillTint(g, c.ink, 0.08);
+    // The track transitions with the knob instead of flipping abruptly.
+    fillTint(g, c.ink, 0.16);
+    if (position > 0) {
+      g.save();
+      g.globalAlpha *= position;
+      g.fillStyle = c.accent;
+      g.fill();
+      g.restore();
+    }
+    if (ctx.isHovered(box.node)) fillTint(g, c.ink, 0.06);
     // The knob is the lightest color in the theme, with a hairline shadow.
     g.beginPath();
-    g.arc(on ? tx + tw - th / 2 : tx + th / 2, ty + th / 2, th / 2 - 2.5, 0, Math.PI * 2);
+    g.arc(tx + th / 2 + (tw - th) * position, ty + th / 2, th / 2 - 2.5, 0, Math.PI * 2);
     g.save();
     g.shadowColor = c.shadow;
     g.shadowBlur = 2;
