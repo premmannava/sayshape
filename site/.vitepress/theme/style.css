@@ -1,97 +1,180 @@
 /*
- * SayShape site theme. One accent, SayShape's own teal (the engine's default
- * theme.colors.accent), on cool neutral surfaces. Display type is
- * Bricolage Grotesque; body text is Instrument Sans, the face the engine
- * draws with, so the page and the canvas read as one product.
+ * Direction B, "bright editorial": a paper ground, ink type, SayShape's teal
+ * and a highlighter yellow used sparingly (the line being written, a key
+ * phrase). Dark mode is its own palette, not an inversion: a green-tinted ink
+ * ground, a lifted teal and a softer gold highlighter.
  */
-
 :root {
   --vp-font-family-base: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --vp-font-family-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   --loom-display: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif;
 
-  --vp-c-bg: #ffffff;
-  --vp-c-bg-alt: #f3f6f5;
-  --vp-c-bg-soft: #f3f6f5;
+  --vp-c-bg: #f4f5f1;
+  --vp-c-bg-alt: #eceee8;
+  --vp-c-bg-soft: #eceee8;
   --vp-c-bg-elv: #ffffff;
-  --vp-c-text-1: #15202b;
-  --vp-c-text-2: #4d5965;
-  --vp-c-text-3: #66717d;
-  --vp-c-divider: #dfe5e3;
-  --vp-c-border: #cdd5d2;
-  --vp-c-gutter: #e7ecea;
+  --vp-c-text-1: #0f1a17;
+  --vp-c-text-2: #3a4642;
+  --vp-c-text-3: #56625e;
+  --vp-c-divider: #d5dad3;
+  --vp-c-border: #c3cac2;
+  --vp-c-gutter: #e4e7e1;
 
-  --vp-c-brand-1: #0e7c76;
-  --vp-c-brand-2: #0a6560;
-  --vp-c-brand-3: #0e7c76;
-  --vp-c-brand-soft: rgba(14, 124, 118, 0.12);
+  --vp-c-brand-1: #0b6b5a;
+  --vp-c-brand-2: #08584a;
+  --vp-c-brand-3: #0b6b5a;
+  --vp-c-brand-soft: rgba(11, 107, 90, 0.12);
   /* Code blocks sit on white with a border: the highlighting theme's colors need it for 4.5:1. */
   --vp-code-block-bg: #ffffff;
-  /* Inline code sits on a tinted background, so it needs a darker teal than links. */
-  --vp-code-color: #09564f;
+  --vp-code-color: #08584a;
+  --vp-code-bg: rgba(11, 107, 90, 0.09);
 
-  --vp-button-brand-bg: #0e7c76;
-  --vp-button-brand-hover-bg: #0a6560;
-  --vp-button-brand-active-bg: #08524e;
+  --vp-button-brand-bg: #0b6b5a;
+  --vp-button-brand-hover-bg: #08584a;
+  --vp-button-brand-active-bg: #064538;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-text: #ffffff;
+  --vp-button-brand-active-text: #ffffff;
 
   --vp-home-hero-name-color: var(--vp-c-text-1);
   --vp-nav-logo-height: 26px;
-  --vp-layout-max-width: 1320px;
+  --vp-layout-max-width: 1360px;
+  --vp-nav-bg-color: var(--vp-c-bg);
+  --vp-sidebar-bg-color: var(--vp-c-bg);
 
-  --loom-stage: #edf1ef;
-  --loom-stage-dot: #cbd4d0;
-  --loom-panel: #f7f9f8;
-  --loom-code-bg: #fbfcfb;
-  --loom-ok: #2e7d32;
+  /* Editorial accents */
+  --ss-rule: var(--vp-c-text-1);
+  --ss-mark: #ffe45c;
+  --ss-mark-soft: #fff0a3;
+  --ss-card: #ffffff;
+  --ss-shadow: #0f1a17;
+  --ss-on-ink: #f4f5f1;
+
+  --loom-stage: #e9ece5;
+  --loom-stage-dot: #cdd3ca;
+  --loom-panel: #ffffff;
+  --loom-code-bg: #ffffff;
+  --loom-ok: #1c7a45;
   --loom-warn: #9a4a07;
   --loom-bad: #b42318;
-  --loom-hl: rgba(14, 124, 118, 0.1);
-  --loom-shadow: 0 1px 0 rgba(21, 32, 43, 0.04), 0 12px 32px -18px rgba(21, 32, 43, 0.25);
+  --loom-hl: var(--ss-mark-soft);
+  --loom-shadow: 0 1px 0 rgba(15, 26, 23, 0.05), 0 14px 32px -20px rgba(15, 26, 23, 0.35);
 
   /* Spec highlighting (spec view and playground editor) */
-  --tk-tag: #0e7c76;
-  --tk-kw: #15202b;
-  --tk-prop: #5b6577;
-  --tk-str: #7a4a00;
+  --tk-tag: #0b6b5a;
+  --tk-kw: #0f1a17;
+  --tk-prop: #4e5a56;
+  --tk-str: #9a4b12;
   --tk-expr: #1d4ed8;
-  --tk-com: #6b7480;
+  --tk-com: #5f6a66;
 }
 
 .dark {
-  --vp-c-bg: #10151b;
-  --vp-c-bg-alt: #0b0f14;
-  --vp-c-bg-soft: #161c23;
-  --vp-c-bg-elv: #161c23;
-  --vp-c-text-1: #e6eaf0;
-  --vp-c-text-2: #a7b1be;
-  --vp-c-text-3: #8893a1;
-  --vp-c-divider: #25303a;
-  --vp-c-border: #34404c;
-  --vp-c-gutter: #0b0f14;
+  --vp-c-bg: #0f1513;
+  --vp-c-bg-alt: #0b100e;
+  --vp-c-bg-soft: #161e1b;
+  --vp-c-bg-elv: #161e1b;
+  --vp-c-text-1: #edf1ec;
+  --vp-c-text-2: #c3ccc8;
+  --vp-c-text-3: #98a49f;
+  --vp-c-divider: #26302c;
+  --vp-c-border: #34403b;
+  --vp-c-gutter: #0b100e;
 
-  --vp-c-brand-1: #3cc2b8;
-  --vp-c-brand-2: #6fd5cd;
-  --vp-c-brand-3: #0e7c76;
-  --vp-c-brand-soft: rgba(60, 194, 184, 0.14);
-  --vp-code-color: #6fd5cd;
-  --vp-code-block-bg: #0d1217;
+  --vp-c-brand-1: #4fd1b2;
+  --vp-c-brand-2: #7fe0c8;
+  --vp-c-brand-3: #4fd1b2;
+  --vp-c-brand-soft: rgba(79, 209, 178, 0.14);
+  --vp-code-color: #7fe0c8;
+  --vp-code-block-bg: #121a17;
+  --vp-code-bg: rgba(79, 209, 178, 0.1);
 
-  --loom-stage: #0b0f14;
-  --loom-stage-dot: #222b35;
-  --loom-panel: #131920;
-  --loom-code-bg: #0d1217;
-  --loom-ok: #6ccb74;
+  --vp-button-brand-bg: #4fd1b2;
+  --vp-button-brand-hover-bg: #7fe0c8;
+  --vp-button-brand-active-bg: #a3ead8;
+  --vp-button-brand-text: #072b23;
+  --vp-button-brand-hover-text: #072b23;
+  --vp-button-brand-active-text: #072b23;
+
+  --ss-mark: #c9a92a;
+  --ss-mark-soft: rgba(255, 228, 92, 0.16);
+  --ss-card: #161e1b;
+  --ss-shadow: #4fd1b2;
+  --ss-on-ink: #0f1513;
+
+  --loom-stage: #0b100e;
+  --loom-stage-dot: #1e2724;
+  --loom-panel: #131a17;
+  --loom-code-bg: #121a17;
+  --loom-ok: #5bd69a;
   --loom-warn: #f5b454;
   --loom-bad: #f87171;
-  --loom-hl: rgba(60, 194, 184, 0.12);
+  --loom-hl: var(--ss-mark-soft);
   --loom-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 16px 40px -20px rgba(0, 0, 0, 0.7);
 
-  --tk-tag: #3cc2b8;
-  --tk-kw: #e6eaf0;
-  --tk-prop: #a7b1be;
-  --tk-str: #e3b567;
+  --tk-tag: #4fd1b2;
+  --tk-kw: #edf1ec;
+  --tk-prop: #c3ccc8;
+  --tk-str: #f2b37b;
   --tk-expr: #8ab4f8;
-  --tk-com: #7d8896;
+  --tk-com: #8a9692;
+}
+
+/* ------------------------------------------------------------ shell: nav, sidebar, footer */
+
+/* The editorial rule under the nav: one solid ink line instead of a soft divider. */
+.VPNavBar .divider-line,
+.VPNavBar.has-sidebar .divider-line { background-color: var(--ss-rule) !important; height: 2px }
+.VPNavBar:not(.top) .divider-line { background-color: var(--ss-rule) }
+.VPNavBar .title { border-bottom: 0 !important }
+.VPNavBarTitle .title::after { content: "."; color: var(--vp-c-brand-1) }
+.VPNavBarMenuLink { font-size: 15px; font-weight: 500 }
+.VPNavBarMenuLink.active { color: var(--vp-c-brand-1); font-weight: 600 }
+@media (min-width: 768px) {
+  .VPNavBarSearch .DocSearch-Button { border-radius: 999px; border: 1.5px solid var(--vp-c-divider); background: var(--ss-card) }
+}
+
+/* Sidebar: mono section labels, and the current page as an ink pill. */
+.VPSidebar { border-right: 1px solid var(--vp-c-divider) }
+.VPSidebarItem.level-0 > .item > .text,
+.VPSidebarItem.level-0 > .item > .link > .text {
+  font: 500 11px/1.4 var(--vp-font-family-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-3);
+}
+.VPSidebarItem.level-1 .link { border-radius: 8px; margin-left: -10px; padding-left: 10px }
+.VPSidebarItem.level-1.is-active > .item > .link {
+  background: var(--vp-c-text-1);
+}
+.VPSidebarItem.level-1.is-active > .item > .link > .text { color: var(--ss-on-ink) !important; font-weight: 600 }
+.VPSidebarItem.level-1.is-active > .item > .indicator { display: none }
+
+/* "On this page": a ruled margin note. */
+.VPDocAsideOutline .content { border-left: 2px solid var(--ss-rule) }
+.VPDocAsideOutline .outline-title { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--vp-c-text-3) }
+
+.VPFooter { border-top: 2px solid var(--ss-rule) !important; background: var(--vp-c-bg) !important }
+.VPFooter .message { font-size: 13.5px }
+.VPFooter .message a { color: var(--vp-c-text-1); font-weight: 600; text-underline-offset: 3px }
+
+/* A yellow highlighter behind a key phrase. Use once or twice per page, never as decoration. */
+.ss-mark {
+  background-image: linear-gradient(var(--ss-mark), var(--ss-mark));
+  background-repeat: no-repeat;
+  background-position: 0 90%;
+  background-size: 100% 0.32em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+/* A small label in the mono face, for numbered steps and section eyebrows. */
+.ss-eyebrow { font: 500 12px/1.4 var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-brand-1) }
+/* A card set off by an ink outline and a hard offset shadow. Reserve it for the thing being demonstrated. */
+.ss-card {
+  background: var(--ss-card);
+  border: 2px solid var(--ss-rule);
+  border-radius: 18px;
+  box-shadow: 5px 5px 0 var(--ss-shadow);
 }
 
 /* ------------------------------------------------------------ type */
@@ -99,21 +182,39 @@
 .vp-doc h1,
 .vp-doc h2 {
   font-family: var(--loom-display);
-  letter-spacing: -0.015em;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
 }
-.vp-doc h1 { font-weight: 800; font-size: 36px; line-height: 1.12 }
-.vp-doc h2 { font-weight: 700; border-top: 0; padding-top: 8px; margin-top: 48px }
-.vp-doc h3 { font-weight: 600 }
+.vp-doc h1 { font-weight: 800; font-size: 48px; line-height: 1.02; margin-bottom: 20px }
+.vp-doc h2 {
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1.1;
+  border-top: 2px solid var(--ss-rule);
+  padding-top: 18px;
+  margin-top: 56px;
+}
+.vp-doc h3 { font-weight: 600; font-size: 19px }
 .vp-doc p, .vp-doc li { line-height: 1.7 }
-.VPNavBarTitle .title { font-family: var(--loom-display); font-weight: 800; font-size: 20px; letter-spacing: -0.02em }
+.vp-doc > div > p:first-of-type { font-size: 18px; color: var(--vp-c-text-2) }
+.VPNavBarTitle .title { font-family: var(--loom-display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em }
 .vp-doc .generated-note {
   font-size: 14px;
   color: var(--vp-c-text-2);
-  border-left: 3px solid var(--vp-c-brand-1);
+  border-left: 3px solid var(--ss-mark);
   padding: 2px 0 2px 14px;
 }
-.vp-doc table { font-size: 14px }
-.vp-doc :not(pre) > code { font-size: 0.86em }
+.vp-doc a { text-underline-offset: 3px }
+.vp-doc table { font-size: 14px; border-collapse: collapse; display: table; width: 100% }
+.vp-doc th { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3); background: transparent !important }
+.vp-doc tr { background: transparent !important; border-top: 1px solid var(--vp-c-divider) }
+.vp-doc thead tr { border-top: 2px solid var(--ss-rule) }
+.vp-doc th, .vp-doc td { border: 0 !important; padding: 10px 14px 10px 0 }
+.vp-doc :not(pre) > code { font-size: 0.86em; border-radius: 5px }
+.vp-doc div[class*="language-"] { border-radius: 12px }
+.vp-doc .custom-block { border-radius: 12px; border-width: 1.5px }
+.vp-doc .custom-block.tip { border-color: var(--vp-c-brand-1); background: var(--vp-c-brand-soft) }
+.vp-doc .custom-block.info { background: var(--ss-mark-soft); border-color: transparent }
 
 :focus-visible {
   outline: 2px solid var(--vp-c-brand-1);
@@ -126,22 +227,23 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
-  padding: 0 18px;
-  border-radius: 8px;
-  border: 1px solid var(--vp-c-brand-3);
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1.5px solid var(--vp-c-brand-3);
   font: 600 15px/1 var(--vp-font-family-base);
   text-decoration: none;
   cursor: pointer;
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
-.loom-btn.primary { background: var(--vp-button-brand-bg); color: #fff }
-.loom-btn.primary:hover { background: var(--vp-button-brand-hover-bg) }
-.loom-btn.quiet { background: transparent; color: var(--vp-c-text-1); border-color: var(--vp-c-border) }
-.loom-btn.quiet:hover { border-color: var(--vp-c-brand-1); color: var(--vp-c-brand-1) }
-.loom-btn.small { height: 32px; padding: 0 12px; font-size: 13px; border-radius: 7px }
+.loom-btn.primary { background: var(--vp-button-brand-bg); border-color: var(--vp-button-brand-bg); color: var(--vp-button-brand-text) }
+.loom-btn.primary:hover { background: var(--vp-button-brand-hover-bg); border-color: var(--vp-button-brand-hover-bg) }
+.loom-btn.quiet { background: transparent; color: var(--vp-c-text-1); border-color: var(--ss-rule) }
+.loom-btn.quiet:hover { background: var(--vp-c-text-1); color: var(--ss-on-ink) }
+.loom-btn.small { height: 34px; padding: 0 14px; font-size: 13px }
 .loom-btn[disabled] { opacity: 0.5; cursor: not-allowed }
+.loom-btn.quiet[disabled]:hover { background: transparent; color: var(--vp-c-text-1) }
 
 .loom-btn-text {
   background: none;
@@ -177,11 +279,12 @@
 /* ------------------------------------------------------------ live examples in docs */
 
 .loom-live {
-  margin: 20px 0 28px;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 12px;
+  margin: 24px 0 32px;
+  border: 2px solid var(--ss-rule);
+  border-radius: 16px;
   overflow: hidden;
-  background: var(--vp-c-bg);
+  background: var(--ss-card);
+  box-shadow: 4px 4px 0 var(--ss-shadow);
 }
 .loom-live__code div[class*="language-"] { margin: 0 !important; border-radius: 0 !important }
 .vp-doc .loom-live__code div[class*="language-"] { background: var(--vp-code-block-bg); border: 0 }
@@ -199,6 +302,7 @@
   color: var(--vp-c-text-2);
 }
 .loom-live__label { display: inline-flex; align-items: center; gap: 8px }
+.loom-live__label { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-brand-1) }
 .loom-live__label .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--vp-c-brand-1) }
 .loom-live__actions { display: inline-flex; gap: 16px }
 .loom-live .loom-stage { min-height: 96px }

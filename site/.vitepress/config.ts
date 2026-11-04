@@ -70,7 +70,7 @@ const docsSidebar: DefaultTheme.SidebarItem[] = [
       { text: "How the engine works", link: "/docs/architecture/" },
       { text: "The expression boundary", link: "/docs/architecture/security" },
       { text: "Accessibility", link: "/docs/architecture/accessibility" },
-      { text: "Limits and status", link: "/docs/architecture/limitations" },
+      { text: "Status and limits", link: "/docs/architecture/limitations" },
     ],
   },
   {
@@ -96,7 +96,7 @@ export default defineConfig({
   sitemap: { hostname: SITE_URL },
   head: [
     ["link", { rel: "icon", type: "image/svg+xml", href: `${BASE}favicon.svg` }],
-    ["meta", { name: "theme-color", content: "#0E7C76" }],
+    ["meta", { name: "theme-color", content: "#0B6B5A" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: TITLE }],
     ["meta", { property: "og:title", content: "SayShape: a UI language for AI, and an engine that brings it to life" }],
@@ -108,13 +108,13 @@ export default defineConfig({
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
   ],
   themeConfig: {
-    logo: { light: "/logo.svg", dark: "/logo-dark.svg", alt: "" },
     siteTitle: "SayShape",
     nav: [
       ...(HAS_MODEL ? [{ text: "Build with AI", link: "/chat", activeMatch: "^/chat" }] : []),
       { text: "Playground", link: "/playground", activeMatch: "^/playground" },
       { text: "Examples", link: "/examples/", activeMatch: "^/examples" },
-      { text: "Docs", link: "/docs/", activeMatch: "^/docs/" },
+      { text: "Docs", link: "/docs/", activeMatch: "^/docs/(?!architecture/limitations)" },
+      { text: "Status", link: "/docs/architecture/limitations", activeMatch: "^/docs/architecture/limitations" },
     ],
     socialLinks: [{ icon: "github", link: REPO, ariaLabel: "SayShape on GitHub" }],
     sidebar: { "/docs/": docsSidebar },
@@ -122,7 +122,7 @@ export default defineConfig({
     outline: { level: [2, 3] },
     editLink: { pattern: `${REPO}/edit/main/site/:path`, text: "Suggest a change to this page" },
     footer: {
-      message: `SayShape is an early prototype (v0.1), released under the MIT License. <a href="${REPO}">Source on GitHub</a>.`,
+      message: `SayShape v0.1 is an early prototype under the MIT License. <a href="${BASE}docs/architecture/limitations.html">Status</a> · <a href="${REPO}">GitHub</a>`,
     },
   },
   markdown: {

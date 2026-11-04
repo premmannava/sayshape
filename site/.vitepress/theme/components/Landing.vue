@@ -19,7 +19,7 @@ const concepts = [
   },
   {
     name: "Components",
-    text: "Forty built-in elements, from rows and cards to tables, charts, selects and date pickers. Each is reviewed TypeScript; a spec can only use them.",
+    text: "48 built-in elements, from rows and cards to tables, charts, selects and date pickers. Each is reviewed TypeScript; a spec can only use them.",
     code: `table items=orders key=id sort=by direction=dir\n  table-column "Total" field=total format=money`,
   },
   {
@@ -43,21 +43,6 @@ const uses = [
   { title: "Lookup tables", text: "Search as you type, filter by category, sort any column, select a row.", id: "equipment-table" },
 ];
 
-const works = [
-  "Parser with line-numbered diagnostics; a bad line is skipped, never fatal",
-  "Layout, painting, hit testing, pointer and keyboard focus, all on one canvas",
-  "State, derived values, lists, conditions, screens and actions",
-  "40 components, including tables, bar and line charts, selects, a date picker and text input",
-  "A generated model guide (full and compact) and a model client that streams, checks and repairs once",
-  "Unit, contract, streaming, fuzz and visual tests",
-];
-const notYet = [
-  "Screen reader support. Canvas content is not exposed to assistive technology yet",
-  "Scrolling regions, dialogs, menus and tooltips",
-  "Multi-line text and form validation",
-  "Tables beyond 200 rows, charts beyond one bar or line series",
-  "An npm package, and a production model server",
-];
 
 const href = (p: string) => withBase(p);
 </script>
@@ -76,7 +61,7 @@ const href = (p: string) => withBase(p);
           <a class="loom-btn quiet" :href="href('/docs/')">Read the docs</a>
           <a v-if="generationAvailable" class="loom-btn quiet" :href="href('/chat.html')">Build with AI</a>
         </div>
-        <p class="hero-status">Early prototype, v0.1. Open source under MIT. <a :href="href('/docs/architecture/limitations.html')">What works and what doesn't</a>.</p>
+        <a class="hero-status" :href="href('/docs/architecture/limitations.html')">v0.1 prototype · open source · Status</a>
       </div>
     </header>
 
@@ -136,22 +121,6 @@ const href = (p: string) => withBase(p);
       </ul>
     </section>
 
-    <section class="block status" aria-labelledby="status">
-      <h2 id="status">Current status and limitations</h2>
-      <p class="block-intro">
-        SayShape is a prototype. It isn't published to npm, and it shouldn't be used where accessibility is required until the accessibility layer exists.
-      </p>
-      <div class="status-cols">
-        <div>
-          <h3>Works today</h3>
-          <ul><li v-for="w in works" :key="w">{{ w }}</li></ul>
-        </div>
-        <div>
-          <h3>Not built yet</h3>
-          <ul><li v-for="n in notYet" :key="n">{{ n }}</li></ul>
-        </div>
-      </div>
-    </section>
 
     <section class="block closing" aria-labelledby="start">
       <h2 id="start">Start with a spec</h2>
@@ -180,8 +149,9 @@ const href = (p: string) => withBase(p);
 }
 .hero-lede { margin: 0 0 20px; font-size: 17px; line-height: 1.6; color: var(--vp-c-text-2); max-width: 54ch }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 10px }
-.hero-status { margin: 16px 0 0; font-size: 13.5px; color: var(--vp-c-text-2) }
-.hero-status a, .split-foot a, .more a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
+.hero-status { align-self: flex-start; display: inline-flex; margin-top: 18px; font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2); text-decoration: none; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; padding: 6px 12px }
+.hero-status:hover { border-color: var(--ss-rule); color: var(--vp-c-text-1) }
+.split-foot a, .more a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
 
 .block { margin-top: 96px }
 .block h2 {
@@ -246,11 +216,6 @@ const href = (p: string) => withBase(p);
 .use-title { font-weight: 700; font-size: 16px }
 .use-text { font-size: 14px; color: var(--vp-c-text-2); line-height: 1.55 }
 
-.status-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px 56px }
-.status h3 { font-size: 16px; margin: 0 0 10px }
-.status ul { margin: 0; padding-left: 18px; color: var(--vp-c-text-2); line-height: 1.6 }
-.status li { margin: 6px 0 }
-.status li::marker { color: var(--vp-c-text-3) }
 
 .closing { border-top: 1px solid var(--vp-c-divider); padding-top: 40px; display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: center; justify-content: space-between }
 .closing h2 { margin: 0 }
@@ -268,7 +233,6 @@ const href = (p: string) => withBase(p);
   .pipeline-legend .engine { grid-column: 1 }
   .concept, .concept dd { grid-template-columns: 1fr }
   .uses { grid-template-columns: 1fr }
-  .status-cols { grid-template-columns: 1fr }
   .block { margin-top: 72px }
 }
 @media (min-width: 961px) and (max-width: 1180px) {
