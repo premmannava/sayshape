@@ -157,6 +157,6 @@ npm run build
 npm run test:e2e   # the built view in Chromium, inside a sandboxed iframe driven by the MCP Apps host bridge
 ```
 
-`test:e2e` runs two browser checks. The first streams a spec into the view, checks the canvas was painted and the height reported, presses an `emit:` button with the keyboard, checks the message that comes back and switches to dark mode. The second (`scripts/e2e-data.mjs [database.db]`) starts the built server with `--data`, plays the model (describe, query, show), lets the view fetch the dataset through the host bridge, and checks the rows in the interface match the database exactly. Screenshots go to `e2e-output/`.
+`test:e2e` runs the browser canvas/host-action test, the database-to-interface test, and the **stdio MCP result import test** (`scripts/e2e-import.mjs`). The last one starts the built server with `--mcp-result`, lists the imported schema, calls `show_interface` and verifies the exact rows delivered by app-only `fetch_dataset`. Screenshots from the browser tests go to `e2e-output/`.
 
 The server bundles the engine from `../src`, so the guide, the parser and the view always match the library they were built with. The MCP packages (`@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `zod`) are dependencies of this package only. The SayShape library itself still has none.
