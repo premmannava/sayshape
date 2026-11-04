@@ -131,7 +131,7 @@ onBeforeUnmount(onClose);
 </template>
 
 <style scoped>
-.ask-trigger { display: inline-flex; align-items: center; gap: 8px; height: 36px; margin-right: 12px; padding: 0 14px 0 6px; border: 1.5px solid var(--ss-rule); border-radius: 999px; font-size: 14px; color: var(--vp-c-text-1); background: var(--ss-card) }
+.ask-trigger { display: inline-flex; align-items: center; gap: 8px; height: 36px; margin: 0 12px 0 20px; padding: 0 14px 0 6px; border: 1.5px solid var(--ss-rule); border-radius: 999px; font-size: 14px; color: var(--vp-c-text-1); background: var(--ss-card) }
 .ask-trigger:hover { box-shadow: 3px 3px 0 var(--ss-shadow) }
 .ask-trigger-k { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; padding: 4px 8px; border-radius: 999px; background: var(--vp-c-brand-1); color: var(--vp-button-brand-text) }
 .ask-trigger-t { color: var(--vp-c-text-2) }

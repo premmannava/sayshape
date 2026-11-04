@@ -348,15 +348,14 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
   <div class="pg" :class="{ 'no-editor': hideEditor }">
     <header class="pg-head">
       <div>
-        <h1>Playground</h1>
+        <p class="ss-eyebrow">Playground</p>
+        <h1>Write it. <span class="ss-mark">Watch it draw.</span></h1>
         <p v-if="generationAvailable" class="pg-note">
-          This playground runs saved or edited SayShape specs in your browser. To have {{ MODEL_LABEL }} write one from a description,
-          use <a :href="chatPage">Build with AI</a>; anything it makes can be opened here.
+          Edit any spec and the real engine redraws as you type. To have {{ MODEL_LABEL }} write one for you, use <a :href="chatPage">Build with AI</a>.
         </p>
         <p v-else class="pg-note">
-          This playground runs saved or edited SayShape specs in your browser. AI generation requires a model connection, which this
-          static site doesn't have: <a :href="docsModel">run generation locally</a>, or copy the
-          <a :href="docsGuide">model guide</a> below into a chat assistant and paste its answer here.
+          Edit any spec and the real engine redraws as you type. No model runs on this site: <a :href="docsModel">connect your own</a>, or paste the
+          <a :href="docsGuide">model guide</a> into any chat assistant and drop its answer here.
         </p>
       </div>
       <dl class="pg-metrics" aria-label="Last frame">
@@ -383,7 +382,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
       <div class="pg-group" role="group" aria-label="Reset">
         <button class="loom-btn quiet small" type="button" :disabled="!loom" title="Restore the spec as it was loaded and start its state over" @click="resetExample">Reset example</button>
         <button class="loom-btn quiet small" type="button" :disabled="!loom" title="Keep the spec as it is and start its state over" @click="resetState">Reset state</button>
-        <button class="loom-btn quiet small" type="button" :disabled="!loom || streaming" title="Play the current spec into the preview line by line, as a model's response would arrive" @click="replay">Replay as stream</button>
+        <button class="loom-btn primary small" type="button" :disabled="!loom || streaming" title="Play the current spec into the preview line by line, as a model's response would arrive" @click="replay">▶ Replay as stream</button>
       </div>
       <div class="pg-group" role="group" aria-label="Share">
         <button class="loom-btn quiet small" type="button" @click="copySpec">Copy spec</button>
@@ -408,11 +407,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
         <button class="loom-btn quiet small pg-hide" type="button" :aria-pressed="hideEditor" @click="hideEditor = !hideEditor">{{ hideEditor ? "Show editor" : "Hide editor" }}</button>
       </div>
     </div>
-    <p class="pg-help">
-      Editing re-renders as you type and keeps values you've changed where their declarations are the same.
-      <strong>Reset state</strong> starts the same spec over; <strong>Reset example</strong> also restores the original text.
-      <span class="pg-notice" role="status" aria-live="polite">{{ notice }}</span>
-    </p>
+    <p class="pg-help"><span class="pg-notice" role="status" aria-live="polite">{{ notice }}</span></p>
 
     <div class="pg-tabs" role="tablist" aria-label="Panels">
       <button role="tab" type="button" :aria-selected="tab === 'spec'" @click="tab = 'spec'">Spec</button>
@@ -528,35 +523,36 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 
 <style scoped>
 .pg { max-width: 1440px; margin: 0 auto; padding: 28px 28px 56px }
-.pg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 40px; align-items: end; margin-bottom: 18px }
-.pg-head h1 { font-family: var(--loom-display); font-weight: 800; font-size: 40px; letter-spacing: -0.03em; margin: 0 0 6px; line-height: 1.05 }
-.pg-note { margin: 0; max-width: 78ch; color: var(--vp-c-text-2); line-height: 1.6; font-size: 15px }
-.pg-note a { color: var(--vp-c-brand-1); font-weight: 600 }
-.pg-metrics { display: flex; margin: 0; border: 1px solid var(--vp-c-divider); border-radius: 10px; overflow: hidden; background: var(--loom-panel) }
-.pg-metrics div { padding: 6px 12px; border-left: 1px solid var(--vp-c-divider) }
+.pg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 40px; align-items: end; margin-bottom: 22px }
+.pg-head h1 { font-family: var(--loom-display); font-weight: 800; font-size: clamp(40px, 5.6vw, 68px); letter-spacing: -0.045em; margin: 8px 0 12px; line-height: 0.98 }
+.pg-note { margin: 0; max-width: 64ch; color: var(--vp-c-text-2); line-height: 1.55; font-size: 16px }
+.pg-note a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
+.pg-metrics { display: flex; margin: 0; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; overflow: hidden; background: var(--ss-card) }
+.pg-metrics div { padding: 6px 14px; border-left: 1px solid var(--vp-c-divider) }
 .pg-metrics div:first-child { border-left: 0 }
-.pg-metrics dt { font-size: 11.5px; color: var(--vp-c-text-2); font-weight: 600 }
+.pg-metrics dt { font: 500 10.5px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3) }
 .pg-metrics dd { margin: 0; font: 500 13px var(--vp-font-family-mono); font-variant-numeric: tabular-nums; white-space: nowrap }
 
-.pg-toolbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; padding: 12px 0; border-top: 1px solid var(--vp-c-divider) }
+.pg-toolbar { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: end; padding: 14px 0 12px; border-top: 2px solid var(--ss-rule) }
 .pg-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: end }
 .pg-right { margin-left: auto }
-.pg-field { display: grid; gap: 3px; font-size: 12px; font-weight: 600; color: var(--vp-c-text-2) }
+.pg-field { display: grid; gap: 4px; font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3) }
 .pg-field select {
-  height: 32px;
+  height: 34px;
   min-width: 120px;
-  padding: 0 28px 0 10px;
-  border: 1px solid var(--vp-c-border);
-  border-radius: 7px;
-  background: var(--vp-c-bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23778' fill='none' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center;
+  padding: 0 30px 0 14px;
+  border: 1.5px solid var(--vp-c-divider);
+  border-radius: 999px;
+  background: var(--ss-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23778' fill='none' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 12px center;
   appearance: none;
   color: var(--vp-c-text-1);
   font: 500 14px var(--vp-font-family-base);
+  letter-spacing: 0;
+  text-transform: none;
 }
-.pg-field.wide select { min-width: 220px }
-.pg-help { margin: 0 0 14px; font-size: 13.5px; color: var(--vp-c-text-2); line-height: 1.55 }
-.pg-help strong { color: var(--vp-c-text-1); font-weight: 600 }
-.pg-notice { margin-left: 8px; color: var(--vp-c-brand-1); font-weight: 600 }
+.pg-field.wide select { min-width: 240px }
+.pg-help { margin: 0 0 12px; min-height: 1.4em; font-size: 13.5px; color: var(--vp-c-text-2); line-height: 1.55 }
+.pg-notice { color: var(--vp-c-brand-1); font-weight: 600 }
 
 .pg-tabs { display: none }
 
@@ -567,9 +563,10 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .pg-preview { grid-area: preview }
 .pg-details { grid-area: details; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start }
 
-.pg-pane { border: 1px solid var(--vp-c-divider); border-radius: 12px; background: var(--vp-c-bg); overflow: hidden; display: flex; flex-direction: column; min-width: 0 }
-.pg-pane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 9px 14px; border-bottom: 1px solid var(--vp-c-divider); background: var(--loom-panel) }
-.pg-pane-head h2 { margin: 0 auto 0 0; font-size: 14px; font-weight: 700; letter-spacing: 0 }
+.pg-pane { border: 1.5px solid var(--vp-c-divider); border-radius: 16px; background: var(--ss-card); overflow: hidden; display: flex; flex-direction: column; min-width: 0 }
+.pg-pane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; border-bottom: 1px solid var(--vp-c-divider); background: transparent }
+.pg-preview { border: 2px solid var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow) }
+.pg-pane-head h2 { margin: 0 auto 0 0; font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--vp-c-brand-1) }
 .pg-edited { color: var(--vp-c-text-2); font-weight: 500 }
 .pg-diag-summary { font-size: 12.5px; color: var(--loom-ok); font-weight: 600 }
 .pg-diag-summary.bad { color: var(--loom-bad) }

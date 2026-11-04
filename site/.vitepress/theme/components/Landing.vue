@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { withBase } from "vitepress";
 import { generationAvailable } from "../loom/generate";
-import Workbench from "./Workbench.vue";
+import Hero from "./Hero.vue";
+import elements from "../../../.generated/elements.json";
 import { highlightSpec } from "../loom/highlight";
 
 const REPO = "https://github.com/premmannava/sayshape";
@@ -19,7 +20,7 @@ const concepts = [
   },
   {
     name: "Components",
-    text: "48 built-in elements, from rows and cards to tables, charts, selects and date pickers. Each is reviewed TypeScript; a spec can only use them.",
+    text: `${elements.elements.length} built-in elements, from rows and cards to tables, charts, selects and date pickers. Each is reviewed TypeScript; a spec can only use them.`,
     code: `table items=orders key=id sort=by direction=dir\n  table-column "Total" field=total format=money`,
   },
   {
@@ -49,23 +50,19 @@ const href = (p: string) => withBase(p);
 
 <template>
   <div class="landing">
-    <header class="hero">
-      <h1 class="hero-title">A UI language for&nbsp;AI. An engine that brings it to&nbsp;life.</h1>
-      <div class="hero-side">
-        <p class="hero-lede">
-          Turn compact, declarative specs into interactive interfaces, with components, state, calculations and actions powered by SayShape.
-          A model writes a few lines of text; SayShape parses them, lays them out, paints them on a canvas and runs them.
-        </p>
-        <div class="hero-cta">
-          <a class="loom-btn primary" :href="href('/playground.html')">Try the playground</a>
-          <a class="loom-btn quiet" :href="href('/docs/')">Read the docs</a>
-          <a v-if="generationAvailable" class="loom-btn quiet" :href="href('/chat.html')">Build with AI</a>
-        </div>
-        <a class="hero-status" :href="href('/docs/architecture/limitations.html')">v0.1 prototype · not yet screen-reader accessible · Status</a>
-      </div>
-    </header>
+    <Hero />
 
-    <Workbench />
+    <section class="block trust" aria-labelledby="trust">
+      <p class="ss-eyebrow">For teams with their own AI</p>
+      <h2 id="trust">Your data stays with your model.</h2>
+      <div class="trust-cols">
+        <div><strong>Your model writes it.</strong><p>The chatbot you already run, with the data access it already has, answers in SayShape instead of prose.</p></div>
+        <div><strong>The browser draws it.</strong><p>The engine runs on the page. No new service sees the data, the spec or the result.</p></div>
+        <div><strong>Nothing can run.</strong><p>A spec can't execute code or fetch anything. Expressions go through SayShape's own small evaluator.</p></div>
+      </div>
+      <a v-if="generationAvailable" class="trust-link" :href="href('/chat.html')">Try it with a model →</a>
+      <a v-else class="trust-link" :href="href('/docs/integration/model.html')">Connect your model →</a>
+    </section>
 
     <section class="block split" aria-labelledby="two-halves">
       <div class="split-head">
@@ -135,28 +132,15 @@ const href = (p: string) => withBase(p);
 </template>
 
 <style scoped>
-.landing { max-width: 1240px; margin: 0 auto; padding: 40px 32px 72px }
+.landing { max-width: 1320px; margin: 0 auto; padding: 40px 32px 72px }
 
-.hero { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 24px 56px; align-items: end; margin-bottom: 36px }
-.hero-title {
-  font-family: var(--loom-display);
-  font-weight: 800;
-  font-size: clamp(38px, 5.4vw, 68px);
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  margin: 0;
-  text-wrap: balance;
-}
-.hero-lede { margin: 0 0 20px; font-size: 17px; line-height: 1.6; color: var(--vp-c-text-2); max-width: 54ch }
-.hero-cta { display: flex; flex-wrap: wrap; gap: 10px }
-.hero-status { align-self: flex-start; display: inline-flex; margin-top: 18px; font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2); text-decoration: none; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; padding: 6px 12px }
-.hero-status:hover { border-color: var(--ss-rule); color: var(--vp-c-text-1) }
 .split-foot a, .more a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
 
-.block { margin-top: 96px }
+.block { margin-top: 88px }
+.trust.block { margin-top: 0 }
 .block h2 {
   font-family: var(--loom-display);
-  font-weight: 700;
+  font-weight: 800;
   font-size: clamp(26px, 3vw, 36px);
   letter-spacing: -0.02em;
   line-height: 1.15;
@@ -217,13 +201,13 @@ const href = (p: string) => withBase(p);
 .use-text { font-size: 14px; color: var(--vp-c-text-2); line-height: 1.55 }
 
 
-.closing { border-top: 1px solid var(--vp-c-divider); padding-top: 40px; display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: center; justify-content: space-between }
+.closing { border-top: 2px solid var(--ss-rule); padding-top: 40px; display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: center; justify-content: space-between }
 .closing h2 { margin: 0 }
 .closing-links { display: flex; flex-wrap: wrap; gap: 10px }
 
 @media (max-width: 960px) {
   .landing { padding: 28px 20px 56px }
-  .hero, .split-head { grid-template-columns: 1fr }
+  .split-head { grid-template-columns: 1fr }
   .pipeline { grid-template-columns: 1fr }
   .stage { grid-template-columns: 22px 1fr; column-gap: 14px; padding: 0 0 22px }
   .stage::before { grid-row: 1 / span 2; width: 3px; height: auto; margin: 4px 0 0 9px }
@@ -238,4 +222,11 @@ const href = (p: string) => withBase(p);
 @media (min-width: 961px) and (max-width: 1180px) {
   .uses { grid-template-columns: repeat(2, minmax(0, 1fr)) }
 }
+.trust { display: grid; gap: 14px; padding: 36px 0; border-top: 2px solid var(--ss-rule) }
+.trust h2 { margin: 0; font: 800 clamp(34px, 4.6vw, 56px)/1 var(--loom-display); letter-spacing: -0.04em }
+.trust-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 40px; padding-top: 10px }
+.trust-cols strong { font-size: 17px }
+.trust-cols p { margin: 6px 0 0; color: var(--vp-c-text-2); line-height: 1.55 }
+.trust-link { justify-self: start; font-weight: 600; color: var(--vp-c-brand-1); text-underline-offset: 3px }
+@media (max-width: 760px) { .trust-cols { grid-template-columns: minmax(0, 1fr) } }
 </style>

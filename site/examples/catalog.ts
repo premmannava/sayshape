@@ -258,9 +258,9 @@ export const examples: readonly Example[] = [tip, grocery, budget, request, conf
 
 /** The three the landing page offers beside the hero demo. */
 export const heroExamples = [
-  { example: tip, label: "Calculator", shows: "Derived values" },
-  { example: grocery, label: "Checklist", shows: "Lists and state" },
-  { example: budget, label: "Dashboard", shows: "Charts and tables" },
+  { example: tip, label: "Calculator", shows: "Derived values", prompt: "Split an $86 restaurant bill with an 18% tip" },
+  { example: grocery, label: "Checklist", shows: "Lists and state", prompt: "A grocery list I can tick off and add to" },
+  { example: budget, label: "Dashboard", shows: "Charts and tables", prompt: "Show this month's budget by category" },
 ] as const;
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);
