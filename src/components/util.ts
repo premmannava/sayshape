@@ -98,7 +98,11 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
       x += widths[j]! + gap;
     });
     packButtons(placed, widths, box.x + pad, innerW, gap, ctx);
-    if (align !== "top") {
+    // Cards form visual panels: match their bottom edges instead of centering
+    // a shorter card. Explicit top/bottom alignment still takes precedence.
+    if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
+      for (const kb of placed) kb.h = tallest;
+    } else if (align !== "top") {
       for (const kb of placed) {
         const d = tallest - kb.h;
         if (d > 0) ctx.shift(kb, 0, align === "center" ? d / 2 : d);

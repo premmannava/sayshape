@@ -1,7 +1,16 @@
 import type { ComponentDef } from "../component";
+import type { Box } from "../types";
 import { wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
 import { chevron, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, partBox, row as rowLayout, ROW_ALIGN, rowMinWidth, runOn, stack, themeFont } from "./util";
+
+/** A parent card is already the frame; let nested tables use its surface. */
+function markTablesInsideCard(box: Box): void {
+  for (const child of box.children) {
+    if (child.node.type === "table") child.data = { ...child.data, embeddedInCard: true };
+    markTablesInsideCard(child);
+  }
+}
 
 export const column: ComponentDef = {
   type: "column",
@@ -21,7 +30,7 @@ export const column: ComponentDef = {
 export const row: ComponentDef = {
   type: "row",
   category: "layout",
-  description: "Places its children side by side, splitting the width equally. On a narrow screen, children that don't fit move onto the next line.",
+  description: "Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.",
   props: {
     gap: gapProp(10),
     pad: padProp(0),
@@ -79,6 +88,7 @@ card on=emit:open_order
   layout(box, ctx) {
     const p = ctx.props(box.node);
     stack(box, ctx, p.num("pad", ctx.theme.space.lg), p.num("gap", ctx.theme.space.md));
+    markTablesInsideCard(box);
   },
   paint(box, ctx) {
     const { g, theme } = ctx;
@@ -147,7 +157,7 @@ export const spacer: ComponentDef = {
 export const grid: ComponentDef = {
   type: "grid",
   category: "layout",
-  description: "Places children in as many equal columns as fit, so the same screen works on a phone and a desktop.",
+  description: "Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.",
   props: {
     min: { type: "number", default: 200, description: "Narrowest a column may be, in pixels (default 200)." },
     gap: gapProp(14),
@@ -169,11 +179,18 @@ export const grid: ComponentDef = {
     for (let start = 0; start < kids.length; start += cols) {
       if (start) y += gap;
       let tallest = 0;
+      const placed: Box[] = [];
       kids.slice(start, start + cols).forEach((k, i) => {
         const kb = ctx.layout(k, box.x + i * (cw + gap), y, cw);
         box.children.push(kb);
+        placed.push(kb);
         tallest = Math.max(tallest, kb.h);
       });
+      // A sparkline or donut legend in one card must not leave ragged bottoms
+      // on its neighbouring panels. Children stay top-aligned within each card.
+      if (placed.length > 1 && placed.every((k) => k.node.type === "card")) {
+        for (const k of placed) k.h = tallest;
+      }
       y += tallest;
     }
     box.h = y - box.y;

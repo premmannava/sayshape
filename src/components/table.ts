@@ -102,6 +102,8 @@ export type TableGeometry = {
   /** Shown under the header when there are no rows. */
   empty?: string;
   sortable: boolean;
+  /** The surrounding card supplies the outer panel, so no second frame is needed. */
+  embeddedInCard?: boolean;
   /** Data still loading: placeholder rows of this height under the real header. */
   loading?: { rows: number; h: number };
 };
@@ -383,12 +385,14 @@ function paintTable(box: Box, ctx: PaintContext): void {
   ctx.roundRect(ox + f.x + 0.5, oy + f.y + 0.5, f.w - 1, f.h - 1, theme.radius.md);
   g.fillStyle = c.raised;
   g.fill();
-  g.strokeStyle = c.line;
-  g.lineWidth = 1;
-  g.save();
-  g.globalAlpha *= 0.72;
-  g.stroke();
-  g.restore();
+  if (!d.embeddedInCard) {
+    g.strokeStyle = c.line;
+    g.lineWidth = 1;
+    g.save();
+    g.globalAlpha *= 0.72;
+    g.stroke();
+    g.restore();
+  }
 
   if (d.message) {
     g.font = d.cellFont;
