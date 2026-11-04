@@ -480,10 +480,12 @@ function paintTable(box: Box, ctx: PaintContext): void {
     g.globalAlpha = base * shown;
     const ry = oy + row.y + (1 - shown) * 6;
     const last = r === d.rows.length - 1;
-    if (row.selected || (row.detail && ctx.isHovered(box.node, row.detail))) {
+    const hovered = row.detail ? ctx.isHovered(box.node, row.detail) : false;
+    const highlight = row.detail ? ctx.tween(box.node, "table:hover:" + String(row.detail), hovered ? 1 : 0, 170) : 0;
+    if (row.selected || highlight > 0) {
       if (last) ctx.roundRect(ox + f.x + 1, ry, f.w - 2, row.h - 1, theme.radius.md - 1);
       else { g.beginPath(); g.rect(ox + f.x + 1, ry, f.w - 2, row.h); }
-      fillTint(g, row.selected ? c.accent : c.ink, row.selected ? 0.065 : 0.025);
+      fillTint(g, row.selected ? c.accent : c.ink, row.selected ? 0.065 : 0.025 * highlight);
     }
     if (row.selected) {
       ctx.roundRect(ox + f.x + 3, ry + 7, 2, row.h - 14, 1);
