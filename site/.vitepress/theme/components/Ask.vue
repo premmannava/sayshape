@@ -4,10 +4,11 @@
  * curated answer (site/ask/answers.ts) and the answer is shown as a working
  * interface, its spec and where to read more. No model is called.
  */
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { withBase } from "vitepress";
 import { match, suggestions, type Answer } from "../../../ask/answers";
 import { highlightSpec } from "../loom/highlight";
+import elements from "../../../.generated/elements.json";
 import { createLoom, loomModules, toBase64Url, watchSiteTheme, type SayShape } from "../loom/runtime";
 
 const dialog = ref<HTMLDialogElement | null>(null);
@@ -32,9 +33,12 @@ async function open() {
   dialog.value?.showModal();
   await nextTick();
   input.value?.focus();
+  // The engine was destroyed when the dialog closed; draw the answer still showing again.
+  if (answer.value) void draw(answer.value);
 }
 function close() { dialog.value?.close(); }
 function onClose() {
+  drawing++;
   stopTheme?.(); stopTheme = null;
   loom?.destroy(); loom = null;
 }
@@ -48,15 +52,22 @@ function ask(q = question.value) {
 
 // Draw the chosen answer with the real engine. The canvas is only in the
 // page while there is an answer, so the instance is made on first use.
-watch(answer, async (a) => {
-  if (!a) return;
+// Creating it is async; `drawing` makes sure only the latest request
+// attaches an engine, so two quick picks or a close never leave two engines
+// on one canvas.
+let drawing = 0;
+async function draw(a: Answer) {
+  const mine = ++drawing;
   await nextTick();
-  if (!canvas.value) return;
+  const el = canvas.value;
+  if (!el || mine !== drawing) return;
   try {
-    if (!loom || loom.canvas !== canvas.value) {
-      loom?.destroy(); stopTheme?.();
-      loom = await createLoom(canvas.value, { today: "2026-10-21" });
-      const mods = await loomModules();
+    if (!loom || loom.canvas !== el) {
+      loom?.destroy(); loom = null;
+      stopTheme?.(); stopTheme = null;
+      const [instance, mods] = await Promise.all([createLoom(el, { today: "2026-10-21" }), loomModules()]);
+      if (mine !== drawing || !dialog.value?.open) { instance.destroy(); return; }
+      loom = instance;
       stopTheme = watchSiteTheme(loom, { light: mods.lightTheme, dark: mods.darkTheme });
     }
     loom.setSpec(a.spec, { resetState: true });
@@ -64,7 +75,9 @@ watch(answer, async (a) => {
   } catch (e) {
     failed.value = e instanceof Error ? e.message : String(e);
   }
-});
+}
+watch(answer, (a) => { if (a) void draw(a); });
+onBeforeUnmount(onClose);
 </script>
 
 <template>
@@ -91,7 +104,7 @@ watch(answer, async (a) => {
       <div v-else-if="!answer" class="ask-start" role="status">
         <p>No answer for “{{ asked }}” yet. Try different words, or one of these:</p>
         <div class="ask-chips"><button v-for="s in suggestions" :key="s" type="button" @click="ask(s)">{{ s }}</button></div>
-        <p class="ask-alt">Or browse <a :href="withBase('/docs/elements/')">all 48 elements</a>.</p>
+        <p class="ask-alt">Or browse <a :href="withBase('/docs/elements/')">all {{ elements.elements.length }} elements</a>.</p>
       </div>
 
       <section v-else class="ask-answer" aria-live="polite">

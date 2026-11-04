@@ -8,6 +8,8 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { render } from "../src/testing";
 import { coreComponents } from "../src/components";
+import { mapComponents } from "../src/components/map";
+import { COMMON_PROPS } from "../src/component";
 import { answers, match, suggestions } from "../site/ask/answers";
 
 const SITE = resolve(__dirname, "../site");
@@ -26,6 +28,12 @@ describe("ask: curated answers", () => {
         expect(ui.warnings).toEqual([]);
         ui.destroy();
       }
+    });
+
+    it(`${a.id}: the note only names props that exist`, () => {
+      // Notes are written by hand, so they must not drift from the component definitions.
+      const known = new Set([...Object.keys(COMMON_PROPS), ...[...coreComponents, ...mapComponents].flatMap((c) => Object.keys(c.props))]);
+      for (const m of a.note.matchAll(/\b([a-z][\w-]*)=/g)) expect(known.has(m[1]!), `${m[1]}= in "${a.note}"`).toBe(true);
     });
 
     it(`${a.id}: links to a page that exists`, () => {
