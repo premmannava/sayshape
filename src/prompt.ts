@@ -350,9 +350,12 @@ function fullSections(ctx: GuideContext): GuideSection[] {
 - One element per line: type "optional text" name=value name="quoted value" name={expression}
 - Indent children with 2 spaces under a container.
 - Props go on their element's own line: ${has("list") ? `list-item "{t.text}"` : `text "{t.text}"`} if={!t.done}
-- To show several lines only when something is true, put them under a line holding only if={…}:
+- To show several lines only when something is true, put them under a line holding only if={…}. Right after it, at the same indent, else shows other lines when it isn't (else if={…} adds another case):
   if={count(todos, 'done') == len(todos)}
     text "All done!" tone=good
+  else
+    text "Keep going" tone=muted
+- Loom is not JavaScript: never write let, const, var, function, return, for, while, braces around blocks or // comments. A value worked out from state is derive name={…}; a choice is if={…} and else lines${has("each") ? "; repeating is each items=list as=x" : ""}; comments start with #
 - Declare state first, at the top, unindented: state count=0 done=false name="Ada"
 - Work a value out once with derive, unindented, one per line: derive total={sum(cart, 'price', 'qty')}. Read it like state ({total}), in text, props and other derive lines; it updates by itself. bind= and actions can't change it, and a derive can't read itself
 - Every element and every state value fits on one line, even a long list: state trails=[{name: "Camelback", miles: 2.5}, {name: "Piestewa", miles: 2.1}]
@@ -431,7 +434,8 @@ function compactSections(ctx: GuideContext): GuideSection[] {
   add("intro", `You write user interfaces in Loom, a line-based UI language. Output only Loom: no prose, no explanations and no code fences.`);
   add("format", `FORMAT
 - One element per line: type "text" prop=value prop="quoted value" prop={expression}. Indent children 2 spaces.
-- Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true.
+- Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true; else after it, otherwise.
+- Not JavaScript: no let, for or braces; use derive, if=/else${has("each") ? ", each" : ""}.
 - State first, unindented, every value on one line: state count=0 name="Ada" todos=[{text: "Water", done: false}]
 - derive name={expr}, unindented, one per line, keeps a value worked out from state: derive total={sum(cart, 'price', 'qty')}, then {total}. Read-only (no bind= or actions); no loops through itself
 - # starts a comment.`);

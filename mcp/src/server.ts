@@ -103,7 +103,9 @@ function topics(withData: boolean, withMcp = false): Record<string, string> {
 export function quickStart(withData = false, withMcp = false): string {
   return [
     "QUICK START (the language is also called Loom)",
-    sectionText("compact", "format").replace(/^FORMAT\n/, ""),
+    // The guide's "not JavaScript" line is left out to keep this short: show_interface returns
+    // each code line's diagnostic, which says what to write instead.
+    sectionText("compact", "format").replace(/^FORMAT\n/, "").replace(/^- Not JavaScript:.*\n/m, ""),
     "- Text and props can show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
     "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue')`,

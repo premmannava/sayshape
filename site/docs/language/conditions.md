@@ -1,6 +1,6 @@
 ---
 title: Conditional visibility
-description: Showing and hiding SayShape elements with if=, and if blocks for several lines at once.
+description: Showing and hiding SayShape elements with if=, if blocks for several lines at once, and else.
 ---
 
 # Conditional visibility
@@ -33,6 +33,24 @@ card
     button "Start over" variant=secondary on=clear:todos
   empty "Nothing left to do" if={len(todos) == 0}
 ```
+
+## Else
+
+Right after an `if=` line (a block or an element with `if=`), at the same indent, `else` shows its lines when the condition doesn't hold. `else if={…}` adds another case:
+
+```loom live
+state view="Week"
+card
+  segmented bind=view options="Week,Month,Year"
+  if={view == 'Week'}
+    text "This week"
+  else if={view == 'Month'}
+    text "This month"
+  else
+    text "This year"
+```
+
+Like `if`, `else` needs nothing to close it, so a spec still streams line by line.
 
 ## Choosing a look with an expression
 

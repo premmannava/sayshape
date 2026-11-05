@@ -329,6 +329,46 @@ export const ON_BLOCK_MESSAGE =
   `There are no "on" blocks. Put the action on the element that runs it: button "Choose" on=emit:choose:{item.name}. ` +
   `emit: sends the choice to the assistant, which answers it. To also change the screen, chain actions: on=set:chosen:{item.name};emit:choose:{item.name}`;
 
+/**
+ * What to write instead of a line of JavaScript (or another language), by its first word.
+ * Models reach for code when a spec needs logic; each message names the Loom way, so one
+ * repair can fix it.
+ */
+const CODE_WORDS: Record<string, string> = {
+  let: "Loom has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
+  const: "Loom has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
+  var: "Loom has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
+  function: "Loom has no functions of your own. Work a value out with derive name={…}, using the built-in ones like sum(), filter() and find()",
+  def: "Loom has no functions of your own. Work a value out with derive name={…}, using the built-in ones like sum(), filter() and find()",
+  return: "Loom has no functions or return. Write the elements themselves, and work values out with derive name={…}",
+  for: "To repeat elements, write each items=list as=x and indent the elements under it",
+  foreach: "To repeat elements, write each items=list as=x and indent the elements under it",
+  while: "To repeat elements, write each items=list as=x and indent the elements under it",
+  else: "Write else on its own line with nothing after it, and indent the lines it shows under it. For another condition, write else if={…}",
+  elif: "Write else if={…} on its own line, right after the if= block it follows",
+  elseif: "Write else if={…} on its own line, right after the if= block it follows",
+  switch: "Write a line holding only if={…} for each case, or else if={…} after the first",
+  import: "Loom can't run code or load modules. Write only Loom lines: elements, state and derive",
+  export: "Loom can't run code or load modules. Write only Loom lines: elements, state and derive",
+  class: "Loom can't run code. Write only Loom lines: elements, state and derive",
+  console: "Loom can't run code. Write only Loom lines: elements, state and derive",
+  document: "Loom can't run code. Write only Loom lines: elements, state and derive",
+  window: "Loom can't run code. Write only Loom lines: elements, state and derive",
+};
+
+/** A Loom message for a line that's code or prose rather than an element, or undefined. */
+export function codeLineMessage(body: string): string | undefined {
+  if (/^(\/\/|\/\*|\*\/|--\s)/.test(body)) return "Comments start with #, like # Totals";
+  if (/^[}\])](\s*[,;)\]}]*)?(\s*else\b.*)?$/.test(body)) return "Loom has no braces around blocks: the lines under an if= or each line are indented under it instead, and nothing closes it";
+  const word = /^([A-Za-z_]\w*)/.exec(body)?.[1];
+  if (word && Object.prototype.hasOwnProperty.call(CODE_WORDS, word)) return CODE_WORDS[word];
+  // A sentence: a capitalised word, then more words, with no props or quoted text.
+  if (/^[A-Z][a-z]*\s+\w+(\s+\w+)+[\s\w,.:;'!?-]*$/.test(body) && !/[="]/.test(body)) {
+    return "Only Loom lines go in a spec. Leave explanations out, or start them with # as comments";
+  }
+  return undefined;
+}
+
 /** Why an element can't go in its container, with what does go there and, for common slips, what to do instead. */
 function cantContain(parentName: string, parentType: string, type: string, accepts: ComponentDef["children"]): string {
   let msg = `${parentName} can't contain "${type}"`;
@@ -404,6 +444,9 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   let openState: { line: number; reported: boolean } | null = null;
   // The first "on" block, which carries the explanation; later ones point back to it.
   let onBlockLine: number | null = null;
+  // The conditions of an if= line and the else if= lines after it, for an else that follows.
+  const chains = new WeakMap<SayShapeNode, string[]>();
+  let pendingChain: string[] | null = null;
   // State names whose value couldn't be read; their own line already says why.
   const skippedState = new Set<string>();
   // Names each line reads that it isn't inside the each for, checked once every each is known.
@@ -448,6 +491,14 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       return;
     }
 
+    // Code that isn't a word: closing braces, other languages' comments, if (…) {.
+    const early = /^([}\])]|\/\/|\/\*|\*\/|--\s)/.test(body) ? codeLineMessage(body) : /^if\s*\(/.test(body) ? "Write a line holding only if={…}, like if={count > 0}, and indent the lines it shows under it" : undefined;
+    if (early && !openState) {
+      diagnostics.push({ line: lineNo, severity: "error", message: `${early}. This line and anything under it were skipped` });
+      skipDeeperThan = indent;
+      return;
+    }
+
     // JSX or code where an element should be, like {items.map(…)} or <list-item>.
     if (/^[{<]/.test(body) && !openState) {
       diagnostics.push({ line: lineNo, severity: "warning", message: `Lines start with an element name. Loom has no JSX or code; to repeat elements for each item, use each items=list as=x and put the elements under it` });
@@ -455,16 +506,44 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       return;
     }
 
+    // else and else if={…}: an if block shown when none of the conditions before it held.
+    const elseLine = /^else(\s+if=(.*))?$/.exec(body);
+    let line = body;
+    if (elseLine && !openState) {
+      let p = stack.length - 1;
+      while (p > 0 && stack[p]!.indent >= indent) p--;
+      const prev = stack[p]!.children.at(-1);
+      const before = prev && prev.indent === indent ? chains.get(prev) : undefined;
+      if (!before) {
+        diagnostics.push({ line: lineNo, severity: "error", message: `else goes right after a line with if={…}, at the same indent, with the lines it shows indented under it. Nothing came before it, so it and the lines under it were skipped` });
+        skipDeeperThan = indent;
+        return;
+      }
+      const own = elseLine[2] === undefined ? undefined : wholeExpression(elseLine[2].trim()) ?? undefined;
+      if (elseLine[2] !== undefined && own === undefined) {
+        diagnostics.push({ line: lineNo, severity: "error", message: `else if needs a condition in braces, like else if={count > 3}. It and the lines under it were skipped` });
+        skipDeeperThan = indent;
+        return;
+      }
+      const cond = [...before.map((c) => `!(${c})`), ...(own === undefined ? [] : [`(${own})`])].join(" && ");
+      line = `if if={${cond}}`;
+      pendingChain = own === undefined ? null : [...before, own];
+    }
+
     // A line holding only if={…} is a condition block for the lines under it.
     // Any other prop on a line of its own was meant for an element.
-    const loneProp = /^([A-Za-z_][\w-]*)=/.exec(body);
-    let line = body;
+    const loneProp = elseLine ? null : /^([A-Za-z_][\w-]*)=/.exec(body);
     if (loneProp && !openState) {
       const block = tokenizeLine(`if ${body}`);
       if (loneProp[1] === "if" && !block.problems.length && block.text === undefined && Object.keys(block.props).join() === "if") {
         line = `if ${body}`;
       } else {
         const name = loneProp[1]!;
+        if (name === "elif" || name === "elseif") {
+          diagnostics.push({ line: lineNo, severity: "error", message: `${CODE_WORDS[name]}. This line and anything under it were skipped` });
+          skipDeeperThan = indent;
+          return;
+        }
         diagnostics.push({ line: lineNo, severity: "warning", message: `A line can't start with ${name}=, so it was ignored. Put it on the element it's for, like list-item "Milk" ${name}=…` });
         return;
       }
@@ -484,6 +563,13 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     if (tok.type === "on" && !defOf("on", registry)) {
       diagnostics.push({ line: lineNo, severity: "error", message: onBlockLine === null ? ON_BLOCK_MESSAGE : `Another "on" block, skipped; see line ${onBlockLine}` });
       onBlockLine ??= lineNo;
+      skipDeeperThan = indent;
+      return;
+    }
+    // A line of code or prose: say what to write instead, without the tokenizer's complaints about it.
+    const code = tok.type && !defOf(tok.type, registry) ? codeLineMessage(body) : undefined;
+    if (code) {
+      diagnostics.push({ line: lineNo, severity: "error", message: `${code}. This line and anything under it were skipped` });
       skipDeeperThan = indent;
       return;
     }
@@ -603,6 +689,10 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     };
     parent.children.push(node);
     last = node;
+    // An else after this node needs the conditions so far: its own if=, or the chain it continues.
+    if (elseLine) { if (pendingChain) chains.set(node, pendingChain); }
+    else if (tok.props.if !== undefined) chains.set(node, [bareExpression(tok.props.if)]);
+    pendingChain = null;
     nodeCount++;
     if (tok.type === "each") eaches.push(node);
     if (def.children) stack.push(node);
