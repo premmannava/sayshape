@@ -14,18 +14,22 @@ import "./no-eval";
 import { App, applyHostFonts, applyHostStyleVariables, type McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { SayShape } from "../../../src/engine";
 import { coreComponents } from "../../../src/components";
-import { darkTheme, lightTheme, type Theme } from "../../../src/theme";
+import type { Theme } from "../../../src/theme";
 import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
 import { eventDelivery, FIXING_SPEC, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
-import { firstFamily, hostTheme, type ReadVar } from "./host-theme";
+import { firstFamily, type ReadVar } from "./host-theme";
+import { DEFAULT_PRESET, isPresetId, THEME_CONTROL_SPEC, themeForPreset } from "./theme-selection";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
 
+const themeCanvas = document.querySelector<HTMLCanvasElement>("#theme-picker")!;
 const canvas = document.querySelector<HTMLCanvasElement>("#loom")!;
 const app = new App({ name: "SayShape", version: "0.1.0" }, {}, { autoResize: true });
 
 let loom: SayShape | null = null;
+let themePicker: SayShape | null = null;
+let activePreset = DEFAULT_PRESET;
 /** The spec text the engine has been given so far in the current stream. */
 let shown = "";
 /** Input that arrived before the engine was ready. */
@@ -115,17 +119,15 @@ function domReader(dark: boolean): ReadVar {
   };
 }
 
-/** SayShape's light or dark theme, adjusted to the host's own colors, fonts and radii when it sends them. */
+/** The selected SayShape preset in the host's mode, adjusted to its shared colors, fonts and radii. */
 function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const dark = ctx?.theme ? ctx.theme === "dark" : prefersDark();
   const root = document.documentElement;
   root.dataset.theme = dark ? "dark" : "light";
-  const base = dark ? darkTheme : lightTheme;
   const styles = ctx?.styles;
   if (styles?.css?.fonts) applyHostFonts(styles.css.fonts);
-  if (!styles?.variables) return base;
-  applyHostStyleVariables(styles.variables);
-  return hostTheme(base, domReader(dark));
+  if (styles?.variables) applyHostStyleVariables(styles.variables);
+  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined);
 }
 
 /** Canvas text doesn't trigger font loading, so load the theme's faces before drawing with them. */
@@ -150,7 +152,9 @@ async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
   // background using the resolved host-aware theme, without changing layout
   // or making the entire iframe opaque.
   canvas.style.backgroundColor = theme.colors.surface;
+  themeCanvas.style.backgroundColor = theme.colors.surface;
   loom?.setTheme(theme);
+  themePicker?.setTheme(theme);
   return theme;
 }
 
@@ -249,6 +253,8 @@ app.onhostcontextchanged = () => {
 app.onteardown = async () => {
   loom?.destroy();
   loom = null;
+  themePicker?.destroy();
+  themePicker = null;
   return {};
 };
 
@@ -281,6 +287,22 @@ async function deliver(name: string, value: Value | undefined, state: Record<str
 async function start(): Promise<void> {
   await app.connect();
   const theme = await applyTheme(app.getHostContext());
+  themePicker = new SayShape(themeCanvas, {
+    components: coreComponents,
+    theme,
+    imageHosts: [],
+    onWarning: () => {},
+  });
+  themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
+    if (name !== "theme") return;
+    if (!isPresetId(value)) {
+      themePicker?.state.set("preset", activePreset);
+      return;
+    }
+    activePreset = value;
+    void applyTheme(app.getHostContext());
+  });
+  themePicker.setSpec(THEME_CONTROL_SPEC);
   loom = new SayShape(canvas, {
     components: coreComponents,
     theme,

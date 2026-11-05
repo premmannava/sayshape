@@ -47,8 +47,15 @@ const failures = [];
 const check = (ok, what) => { console.log(`${ok ? "✓" : "✗"} ${what}`); if (!ok) failures.push(what); };
 const frameBackground = async (page) => {
   const frame = page.frames().find((f) => f !== page.mainFrame());
-  return frame.evaluate(() => getComputedStyle(document.querySelector("canvas")).backgroundColor);
+  return frame.evaluate(() => getComputedStyle(document.querySelector("#loom")).backgroundColor);
 };
+const colorPixels = (frame, selector, rgb) => frame.evaluate(({ selector, rgb }) => {
+  const c = document.querySelector(selector);
+  const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+  let count = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i] === rgb[0] && d[i + 1] === rgb[1] && d[i + 2] === rgb[2] && d[i + 3] > 0) count++;
+  return count;
+}, { selector, rgb });
 
 const browser = await chromium.launch();
 try {
@@ -89,7 +96,7 @@ try {
 
   const frame = page.frames().find((f) => f !== page.mainFrame());
   const painted = await frame.evaluate(() => {
-    const c = document.querySelector("canvas");
+    const c = document.querySelector("#loom");
     const g = c.getContext("2d");
     const d = g.getImageData(0, 0, c.width, c.height).data;
     let ink = 0;
@@ -98,8 +105,16 @@ try {
   });
   check(painted.h > 300 && painted.ink > 50, `the engine painted the canvas (${painted.w}×${painted.h}, ${painted.ink} sampled pixels)`);
 
+  // The trusted picker changes the preset without replacing the model's spec or emitting an action.
+  await frame.locator("#theme-picker").click({ position: { x: 300, y: 70 } });
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(350);
+  check(await colorPixels(frame, "#loom", [109, 40, 217]) > 0, "selecting Purple updates the chart palette");
+  check((await page.evaluate(() => window.host.messages)).length === 0, "theme selection stays local and sends nothing to the model");
+
   // Press the emit button with the keyboard: focus the canvas, Tab through the controls, Enter.
-  await frame.locator("canvas").focus();
+  await frame.locator("#loom").focus();
   let sent = [];
   for (let i = 0; i < 12 && !sent.length; i++) {
     await page.keyboard.press("Tab");
@@ -121,6 +136,7 @@ try {
   check(await frame.evaluate(() => document.documentElement.dataset.theme === "dark"), "the view follows the host's dark theme");
   const darkBacking = await frameBackground(page);
   check(darkBacking === "rgb(18, 25, 28)", `Canvas gutter updates when the host switches to dark theme (${darkBacking})`);
+  check(await colorPixels(frame, "#loom", [182, 156, 247]) > 0, "the selected Purple preset follows the host's dark palette");
 
   
   // VS Code can cap an MCP App's iframe height. A tall canvas then extends
@@ -163,10 +179,10 @@ try {
   await styled.waitForTimeout(700);
   await styled.screenshot({ path: out + "5-host-styles.png" });
   const styledFrame = styled.frames().find((f) => f !== styled.mainFrame());
-  const hostBacking = await styledFrame.evaluate(() => getComputedStyle(document.querySelector("canvas")).backgroundColor);
+  const hostBacking = await styledFrame.evaluate(() => getComputedStyle(document.querySelector("#loom")).backgroundColor);
   check(hostBacking === "rgb(48, 48, 46)", `Canvas gutter respects the host's custom surface color (${hostBacking})`);
   const cardPixel = await styledFrame.evaluate(() => {
-    const c = document.querySelector("canvas");
+    const c = document.querySelector("#loom");
     // A point inside the card, left of the title and above it.
     const d = c.getContext("2d").getImageData(Math.round(c.width * 0.1), Math.round(c.height * 0.06), 1, 1).data;
     return [d[0], d[1], d[2]];
@@ -197,9 +213,9 @@ try {
   };
   const fixing = await foldPage({ toFix: 2, repeat: false });
   await fixing.p.screenshot({ path: out + "7-fixing.png" });
-  check(fixing.folded < 120 && fixing.full > 300, `a view whose spec needs fixing folds into a short note (${fixing.full}px → ${fixing.folded}px)`);
+  check(fixing.folded < 200 && fixing.full > 300, `a view whose spec needs fixing folds into a short note (${fixing.full}px → ${fixing.folded}px)`);
   const foldedFrame = fixing.p.frames().find((f) => f !== fixing.p.mainFrame());
-  await foldedFrame.locator("canvas").focus();
+  await foldedFrame.locator("#loom").focus();
   let restored = fixing.folded;
   for (let i = 0; i < 4 && restored < 300; i++) {
     await fixing.p.keyboard.press("Tab");
@@ -211,7 +227,7 @@ try {
   check((await fixing.p.evaluate(() => window.host.messages)).length === 0, "and sends nothing to the model");
   const repeat = await foldPage({ toFix: 0, repeat: true });
   await repeat.p.screenshot({ path: out + "8-repeat.png" });
-  check(repeat.folded < 80, `a repeat of the interface above folds into one line (${repeat.folded}px)`);
+  check(repeat.folded < 180, `a repeat of the interface above folds into one line (${repeat.folded}px)`);
   const kept = await foldPage({ toFix: 0, repeat: false });
   check(kept.folded > 300, `a good interface stays as it is (${kept.folded}px)`);
 

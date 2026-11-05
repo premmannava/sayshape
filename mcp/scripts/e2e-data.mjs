@@ -83,7 +83,7 @@ try {
   await page.evaluate(() => window.host.ready);
   const frame = page.frames().find((f) => f !== page.mainFrame());
   const ink = () => frame.evaluate(() => {
-    const c = document.querySelector("canvas");
+    const c = document.querySelector("#loom");
     const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
     let n = 0;
     for (let i = 3; i < d.length; i += 4 * 97) if (d[i] > 0) n++;
@@ -104,7 +104,7 @@ try {
   const calls = await page.evaluate(() => window.host.calls);
   check(calls.some((c) => c.name === "fetch_dataset" && c.arguments.id === id), "the interface fetched the dataset itself");
 
-  await frame.locator("canvas").focus();
+  await frame.locator("#loom").focus();
   let sent = [];
   for (let i = 0; i < 30 && !sent.length; i++) {
     await page.keyboard.press("Tab");
