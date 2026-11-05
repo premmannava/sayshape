@@ -398,15 +398,17 @@ ELEMENTS
     action=<string>  Label for a button under the message.
     on=<action>  Actions to run when the button is pressed, e.g. emit:changed. Separate several with ;
 
-  map  — A world map with clickable countries. Highlight countries by name and add pin children for places.
+  map  — A world map with clickable countries and selectable pins. Highlight countries by name; plot places with optional status colors and sizes.
     highlight=<string>  Comma-separated country names to tint, e.g. "Japan,Brazil".
-    bind=<state>  State name that receives the clicked country's name.
+    bind=<state>  State name that receives the clicked country or marker label.
     children: pin
 
   pin "<text>"  — A labelled point on a map, placed by latitude and longitude.
     "<text>" (required)  The place name shown next to the pin.
     lat=<number, required>  Latitude in degrees (-90 to 90).
     lon=<number, required>  Longitude in degrees (-180 to 180).
+    tone=<ink|accent|good|warn|bad|muted>  Theme color for a marker: ink, accent, good, warn, bad or muted. Supports state expressions for data-driven status colors.
+    size=<number>  Marker radius in screen pixels, clamped to 2..18. Supports expressions for bubble-like visualizations.
     only inside: map
 
 RULES

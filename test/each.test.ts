@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
-import { mapComponents } from "../src/components/map";
+import { mapComponents, project } from "../src/components/map";
 import { MAX_EACH_ELEMENTS, MAX_EACH_ITEMS } from "../src/each";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
@@ -125,6 +125,32 @@ map
     expect(ui.diagnostics).toEqual([]);
     expect(ui.text()).toEqual(expect.arrayContaining(["Tokyo", "Nairobi"]));
   });
+  it("colors and sizes data-driven pins and selects a pin through the real pointer path", () => {
+    const ui = render(`state selected="" places=[{name: "Phoenix", lat: 33.4484, lon: -112.074, status: "Delayed", value: 12}, {name: "Nairobi", lat: -1.29, lon: 36.82, status: "Complete", value: 4}]
+map bind=selected
+  each items=places as=p
+    pin "{p.name}" lat={p.lat} lon={p.lon} tone={p.status == 'Delayed' ? 'bad' : 'good'} size={p.value}
+`, { components: [...coreComponents, ...mapComponents] });
+    expect(ui.diagnostics).toEqual([]);
+    const box = ui.find({ type: "map" }).box!;
+    const info = box.data as { scale: number; pins: Array<{ label: string; tone: string; size: number }> };
+    expect(info.pins.map((p) => [p.label, p.tone, p.size])).toEqual([
+      ["Phoenix", "bad", 12],
+      ["Nairobi", "good", 4],
+    ]);
+    const [px, py] = project(-112.074, 33.4484);
+    ui.click(box.x + px * info.scale, box.y + py * info.scale);
+    expect(ui.state.selected).toBe("Phoenix");
+  });
+
+  it("ignores invalid coordinates instead of drawing a pin at the origin", () => {
+    const ui = render(`map
+  pin "Invalid" lat=999 lon=36
+`, { components: [...coreComponents, ...mapComponents] });
+    expect((ui.find({ type: "map" }).box!.data as { pins: unknown[] }).pins).toHaveLength(0);
+    expect(ui.warnings.some((w) => w.includes("latitude must be -90..90"))).toBe(true);
+  });
+
 });
 
 describe("nesting and conditions", () => {

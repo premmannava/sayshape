@@ -40,14 +40,25 @@ function countryAt(mx: number, my: number): string | null {
 }
 
 const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+const PIN_TONES = ["ink", "accent", "good", "warn", "bad", "muted"] as const;
+type PinTone = (typeof PIN_TONES)[number];
+interface MapPinPoint {
+  node: SayShapeNode;
+  label: string;
+  x: number;
+  y: number;
+  tone: PinTone;
+  size: number;
+}
+
 
 export const map: ComponentDef = {
   type: "map",
   category: "data",
-  description: "A world map with clickable countries. Highlight countries by name and add pin children for places.",
+  description: "A world map with clickable countries and selectable pins. Highlight countries by name; plot places with optional status colors and sizes.",
   props: {
     highlight: { type: "string", description: "Comma-separated country names to tint, e.g. \"Japan,Brazil\"." },
-    bind: { type: "state", description: "State name that receives the clicked country's name." },
+    bind: { type: "state", description: "State name that receives the clicked country or marker label." },
   },
   children: ["pin"],
   example: `state picked=none
@@ -57,8 +68,25 @@ map highlight="Japan,Kenya" bind=picked
   layout(box, ctx) {
     const s = box.w / WORLD.w;
     box.h = WORLD.h * s;
-    // Pins are drawn over the map rather than laid out, but come from visibleChildren so each= works.
-    box.data = { scale: s, pins: ctx.visibleChildren(box.node).filter((k) => k.type === "pin") };
+    // The map and its pins share one projection; each= expands dataset-backed pins here.
+    // Calculate geometry during layout so painting and hit testing use identical positions.
+    const pins: MapPinPoint[] = [];
+    for (const node of ctx.visibleChildren(box.node)) {
+      if (node.type !== "pin") continue;
+      const p = ctx.props(node);
+      const lat = p.num("lat", NaN), lon = p.num("lon", NaN);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        ctx.warn?.(`pin on line ${node.line}: latitude must be -90..90 and longitude -180..180`);
+        continue;
+      }
+      const [x, y] = project(lon, lat);
+      pins.push({
+        node, label: p.text(), x, y,
+        tone: p.oneOf("tone", PIN_TONES, "ink"),
+        size: Math.max(2, Math.min(18, p.num("size", 5))),
+      });
+    }
+    box.data = { scale: s, pins };
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
@@ -86,27 +114,33 @@ map highlight="Japan,Kenya" bind=picked
   paintOver(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const { scale: s, pins } = box.data as { scale: number; pins: SayShapeNode[] };
+    const { scale: s, pins } = box.data as { scale: number; pins: MapPinPoint[] };
+    const selected = ctx.props(box.node).raw("bind") ? ctx.props(box.node).bound() : null;
     for (const pin of pins) {
-      const pp = ctx.props(pin);
-      g.globalAlpha = ctx.appear(pin);
-      const [px, py] = project(pp.num("lon", 0), pp.num("lat", 0));
-      const x = box.x + px * s, y = box.y + py * s;
+      g.globalAlpha = ctx.appear(pin.node);
+      const x = box.x + pin.x * s, y = box.y + pin.y * s;
+      if (selected === pin.label) {
+        g.beginPath();
+        g.arc(x, y, pin.size + 4, 0, Math.PI * 2);
+        g.lineWidth = 2;
+        g.strokeStyle = c.focus;
+        g.stroke();
+      }
       g.beginPath();
-      g.arc(x, y, 5, 0, Math.PI * 2);
-      g.fillStyle = c.ink;
+      g.arc(x, y, pin.size, 0, Math.PI * 2);
+      g.fillStyle = c[pin.tone];
       g.fill();
       g.lineWidth = 2;
       g.strokeStyle = c.surface;
       g.stroke();
-      const label = pp.text();
       g.font = ctx.font(600, 12);
       g.textAlign = "left";
       g.textBaseline = "middle";
       g.lineWidth = 3;
-      g.strokeText(label, x + 9, y);
+      g.strokeStyle = c.surface;
+      g.strokeText(pin.label, x + pin.size + 4, y);
       g.fillStyle = c.ink;
-      g.fillText(label, x + 9, y);
+      g.fillText(pin.label, x + pin.size + 4, y);
     }
     g.globalAlpha = 1;
     const hovered = ctx.hover && ctx.hover.node.id === box.node.id ? (ctx.hover.detail as string | undefined) : undefined;
@@ -114,7 +148,13 @@ map highlight="Japan,Kenya" bind=picked
     if (hovered && pointer) tooltip(ctx.g, hovered, pointer.x, pointer.y, box, ctx.font(600, 12), c.ink, c.surface);
   },
   hitTest(box, x, y) {
-    const s = (box.data as { scale: number }).scale;
+    const { scale: s, pins } = box.data as { scale: number; pins: MapPinPoint[] };
+    // Test pins first (latest drawn wins) so an overlapping country cannot steal clicks.
+    for (let i = pins.length - 1; i >= 0; i--) {
+      const pin = pins[i]!;
+      const dx = x - (box.x + pin.x * s), dy = y - (box.y + pin.y * s);
+      if (dx * dx + dy * dy <= (pin.size + 4) ** 2) return { detail: pin.label };
+    }
     const name = countryAt((x - box.x) / s, (y - box.y) / s);
     return name ? { detail: name } : null;
   },
@@ -133,9 +173,11 @@ export const pin: ComponentDef = {
   props: {
     lat: { type: "number", required: true, description: "Latitude in degrees (-90 to 90)." },
     lon: { type: "number", required: true, description: "Longitude in degrees (-180 to 180)." },
+    tone: { type: "enum", values: PIN_TONES, default: "ink", description: "Theme color for a marker: ink, accent, good, warn, bad or muted. Supports state expressions for data-driven status colors." },
+    size: { type: "number", default: 5, description: "Marker radius in screen pixels, clamped to 2..18. Supports expressions for bubble-like visualizations." },
   },
   parents: ["map"],
-  example: `pin "Nairobi" lat=-1.29 lon=36.82`,
+  example: `pin "Nairobi" lat=-1.29 lon=36.82 tone=good size=7`,
   layout(box) {
     box.h = 0;
   },

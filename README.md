@@ -1276,12 +1276,12 @@ empty "No results" detail="Try a wider price range." action="Clear filters" on=e
 
 ### `map`
 
-A world map with clickable countries. Highlight countries by name and add pin children for places.
+A world map with clickable countries and selectable pins. Highlight countries by name; plot places with optional status colors and sizes.
 
 | Prop | Type | Description |
 |---|---|---|
 | `highlight` | string | Comma-separated country names to tint, e.g. "Japan,Brazil". |
-| `bind` | state | State name that receives the clicked country's name. |
+| `bind` | state | State name that receives the clicked country or marker label. |
 
 Children: `pin`.
 
@@ -1300,11 +1300,13 @@ A labelled point on a map, placed by latitude and longitude.
 | `"text"` | text, required | The place name shown next to the pin. |
 | `lat` | number, required | Latitude in degrees (-90 to 90). |
 | `lon` | number, required | Longitude in degrees (-180 to 180). |
+| `tone` | `ink` / `accent` / `good` / `warn` / `bad` / `muted` | Theme color for a marker: ink, accent, good, warn, bad or muted. Supports state expressions for data-driven status colors. |
+| `size` | number | Marker radius in screen pixels, clamped to 2..18. Supports expressions for bubble-like visualizations. |
 
 Only inside: `map`.
 
 ```
-pin "Nairobi" lat=-1.29 lon=36.82
+pin "Nairobi" lat=-1.29 lon=36.82 tone=good size=7
 ```
 <!-- COMPONENTS:END -->
 
