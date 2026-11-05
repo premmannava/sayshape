@@ -1278,7 +1278,9 @@ empty "No results" detail="Try a wider price range." action="Clear filters" on=e
 
 Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
 
-| Prop | Type | Descrip| `kind` | `markers` / `choropleth` / `bubble` | markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows. |
+| Prop | Type | Description |
+|---|---|---|
+| `kind` | `markers` / `choropleth` / `bubble` | markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows. |
 | `items` | expression | Data rows for kind=choropleth or kind=bubble, e.g. items=sales. Do not embed individual rows in map specs. |
 | `region` | name | Country-name column for choropleth, e.g. region=country. |
 | `value` | name | Numeric column used for country shading or proportional bubble area. |

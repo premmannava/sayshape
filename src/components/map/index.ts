@@ -9,6 +9,9 @@ import world from "./world.json";
 import { clusterPoints, type Cluster } from "./clustering";
 import { bubbleRadius, bubbleValues, formatMapValue, fraction, mixedColor, regionValues, type BubbleValues, type RegionValues } from "./analytics";
 import { drawBubbleLegend, drawChoroplethLegend } from "./legend";
+import { overlappingGroups, spiderfy, type SpiderPoint } from "./overlap";
+import { layoutBubbleLabels, type LabelCircle } from "./labels";
+import { stateBoundaryPaths } from "./states";
 import { isList } from "../../data";
 import { constrain, fitPins, panBy, worldView, zoomAt, type Viewport } from "./viewport";
 
@@ -46,6 +49,7 @@ const PIN_TONES = ["ink", "accent", "good", "warn", "bad", "muted"] as const;
 type PinTone = (typeof PIN_TONES)[number];
 
 interface MapPinPoint {
+  id: number;
   node: SayShapeNode;
   label: string;
   detail: string;
@@ -69,6 +73,8 @@ interface MapRuntime {
   fitMode: "world" | "pins";
   fitKey: string;
   drag: MapDrag | null;
+  /** Expanded location indices are kept only until the dataset or camera changes. */
+  spider: { indices: number[]; fingerprint: string } | null;
 }
 interface MapData {
   scale: number;
@@ -83,6 +89,9 @@ interface MapData {
   bubbles?: BubbleValues;
   legend: boolean;
   legendTitle: string;
+  fingerprint: string;
+  overlaps: number[][];
+  spiderPoints: SpiderPoint[];
 }
 const runtimes = new WeakMap<SayShapeNode, MapRuntime>();
 const CONTROLS = ["@map:in", "@map:out", "@map:reset"] as const;
@@ -98,29 +107,50 @@ function resetView(data: MapData, box: Box): Viewport {
 function activateMap(ctx: PressContext): boolean {
   const box = ctx.target.box;
   const data = details(box);
+  const runtime = data.runtime;
   const detail = ctx.target.detail;
-  const localX = (box.w / 2), localY = (box.h / 2);
-  if (detail === "@map:in") {
-    data.runtime.view = zoomAt(data.runtime.view, 1.7, localX, localY, box.w, box.h);
+  const bind = ctx.props(ctx.target.node).raw("bind");
+  const centerX = box.w / 2, centerY = box.h / 2;
+  if (detail === "@map:in" || detail === "@map:out" || detail === "@map:reset") {
+    runtime.spider = null;
+    runtime.view = detail === "@map:reset" ? resetView(data, box) :
+      zoomAt(runtime.view, detail === "@map:in" ? 1.7 : 1 / 1.7, centerX, centerY, box.w, box.h);
     return true;
   }
-  if (detail === "@map:out") {
-    data.runtime.view = zoomAt(data.runtime.view, 1 / 1.7, localX, localY, box.w, box.h);
-    return true;
+  if (typeof detail === "string" && detail.startsWith("@map:spider:")) {
+    const pin = data.pins[Number(detail.slice("@map:spider:".length))];
+    if (pin && bind) ctx.set(bind, pin.label);
+    return false;
   }
-  if (detail === "@map:reset") {
-    data.runtime.view = resetView(data, box);
-    return true;
+  if (typeof detail === "string" && detail.startsWith("@map:bubble:")) {
+    const id = Number(detail.slice("@map:bubble:".length));
+    const pin = data.pins[id];
+    if (!pin) return false;
+    const collision = data.overlaps.find((indices) => indices.includes(id));
+    if (collision) {
+      runtime.spider = { indices: collision, fingerprint: data.fingerprint };
+      return true;
+    }
+    const wasOpen = !!runtime.spider;
+    runtime.spider = null;
+    if (bind) ctx.set(bind, pin.label);
+    return wasOpen;
   }
   if (typeof detail === "string" && detail.startsWith("@map:cluster:")) {
-    const i = Number(detail.slice("@map:cluster:".length));
-    const group = data.groups[i];
+    const group = data.groups[Number(detail.slice("@map:cluster:".length))];
     if (group && group.items.length > 1) {
-      data.runtime.view = zoomAt(data.runtime.view, 2.5, group.x, group.y, box.w, box.h);
+      const next = zoomAt(runtime.view, 2.5, group.x, group.y, box.w, box.h);
+      if (data.kind === "bubble" && next.zoom === runtime.view.zoom) {
+        runtime.spider = { indices: group.items.map((pin) => pin.id), fingerprint: data.fingerprint };
+      } else {
+        runtime.spider = null;
+        runtime.view = next;
+      }
       return true;
     }
   }
-  const bind = ctx.props(ctx.target.node).raw("bind");
+  // Click outside an expanded group to close it without changing the country selection.
+  if (runtime.spider) { runtime.spider = null; return true; }
   if (bind && typeof detail === "string" && !detail.startsWith("@map:")) ctx.set(bind, detail);
   return false;
 }
@@ -174,7 +204,7 @@ map bind=selected fit=pins cluster=true controls=true
       }
       const [x, y] = project(lon, lat);
       pins.push({
-        node, label: p.text(), detail: p.str("detail"), x, y,
+        id: pins.length, node, label: p.text(), detail: p.str("detail"), x, y,
         tone: p.oneOf("tone", PIN_TONES, "ink"),
         size: Math.max(2, Math.min(18, p.num("size", 5))),
       });
@@ -198,7 +228,7 @@ map bind=selected fit=pins cluster=true controls=true
         const [x, y] = project(point.lon, point.lat);
         const metric = p.str("legendTitle", "Value");
         pins.push({
-          node: box.node, label: point.label,
+          id: pins.length, node: box.node, label: point.label,
           detail: metric + ": " + formatMapValue(point.value), x, y,
           tone: "accent", size: bubbleRadius(point.value, bubbles.min, bubbles.max),
           value: point.value,
@@ -206,29 +236,49 @@ map bind=selected fit=pins cluster=true controls=true
       }
     }
     const fit = p.oneOf("fit", ["world", "pins"] as const, "world");
-    const key = box.w + ":" + pins.map((pin) => pin.x.toFixed(2) + "," + pin.y.toFixed(2)).join(";");
+    const key = kind + ":" + box.w + ":" + pins.map((pin) => pin.x.toFixed(2) + "," + pin.y.toFixed(2) +
+      "," + pin.size.toFixed(2) + "," + pin.label).join(";");
     let runtime = runtimes.get(box.node);
     if (!runtime) {
-      runtime = { view: worldView(), fitMode: "world", fitKey: "", drag: null };
+      runtime = { view: worldView(), fitMode: "world", fitKey: "", drag: null, spider: null };
       runtimes.set(box.node, runtime);
     }
     if (fit !== runtime.fitMode || (fit === "pins" && key !== runtime.fitKey)) {
       runtime.view = fit === "pins" ? fitPins(pins, box.w, box.h, WORLD.w) : worldView();
     }
+    if (runtime.fitKey !== key) runtime.spider = null;
     runtime.fitMode = fit;
     runtime.fitKey = key;
     runtime.view = constrain(runtime.view, box.w, box.h);
     const view = runtime.view;
     const visible = pins.map((pin) => ({
-      item: pin, x: pin.x * scale * view.zoom + view.dx, y: pin.y * scale * view.zoom + view.dy,
+      index: pin.id, item: pin, x: pin.x * scale * view.zoom + view.dx, y: pin.y * scale * view.zoom + view.dy,
     })).filter((point) => point.x >= -32 && point.x <= box.w + 32 && point.y >= -32 && point.y <= box.h + 32);
     const groups = p.bool("cluster", false)
       ? clusterPoints(visible)
       : visible.map(({ item, x, y }) => ({ items: [item], x, y }));
+    // Collision tests use the *actual drawn radii*, not the fixed clustering distance.
+    const overlaps = kind === "bubble" ? overlappingGroups(visible.map(
+      ({ x, y, item }) => ({ x, y, radius: item.size }),
+    )).map((group) => group.map((i) => visible[i]!.index)) : [];
+    const allCircles = pins.map((pin) => ({
+      x: pin.x * scale * view.zoom + view.dx,
+      y: pin.y * scale * view.zoom + view.dy,
+      radius: pin.size,
+    }));
+    const expanded = runtime.spider;
+    const sameIndices = (indices: readonly number[]) =>
+      expanded && indices.length === expanded.indices.length && indices.every((id) => expanded.indices.includes(id));
+    const active = expanded?.fingerprint === key && (
+      overlaps.some(sameIndices) || groups.some((group) =>
+        group.items.length > 1 && sameIndices(group.items.map((item) => item.id))));
+    if (expanded && !active) runtime.spider = null;
+    const spiderPoints = active && expanded ? spiderfy(expanded.indices, allCircles, box.w, box.h) : [];
     box.data = {
       scale, pins, groups, view, runtime, fit, controls: p.bool("controls", false),
       kind, regions, bubbles, legend: p.bool("legend", kind !== "markers"),
       legendTitle: p.str("legendTitle", kind === "choropleth" ? "Country value" : "Location value"),
+      fingerprint: key, overlaps, spiderPoints,
     } satisfies MapData;
   },
   paint(box, ctx) {
@@ -251,13 +301,23 @@ map bind=selected fit=pins cluster=true controls=true
     g.strokeStyle = c.surface;
     for (const { name, path } of countryPaths()) {
       const value = regions?.values.get(name);
-      const shade = value === undefined ? c.land :
-        mixedColor(c.land, c.accent, 0.15 + 0.85 * fraction(value, regions!.min, regions!.max));
+      const shade = value === undefined
+        ? (regions ? mixedColor(c.land, c.muted, 0.22) : c.land)
+        : mixedColor(c.land, c.accent, 0.34 + 0.66 * Math.pow(fraction(value, regions!.min, regions!.max), 0.8));
       g.fillStyle = name === selected ? c.accent :
         name === hovered ? c.landHover :
         highlighted.has(name) ? c.landHighlight : shade;
       g.fill(path);
       g.stroke(path);
+    }
+    // World-level maps remain uncluttered. At regional zoom, local US
+    // geography is visible without street tiles or changing map behavior.
+    if (view.zoom >= 4) {
+      g.globalAlpha = 0.56;
+      g.strokeStyle = c.muted;
+      g.lineWidth = 1 / (scale * view.zoom);
+      for (const statePath of stateBoundaryPaths()) g.stroke(statePath);
+      g.globalAlpha = 1;
     }
     g.restore();
     // The full map is hit-testable, including ocean, so drags start everywhere.
@@ -268,12 +328,86 @@ map bind=selected fit=pins cluster=true controls=true
     const c = theme.colors;
     const data = details(box);
     const selected = ctx.props(box.node).raw("bind") ? ctx.props(box.node).bound() : null;
+    const hover = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
+    const hoverId = typeof hover === "string" && /^@map:(bubble|spider):\d+$/.test(hover)
+      ? Number(hover.split(":")[2]) : -1;
+    const expanded = new Set(data.spiderPoints.map((p) => p.index));
+
+    // Only data-driven bubbles get automatic label deconfliction.
+    // Traditional pin specs keep the labels they have always displayed.
+    const bubbleLabels = new Map<number, { x: number; y: number; text: string }>();
+    if (data.kind === "bubble") {
+      const candidates: LabelCircle[] = [];
+      const addCandidate = (pin: MapPinPoint, x: number, y: number, spider: boolean) => {
+        candidates.push({
+          id: pin.id, x, y, radius: pin.size, text: pin.label,
+          priority: selected === pin.label ? 1000 : hoverId === pin.id ? 900 : spider ? 600 : pin.size,
+        });
+      };
+      for (const group of data.groups) {
+        if (group.items.length === 1) {
+          const pin = group.items[0]!;
+          if (!expanded.has(pin.id)) addCandidate(pin, group.x, group.y, false);
+        }
+      }
+      for (const point of data.spiderPoints) {
+        const pin = data.pins[point.index];
+        if (pin) addCandidate(pin, point.x, point.y, true);
+      }
+      const avoid = [];
+      if (data.controls) avoid.push({ x: box.w - 40, y: 4, w: 36, h: 105 });
+      if (data.legend && data.bubbles?.points.length && box.w >= 180) {
+        avoid.push({ x: 4, y: box.h - 105, w: Math.min(212, box.w - 12), h: 101 });
+      }
+      g.save();
+      g.font = ctx.font(600, 12);
+      const placements = layoutBubbleLabels(candidates, box.w, box.h, (text) => g.measureText(text).width, avoid);
+      g.restore();
+      for (const [id, placed] of placements) bubbleLabels.set(id, placed);
+    }
+
+    const drawPin = (pin: MapPinPoint, x: number, y: number) => {
+      const active = selected === pin.label;
+      const over = hoverId === pin.id;
+      const alpha = ctx.appear(pin.node);
+      if (active || over) {
+        g.beginPath();
+        g.arc(x, y, pin.size + 5, 0, Math.PI * 2);
+        g.globalAlpha = 0.9 * alpha;
+        g.lineWidth = active ? 2.5 : 2;
+        g.strokeStyle = active ? c.focus : c.accent;
+        g.stroke();
+      }
+      g.beginPath();
+      g.arc(x, y, pin.size, 0, Math.PI * 2);
+      g.globalAlpha = (data.kind === "bubble" ? 0.8 : 1) * alpha;
+      g.fillStyle = c[pin.tone];
+      g.fill();
+      g.globalAlpha = alpha;
+      g.lineWidth = data.kind === "bubble" ? 1.7 : 2;
+      g.strokeStyle = c.surface;
+      g.stroke();
+      g.globalAlpha = 1;
+      const position = data.kind === "bubble" ? bubbleLabels.get(pin.id) : undefined;
+      if (data.kind === "bubble" && !position) return;
+      const lx = data.kind === "bubble" ? box.x + position!.x : x + pin.size + 4;
+      const ly = data.kind === "bubble" ? box.y + position!.y : y;
+      const label = position?.text ?? pin.label;
+      g.font = ctx.font(600, 12);
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      g.lineWidth = 3.5;
+      g.strokeStyle = c.surface;
+      g.strokeText(label, lx, ly);
+      g.fillStyle = c.ink;
+      g.fillText(label, lx, ly);
+    };
+
     g.save();
     g.beginPath();
     g.rect(box.x, box.y, box.w, box.h);
     g.clip();
-    for (let i = 0; i < data.groups.length; i++) {
-      const group = data.groups[i]!;
+    for (const group of data.groups) {
       const x = box.x + group.x, y = box.y + group.y;
       if (group.items.length > 1) {
         const radius = 14 + Math.min(8, String(group.items.length).length * 2);
@@ -292,31 +426,28 @@ map bind=selected fit=pins cluster=true controls=true
         continue;
       }
       const pin = group.items[0]!;
-      g.globalAlpha = ctx.appear(pin.node);
-      if (selected === pin.label) {
+      if (expanded.has(pin.id)) continue;
+      drawPin(pin, x, y);
+    }
+    // Leaders show geographic origins; the exploded positions are only a view aid.
+    if (data.spiderPoints.length) {
+      g.save();
+      g.strokeStyle = c.muted;
+      g.globalAlpha = 0.65;
+      g.lineWidth = 1.25;
+      g.setLineDash([4, 3]);
+      for (const point of data.spiderPoints) {
         g.beginPath();
-        g.arc(x, y, pin.size + 4, 0, Math.PI * 2);
-        g.lineWidth = 2;
-        g.strokeStyle = c.focus;
+        g.moveTo(box.x + point.sourceX, box.y + point.sourceY);
+        g.lineTo(box.x + point.x, box.y + point.y);
         g.stroke();
       }
-      g.beginPath();
-      g.arc(x, y, pin.size, 0, Math.PI * 2);
-      g.fillStyle = c[pin.tone];
-      g.fill();
-      g.lineWidth = 2;
-      g.strokeStyle = c.surface;
-      g.stroke();
-      g.font = ctx.font(600, 12);
-      g.textAlign = "left";
-      g.textBaseline = "middle";
-      g.lineWidth = 3;
-      g.strokeStyle = c.surface;
-      g.strokeText(pin.label, x + pin.size + 4, y);
-      g.fillStyle = c.ink;
-      g.fillText(pin.label, x + pin.size + 4, y);
+      g.restore();
+      for (const point of data.spiderPoints) {
+        const pin = data.pins[point.index];
+        if (pin) drawPin(pin, box.x + point.x, box.y + point.y);
+      }
     }
-    g.globalAlpha = 1;
     if (data.controls) {
       for (let i = 0; i < CONTROLS.length; i++) {
         const rect = controlRect(box, i);
@@ -342,21 +473,26 @@ map bind=selected fit=pins cluster=true controls=true
         drawBubbleLegend(g, box, theme, data.legendTitle, data.bubbles.min, data.bubbles.max);
       }
     }
-    const hover = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
     const pointer = ctx.pointer;
     if (typeof hover === "string" && pointer && !isControl(hover)) {
       let lines: string[];
       if (hover.startsWith("@map:cluster:")) {
         const group = data.groups[Number(hover.slice("@map:cluster:".length))];
         if (!group || group.items.length < 2) return;
-        lines = [group.items.length + " locations", "Click to zoom in"];
+        lines = [group.items.length + " locations",
+          data.kind === "bubble" && data.view.zoom >= 128 ? "Click to separate" : "Click to zoom in"];
       } else {
-        const pin = data.pins.find((item) => item.label === hover);
+        const pin = hoverId >= 0 ? data.pins[hoverId] : data.pins.find((item) => item.label === hover);
         const value = data.regions?.values.get(hover);
-        lines = pin ? [pin.label, ...pin.detail.split("|").map((s) => s.trim()).filter(Boolean)] :
+        lines = pin ? [pin.label, ...pin.detail.split("|").map((v) => v.trim()).filter(Boolean)] :
           value !== undefined ? [hover, data.legendTitle + ": " + formatMapValue(value)] : [hover];
+        if (pin && data.kind === "bubble" && hover.startsWith("@map:bubble:")) {
+          const overlapping = data.overlaps.find((group) => group.includes(pin.id));
+          if (overlapping) lines.push("Click to separate " + overlapping.length + " bubbles");
+        }
       }
-      tooltip(g, lines.slice(0, 5), pointer.x, pointer.y, box, ctx.font(600, 12), ctx.font(400, 11), c.raised, c.ink, c.line);
+      tooltip(g, lines.slice(0, 5), pointer.x, pointer.y, box, ctx.font(600, 12),
+        ctx.font(400, 11), c.raised, c.ink, c.line);
     }
   },
   hitTest(box, x, y) {
@@ -367,12 +503,22 @@ map bind=selected fit=pins cluster=true controls=true
         if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return { detail: CONTROLS[i] };
       }
     }
+    // Expanded markers sit above the real locations and have independent hit targets.
+    for (let i = data.spiderPoints.length - 1; i >= 0; i--) {
+      const point = data.spiderPoints[i]!;
+      const pin = data.pins[point.index]!;
+      const dx = x - box.x - point.x, dy = y - box.y - point.y;
+      if (dx * dx + dy * dy <= (pin.size + 4) ** 2) return { detail: "@map:spider:" + pin.id };
+    }
+    const expanded = new Set(data.spiderPoints.map((p) => p.index));
     for (let i = data.groups.length - 1; i >= 0; i--) {
       const group = data.groups[i]!;
+      if (group.items.length === 1 && expanded.has(group.items[0]!.id)) continue;
       const dx = x - box.x - group.x, dy = y - box.y - group.y;
       const radius = group.items.length > 1 ? 20 : group.items[0]!.size + 4;
       if (dx * dx + dy * dy <= radius * radius) {
-        return { detail: group.items.length > 1 ? "@map:cluster:" + i : group.items[0]!.label };
+        return { detail: group.items.length > 1 ? "@map:cluster:" + i :
+          data.kind === "bubble" ? "@map:bubble:" + group.items[0]!.id : group.items[0]!.label };
       }
     }
     const scale = data.scale * data.view.zoom;
@@ -387,6 +533,7 @@ map bind=selected fit=pins cluster=true controls=true
     const box = ctx.target.box;
     const data = details(box);
     const factor = Math.exp(-Math.max(-600, Math.min(600, ctx.deltaY)) * 0.0015);
+    data.runtime.spider = null;
     data.runtime.view = zoomAt(data.runtime.view, factor, ctx.x - box.x, ctx.y - box.y, box.w, box.h);
     return true;
   },
@@ -406,6 +553,7 @@ map bind=selected fit=pins cluster=true controls=true
       const dx = ctx.x - drag.startX, dy = ctx.y - drag.startY;
       if (!drag.moved && dx * dx + dy * dy <= 16) return false;
       drag.moved = true;
+      runtime.spider = null;
       runtime.view = panBy(drag.base, dx, dy, box.w, box.h);
       return true;
     }

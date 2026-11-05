@@ -5,7 +5,7 @@ import { bubbleRadius, formatMapValue, mixedColor } from "./analytics";
 
 function shell(g: CanvasRenderingContext2D, box: Box, theme: Theme, height: number): { x: number; y: number; w: number } | null {
   if (box.w < 180 || box.h < height + 16) return null;
-  const w = Math.min(216, box.w - 16);
+  const w = Math.min(200, box.w - 16);
   const x = box.x + 8, y = box.y + box.h - height - 8;
   g.beginPath();
   g.roundRect?.(x, y, w, height, 8);
@@ -22,7 +22,7 @@ export function drawChoroplethLegend(
   g: CanvasRenderingContext2D, box: Box, theme: Theme, title: string, min: number, max: number,
 ): void {
   g.save();
-  const panel = shell(g, box, theme, 73);
+  const panel = shell(g, box, theme, 68);
   if (!panel) { g.restore(); return; }
   const { x, y, w } = panel;
   g.textAlign = "left";
@@ -31,13 +31,14 @@ export function drawChoroplethLegend(
   g.fillStyle = theme.colors.ink;
   g.fillText(compactTitle(title), x + 10, y + 14, w - 20);
   const grd = g.createLinearGradient(x + 10, y + 26, x + w - 10, y + 26);
-  grd.addColorStop(0, mixedColor(theme.colors.land, theme.colors.accent, 0.15));
+  grd.addColorStop(0, mixedColor(theme.colors.land, theme.colors.accent, 0.34));
+  grd.addColorStop(0.5, mixedColor(theme.colors.land, theme.colors.accent, 0.72));
   grd.addColorStop(1, theme.colors.accent);
   g.fillStyle = grd;
   g.fillRect(x + 10, y + 27, w - 20, 12);
   g.font = "400 11px " + theme.font.family;
   g.fillStyle = theme.colors.muted;
-  g.fillText(formatMapValue(min), x + 10, y + 57);
+  g.fillText(formatMapValue(min), x + 10, y + 54);
   g.textAlign = "right";
   g.fillText(formatMapValue(max), x + w - 10, y + 57);
   g.restore();

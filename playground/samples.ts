@@ -71,6 +71,18 @@ card
           button "Reset settings" variant=secondary on="set:target:72;set:alerts:true;set:channel:'email'"
 `,
   },
+  mapOverlap: {
+    label: "Bubble overlap",
+    prompt: "Show Arizona construction budgets with overlapping locations; clicking a crowded bubble separates projects so each can be selected.",
+    spec: `state selected=""
+state projects=[{name:"Mesa school campus",lat:33.4152,lon:-111.8315,budget:1000},{name:"Mesa clinic",lat:33.4152,lon:-111.8315,budget:480},{name:"Tempe apartments",lat:33.4255,lon:-111.94,budget:630},{name:"Tempe offices",lat:33.4255,lon:-111.94,budget:380},{name:"Prescott bridge",lat:34.54,lon:-112.4685,budget:840},{name:"Flagstaff hospital",lat:35.1983,lon:-111.6513,budget:920},{name:"Tucson water works",lat:32.2226,lon:-110.9747,budget:150}]
+card
+  text "Arizona projects: resolve overlap" style=title
+  text "Click overlapping bubbles to fan them out. Each remains independently selectable." tone=muted
+  map kind=bubble items=projects lat=lat lon=lon label=name value=budget fit=pins bind=selected controls=true legendTitle="Budget ($K)"
+  text "Selected: {selected}"
+`,
+  },
   mapAnalytics: {
     label: "Geo analytics",
     prompt: "Compare revenue by country as a choropleth and project budgets as a proportional bubble map. Show native Canvas legends.",
