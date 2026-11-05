@@ -313,9 +313,11 @@ map bind=selected fit=pins cluster=true controls=true
     // World-level maps remain uncluttered. At regional zoom, local US
     // geography is visible without street tiles or changing map behavior.
     if (view.zoom >= 4) {
-      g.strokeStyle = mixedColor(c.muted, c.surface, 0.2);
+      g.globalAlpha = 0.56;
+      g.strokeStyle = c.muted;
       g.lineWidth = 1 / (scale * view.zoom);
       for (const statePath of stateBoundaryPaths()) g.stroke(statePath);
+      g.globalAlpha = 1;
     }
     g.restore();
     // The full map is hit-testable, including ocean, so drags start everywhere.
