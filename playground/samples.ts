@@ -71,6 +71,23 @@ card
           button "Reset settings" variant=secondary on="set:target:72;set:alerts:true;set:channel:'email'"
 `,
   },
+  mapAnalytics: {
+    label: "Geo analytics",
+    prompt: "Compare revenue by country as a choropleth and project budgets as a proportional bubble map. Show native Canvas legends.",
+    spec: `state picked="" countries=[{country:"United States",revenue:4200},{country:"Brazil",revenue:2400},{country:"India",revenue:3600},{country:"Japan",revenue:2900},{country:"Germany",revenue:3100},{country:"Australia",revenue:1700},{country:"United Kingdom",revenue:2700},{country:"Kenya",revenue:640}]
+state projects=[{name:"Phoenix",lat:33.4484,lon:-112.074,budget:980},{name:"Tucson",lat:32.2226,lon:-110.9747,budget:150},{name:"Scottsdale",lat:33.4942,lon:-111.9261,budget:440},{name:"Flagstaff",lat:35.1983,lon:-111.6513,budget:270},{name:"Mesa",lat:33.4152,lon:-111.8315,budget:620},{name:"Tempe",lat:33.4255,lon:-111.94,budget:310}]
+card
+  text "Geographic analytics" style=title
+  text "Two independent Canvas visualizations from tabular records. No linked analytics." tone=muted
+  text "Revenue by country" style=lead weight=semibold
+  map kind=choropleth items=countries region=country value=revenue legendTitle="Revenue ($K)" bind=picked controls=true
+  text "Selected country: {picked}"
+card
+  text "Arizona project budgets" style=lead weight=semibold
+  text "Circle area indicates budget; the legend uses the same scale." tone=muted
+  map kind=bubble items=projects lat=lat lon=lon label=name value=budget fit=pins legendTitle="Budget ($K)" controls=true
+`,
+  },
   map: {
     label: "World map",
     prompt: "Show me a world map with a few cities pinned, and let me pick a country.",

@@ -1276,10 +1276,17 @@ empty "No results" detail="Try a wider price range." action="Clear filters" on=e
 
 ### `map`
 
-Canvas world map with selectable pins, wheel zoom, drag pan, auto-fit, optional clustering and rich tooltips. Use fit=pins for local datasets and cluster=true for dense locations.
+Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
 
-| Prop | Type | Description |
-|---|---|---|
+| Prop | Type | Descrip| `kind` | `markers` / `choropleth` / `bubble` | markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows. |
+| `items` | expression | Data rows for kind=choropleth or kind=bubble, e.g. items=sales. Do not embed individual rows in map specs. |
+| `region` | name | Country-name column for choropleth, e.g. region=country. |
+| `value` | name | Numeric column used for country shading or proportional bubble area. |
+| `lat` | name | Latitude column for bubble maps. |
+| `lon` | name | Longitude column for bubble maps. |
+| `label` | name | Location-name column for bubble maps. |
+| `legend` | boolean | Show a Canvas legend; defaults on for choropleth and bubble, off for markers. |
+| `legendTitle` | string | Legend title, e.g. Revenue ($) or Project value. |
 | `highlight` | string | Comma-separated country names to tint, e.g. Japan,Brazil. |
 | `bind` | state | State name that receives the clicked country or marker label. |
 | `fit` | `world` / `pins` | Initial framing: whole world, or zoom to the current pin locations. Re-fits when the pins change. |
@@ -1313,7 +1320,6 @@ Only inside: `map`.
 ```
 pin "Phoenix" lat=33.4484 lon=-112.074 tone=bad size=9 detail="Status: delayed | Value: 120000"
 ```
-
 <!-- COMPONENTS:END -->
 
 ---

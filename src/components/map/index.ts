@@ -7,6 +7,9 @@ import type { ComponentDef, PressContext } from "../../component";
 import type { Box, SayShapeNode } from "../../types";
 import world from "./world.json";
 import { clusterPoints, type Cluster } from "./clustering";
+import { bubbleRadius, bubbleValues, formatMapValue, fraction, mixedColor, regionValues, type BubbleValues, type RegionValues } from "./analytics";
+import { drawBubbleLegend, drawChoroplethLegend } from "./legend";
+import { isList } from "../../data";
 import { constrain, fitPins, panBy, worldView, zoomAt, type Viewport } from "./viewport";
 
 interface WorldData { w: number; h: number; k: number; t: [number, number]; c: Array<[string, string]> }
@@ -50,7 +53,10 @@ interface MapPinPoint {
   y: number;
   tone: PinTone;
   size: number;
+  /** Raw data value when this is a proportional bubble rather than a regular pin. */
+  value?: number;
 }
+type MapKind = "markers" | "choropleth" | "bubble";
 interface MapDrag {
   startX: number;
   startY: number;
@@ -72,6 +78,11 @@ interface MapData {
   runtime: MapRuntime;
   fit: "world" | "pins";
   controls: boolean;
+  kind: MapKind;
+  regions?: RegionValues;
+  bubbles?: BubbleValues;
+  legend: boolean;
+  legendTitle: string;
 }
 const runtimes = new WeakMap<SayShapeNode, MapRuntime>();
 const CONTROLS = ["@map:in", "@map:out", "@map:reset"] as const;
@@ -117,8 +128,17 @@ function activateMap(ctx: PressContext): boolean {
 export const map: ComponentDef = {
   type: "map",
   category: "data",
-  description: "Canvas world map with selectable pins, wheel zoom, drag pan, auto-fit, optional clustering and rich tooltips. Use fit=pins for local datasets and cluster=true for dense locations.",
+  description: "Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.",
   props: {
+    kind: { type: "enum", values: ["markers", "choropleth", "bubble"], default: "markers", description: "markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows." },
+    items: { type: "expression", description: "Data rows for kind=choropleth or kind=bubble, e.g. items=sales. Do not embed individual rows in map specs." },
+    region: { type: "name", description: "Country-name column for choropleth, e.g. region=country." },
+    value: { type: "name", description: "Numeric column used for country shading or proportional bubble area." },
+    lat: { type: "name", description: "Latitude column for bubble maps." },
+    lon: { type: "name", description: "Longitude column for bubble maps." },
+    label: { type: "name", description: "Location-name column for bubble maps." },
+    legend: { type: "boolean", description: "Show a Canvas legend; defaults on for choropleth and bubble, off for markers." },
+    legendTitle: { type: "string", description: "Legend title, e.g. Revenue ($) or Project value." },
     highlight: { type: "string", description: "Comma-separated country names to tint, e.g. Japan,Brazil." },
     bind: { type: "state", description: "State name that receives the clicked country or marker label." },
     fit: { type: "enum", values: ["world", "pins"], default: "world", description: "Initial framing: whole world, or zoom to the current pin locations. Re-fits when the pins change." },
@@ -127,6 +147,15 @@ export const map: ComponentDef = {
     controls: { type: "boolean", default: false, description: "Show Canvas zoom in, zoom out and reset controls. Opt in to preserve the original minimal map appearance." },
   },
   children: ["pin"],
+  check(props) {
+    if (props.kind === "choropleth") {
+      return ["items", "region", "value"].filter((key) => !props[key]).map((key) => "choropleth map needs " + key + "=");
+    }
+    if (props.kind === "bubble") {
+      return ["items", "lat", "lon", "label", "value"].filter((key) => !props[key]).map((key) => "bubble map needs " + key + "=");
+    }
+    return [];
+  },
   example: `state selected=""
 map bind=selected fit=pins cluster=true controls=true
   pin "Phoenix" lat=33.4484 lon=-112.074 detail="Status: delayed | Contract: 120000" tone=bad size=8`,
@@ -151,6 +180,31 @@ map bind=selected fit=pins cluster=true controls=true
       });
     }
     const p = ctx.props(box.node);
+    const kind = p.oneOf("kind", ["markers", "choropleth", "bubble"] as const, "markers");
+    const rows = kind !== "markers" ? p.expr("items") : undefined;
+    if (kind !== "markers" && p.has("items") && !isList(rows)) {
+      ctx.warn?.("map on line " + box.node.line + ": items is not a list; use a dataset such as items=sales");
+    }
+    let regions: RegionValues | undefined;
+    let bubbles: BubbleValues | undefined;
+    if (kind === "choropleth") {
+      regions = regionValues(rows, p.str("region"), p.str("value"), COUNTRY_NAMES);
+      if (regions.ignored) ctx.warn?.("map on line " + box.node.line + ": skipped " + regions.ignored + " invalid or unknown country rows" +
+        (regions.unmatched.length ? " (" + regions.unmatched.join(", ") + ")" : ""));
+    } else if (kind === "bubble") {
+      bubbles = bubbleValues(rows, p.str("lat"), p.str("lon"), p.str("value"), p.str("label"));
+      if (bubbles.ignored) ctx.warn?.("map on line " + box.node.line + ": skipped " + bubbles.ignored + " rows with invalid coordinates or negative/non-numeric values");
+      for (const point of bubbles.points) {
+        const [x, y] = project(point.lon, point.lat);
+        const metric = p.str("legendTitle", "Value");
+        pins.push({
+          node: box.node, label: point.label,
+          detail: metric + ": " + formatMapValue(point.value), x, y,
+          tone: "accent", size: bubbleRadius(point.value, bubbles.min, bubbles.max),
+          value: point.value,
+        });
+      }
+    }
     const fit = p.oneOf("fit", ["world", "pins"] as const, "world");
     const key = box.w + ":" + pins.map((pin) => pin.x.toFixed(2) + "," + pin.y.toFixed(2)).join(";");
     let runtime = runtimes.get(box.node);
@@ -171,13 +225,18 @@ map bind=selected fit=pins cluster=true controls=true
     const groups = p.bool("cluster", false)
       ? clusterPoints(visible)
       : visible.map(({ item, x, y }) => ({ items: [item], x, y }));
-    box.data = { scale, pins, groups, view, runtime, fit, controls: p.bool("controls", false) } satisfies MapData;
+    box.data = {
+      scale, pins, groups, view, runtime, fit, controls: p.bool("controls", false),
+      kind, regions, bubbles, legend: p.bool("legend", kind !== "markers"),
+      legendTitle: p.str("legendTitle", kind === "choropleth" ? "Country value" : "Location value"),
+    } satisfies MapData;
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
     const c = theme.colors;
-    const { scale, view } = details(box);
+    const data = details(box);
+    const { scale, view, regions } = data;
     const selected = p.raw("bind") ? p.bound() : null;
     const highlighted = new Set(list(p.str("highlight")));
     const hovered = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
@@ -191,7 +250,12 @@ map bind=selected fit=pins cluster=true controls=true
     g.lineJoin = "round";
     g.strokeStyle = c.surface;
     for (const { name, path } of countryPaths()) {
-      g.fillStyle = name === selected ? c.accent : name === hovered ? c.landHover : highlighted.has(name) ? c.landHighlight : c.land;
+      const value = regions?.values.get(name);
+      const shade = value === undefined ? c.land :
+        mixedColor(c.land, c.accent, 0.15 + 0.85 * fraction(value, regions!.min, regions!.max));
+      g.fillStyle = name === selected ? c.accent :
+        name === hovered ? c.landHover :
+        highlighted.has(name) ? c.landHighlight : shade;
       g.fill(path);
       g.stroke(path);
     }
@@ -271,6 +335,13 @@ map bind=selected fit=pins cluster=true controls=true
       }
     }
     g.restore();
+    if (data.legend) {
+      if (data.kind === "choropleth" && data.regions?.values.size) {
+        drawChoroplethLegend(g, box, theme, data.legendTitle, data.regions.min, data.regions.max);
+      } else if (data.kind === "bubble" && data.bubbles?.points.length) {
+        drawBubbleLegend(g, box, theme, data.legendTitle, data.bubbles.min, data.bubbles.max);
+      }
+    }
     const hover = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
     const pointer = ctx.pointer;
     if (typeof hover === "string" && pointer && !isControl(hover)) {
@@ -281,7 +352,9 @@ map bind=selected fit=pins cluster=true controls=true
         lines = [group.items.length + " locations", "Click to zoom in"];
       } else {
         const pin = data.pins.find((item) => item.label === hover);
-        lines = pin ? [pin.label, ...pin.detail.split("|").map((s) => s.trim()).filter(Boolean)] : [hover];
+        const value = data.regions?.values.get(hover);
+        lines = pin ? [pin.label, ...pin.detail.split("|").map((s) => s.trim()).filter(Boolean)] :
+          value !== undefined ? [hover, data.legendTitle + ": " + formatMapValue(value)] : [hover];
       }
       tooltip(g, lines.slice(0, 5), pointer.x, pointer.y, box, ctx.font(600, 12), ctx.font(400, 11), c.raised, c.ink, c.line);
     }
