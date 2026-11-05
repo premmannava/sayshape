@@ -90,6 +90,20 @@ describe("SayShape MCP server", () => {
     expect(r.structuredContent).toMatchObject({ title: "Hike", errors: 0, warnings: 0 });
   });
 
+  it("exposes and validates map, pin and spreadsheet-style location loops", async () => {
+    const client = await connect();
+    const docs = text(await client.callTool({ name: "sayshape_docs", arguments: { elements: ["map", "pin"] } }));
+    expect(docs).toContain("tone=<accent|good|warn|bad|muted>");
+    expect(docs).toContain("size=<number>");
+    const spec = `state selected="" locations=[{name:"Phoenix",lat:33.4484,lon:-112.074,tone:"bad",value:12}]
+map bind=selected
+  each items=locations as=p
+    pin "{p.name}" lat={p.lat} lon={p.lon} tone={p.tone} size={p.value}
+`;
+    const response = await client.callTool({ name: "show_interface", arguments: { spec } });
+    expect(response.structuredContent).toMatchObject({ errors: 0, warnings: 0 });
+  });
+
   it("reports skipped lines with line numbers, so the model can fix them", async () => {
     const client = await connect();
     const spec = `card\n  button "Go" colour=red\n  sparkle "nope"\n`;
