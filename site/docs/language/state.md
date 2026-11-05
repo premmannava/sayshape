@@ -24,7 +24,7 @@ card
 ## Rules
 
 - **One line per value.** A value must fit on one line, however long, so a streamed spec can render line by line.
-- **Data only.** Lists and records are parsed as data, never run. They can nest at most 20 levels and hold at most 10,000 values.
+- **Data only.** Lists and records are parsed as data, never run. They can nest at most 20 levels and hold at most 10,000 values. Data your app passes in with `state.set` can hold up to 1,000,000.
 - **Read anywhere.** A state name can be read in text, props, conditions and expressions anywhere in the spec, on any screen.
 - **Changed by the interface.** Controls write state through [`bind=`](./bindings), and buttons through [actions](./actions).
 - **Changed by your app.** `ui.state.set("products", rows)` and `ui.state.get("qty")` ([Host data and events](../integration/host-data)).

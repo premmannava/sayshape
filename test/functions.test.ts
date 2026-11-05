@@ -95,6 +95,117 @@ describe("sorting and taking", () => {
   });
 });
 
+describe("grouping", () => {
+  it("counts each group, in the order groups first appear", () => {
+    expect(json(val("group(tx, 'cat')"))).toEqual([
+      { cat: "Groceries", count: 2 },
+      { cat: "Gas", count: 1 },
+      { cat: "Income", count: 1 },
+    ]);
+  });
+
+  it("totals a field per group under the field's own name, and composes with sort and take", () => {
+    expect(json(val("group(tx, 'cat', 'amount')"))).toEqual([
+      { cat: "Groceries", count: 2, amount: -84.12 + -38.9 },
+      { cat: "Gas", count: 1, amount: -46.5 },
+      { cat: "Income", count: 1, amount: 2400 },
+    ]);
+    expect(json(val("take(sort(group(tx, 'cat', 'amount'), 'amount'), 1)"))).toEqual([{ cat: "Groceries", count: 2, amount: -84.12 + -38.9 }]);
+    expect(val("first(sort(group(tx, 'cat', 'amount'), 'count', 'desc')).cat")).toBe("Groceries");
+    expect(val("len(group(tx, 'cat'))")).toBe(3);
+  });
+
+  it("works out avg, min or max instead of the sum", () => {
+    const by = (how: string) => json(val(`group(tx, 'cat', 'amount', '${how}')`))[0].amount;
+    expect(by("sum")).toBeCloseTo(-123.02);
+    expect(by("avg")).toBeCloseTo(-61.51);
+    expect(by("min")).toBe(-84.12);
+    expect(by("max")).toBe(-38.9);
+  });
+
+  it("follows sum()'s rules: text, null or a missing field makes that group's total nothing", () => {
+    const s = new Store();
+    s.set("rows", [{ c: "A", v: 1 }, { c: "A", v: "2" }, { c: "B", v: 3 }, { c: "B" }, { c: "C", v: 4 }] as unknown as Value);
+    const r = evaluate("group(rows, 'c', 'v')", s.scope);
+    if (!r.ok) throw new Error(r.error);
+    const out = json(r.value) as Array<{ c: string; count: number; v: number | null }>;
+    expect(out.map((g) => [g.c, g.count])).toEqual([["A", 2], ["B", 2], ["C", 1]]);
+    // NaN is shown as —; JSON writes it as null.
+    expect(out.map((g) => g.v)).toEqual([null, null, 4]);
+  });
+
+  it("groups items without the field, or with a list or record in it, together under null", () => {
+    const s = new Store();
+    s.set("rows", [{ c: "A" }, { x: 1 }, { c: [1] }, { c: { d: 1 } }, { c: null }] as unknown as Value);
+    const r = evaluate("group(rows, 'c')", s.scope);
+    if (!r.ok) throw new Error(r.error);
+    expect(json(r.value)).toEqual([{ c: "A", count: 1 }, { c: null, count: 4 }]);
+  });
+
+  it("keeps values as they are: 1 and '1', or US and USA, are different groups", () => {
+    const s = new Store();
+    s.set("rows", [{ c: 1 }, { c: "1" }, { c: "US" }, { c: "USA" }, { c: "US" }] as unknown as Value);
+    const r = evaluate("group(rows, 'c')", s.scope);
+    if (!r.ok) throw new Error(r.error);
+    expect(json(r.value)).toEqual([{ c: 1, count: 1 }, { c: "1", count: 1 }, { c: "US", count: 2 }, { c: "USA", count: 1 }]);
+  });
+
+  it("explains a wrong call instead of guessing", () => {
+    const err = (src: string) => {
+      const r = evaluate(src, store.scope);
+      return r.ok ? null : r.error;
+    };
+    expect(err("group(tx, 'cat', 'amount', 'median')")).toMatch(/'sum', 'avg', 'min' or 'max'.*not 'median'/);
+    expect(err("group(tx, 'cat', 'cat')")).toMatch(/can't total the field it groups by/);
+    expect(err("group(tx, 'cat', 'count')")).toMatch(/already counts/);
+    expect(Number.isNaN(val("group(5, 'cat')"))).toBe(true);
+    expect(Number.isNaN(val("group(tx, 3)"))).toBe(true);
+    expect(json(val("group(filter(tx, 'cat', 'Nothing'), 'cat', 'amount')"))).toEqual([]);
+  });
+
+  it("points a model at group() when it reaches for groupBy", () => {
+    for (const name of ["groupBy", "group_by", "aggregate"]) {
+      const r = evaluate(`${name}(tx, 'cat')`, store.scope);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toMatch(/Use group\(list, 'field', 'amount'\)/);
+    }
+  });
+
+  it("charts and tables the groups in a screen, and updates when the list changes", () => {
+    const ui = render(`state spend=[{cat: "Food", amt: 12}, {cat: "Fun", amt: 30}, {cat: "Food", amt: 8}]
+derive byCat={sort(group(spend, 'cat', 'amt'), 'amt', 'desc')}
+chart "By category" kind=hbar items=byCat x=cat y=amt format=money
+table items=byCat
+  table-column "Category" field=cat
+  table-column "Items" field=count
+  table-column "Spent" field=amt format=money
+button "More fun" on="add:spend:{cat: 'Fun', amt: 5}"`);
+    expect(ui.diagnostics).toEqual([]);
+    expect(ui.warnings).toEqual([]);
+    expect(ui.text()).toEqual(expect.arrayContaining(["Fun", "$30.00", "Food", "$20.00"]));
+    ui.press("button");
+    expect(ui.text()).toContain("$35.00");
+  });
+});
+
+describe("big lists from the host", () => {
+  it("finds the smallest and largest of 400,000 items without overflowing the stack", () => {
+    const s = new Store();
+    s.set("big", Array.from({ length: 400_000 }, (_, i) => ({ v: (i * 7919) % 100_003 })) as unknown as Value);
+    s.set("nums", Array.from({ length: 300_000 }, (_, i) => i - 5) as unknown as Value);
+    const at = (src: string) => {
+      const r = evaluate(src, s.scope);
+      if (!r.ok) throw new Error(r.error);
+      return r.value;
+    };
+    expect(at("min(big, 'v')")).toBe(0);
+    expect(at("max(big, 'v')")).toBe(100_002);
+    expect(at("min(nums)")).toBe(-5);
+    expect(at("max(nums)")).toBe(299_994);
+    expect(json(at("take(sort(group(big, 'v'), 'count', 'desc'), 1)"))[0].count).toBeGreaterThan(1);
+  });
+});
+
 describe("formatting", () => {
   it("formats money, numbers and plurals", () => {
     expect(val("money(2400)")).toBe("$2,400.00");
@@ -145,6 +256,11 @@ describe("the sandbox", () => {
     "count(rooms, 'toString')",
     "money(1, 'constructor')",
     "take(rooms, '__proto__')",
+    "group(tx, '__proto__')",
+    "group(tx, 'constructor', 'amount')",
+    "group(tx, 'cat', '__proto__')",
+    "group(tx, 'cat', 'amount', 'constructor')",
+    "group(tx, 'toString', 'amount', '__proto__')",
   ];
   for (const src of attempts) {
     it(`gives only SayShape data for ${src}`, () => {
@@ -154,7 +270,7 @@ describe("the sandbox", () => {
   }
 
   it("never returns host objects or functions", () => {
-    for (const src of ["filter(tx, 'cat', 'Gas')", "sort(tx, 'amount')", "take(tx, 2)", "search(tx, 'name', 'a')", "find(tx, 'cat', 'Gas')"]) {
+    for (const src of ["group(tx, 'cat', 'amount')", "group(tx, '__proto__')", "filter(tx, 'cat', 'Gas')", "sort(tx, 'amount')", "take(tx, 2)", "search(tx, 'name', 'a')", "find(tx, 'cat', 'Gas')"]) {
       expect(isData(val(src)), src).toBe(true);
     }
   });

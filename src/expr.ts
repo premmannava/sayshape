@@ -87,15 +87,76 @@ function amountOf(v: Value | undefined): number {
 /** Text for a value in lower/upper/trim: text as is, numbers as shown, nothing for null. */
 const textOf = (v: Value | undefined): string => (typeof v === "string" ? v : v === undefined || v === null ? "" : formatValue(v));
 
+/**
+ * The smallest or largest number, with a loop rather than Math.min(...xs):
+ * spreading a list of host data with hundreds of thousands of items into
+ * arguments overflows the call stack. Like Math.min, any NaN makes it NaN,
+ * and no numbers at all give Infinity (min) or -Infinity (max).
+ */
+function pickOf(xs: readonly number[], largest: boolean): number {
+  let best = largest ? -Infinity : Infinity;
+  for (const x of xs) {
+    if (isNaN(x)) return NaN;
+    if (largest ? x > best : x < best) best = x;
+  }
+  return best;
+}
+
 /** min(3, 5), min(list) or min(list, 'field'). */
-function extreme(pick: (...xs: number[]) => number, a: Value[]): number {
-  if (isList(a[0]) && typeof a[1] === "string") return pick(...(amounts(a[0], a[1]) ?? []));
-  return pick(...spread(a).map(toNumber));
+function extreme(largest: boolean, a: Value[]): number {
+  if (isList(a[0]) && typeof a[1] === "string") return pickOf(amounts(a[0], a[1]) ?? [], largest);
+  return pickOf(spread(a).map(toNumber), largest);
+}
+
+const GROUP_RESULTS = ["sum", "avg", "min", "max"] as const;
+type GroupResult = (typeof GROUP_RESULTS)[number];
+
+/** One number from a group's values: sum, avg, min or max, by the same rules as those functions. */
+function combine(xs: readonly number[], how: GroupResult): number {
+  if (how === "min" || how === "max") return pickOf(xs, how === "max");
+  const total = xs.reduce((t, x) => t + x, 0);
+  return how === "sum" ? total : xs.length ? total / xs.length : NaN;
+}
+
+/**
+ * group(sales, 'region'): one record per region, in the order each first
+ * appears, with how many items it has: [{region: "West", count: 12}, …].
+ * group(sales, 'region', 'revenue') also totals that field per group, under
+ * the field's own name, and a fourth argument works out 'avg', 'min' or 'max'
+ * instead of the 'sum'. Totals follow sum()'s rules: only numbers count.
+ *
+ * Items group by the field's value as it is ("US" and "USA" are two groups);
+ * items without the field, or with a list or record in it, share a null group.
+ * The groups are new records worked out from the list, so they can be shown,
+ * sorted and charted, but not written back to.
+ */
+function group(v: Value, by: Value | undefined, field: Value | undefined, how: Value | undefined): Value {
+  if (!isList(v) || typeof by !== "string") return NaN;
+  if (field !== undefined && typeof field !== "string") return NaN;
+  if (field === by) throw new ExprError(`group() can't total the field it groups by ("${by}"); total another field, like group(list, '${by}', 'amount')`);
+  if (field === "count") throw new ExprError(`group() already counts each group as count; total another field, or use group(list, '${by}') for the counts`);
+  const result = how ?? "sum";
+  if (!GROUP_RESULTS.includes(result as GroupResult)) {
+    throw new ExprError(`group() works out 'sum', 'avg', 'min' or 'max' of a field, not ${typeof result === "string" ? `'${result}'` : String(result)}`);
+  }
+  const groups = new Map<Value, number[]>();
+  for (const item of v) {
+    const raw = fieldOf(item, by);
+    const key = raw === undefined || !isScalar(raw) ? null : raw;
+    let values = groups.get(key);
+    if (!values) groups.set(key, (values = []));
+    values.push(field === undefined ? 0 : amount(fieldOf(item, field)));
+  }
+  return makeList([...groups].map(([key, values]) => {
+    const entries: Array<[string, Value]> = [[by, key], ["count", values.length]];
+    if (field !== undefined) entries.push([field, combine(values, result as GroupResult)]);
+    return makeRecord(entries);
+  }));
 }
 
 const BUILTINS: Record<string, Fn> = {
-  min: (...a) => extreme(Math.min, a),
-  max: (...a) => extreme(Math.max, a),
+  min: (...a) => extreme(false, a),
+  max: (...a) => extreme(true, a),
   /** Items in a list, or characters in text. */
   len: (v) => (isList(v) || typeof v === "string" ? v.length : NaN),
   /** Items that are true, whose field is true (or not empty), or whose field equals a value. */
@@ -130,6 +191,8 @@ const BUILTINS: Record<string, Fn> = {
     const xs = amounts(v, a, b);
     return xs && xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length : NaN;
   },
+  /** Totals per category: group(sales, 'region', 'revenue') is one {region, count, revenue} record per region. */
+  group: (v, by, field, how) => group(v, by, field, how),
   /** join(tags) or join(tags, " / "), and for records join(cart, "name") or join(cart, "name", " / "). */
   join: (v, a, b) => {
     if (!isList(v)) return NaN;
@@ -214,6 +277,7 @@ const FUNCTION_HINTS: Record<string, string> = {
   max_by: "first(sort(list, 'field', 'desc'))", min_by: "first(sort(list, 'field'))",
   mean: "avg(list, 'field')", average: "avg(list, 'field')", total: "sum(list, 'field')",
   where: "filter(list, 'field', value)", contains: "includes(list, value)",
+  groupby: "group(list, 'field', 'amount')", group_by: "group(list, 'field', 'amount')", aggregate: "group(list, 'field', 'amount')", pivot: "group(list, 'field', 'amount')",
   format: "number(n) or money(n)", currency: "money(n)", tofixed: "fixed(n, 2)", str: "text in quotes: \"{n} items\"", string: "text in quotes: \"{n} items\"",
   if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes", map: "each, or sum/avg/join with a field",
 };

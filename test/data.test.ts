@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DataError, isData, looksLikeData, MAX_DATA_DEPTH, MAX_DATA_VALUES, parseData, toData } from "../src/data";
+import { DataError, isData, looksLikeData, MAX_DATA_DEPTH, MAX_DATA_VALUES, MAX_HOST_VALUES, parseData, toData } from "../src/data";
 import { evaluate, interpolate } from "../src/expr";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
@@ -111,7 +111,20 @@ describe("data from the host", () => {
     let deep: unknown = 1;
     for (let i = 0; i < MAX_DATA_DEPTH + 1; i++) deep = [deep];
     expect(() => toData(deep)).toThrow(/nested more than 20 levels/);
-    expect(() => toData(Array(MAX_DATA_VALUES + 1).fill(0))).toThrow(/More than 10000 values/);
+    // The list itself counts as one value, so MAX_HOST_VALUES - 1 items fit and one more doesn't.
+    expect(() => toData(Array(MAX_HOST_VALUES).fill(0))).toThrow(/More than 1,000,000 values/);
+  });
+
+  it("takes far more from the host than a spec may write itself", () => {
+    expect(MAX_HOST_VALUES).toBeGreaterThan(MAX_DATA_VALUES);
+    // A spreadsheet of 20,000 rows and 10 columns: 220,001 values.
+    const rows = Array.from({ length: 20_000 }, (_, i) => Object.fromEntries(Array.from({ length: 10 }, (_, c) => [`c${c}`, i * c])));
+    const copy = toData(rows);
+    expect(isData(copy)).toBe(true);
+    expect((copy as readonly unknown[]).length).toBe(20_000);
+    expect(toData(Array(MAX_HOST_VALUES - 1).fill(0))).toHaveLength(MAX_HOST_VALUES - 1);
+    // A literal in a spec keeps the small limit.
+    expect(parseData(`[${Array(MAX_DATA_VALUES + 1).fill(0).join(",")}]`)).toEqual({ error: expect.stringMatching(/More than 10000 values/) });
   });
 
   it("goes through the store, which copies or refuses", () => {
