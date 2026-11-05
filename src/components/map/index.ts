@@ -364,6 +364,7 @@ map bind=selected fit=pins cluster=true controls=true
   paintOver(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
+    const visual = mapVisual(theme);
     const data = details(box);
     const selected = ctx.props(box.node).raw("bind") ? ctx.props(box.node).bound() : null;
     const hover = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
@@ -408,36 +409,62 @@ map bind=selected fit=pins cluster=true controls=true
       const active = selected === pin.label;
       const over = hoverId === pin.id;
       const alpha = ctx.appear(pin.node);
+      const isBubble = data.kind === "bubble";
+      if (isBubble) {
+        // Soft accent halo establishes depth without changing the bubble's
+        // actual hit radius, geographic location or encoded value.
+        g.beginPath();
+        g.arc(x, y, pin.size + (active || over ? 5.5 : 3), 0, Math.PI * 2);
+        g.fillStyle = c.accent;
+        g.globalAlpha = (active || over ? 0.24 : 0.11) * alpha;
+        g.fill();
+        g.globalAlpha = 1;
+      }
       if (active || over) {
         g.beginPath();
         g.arc(x, y, pin.size + 5, 0, Math.PI * 2);
-        g.globalAlpha = 0.9 * alpha;
+        g.globalAlpha = 0.92 * alpha;
         g.lineWidth = active ? 2.5 : 2;
         g.strokeStyle = active ? c.focus : c.accent;
         g.stroke();
       }
       g.beginPath();
       g.arc(x, y, pin.size, 0, Math.PI * 2);
-      g.globalAlpha = (data.kind === "bubble" ? 0.8 : 1) * alpha;
+      g.globalAlpha = (isBubble ? visual.bubbleOpacity : 1) * alpha;
       g.fillStyle = c[pin.tone];
+      if (isBubble) {
+        g.shadowColor = c.shadow;
+        g.shadowBlur = active || over ? 10 : 4;
+        g.shadowOffsetY = 1;
+      }
       g.fill();
+      g.shadowBlur = 0;
+      g.shadowOffsetY = 0;
       g.globalAlpha = alpha;
-      g.lineWidth = data.kind === "bubble" ? 1.7 : 2;
-      g.strokeStyle = c.surface;
+      g.lineWidth = isBubble ? 1.65 : 2;
+      g.strokeStyle = isBubble ? visual.bubbleOutline : c.surface;
       g.stroke();
+      if (isBubble && pin.size >= 8) {
+        // A restrained top-left glint makes circles feel tactile in both modes.
+        g.beginPath();
+        g.arc(x - pin.size * 0.29, y - pin.size * 0.3, Math.min(3.5, pin.size * 0.19), 0, Math.PI * 2);
+        g.fillStyle = c.ink;
+        g.globalAlpha = (visual.dark ? 0.16 : 0.12) * alpha;
+        g.fill();
+      }
       g.globalAlpha = 1;
-      const position = data.kind === "bubble" ? bubbleLabels.get(pin.id) : undefined;
-      if (data.kind === "bubble" && !position) return;
-      const lx = data.kind === "bubble" ? box.x + position!.x : x + pin.size + 4;
-      const ly = data.kind === "bubble" ? box.y + position!.y : y;
+      const position = isBubble ? bubbleLabels.get(pin.id) : undefined;
+      if (isBubble && !position) return;
+      const lx = isBubble ? box.x + position!.x : x + pin.size + 4;
+      const ly = isBubble ? box.y + position!.y : y;
       const label = position?.text ?? pin.label;
       g.font = ctx.font(600, 12);
       g.textAlign = "left";
       g.textBaseline = "middle";
       g.lineWidth = 3.5;
-      g.strokeStyle = c.surface;
+      g.strokeStyle = visual.labelHalo;
       g.strokeText(label, lx, ly);
-      g.fillStyle = c.ink;
+      g.fillStyle = visual.label;
       g.fillText(label, lx, ly);
     };
 
@@ -450,11 +477,17 @@ map bind=selected fit=pins cluster=true controls=true
       if (group.items.length > 1) {
         const radius = 14 + Math.min(8, String(group.items.length).length * 2);
         g.beginPath();
+        g.arc(x, y, radius + 3, 0, Math.PI * 2);
+        g.fillStyle = c.accent;
+        g.globalAlpha = 0.18;
+        g.fill();
+        g.globalAlpha = 1;
+        g.beginPath();
         g.arc(x, y, radius, 0, Math.PI * 2);
         g.fillStyle = c.accent;
         g.fill();
-        g.lineWidth = 2;
-        g.strokeStyle = c.surface;
+        g.lineWidth = 1.8;
+        g.strokeStyle = c.raised;
         g.stroke();
         g.fillStyle = c.onAccent;
         g.font = ctx.font(700, 12);
@@ -487,15 +520,30 @@ map bind=selected fit=pins cluster=true controls=true
       }
     }
     if (data.controls) {
+      g.save();
+      g.shadowColor = c.shadow;
+      g.shadowBlur = 9;
+      g.shadowOffsetY = 2;
+      g.beginPath();
+      g.roundRect(box.x + box.w - 39, box.y + 4, 35, 106, 9);
+      g.fillStyle = c.raised;
+      g.fill();
+      g.restore();
+      g.beginPath();
+      g.roundRect(box.x + box.w - 39, box.y + 4, 35, 106, 9);
+      g.strokeStyle = c.line;
+      g.globalAlpha = 0.7;
+      g.lineWidth = 0.8;
+      g.stroke();
+      g.globalAlpha = 1;
       for (let i = 0; i < CONTROLS.length; i++) {
         const rect = controlRect(box, i);
-        g.beginPath();
-        g.roundRect?.(rect.x, rect.y, rect.w, rect.h, 6);
-        g.fillStyle = c.raised;
-        g.fill();
-        g.strokeStyle = c.line;
-        g.lineWidth = 1;
-        g.stroke();
+        if (hover === CONTROLS[i]) {
+          g.beginPath();
+          g.roundRect(rect.x, rect.y, rect.w, rect.h, 6);
+          g.fillStyle = c.landHighlight;
+          g.fill();
+        }
         g.fillStyle = c.ink;
         g.font = ctx.font(700, 16);
         g.textAlign = "center";
@@ -530,7 +578,7 @@ map bind=selected fit=pins cluster=true controls=true
         }
       }
       tooltip(g, lines.slice(0, 5), pointer.x, pointer.y, box, ctx.font(600, 12),
-        ctx.font(400, 11), c.raised, c.ink, c.line);
+        ctx.font(400, 11), visual.tooltip, c.ink, visual.tooltipBorder, c.accent, c.shadow);
     }
   },
   hitTest(box, x, y) {
@@ -625,28 +673,40 @@ export const pin: ComponentDef = {
 function tooltip(
   g: CanvasRenderingContext2D, lines: string[], px: number, py: number, box: Box,
   titleFont: string, bodyFont: string, background: string, foreground: string, border: string,
+  accent: string, shadow: string,
 ): void {
+  if (!lines.length) return;
   g.save();
-  const width = Math.min(box.w - 12, Math.max(100, ...lines.map((line, i) => {
+  const width = Math.min(box.w - 12, Math.max(110, ...lines.map((line, i) => {
     g.font = i === 0 ? titleFont : bodyFont;
-    return g.measureText(line).width + 20;
+    return g.measureText(line).width + 34;
   })));
-  const height = 12 + lines.length * 18;
+  const height = 18 + lines.length * 19;
   const x = Math.max(box.x + 4, Math.min(px + 14, box.x + box.w - width - 4));
   const y = Math.max(box.y + 4, Math.min(py - height - 8, box.y + box.h - height - 4));
+  g.shadowColor = shadow;
+  g.shadowBlur = 13;
+  g.shadowOffsetY = 3;
   g.beginPath();
-  g.roundRect?.(x, y, width, height, 6);
+  g.roundRect(x, y, width, height, 9);
   g.fillStyle = background;
   g.fill();
-  g.lineWidth = 1;
+  g.shadowBlur = 0;
+  g.shadowOffsetY = 0;
+  g.lineWidth = 0.8;
   g.strokeStyle = border;
   g.stroke();
+  g.beginPath();
+  g.roundRect(x + 7, y + 9, 3, height - 18, 1.5);
+  g.fillStyle = accent;
+  g.fill();
   g.fillStyle = foreground;
   g.textAlign = "left";
   g.textBaseline = "middle";
   lines.forEach((line, i) => {
     g.font = i === 0 ? titleFont : bodyFont;
-    g.fillText(line, x + 10, y + 15 + i * 18, width - 18);
+    g.globalAlpha = i === 0 ? 1 : 0.86;
+    g.fillText(line, x + 19, y + 17 + i * 19, width - 29);
   });
   g.restore();
 }
