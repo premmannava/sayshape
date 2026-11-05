@@ -124,6 +124,43 @@ describe("reading answers", () => {
   });
 });
 
+describe("repair", () => {
+  it("sends problems back once, in both formats, and records the first try and the repaired one", async () => {
+    const task = tasks.find((t) => t.id === "k3")!;
+    const seen: Record<string, number> = {};
+    const lastUser: string[] = [];
+    const fetchImpl = (async (url: string, init: RequestInit) => {
+      const body = JSON.parse(init.body as string) as { messages: Array<{ role: string; content: unknown }> };
+      const system = body.messages[0]!.content;
+      const format: Format = (typeof system === "string" ? system : JSON.stringify(system)).includes("You write interactive UI") ? "html" : "sayshape";
+      seen[format] = (seen[format] ?? 0) + 1;
+      lastUser.push(String(body.messages.at(-1)!.content));
+      // Mid-spec, where models write it: a leading non-Loom line is dropped as prose before the spec.
+      const broken = format === "sayshape" ? `${reference.k3!.sayshape}\nlet left = budget - spent` : `<p id="x"></p><script>document.getElementById('missing').textContent = 'x';</script>`;
+      const text = seen[format] === 1 ? broken : reference.k3![format];
+      return new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 1000, completion_tokens: 100 } })}\n\ndata: [DONE]\n\n`, { status: 200 });
+    }) as typeof fetch;
+    const results = await runCompare([task], { config: { url: "http://model.test/v1" }, models: ["fake"], registry, repair: true, fetch: fetchImpl });
+    for (const r of results) {
+      expect(r, r.format).toMatchObject({ repaired: true, firstSuccess: false, success: true, usage: { promptTokens: 2000, completionTokens: 200 } });
+    }
+    expect(seen).toEqual({ sayshape: 2, html: 2 });
+    // The second message to each carries the first one's problems.
+    expect(lastUser.find((m) => m.includes("Loom has no variables"))).toBeDefined();
+    expect(lastUser.find((m) => m.startsWith("Your HTML had these problems when it ran:"))).toBeDefined();
+    const sum = summarize(results);
+    expect(sum.map((x) => [x.firstSuccessRate, x.successRate, x.repaired])).toEqual([[0, 1, 1], [0, 1, 1]]);
+    expect(report(results, { date: "d", url: "u", runs: 1, guideChars: 1, htmlPromptChars: 1 })).toContain("| Works first try | Works after repair | Repairs |");
+  });
+
+  it("doesn't repair a first answer without problems", async () => {
+    const task = tasks.find((t) => t.id === "k3")!;
+    const results = await runCompare([task], { config: { url: "http://model.test/v1" }, models: ["fake"], registry, repair: true, fetch: fakeModel((_r, f) => reference.k3![f]) });
+    for (const r of results) expect(r).toMatchObject({ repaired: false, success: true });
+    expect(summarize(results).map((x) => x.firstSuccessRate)).toEqual([1, 1]);
+  });
+});
+
 describe("prompt caching", () => {
   const prices = { prompt: 3e-6, completion: 15e-6, cacheRead: 0.3e-6, cacheWrite: 3.75e-6 };
 

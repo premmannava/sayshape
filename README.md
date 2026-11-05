@@ -416,6 +416,25 @@ if={count(todos, 'done') == len(todos)}
   button "Start over" on=clear:todos
 ```
 
+Right after an `if=` line (a block or an element with `if=`), at the same indent, `else` shows its lines when the condition doesn't hold, and `else if={…}` adds another case. Like `if`, it needs nothing to close it, so a spec still streams line by line:
+
+```
+state view="Week"
+segmented bind=view options="Week,Month,Year"
+if={view == 'Week'}
+  text "This week"
+else if={view == 'Month'}
+  text "This month"
+else
+  text "This year"
+```
+
+An `else` with no `if=` line just before it is an error, and it and its lines are skipped.
+
+### Not JavaScript
+
+Models often reach for code when a spec needs logic. Each kind of code line gets an error saying what to write instead, so one repair can fix it: `let`, `const` and `var` (use `derive name={…}` or `state`), `function` and `return` (use `derive`), `for` and `while` (use `each`), `elif` (use `else if={…}`), `if (…) {` and closing braces (use `if={…}` lines and indentation), `//` comments (use `#`), and sentences of prose.
+
 ### Comments
 
 Lines starting with `#` are ignored.

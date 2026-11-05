@@ -11,7 +11,7 @@
  *   theming (inserting HTML strings, eval, external scripts, fixed colors).
  */
 import { generateSpec } from "../../src/model/generate";
-import { streamChat, type ModelConfig, type Usage } from "../../src/model/stream";
+import { streamChat, type ChatMessage, type ModelConfig, type Usage } from "../../src/model/stream";
 import { languageGuide, type GuideOptions } from "../../src/prompt";
 import type { Registry } from "../../src/registry";
 import { htmlScreen, sayshapeScreen, type Screen } from "./screens";
@@ -84,6 +84,10 @@ export interface AnswerResult {
   checks: CheckResult[];
   /** Valid and every check passed. */
   success: boolean;
+  /** Whether a repair ran, and the first try's result, when it did. */
+  repaired?: boolean;
+  firstSuccess?: boolean;
+  firstOutput?: string;
   code: CodeStats;
 }
 
@@ -131,33 +135,78 @@ export interface Answer {
   inputChars: number;
   /** SayShape's own count of problems, from the parser. */
   warnings?: number;
+  /** When a repair ran: the first answer, before it. output is then the repaired one. */
+  firstOutput?: string;
 }
 
 const clock = () => performance.now();
 
-export async function askSayShape(task: Task, config: ModelConfig, registry: Registry, guide: GuideOptions, fetchImpl?: typeof fetch): Promise<Answer> {
-  const r = await generateSpec({ config, registry, request: task.request, guide, repairOn: "never", fetch: fetchImpl });
+/**
+ * A SayShape answer. With repair, the way the product works: when the first answer
+ * has any diagnostics, they go back to the model once and its fixed spec is used.
+ */
+export async function askSayShape(task: Task, config: ModelConfig, registry: Registry, guide: GuideOptions, fetchImpl?: typeof fetch, repair = false): Promise<Answer> {
+  const r = await generateSpec({ config, registry, request: task.request, guide, repairOn: repair ? "any" : "never", fetch: fetchImpl });
+  const u = r.usage;
   return {
     output: r.spec,
-    raw: r.first.raw,
-    usage: r.first.usage,
+    raw: r.repair?.raw ?? r.first.raw,
+    // Over both attempts when a repair ran.
+    usage: r.repair ? { promptTokens: u.promptTokens, completionTokens: u.completionTokens, reasoningTokens: u.reasoningTokens, cachedTokens: u.cachedTokens, cacheWriteTokens: u.cacheWriteTokens } : r.first.usage,
     firstTokenMs: r.first.firstTokenMs,
     totalMs: r.timings.totalMs,
-    inputChars: r.first.inputChars,
+    inputChars: r.first.inputChars + (r.repair?.inputChars ?? 0),
     warnings: r.diagnostics.filter((d) => d.severity === "warning").length,
+    ...(r.repair ? { firstOutput: r.first.spec } : {}),
   };
 }
 
-export async function askHtml(task: Task, config: ModelConfig, fetchImpl?: typeof fetch): Promise<Answer> {
-  const messages = [{ role: "system" as const, content: HTML_PROMPT }, { role: "user" as const, content: task.request }];
-  const usage: Usage = {};
+/** What an HTML answer is sent back with when it ran with errors: the counterpart of SayShape's repair. */
+export function htmlRepairPrompt(problems: string[]): string {
+  return `Your HTML had these problems when it ran:\n${problems.slice(0, 10).map((p) => `- ${p}`).join("\n")}\nReply with the whole corrected HTML fragment only.`;
+}
+
+/**
+ * An HTML answer. With repair, when the first answer runs with script errors or
+ * shows nothing, the problems go back to the model once and its fixed HTML is used.
+ */
+export async function askHtml(task: Task, config: ModelConfig, fetchImpl?: typeof fetch, repair = false): Promise<Answer> {
+  const messages: ChatMessage[] = [{ role: "system", content: HTML_PROMPT }, { role: "user", content: task.request }];
   const start = clock();
-  let raw = "", firstTokenMs: number | undefined;
-  for await (const part of streamChat(config, messages, { usage, fetch: fetchImpl })) {
-    firstTokenMs ??= clock() - start;
-    if (part.kind === "content") raw += part.text;
+  let firstTokenMs: number | undefined;
+  const ask = async (msgs: ChatMessage[]) => {
+    const usage: Usage = {};
+    let raw = "";
+    for await (const part of streamChat(config, msgs, { usage, fetch: fetchImpl })) {
+      firstTokenMs ??= clock() - start;
+      if (part.kind === "content") raw += part.text;
+    }
+    return { raw, usage };
+  };
+  const first = await ask(messages);
+  const firstOutput = cleanHtml(first.raw);
+  const inputChars = HTML_PROMPT.length + task.request.length;
+  if (repair) {
+    const { valid, problems } = await score("html", { ...task, checks: [] }, firstOutput);
+    if (!valid) {
+      const fix: ChatMessage[] = [...messages, { role: "assistant", content: first.raw }, { role: "user", content: htmlRepairPrompt(problems) }];
+      const second = await ask(fix);
+      return {
+        output: cleanHtml(second.raw), raw: second.raw, usage: addUsage(first.usage, second.usage), firstTokenMs, totalMs: clock() - start,
+        inputChars: inputChars + fix.reduce((n, m) => n + m.content.length, 0), firstOutput,
+      };
+    }
   }
-  return { output: cleanHtml(raw), raw, usage, firstTokenMs, totalMs: clock() - start, inputChars: HTML_PROMPT.length + task.request.length };
+  return { output: firstOutput, raw: first.raw, usage: first.usage, firstTokenMs, totalMs: clock() - start, inputChars };
+}
+
+/** Two attempts' usage added up; a figure either didn't report stays unknown. */
+function addUsage(a: Usage, b: Usage): Usage {
+  const out: Usage = {};
+  for (const k of ["promptTokens", "completionTokens", "reasoningTokens", "cachedTokens", "cacheWriteTokens"] as const) {
+    if (a[k] !== undefined && b[k] !== undefined) out[k] = a[k]! + b[k]!;
+  }
+  return out;
 }
 
 async function open(format: Format, code: string): Promise<Screen> {
@@ -222,6 +271,8 @@ export interface CompareOptions {
   runs?: number;
   registry: Registry;
   guide?: GuideOptions;
+  /** One repair per answer when the first has problems (SayShape diagnostics, HTML script errors). */
+  repair?: boolean;
   prices?: Record<string, Prices>;
   fetch?: typeof fetch;
   onResult?: (r: AnswerResult, done: number, total: number) => void;
@@ -258,7 +309,7 @@ async function answerOne(task: Task, format: Format, model: string, run: number,
   const base = { model, task: task.id, category: task.category, format, run };
   let a: Answer;
   try {
-    a = format === "sayshape" ? await askSayShape(task, config, o.registry, guide, o.fetch) : await askHtml(task, config, o.fetch);
+    a = format === "sayshape" ? await askSayShape(task, config, o.registry, guide, o.fetch, o.repair) : await askHtml(task, config, o.fetch, o.repair);
   } catch (e) {
     return {
       ...base, ok: false, error: e instanceof Error ? e.message : String(e), output: "", raw: "", usage: {}, totalMs: 0, inputChars: 0,
@@ -272,7 +323,15 @@ async function answerOne(task: Task, format: Format, model: string, run: number,
     ...base, ok: true, output: a.output, raw: a.raw, usage: a.usage, cost, firstTokenMs: a.firstTokenMs, totalMs: a.totalMs, inputChars: a.inputChars,
     valid: s.valid, problems: s.problems, checks: s.checks, success: s.valid && s.checks.every((c) => c.passed),
     code: codeStats(format, a.output, a.warnings ?? 0),
+    ...(o.repair ? await firstTry(format, task, a) : {}),
   };
+}
+
+/** With repair on: whether it ran, and how the first answer did on its own. */
+async function firstTry(format: Format, task: Task, a: Answer): Promise<Pick<AnswerResult, "repaired" | "firstSuccess" | "firstOutput">> {
+  if (a.firstOutput === undefined) return { repaired: false };
+  const f = await score(format, task, a.firstOutput);
+  return { repaired: true, firstOutput: a.firstOutput, firstSuccess: f.valid && f.checks.every((c) => c.passed) };
 }
 
 /** The system prompt each format is sent, for the report. */
@@ -297,6 +356,10 @@ export interface Summary {
   failedRequests: number;
   validRate: number;
   successRate: number;
+  /** Without the repair: first answers that worked (equals successRate when repair is off). */
+  firstSuccessRate: number;
+  /** Answers a repair ran on. */
+  repaired: number;
   checkRate: number;
   /** Medians over answered requests; undefined when the server didn't report them. */
   inputTokens?: number;
@@ -341,6 +404,8 @@ export function summarize(results: AnswerResult[]): Summary[] {
       failedRequests: rs.length - answered.length,
       validRate: answered.length ? answered.filter((r) => r.valid).length / answered.length : 0,
       successRate: answered.length ? successes / answered.length : 0,
+      firstSuccessRate: answered.length ? answered.filter((r) => (r.repaired ? r.firstSuccess : r.success)).length / answered.length : 0,
+      repaired: answered.filter((r) => r.repaired).length,
       checkRate: checks.length ? checks.filter((c) => c.passed).length / checks.length : 0,
       inputTokens: median(known(answered.map((r) => r.usage.promptTokens))),
       cachedShare: cachedShare(answered),
@@ -371,10 +436,11 @@ export function report(results: AnswerResult[], meta: { date: string; url: strin
   lines.push(`# SayShape vs HTML`, "", `${meta.date} · ${meta.url} · ${meta.runs} run${meta.runs === 1 ? "" : "s"} per task · first tries only, no repair`, "");
   lines.push(`System prompts: SayShape guide ${meta.guideChars.toLocaleString("en-US")} characters, HTML instructions ${meta.htmlPromptChars} characters. Prompt caching: ${meta.cache === "1h" ? "marked, 1 hour" : meta.cache ? "marked, about 5 minutes" : "not marked (servers that cache on their own still may)"}.`, "");
   lines.push("## Summary", "");
-  lines.push("| Model | Format | Works (all checks) | Checks passed | Renders cleanly | Input tokens | From cache | Output tokens | First token | Total time | Cost | Cost per working UI |");
-  lines.push("|---|---|---|---|---|---|---|---|---|---|---|---|");
+  const repair = results.some((r) => r.repaired !== undefined);
+  lines.push(`| Model | Format | ${repair ? "Works first try | Works after repair | Repairs |" : "Works (all checks) |"} Checks passed | Renders cleanly | Input tokens | From cache | Output tokens | First token | Total time | Cost | Cost per working UI |`);
+  lines.push(`|---|---|${repair ? "---|---|---|" : "---|"}---|---|---|---|---|---|---|---|---|`);
   for (const s of sums) {
-    lines.push(`| ${s.model} | ${s.format} | ${pct(s.successRate)} | ${pct(s.checkRate)} | ${pct(s.validRate)} | ${num(s.inputTokens)} | ${s.cachedShare === undefined ? "?" : pct(s.cachedShare)} | ${num(s.outputTokens)} | ${secs(s.firstTokenMs)} | ${secs(s.totalMs)} | ${usd(s.cost)} | ${usd(s.costPerSuccess)} |`);
+    lines.push(`| ${s.model} | ${s.format} | ${repair ? `${pct(s.firstSuccessRate)} | ${pct(s.successRate)} | ${s.repaired} |` : `${pct(s.successRate)} |`} ${pct(s.checkRate)} | ${pct(s.validRate)} | ${num(s.inputTokens)} | ${s.cachedShare === undefined ? "?" : pct(s.cachedShare)} | ${num(s.outputTokens)} | ${secs(s.firstTokenMs)} | ${secs(s.totalMs)} | ${usd(s.cost)} | ${usd(s.costPerSuccess)} |`);
   }
   lines.push("", "Token and time figures are medians per answer; From cache is the share of all input tokens the server read from its prompt cache; cost is the total over all answers.", "");
   lines.push("## Code", "");

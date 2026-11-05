@@ -6,12 +6,13 @@
  *   npm run compare -- --runs 3                      each task three times per model and format
  *   npm run compare -- --only kpi,d1                 some categories or task ids
  *   npm run compare -- --guide compact               SayShape's compact guide instead of the full one
+ *   npm run compare -- --repair                      one repair when the first answer has problems
  *   npm run compare -- --cache 1h                    mark the guide for prompt caching (1h, 5m or off;
  *                                                    default LOOM_PROMPT_CACHE)
  *
  * Settings come from .env.local like `npm run eval` (LOOM_MODEL_URL,
  * LOOM_API_KEY). With OpenRouter, each model's prices are looked up so the
- * report can show cost. Every answer is a first try, with no repair.
+ * report can show cost. Every answer is a first try unless --repair is given.
  *
  * Results go to eval/compare/results/<date>/: report.md, results.json, and
  * each answer as .loom or .html under answers/.
@@ -83,6 +84,7 @@ async function main(): Promise<void> {
     runs,
     registry,
     guide,
+    repair: process.argv.includes("--repair"),
     prices,
     onResult: (r, done, n) => {
       const mark = !r.ok ? `failed: ${r.error?.slice(0, 80)}` : r.success ? "works" : `${r.checks.filter((c) => !c.passed).length + (r.valid ? 0 : 1)} problem(s)`;
