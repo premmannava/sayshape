@@ -130,9 +130,10 @@ function activateMap(ctx: PressContext): boolean {
       runtime.spider = { indices: collision, fingerprint: data.fingerprint };
       return true;
     }
-    if (runtime.spider) runtime.spider = null;
+    const wasOpen = !!runtime.spider;
+    runtime.spider = null;
     if (bind) ctx.set(bind, pin.label);
-    return !!runtime.spider;
+    return wasOpen;
   }
   if (typeof detail === "string" && detail.startsWith("@map:cluster:")) {
     const group = data.groups[Number(detail.slice("@map:cluster:".length))];
@@ -489,12 +490,22 @@ map bind=selected fit=pins cluster=true controls=true
         if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return { detail: CONTROLS[i] };
       }
     }
+    // Expanded markers sit above the real locations and have independent hit targets.
+    for (let i = data.spiderPoints.length - 1; i >= 0; i--) {
+      const point = data.spiderPoints[i]!;
+      const pin = data.pins[point.index]!;
+      const dx = x - box.x - point.x, dy = y - box.y - point.y;
+      if (dx * dx + dy * dy <= (pin.size + 4) ** 2) return { detail: "@map:spider:" + pin.id };
+    }
+    const expanded = new Set(data.spiderPoints.map((p) => p.index));
     for (let i = data.groups.length - 1; i >= 0; i--) {
       const group = data.groups[i]!;
+      if (group.items.length === 1 && expanded.has(group.items[0]!.id)) continue;
       const dx = x - box.x - group.x, dy = y - box.y - group.y;
       const radius = group.items.length > 1 ? 20 : group.items[0]!.size + 4;
       if (dx * dx + dy * dy <= radius * radius) {
-        return { detail: group.items.length > 1 ? "@map:cluster:" + i : group.items[0]!.label };
+        return { detail: group.items.length > 1 ? "@map:cluster:" + i :
+          data.kind === "bubble" ? "@map:bubble:" + group.items[0]!.id : group.items[0]!.label };
       }
     }
     const scale = data.scale * data.view.zoom;
@@ -509,6 +520,7 @@ map bind=selected fit=pins cluster=true controls=true
     const box = ctx.target.box;
     const data = details(box);
     const factor = Math.exp(-Math.max(-600, Math.min(600, ctx.deltaY)) * 0.0015);
+    data.runtime.spider = null;
     data.runtime.view = zoomAt(data.runtime.view, factor, ctx.x - box.x, ctx.y - box.y, box.w, box.h);
     return true;
   },
@@ -528,6 +540,7 @@ map bind=selected fit=pins cluster=true controls=true
       const dx = ctx.x - drag.startX, dy = ctx.y - drag.startY;
       if (!drag.moved && dx * dx + dy * dy <= 16) return false;
       drag.moved = true;
+      runtime.spider = null;
       runtime.view = panBy(drag.base, dx, dy, box.w, box.h);
       return true;
     }
