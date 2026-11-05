@@ -60,6 +60,9 @@ export function eventDelivery(caps: EventCaps, name: string, value: Value | unde
   return null;
 }
 
+/** A short user-approved follow-up for hosts that save action context but cannot start a new turn. */
+export const ACTION_FOLLOWUP = "Continue the action I just selected in the SayShape interface using the attached action context. Ask for approval before modifying files or running commands.";
+
 /**
  * How to bring the engine from `shown` to `next`, the newest copy of a
  * streamed spec: append the new part, or start over when the text isn't a
