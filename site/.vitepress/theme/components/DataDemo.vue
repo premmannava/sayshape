@@ -23,6 +23,10 @@ import { FileProblem, MAX_FILE_BYTES, readSpreadsheet } from "../sayshape/readFi
 
 /** The name live answers read the spreadsheet by (worker/src/answer.ts). */
 const LIVE_NAME = "data";
+/** Shown when the site was built without the model proxy's URL (VITE_SAYSHAPE_MODEL_ENDPOINT). */
+const NO_MODEL = import.meta.env.DEV
+  ? "Your file is read, but no model is connected, so it can't be answered yet. Run the worker (worker/README.md) and start the site with VITE_SAYSHAPE_MODEL_ENDPOINT=http://localhost:8787."
+  : "Your file is read, but live answers aren't switched on for this copy of the site yet. The sample spreadsheets still work.";
 
 interface OwnFile { name: string; table: Table; notes: string[] }
 type Source = { kind: "sample"; index: number } | { kind: "file" };
@@ -165,10 +169,17 @@ function startCheck() {
 async function askLive(text: string) {
   const question = text.trim().slice(0, MAX_QUESTION_CHARS);
   const l = sayshape.value;
-  if (!question || !l || !generationAvailable) return;
+  if (!question || !l) return;
   stop();
   mode.value = "with";
   answer.value = { kind: "live", text: question };
+  if (!generationAvailable) {
+    // The file still reads and previews; only the answer needs the model proxy.
+    shown.value = "";
+    writing.value = false;
+    live.value = { phase: "done", error: NO_MODEL };
+    return;
+  }
   live.value = { phase: "waiting", error: null };
   shown.value = "";
   writing.value = true;
@@ -291,7 +302,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <label v-if="generationAvailable" class="dd-drop" :class="{ over: dragging, busy: reading }" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="onDrop">
+        <label class="dd-drop" :class="{ over: dragging, busy: reading }" @dragover.prevent="dragging = true" @dragleave="dragging = false" @drop.prevent="onDrop">
           <input type="file" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" class="dd-file" :disabled="!!reading" @change="onPick" @focus="startCheck">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
           <span>
@@ -299,10 +310,6 @@ onBeforeUnmount(() => {
             <span>Excel (.xlsx) or CSV, up to {{ MAX_FILE_BYTES / 1024 / 1024 }} MB. Read here; never uploaded.</span>
           </span>
         </label>
-        <div v-else class="dd-drop off">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></svg>
-          <span><strong>Your own file</strong><span>Live answers aren't switched on for this copy of the site.</span></span>
-        </div>
         <p v-if="fileError" class="dd-error" role="alert">{{ fileError }}</p>
         <ul v-if="source.kind === 'file' && own?.notes.length" class="dd-notes">
           <li v-for="n in own.notes" :key="n">{{ n }}</li>
@@ -325,7 +332,7 @@ onBeforeUnmount(() => {
       <div class="dd-step">
         <p class="dd-eyebrow">2 · Ask a question</p>
         <div class="dd-asks" role="group" aria-label="Suggested questions">
-          <button v-for="x in chips" :key="x.text" type="button" class="dd-ask" :aria-pressed="x.pressed" :disabled="!entry && !generationAvailable" @click="x.pick">{{ x.text }}</button>
+          <button v-for="x in chips" :key="x.text" type="button" class="dd-ask" :aria-pressed="x.pressed" @click="x.pick">{{ x.text }}</button>
         </div>
         <form v-if="generationAvailable" class="dd-form" @submit.prevent="submit">
           <label class="dd-visually-hidden" for="dd-question">Ask anything about {{ sourceName }}</label>
@@ -403,8 +410,6 @@ onBeforeUnmount(() => {
 .dd-drop:hover, .dd-drop.over, .dd-drop:focus-within { border-color: var(--ss-rule); border-style: solid; background: var(--ss-card) }
 .dd-drop:focus-within { outline: 2px solid var(--vp-c-brand-1); outline-offset: 2px }
 .dd-drop.busy { cursor: progress }
-.dd-drop.off { cursor: default }
-.dd-drop.off:hover { border-style: dashed; border-color: var(--vp-c-text-3); background: none }
 .dd-drop svg { flex: none }
 .dd-drop > span { display: flex; flex-direction: column; font-size: 13px }
 .dd-drop strong { font-size: 15px; color: var(--vp-c-text-1) }
