@@ -9,6 +9,8 @@ import world from "./world.json";
 import { clusterPoints, type Cluster } from "./clustering";
 import { bubbleRadius, bubbleValues, formatMapValue, fraction, mixedColor, regionValues, type BubbleValues, type RegionValues } from "./analytics";
 import { drawBubbleLegend, drawChoroplethLegend } from "./legend";
+import { overlappingGroups, spiderfy, type SpiderPoint } from "./overlap";
+import { layoutBubbleLabels, type LabelCircle } from "./labels";
 import { isList } from "../../data";
 import { constrain, fitPins, panBy, worldView, zoomAt, type Viewport } from "./viewport";
 
@@ -46,6 +48,7 @@ const PIN_TONES = ["ink", "accent", "good", "warn", "bad", "muted"] as const;
 type PinTone = (typeof PIN_TONES)[number];
 
 interface MapPinPoint {
+  id: number;
   node: SayShapeNode;
   label: string;
   detail: string;
@@ -69,6 +72,8 @@ interface MapRuntime {
   fitMode: "world" | "pins";
   fitKey: string;
   drag: MapDrag | null;
+  /** Expanded location indices are kept only until the dataset or camera changes. */
+  spider: { indices: number[]; fingerprint: string } | null;
 }
 interface MapData {
   scale: number;
@@ -83,6 +88,9 @@ interface MapData {
   bubbles?: BubbleValues;
   legend: boolean;
   legendTitle: string;
+  fingerprint: string;
+  overlaps: number[][];
+  spiderPoints: SpiderPoint[];
 }
 const runtimes = new WeakMap<SayShapeNode, MapRuntime>();
 const CONTROLS = ["@map:in", "@map:out", "@map:reset"] as const;
@@ -98,29 +106,49 @@ function resetView(data: MapData, box: Box): Viewport {
 function activateMap(ctx: PressContext): boolean {
   const box = ctx.target.box;
   const data = details(box);
+  const runtime = data.runtime;
   const detail = ctx.target.detail;
-  const localX = (box.w / 2), localY = (box.h / 2);
-  if (detail === "@map:in") {
-    data.runtime.view = zoomAt(data.runtime.view, 1.7, localX, localY, box.w, box.h);
+  const bind = ctx.props(ctx.target.node).raw("bind");
+  const centerX = box.w / 2, centerY = box.h / 2;
+  if (detail === "@map:in" || detail === "@map:out" || detail === "@map:reset") {
+    runtime.spider = null;
+    runtime.view = detail === "@map:reset" ? resetView(data, box) :
+      zoomAt(runtime.view, detail === "@map:in" ? 1.7 : 1 / 1.7, centerX, centerY, box.w, box.h);
     return true;
   }
-  if (detail === "@map:out") {
-    data.runtime.view = zoomAt(data.runtime.view, 1 / 1.7, localX, localY, box.w, box.h);
-    return true;
+  if (typeof detail === "string" && detail.startsWith("@map:spider:")) {
+    const pin = data.pins[Number(detail.slice("@map:spider:".length))];
+    if (pin && bind) ctx.set(bind, pin.label);
+    return false;
   }
-  if (detail === "@map:reset") {
-    data.runtime.view = resetView(data, box);
-    return true;
+  if (typeof detail === "string" && detail.startsWith("@map:bubble:")) {
+    const id = Number(detail.slice("@map:bubble:".length));
+    const pin = data.pins[id];
+    if (!pin) return false;
+    const collision = data.overlaps.find((indices) => indices.includes(id));
+    if (collision) {
+      runtime.spider = { indices: collision, fingerprint: data.fingerprint };
+      return true;
+    }
+    if (runtime.spider) runtime.spider = null;
+    if (bind) ctx.set(bind, pin.label);
+    return !!runtime.spider;
   }
   if (typeof detail === "string" && detail.startsWith("@map:cluster:")) {
-    const i = Number(detail.slice("@map:cluster:".length));
-    const group = data.groups[i];
+    const group = data.groups[Number(detail.slice("@map:cluster:".length))];
     if (group && group.items.length > 1) {
-      data.runtime.view = zoomAt(data.runtime.view, 2.5, group.x, group.y, box.w, box.h);
+      const next = zoomAt(runtime.view, 2.5, group.x, group.y, box.w, box.h);
+      if (data.kind === "bubble" && next.zoom === runtime.view.zoom) {
+        runtime.spider = { indices: group.items.map((pin) => pin.id), fingerprint: data.fingerprint };
+      } else {
+        runtime.spider = null;
+        runtime.view = next;
+      }
       return true;
     }
   }
-  const bind = ctx.props(ctx.target.node).raw("bind");
+  // Click outside an expanded group to close it without changing the country selection.
+  if (runtime.spider) { runtime.spider = null; return true; }
   if (bind && typeof detail === "string" && !detail.startsWith("@map:")) ctx.set(bind, detail);
   return false;
 }
@@ -174,7 +202,7 @@ map bind=selected fit=pins cluster=true controls=true
       }
       const [x, y] = project(lon, lat);
       pins.push({
-        node, label: p.text(), detail: p.str("detail"), x, y,
+        id: pins.length, node, label: p.text(), detail: p.str("detail"), x, y,
         tone: p.oneOf("tone", PIN_TONES, "ink"),
         size: Math.max(2, Math.min(18, p.num("size", 5))),
       });
@@ -198,7 +226,7 @@ map bind=selected fit=pins cluster=true controls=true
         const [x, y] = project(point.lon, point.lat);
         const metric = p.str("legendTitle", "Value");
         pins.push({
-          node: box.node, label: point.label,
+          id: pins.length, node: box.node, label: point.label,
           detail: metric + ": " + formatMapValue(point.value), x, y,
           tone: "accent", size: bubbleRadius(point.value, bubbles.min, bubbles.max),
           value: point.value,
@@ -206,29 +234,46 @@ map bind=selected fit=pins cluster=true controls=true
       }
     }
     const fit = p.oneOf("fit", ["world", "pins"] as const, "world");
-    const key = box.w + ":" + pins.map((pin) => pin.x.toFixed(2) + "," + pin.y.toFixed(2)).join(";");
+    const key = kind + ":" + box.w + ":" + pins.map((pin) => pin.x.toFixed(2) + "," + pin.y.toFixed(2) +
+      "," + pin.size.toFixed(2) + "," + pin.label).join(";");
     let runtime = runtimes.get(box.node);
     if (!runtime) {
-      runtime = { view: worldView(), fitMode: "world", fitKey: "", drag: null };
+      runtime = { view: worldView(), fitMode: "world", fitKey: "", drag: null, spider: null };
       runtimes.set(box.node, runtime);
     }
     if (fit !== runtime.fitMode || (fit === "pins" && key !== runtime.fitKey)) {
       runtime.view = fit === "pins" ? fitPins(pins, box.w, box.h, WORLD.w) : worldView();
     }
+    if (runtime.fitKey !== key) runtime.spider = null;
     runtime.fitMode = fit;
     runtime.fitKey = key;
     runtime.view = constrain(runtime.view, box.w, box.h);
     const view = runtime.view;
     const visible = pins.map((pin) => ({
-      item: pin, x: pin.x * scale * view.zoom + view.dx, y: pin.y * scale * view.zoom + view.dy,
+      index: pin.id, item: pin, x: pin.x * scale * view.zoom + view.dx, y: pin.y * scale * view.zoom + view.dy,
     })).filter((point) => point.x >= -32 && point.x <= box.w + 32 && point.y >= -32 && point.y <= box.h + 32);
     const groups = p.bool("cluster", false)
       ? clusterPoints(visible)
       : visible.map(({ item, x, y }) => ({ items: [item], x, y }));
+    // Collision tests use the *actual drawn radii*, not the fixed clustering distance.
+    const overlaps = kind === "bubble" ? overlappingGroups(visible.map(
+      ({ x, y, item }) => ({ x, y, radius: item.size }),
+    )).map((group) => group.map((i) => visible[i]!.index)) : [];
+    const allCircles = pins.map((pin) => ({
+      x: pin.x * scale * view.zoom + view.dx,
+      y: pin.y * scale * view.zoom + view.dy,
+      radius: pin.size,
+    }));
+    const expanded = runtime.spider;
+    const active = expanded?.fingerprint === key && overlaps.some((group) =>
+      group.length === expanded.indices.length && group.every((id) => expanded.indices.includes(id)));
+    if (expanded && !active) runtime.spider = null;
+    const spiderPoints = active && expanded ? spiderfy(expanded.indices, allCircles, box.w, box.h) : [];
     box.data = {
       scale, pins, groups, view, runtime, fit, controls: p.bool("controls", false),
       kind, regions, bubbles, legend: p.bool("legend", kind !== "markers"),
       legendTitle: p.str("legendTitle", kind === "choropleth" ? "Country value" : "Location value"),
+      fingerprint: key, overlaps, spiderPoints,
     } satisfies MapData;
   },
   paint(box, ctx) {
@@ -251,8 +296,9 @@ map bind=selected fit=pins cluster=true controls=true
     g.strokeStyle = c.surface;
     for (const { name, path } of countryPaths()) {
       const value = regions?.values.get(name);
-      const shade = value === undefined ? c.land :
-        mixedColor(c.land, c.accent, 0.15 + 0.85 * fraction(value, regions!.min, regions!.max));
+      const shade = value === undefined
+        ? (regions ? mixedColor(c.land, c.muted, 0.22) : c.land)
+        : mixedColor(c.land, c.accent, 0.34 + 0.66 * Math.pow(fraction(value, regions!.min, regions!.max), 0.8));
       g.fillStyle = name === selected ? c.accent :
         name === hovered ? c.landHover :
         highlighted.has(name) ? c.landHighlight : shade;
