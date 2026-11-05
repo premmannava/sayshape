@@ -398,15 +398,22 @@ ELEMENTS
     action=<string>  Label for a button under the message.
     on=<action>  Actions to run when the button is pressed, e.g. emit:changed. Separate several with ;
 
-  map  — A world map with clickable countries. Highlight countries by name and add pin children for places.
-    highlight=<string>  Comma-separated country names to tint, e.g. "Japan,Brazil".
-    bind=<state>  State name that receives the clicked country's name.
+  map  — Canvas world map with selectable pins, wheel zoom, drag pan, auto-fit, optional clustering and rich tooltips. Use fit=pins for local datasets and cluster=true for dense locations.
+    highlight=<string>  Comma-separated country names to tint, e.g. Japan,Brazil.
+    bind=<state>  State name that receives the clicked country or marker label.
+    fit=<world|pins>  Initial framing: whole world, or zoom to the current pin locations. Re-fits when the pins change.
+    cluster=<boolean>  Group nearby pins into clickable counts. Zooming in separates them.
+    interactive=<boolean>  Enable mouse-wheel zoom and drag pan.
+    controls=<boolean>  Show Canvas zoom in, zoom out and reset controls. Opt in to preserve the original minimal map appearance.
     children: pin
 
-  pin "<text>"  — A labelled point on a map, placed by latitude and longitude.
+  pin "<text>"  — A labelled point on a Canvas map. The optional detail is shown in a multiline hover tooltip.
     "<text>" (required)  The place name shown next to the pin.
     lat=<number, required>  Latitude in degrees (-90 to 90).
     lon=<number, required>  Longitude in degrees (-180 to 180).
+    detail=<string>  Tooltip details; separate lines with |. Supports interpolated dataset expressions.
+    tone=<ink|accent|good|warn|bad|muted>  Theme color: ink, accent, good, warn, bad or muted.
+    size=<number>  Marker radius in CSS pixels, clamped to 2..18. Supports expressions.
     only inside: map
 
 RULES

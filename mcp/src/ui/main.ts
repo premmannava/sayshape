@@ -14,6 +14,7 @@ import "./no-eval";
 import { App, applyHostFonts, applyHostStyleVariables, type McpUiHostContext } from "@modelcontextprotocol/ext-apps";
 import { SayShape } from "../../../src/engine";
 import { coreComponents } from "../../../src/components";
+import { mapComponents } from "../../../src/components/map";
 import type { Theme } from "../../../src/theme";
 import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
@@ -304,7 +305,7 @@ async function start(): Promise<void> {
   });
   themePicker.setSpec(THEME_CONTROL_SPEC);
   loom = new SayShape(canvas, {
-    components: coreComponents,
+    components: [...coreComponents, ...mapComponents],
     theme,
     // The view has no network access of its own; the client's sandbox blocks it too.
     imageHosts: [],

@@ -247,15 +247,14 @@ watch(() => texts.value.a2ui, applyA2ui);
 
 async function loadA2ui() {
   try {
-    const [core, lit, md] = await Promise.all([import("@a2ui/web_core/v0_9"), import("@a2ui/lit/v0_9"), import("@a2ui/markdown-it")]);
-    // Set up the way A2UI's own renderers are: its styles, its Markdown renderer for Text,
-    // and the icon font its Icon component draws with (Material Symbols, from Google Fonts).
+    // Set up the way A2UI's own renderers are: its styles, its Markdown renderer for Text, and the
+    // icon font its Icon component draws with (Material Symbols, self-hosted like the site's other fonts).
+    const [core, lit, md] = await Promise.all([
+      import("@a2ui/web_core/v0_9"), import("@a2ui/lit/v0_9"), import("@a2ui/markdown-it"),
+      import("@fontsource/material-symbols-outlined/400.css"),
+    ]);
     core.injectBasicCatalogStyles(document);
     core.setMarkdownRenderer(md.renderMarkdown);
-    if (!document.getElementById("a2ui-icons")) {
-      const link = Object.assign(document.createElement("link"), { id: "a2ui-icons", rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" });
-      document.head.appendChild(link);
-    }
     a2 = { core, lit };
     resetA2ui();
     applyA2ui();

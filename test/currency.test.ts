@@ -50,7 +50,7 @@ describe("one currency sign", () => {
   });
 
   it("drops it before compact with a currency too", () => {
-    expect(show("${compact(big, 'USD')}")).toBe("$250.0K");
+    expect(show("${compact(big, 'USD')}")).toBe("$250K");
   });
 
   it("reads amounts that are already formatted", () => {
@@ -58,7 +58,7 @@ describe("one currency sign", () => {
     expect(val("money(plain)")).toBe("$1,000.00");
     expect(val("money('-$84.10')")).toBe("-$84.10");
     expect(val("number('$2,400')")).toBe("2,400");
-    expect(val("compact('$250,000', 'USD')")).toBe("$250.0K");
+    expect(val("compact('$250,000', 'USD')")).toBe("$250K");
   });
 
   it("still shows a dash for what isn't an amount", () => {

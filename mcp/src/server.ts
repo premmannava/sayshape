@@ -36,6 +36,7 @@ import { z } from "zod";
 import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
+import { mapComponents } from "../../src/components/map";
 import { elementGuide, elementIndex, guideSections, languageGuide } from "../../src/prompt";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
@@ -50,7 +51,8 @@ export const MAX_SPEC_CHARS = 20_000;
 /** How many problems go back to the model; the first few are what it needs to fix. */
 const MAX_REPORTED = 12;
 
-const registry = new Registry(coreComponents);
+const components = [...coreComponents, ...mapComponents];
+const registry = new Registry(components);
 
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
 const CHAT_NOTES = `This guide calls the language Loom, its earlier name: it is the same language as SayShape.
@@ -109,8 +111,8 @@ export function quickStart(withData = false, withMcp = false): string {
     "- Text and props can show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
     "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue')`,
-    `ELEMENTS\n${elementIndex(coreComponents)}`,
-    "IN A CHAT: one card with a title; the column is about 600px wide, so use grid min=140 for side-by-side figures; say in a caption when numbers come from your own knowledge.",
+    `ELEMENTS\n${elementIndex(components)}`,
+    "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
     `BEFORE YOU USE AN ELEMENT for the first time in a conversation, get its props and an example with sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");
@@ -123,7 +125,7 @@ export function docsText(elements: readonly string[], topicNames: readonly strin
   if (elements.length) {
     const { text, unknown } = elementGuide(registry, elements);
     if (text) parts.push(`ELEMENTS\n${text}`);
-    if (unknown.length) parts.push(`No element called ${unknown.join(", ")}. The elements are:\n${elementIndex(coreComponents)}`);
+    if (unknown.length) parts.push(`No element called ${unknown.join(", ")}. The elements are:\n${elementIndex(components)}`);
   }
   for (const name of topicNames) {
     const body = t[name];

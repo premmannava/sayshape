@@ -1,13 +1,13 @@
 /**
- * World map. Kept in its own entry point (`loom-ui/map`) because the country
- * outlines add ~76 KB that most screens don't need.
- *
- * Country shapes: Natural Earth 1:110m (public domain) via world-atlas,
- * pre-projected with the Natural Earth I projection by scripts/build-world.mjs.
+ * Canvas-only geographic data visualization. No tiles, external services,
+ * mapping libraries or geographic navigation/routing dependencies.
+ * The Natural Earth 1:110m country outlines are embedded in this opt-in entry.
  */
-import type { ComponentDef } from "../../component";
+import type { ComponentDef, PressContext } from "../../component";
 import type { Box, SayShapeNode } from "../../types";
 import world from "./world.json";
+import { clusterPoints, type Cluster } from "./clustering";
+import { constrain, fitPins, panBy, worldView, zoomAt, type Viewport } from "./viewport";
 
 interface WorldData { w: number; h: number; k: number; t: [number, number]; c: Array<[string, string]> }
 const WORLD = world as unknown as WorldData;
@@ -18,10 +18,10 @@ function countryPaths() {
   return paths;
 }
 
-/** All country names the map knows, for docs and validation. */
+/** Country names available for matching data values. */
 export const COUNTRY_NAMES: readonly string[] = WORLD.c.map((c) => c[0]);
 
-/** Natural Earth I projection, matching the pre-projected outlines. */
+/** Natural Earth I projection, shared with the pre-projected country outlines. */
 export function project(lon: number, lat: number): [number, number] {
   const l = (lon * Math.PI) / 180, f = (lat * Math.PI) / 180, f2 = f * f, f4 = f2 * f2;
   const x = l * (0.8707 - 0.131979 * f2 + f4 * (-0.013791 + f4 * (0.003971 * f2 - 0.001529 * f4)));
@@ -31,7 +31,6 @@ export function project(lon: number, lat: number): [number, number] {
 
 let probe: CanvasRenderingContext2D | null = null;
 function countryAt(mx: number, my: number): string | null {
-  // Outside a browser (tests, server rendering) there's no canvas to test points with.
   if (!probe && typeof document === "undefined") return null;
   if (!probe) probe = document.createElement("canvas").getContext("2d");
   if (!probe) return null;
@@ -40,39 +39,155 @@ function countryAt(mx: number, my: number): string | null {
 }
 
 const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+const PIN_TONES = ["ink", "accent", "good", "warn", "bad", "muted"] as const;
+type PinTone = (typeof PIN_TONES)[number];
+
+interface MapPinPoint {
+  node: SayShapeNode;
+  label: string;
+  detail: string;
+  x: number;
+  y: number;
+  tone: PinTone;
+  size: number;
+}
+interface MapDrag {
+  startX: number;
+  startY: number;
+  base: Viewport;
+  detail: unknown;
+  moved: boolean;
+}
+interface MapRuntime {
+  view: Viewport;
+  fitMode: "world" | "pins";
+  fitKey: string;
+  drag: MapDrag | null;
+}
+interface MapData {
+  scale: number;
+  pins: MapPinPoint[];
+  groups: Cluster<MapPinPoint>[];
+  view: Viewport;
+  runtime: MapRuntime;
+  fit: "world" | "pins";
+  controls: boolean;
+}
+const runtimes = new WeakMap<SayShapeNode, MapRuntime>();
+const CONTROLS = ["@map:in", "@map:out", "@map:reset"] as const;
+const controlRect = (b: Box, i: number) => ({ x: b.x + b.w - 34, y: b.y + 8 + 32 * i, w: 26, h: 26 });
+const details = (b: Box) => b.data as unknown as MapData;
+const isControl = (name: unknown): name is (typeof CONTROLS)[number] =>
+  typeof name === "string" && (CONTROLS as readonly string[]).includes(name);
+
+function resetView(data: MapData, box: Box): Viewport {
+  return data.fit === "pins" ? fitPins(data.pins, box.w, box.h, WORLD.w) : worldView();
+}
+
+function activateMap(ctx: PressContext): boolean {
+  const box = ctx.target.box;
+  const data = details(box);
+  const detail = ctx.target.detail;
+  const localX = (box.w / 2), localY = (box.h / 2);
+  if (detail === "@map:in") {
+    data.runtime.view = zoomAt(data.runtime.view, 1.7, localX, localY, box.w, box.h);
+    return true;
+  }
+  if (detail === "@map:out") {
+    data.runtime.view = zoomAt(data.runtime.view, 1 / 1.7, localX, localY, box.w, box.h);
+    return true;
+  }
+  if (detail === "@map:reset") {
+    data.runtime.view = resetView(data, box);
+    return true;
+  }
+  if (typeof detail === "string" && detail.startsWith("@map:cluster:")) {
+    const i = Number(detail.slice("@map:cluster:".length));
+    const group = data.groups[i];
+    if (group && group.items.length > 1) {
+      data.runtime.view = zoomAt(data.runtime.view, 2.5, group.x, group.y, box.w, box.h);
+      return true;
+    }
+  }
+  const bind = ctx.props(ctx.target.node).raw("bind");
+  if (bind && typeof detail === "string" && !detail.startsWith("@map:")) ctx.set(bind, detail);
+  return false;
+}
 
 export const map: ComponentDef = {
   type: "map",
   category: "data",
-  description: "A world map with clickable countries. Highlight countries by name and add pin children for places.",
+  description: "Canvas world map with selectable pins, wheel zoom, drag pan, auto-fit, optional clustering and rich tooltips. Use fit=pins for local datasets and cluster=true for dense locations.",
   props: {
-    highlight: { type: "string", description: "Comma-separated country names to tint, e.g. \"Japan,Brazil\"." },
-    bind: { type: "state", description: "State name that receives the clicked country's name." },
+    highlight: { type: "string", description: "Comma-separated country names to tint, e.g. Japan,Brazil." },
+    bind: { type: "state", description: "State name that receives the clicked country or marker label." },
+    fit: { type: "enum", values: ["world", "pins"], default: "world", description: "Initial framing: whole world, or zoom to the current pin locations. Re-fits when the pins change." },
+    cluster: { type: "boolean", default: false, description: "Group nearby pins into clickable counts. Zooming in separates them." },
+    interactive: { type: "boolean", default: true, description: "Enable mouse-wheel zoom and drag pan." },
+    controls: { type: "boolean", default: false, description: "Show Canvas zoom in, zoom out and reset controls. Opt in to preserve the original minimal map appearance." },
   },
   children: ["pin"],
-  example: `state picked=none
-map highlight="Japan,Kenya" bind=picked
-  pin "Tokyo" lat=35.68 lon=139.69`,
+  example: `state selected=""
+map bind=selected fit=pins cluster=true controls=true
+  pin "Phoenix" lat=33.4484 lon=-112.074 detail="Status: delayed | Contract: 120000" tone=bad size=8`,
   minWidth: () => 200,
   layout(box, ctx) {
-    const s = box.w / WORLD.w;
-    box.h = WORLD.h * s;
-    // Pins are drawn over the map rather than laid out, but come from visibleChildren so each= works.
-    box.data = { scale: s, pins: ctx.visibleChildren(box.node).filter((k) => k.type === "pin") };
+    const scale = box.w / WORLD.w;
+    box.h = WORLD.h * scale;
+    const pins: MapPinPoint[] = [];
+    for (const node of ctx.visibleChildren(box.node)) {
+      if (node.type !== "pin") continue;
+      const p = ctx.props(node);
+      const lat = p.num("lat", NaN), lon = p.num("lon", NaN);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        ctx.warn?.("pin on line " + node.line + ": latitude must be -90..90 and longitude -180..180");
+        continue;
+      }
+      const [x, y] = project(lon, lat);
+      pins.push({
+        node, label: p.text(), detail: p.str("detail"), x, y,
+        tone: p.oneOf("tone", PIN_TONES, "ink"),
+        size: Math.max(2, Math.min(18, p.num("size", 5))),
+      });
+    }
+    const p = ctx.props(box.node);
+    const fit = p.oneOf("fit", ["world", "pins"] as const, "world");
+    const key = box.w + ":" + pins.map((pin) => pin.x.toFixed(2) + "," + pin.y.toFixed(2)).join(";");
+    let runtime = runtimes.get(box.node);
+    if (!runtime) {
+      runtime = { view: worldView(), fitMode: "world", fitKey: "", drag: null };
+      runtimes.set(box.node, runtime);
+    }
+    if (fit !== runtime.fitMode || (fit === "pins" && key !== runtime.fitKey)) {
+      runtime.view = fit === "pins" ? fitPins(pins, box.w, box.h, WORLD.w) : worldView();
+    }
+    runtime.fitMode = fit;
+    runtime.fitKey = key;
+    runtime.view = constrain(runtime.view, box.w, box.h);
+    const view = runtime.view;
+    const visible = pins.map((pin) => ({
+      item: pin, x: pin.x * scale * view.zoom + view.dx, y: pin.y * scale * view.zoom + view.dy,
+    })).filter((point) => point.x >= -32 && point.x <= box.w + 32 && point.y >= -32 && point.y <= box.h + 32);
+    const groups = p.bool("cluster", false)
+      ? clusterPoints(visible)
+      : visible.map(({ item, x, y }) => ({ items: [item], x, y }));
+    box.data = { scale, pins, groups, view, runtime, fit, controls: p.bool("controls", false) } satisfies MapData;
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
     const c = theme.colors;
-    const s = (box.data as { scale: number }).scale;
+    const { scale, view } = details(box);
+    const selected = p.raw("bind") ? p.bound() : null;
     const highlighted = new Set(list(p.str("highlight")));
-    const bind = p.raw("bind");
-    const selected = bind ? p.bound() : null;
-    const hovered = ctx.hover && ctx.hover.node.id === box.node.id ? (ctx.hover.detail as string | undefined) : undefined;
+    const hovered = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
     g.save();
-    g.translate(box.x, box.y);
-    g.scale(s, s);
-    g.lineWidth = 0.7 / s;
+    g.beginPath();
+    g.rect(box.x, box.y, box.w, box.h);
+    g.clip();
+    g.translate(box.x + view.dx, box.y + view.dy);
+    g.scale(scale * view.zoom, scale * view.zoom);
+    g.lineWidth = 0.7 / (scale * view.zoom);
     g.lineJoin = "round";
     g.strokeStyle = c.surface;
     for (const { name, path } of countryPaths()) {
@@ -81,79 +196,200 @@ map highlight="Japan,Kenya" bind=picked
       g.stroke(path);
     }
     g.restore();
+    // The full map is hit-testable, including ocean, so drags start everywhere.
     ctx.addHit(box, { focusable: false });
   },
   paintOver(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const { scale: s, pins } = box.data as { scale: number; pins: SayShapeNode[] };
-    for (const pin of pins) {
-      const pp = ctx.props(pin);
-      g.globalAlpha = ctx.appear(pin);
-      const [px, py] = project(pp.num("lon", 0), pp.num("lat", 0));
-      const x = box.x + px * s, y = box.y + py * s;
+    const data = details(box);
+    const selected = ctx.props(box.node).raw("bind") ? ctx.props(box.node).bound() : null;
+    g.save();
+    g.beginPath();
+    g.rect(box.x, box.y, box.w, box.h);
+    g.clip();
+    for (let i = 0; i < data.groups.length; i++) {
+      const group = data.groups[i]!;
+      const x = box.x + group.x, y = box.y + group.y;
+      if (group.items.length > 1) {
+        const radius = 14 + Math.min(8, String(group.items.length).length * 2);
+        g.beginPath();
+        g.arc(x, y, radius, 0, Math.PI * 2);
+        g.fillStyle = c.accent;
+        g.fill();
+        g.lineWidth = 2;
+        g.strokeStyle = c.surface;
+        g.stroke();
+        g.fillStyle = c.onAccent;
+        g.font = ctx.font(700, 12);
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText(String(group.items.length), x, y);
+        continue;
+      }
+      const pin = group.items[0]!;
+      g.globalAlpha = ctx.appear(pin.node);
+      if (selected === pin.label) {
+        g.beginPath();
+        g.arc(x, y, pin.size + 4, 0, Math.PI * 2);
+        g.lineWidth = 2;
+        g.strokeStyle = c.focus;
+        g.stroke();
+      }
       g.beginPath();
-      g.arc(x, y, 5, 0, Math.PI * 2);
-      g.fillStyle = c.ink;
+      g.arc(x, y, pin.size, 0, Math.PI * 2);
+      g.fillStyle = c[pin.tone];
       g.fill();
       g.lineWidth = 2;
       g.strokeStyle = c.surface;
       g.stroke();
-      const label = pp.text();
       g.font = ctx.font(600, 12);
       g.textAlign = "left";
       g.textBaseline = "middle";
       g.lineWidth = 3;
-      g.strokeText(label, x + 9, y);
+      g.strokeStyle = c.surface;
+      g.strokeText(pin.label, x + pin.size + 4, y);
       g.fillStyle = c.ink;
-      g.fillText(label, x + 9, y);
+      g.fillText(pin.label, x + pin.size + 4, y);
     }
     g.globalAlpha = 1;
-    const hovered = ctx.hover && ctx.hover.node.id === box.node.id ? (ctx.hover.detail as string | undefined) : undefined;
+    if (data.controls) {
+      for (let i = 0; i < CONTROLS.length; i++) {
+        const rect = controlRect(box, i);
+        g.beginPath();
+        g.roundRect?.(rect.x, rect.y, rect.w, rect.h, 6);
+        g.fillStyle = c.raised;
+        g.fill();
+        g.strokeStyle = c.line;
+        g.lineWidth = 1;
+        g.stroke();
+        g.fillStyle = c.ink;
+        g.font = ctx.font(700, 16);
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText(["+", "−", "⌂"][i]!, rect.x + rect.w / 2, rect.y + rect.h / 2 + 1);
+      }
+    }
+    g.restore();
+    const hover = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
     const pointer = ctx.pointer;
-    if (hovered && pointer) tooltip(ctx.g, hovered, pointer.x, pointer.y, box, ctx.font(600, 12), c.ink, c.surface);
+    if (typeof hover === "string" && pointer && !isControl(hover)) {
+      let lines: string[];
+      if (hover.startsWith("@map:cluster:")) {
+        const group = data.groups[Number(hover.slice("@map:cluster:".length))];
+        if (!group || group.items.length < 2) return;
+        lines = [group.items.length + " locations", "Click to zoom in"];
+      } else {
+        const pin = data.pins.find((item) => item.label === hover);
+        lines = pin ? [pin.label, ...pin.detail.split("|").map((s) => s.trim()).filter(Boolean)] : [hover];
+      }
+      tooltip(g, lines.slice(0, 5), pointer.x, pointer.y, box, ctx.font(600, 12), ctx.font(400, 11), c.raised, c.ink, c.line);
+    }
   },
   hitTest(box, x, y) {
-    const s = (box.data as { scale: number }).scale;
-    const name = countryAt((x - box.x) / s, (y - box.y) / s);
-    return name ? { detail: name } : null;
+    const data = details(box);
+    if (data.controls) {
+      for (let i = 0; i < CONTROLS.length; i++) {
+        const r = controlRect(box, i);
+        if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return { detail: CONTROLS[i] };
+      }
+    }
+    for (let i = data.groups.length - 1; i >= 0; i--) {
+      const group = data.groups[i]!;
+      const dx = x - box.x - group.x, dy = y - box.y - group.y;
+      const radius = group.items.length > 1 ? 20 : group.items[0]!.size + 4;
+      if (dx * dx + dy * dy <= radius * radius) {
+        return { detail: group.items.length > 1 ? "@map:cluster:" + i : group.items[0]!.label };
+      }
+    }
+    const scale = data.scale * data.view.zoom;
+    const country = countryAt((x - box.x - data.view.dx) / scale, (y - box.y - data.view.dy) / scale);
+    return country ? { detail: country } : {};
   },
   press(ctx) {
-    const bind = ctx.props(ctx.target.node).raw("bind");
-    if (bind && typeof ctx.target.detail === "string") ctx.set(bind, ctx.target.detail);
+    activateMap(ctx);
   },
-  cursor: (t) => (t.detail ? "pointer" : "default"),
+  wheel(ctx) {
+    if (!ctx.props(ctx.target.node).bool("interactive", true)) return false;
+    const box = ctx.target.box;
+    const data = details(box);
+    const factor = Math.exp(-Math.max(-600, Math.min(600, ctx.deltaY)) * 0.0015);
+    data.runtime.view = zoomAt(data.runtime.view, factor, ctx.x - box.x, ctx.y - box.y, box.w, box.h);
+    return true;
+  },
+  drag(ctx) {
+    const box = ctx.target.box;
+    const data = details(box);
+    const runtime = data.runtime;
+    const interactive = ctx.props(ctx.target.node).bool("interactive", true);
+    if (ctx.phase === "start") {
+      runtime.drag = { startX: ctx.x, startY: ctx.y, base: runtime.view, detail: ctx.target.detail, moved: false };
+      return false;
+    }
+    const drag = runtime.drag;
+    if (!drag) return false;
+    if (ctx.phase === "move") {
+      if (!interactive) return false;
+      const dx = ctx.x - drag.startX, dy = ctx.y - drag.startY;
+      if (!drag.moved && dx * dx + dy * dy <= 16) return false;
+      drag.moved = true;
+      runtime.view = panBy(drag.base, dx, dy, box.w, box.h);
+      return true;
+    }
+    runtime.drag = null;
+    if (!drag.moved) {
+      const changed = activateMap(ctx);
+      return changed;
+    }
+    return true;
+  },
+  cursor: (target) => target.detail ? "pointer" : "grab",
 };
 
 export const pin: ComponentDef = {
   type: "pin",
   category: "data",
-  description: "A labelled point on a map, placed by latitude and longitude.",
+  description: "A labelled point on a Canvas map. The optional detail is shown in a multiline hover tooltip.",
   text: { description: "The place name shown next to the pin.", required: true },
   props: {
     lat: { type: "number", required: true, description: "Latitude in degrees (-90 to 90)." },
     lon: { type: "number", required: true, description: "Longitude in degrees (-180 to 180)." },
+    detail: { type: "string", description: "Tooltip details; separate lines with |. Supports interpolated dataset expressions." },
+    tone: { type: "enum", values: PIN_TONES, default: "ink", description: "Theme color: ink, accent, good, warn, bad or muted." },
+    size: { type: "number", default: 5, description: "Marker radius in CSS pixels, clamped to 2..18. Supports expressions." },
   },
   parents: ["map"],
-  example: `pin "Nairobi" lat=-1.29 lon=36.82`,
-  layout(box) {
-    box.h = 0;
-  },
+  example: `pin "Phoenix" lat=33.4484 lon=-112.074 tone=bad size=9 detail="Status: delayed | Value: 120000"`,
+  layout(box) { box.h = 0; },
 };
 
-function tooltip(g: CanvasRenderingContext2D, text: string, px: number, py: number, box: Box, font: string, bg: string, fg: string): void {
-  g.font = font;
-  const w = g.measureText(text).width + 16;
-  const x = Math.min(px + 14, box.x + box.w - w - 4);
-  const y = Math.max(box.y + 4, py - 32);
+function tooltip(
+  g: CanvasRenderingContext2D, lines: string[], px: number, py: number, box: Box,
+  titleFont: string, bodyFont: string, background: string, foreground: string, border: string,
+): void {
+  g.save();
+  const width = Math.min(box.w - 12, Math.max(100, ...lines.map((line, i) => {
+    g.font = i === 0 ? titleFont : bodyFont;
+    return g.measureText(line).width + 20;
+  })));
+  const height = 12 + lines.length * 18;
+  const x = Math.max(box.x + 4, Math.min(px + 14, box.x + box.w - width - 4));
+  const y = Math.max(box.y + 4, Math.min(py - height - 8, box.y + box.h - height - 4));
   g.beginPath();
-  g.roundRect?.(x, y, w, 24, 6);
-  g.fillStyle = bg;
+  g.roundRect?.(x, y, width, height, 6);
+  g.fillStyle = background;
   g.fill();
-  g.fillStyle = fg;
+  g.lineWidth = 1;
+  g.strokeStyle = border;
+  g.stroke();
+  g.fillStyle = foreground;
   g.textAlign = "left";
   g.textBaseline = "middle";
-  g.fillText(text, x + 8, y + 12.5);
+  lines.forEach((line, i) => {
+    g.font = i === 0 ? titleFont : bodyFont;
+    g.fillText(line, x + 10, y + 15 + i * 18, width - 18);
+  });
+  g.restore();
 }
 
 export const mapComponents = [map, pin];
