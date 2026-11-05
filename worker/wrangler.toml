@@ -4,12 +4,19 @@ main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
 [vars]
-MODEL = "nvidia/nemotron-3-ultra-550b-a55b:free"
+# The model's id as NVIDIA names it on build.nvidia.com (its "model" in the API example),
+# and the name the page shows next to live answers. Empty until you pick one: answers stay off.
+MODEL = ""
+MODEL_LABEL = ""
+MODEL_URL = "https://integrate.api.nvidia.com/v1"
 ALLOWED_ORIGINS = "https://premmannava.github.io"
 GENERATION_ENABLED = "true"
+# Questions answered per day for the whole site. Needs the ANSWER_COUNT namespace below.
+DAILY_ANSWERS = "500"
+# Set to "false" if the model refuses stream_options; the page then shows no token counts.
+STREAM_USAGE = "true"
 
-# Per-visitor limit, by IP: 4 requests a minute. (OpenRouter's free models also
-# allow 20 a minute and 50 a day per account, or 1,000 a day after buying credits.)
+# Per-visitor limit, by IP: 4 questions a minute.
 [[ratelimits]]
 name = "RATE_LIMITER"
 namespace_id = "1001"
@@ -18,6 +25,13 @@ namespace_id = "1001"
   limit = 4
   period = 60
 
+# The daily count. Create it once with
+#   npx wrangler kv namespace create ANSWER_COUNT
+# then uncomment these lines and paste the id it prints. Without it there's no daily cap.
+# [[kv_namespaces]]
+# binding = "ANSWER_COUNT"
+# id = "<the id from wrangler>"
+
 # Secrets, set with wrangler and never written here:
-#   npx wrangler secret put OPENROUTER_API_KEY
-#   npx wrangler secret put TURNSTILE_SECRET     (optional, recommended)
+#   npx wrangler secret put MODEL_API_KEY        your NVIDIA API key (nvapi-…)
+#   npx wrangler secret put TURNSTILE_SECRET     (recommended)

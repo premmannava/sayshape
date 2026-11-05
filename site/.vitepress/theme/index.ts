@@ -16,7 +16,6 @@ import Landing from "./components/Landing.vue";
 import Gallery from "./components/Gallery.vue";
 import Playground from "./components/Playground.vue";
 import EngineDiagram from "./components/EngineDiagram.vue";
-import Chat from "./components/Chat.vue";
 import Atlas from "./components/Atlas.vue";
 import ElementPage from "./components/ElementPage.vue";
 import Learn from "./components/Learn.vue";
@@ -33,7 +32,6 @@ export default {
     app.component("Gallery", Gallery);
     app.component("Playground", Playground);
     app.component("EngineDiagram", EngineDiagram);
-    app.component("Chat", Chat);
     app.component("Atlas", Atlas);
     app.component("ElementPage", ElementPage);
     app.component("Learn", Learn);

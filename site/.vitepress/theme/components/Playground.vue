@@ -340,7 +340,7 @@ onBeforeUnmount(() => {
 });
 
 const docsModel = withBase("/docs/integration/model.html");
-const chatPage = withBase("/chat.html");
+const landingDemo = withBase("/#demo");
 const docsGuide = withBase("/docs/integration/model-guide.html");
 </script>
 
@@ -351,7 +351,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
         <p class="ss-eyebrow">Playground</p>
         <h1>Write it. <span class="ss-mark">Watch it draw.</span></h1>
         <p v-if="generationAvailable" class="pg-note">
-          Edit any spec and the real engine redraws as you type. To have {{ MODEL_LABEL }} write one for you, use <a :href="chatPage">Build with AI</a>.
+          Edit any spec and the real engine redraws as you type. To see {{ MODEL_LABEL }} answer questions about a spreadsheet, try the <a :href="landingDemo">demo on the home page</a>.
         </p>
         <p v-else class="pg-note">
           Edit any spec and the real engine redraws as you type. No model runs on this site: <a :href="docsModel">connect your own</a>, or paste the

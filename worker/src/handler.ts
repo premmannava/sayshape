@@ -1,23 +1,21 @@
 /**
- * The model proxy for the public website: a Cloudflare Worker that turns a
- * person's request into a SayShape spec with a model, without the API key
- * ever reaching the browser.
+ * The model proxy for the public website: a Cloudflare Worker that answers
+ * questions about a spreadsheet with a SayShape interface, without the API
+ * key or the spreadsheet ever reaching the model provider from the browser.
  *
- * The browser sends only the request text (and a Turnstile token). The
+ * The browser sends the question, the column names and three sample rows
+ * (and a Turnstile token); the rows themselves stay in the browser. The
  * worker builds every message itself, with SayShape's own model client
- * (src/model): the guide, the request and at most one repair. So the key
- * can only ever be used for this one model and this one job.
+ * (src/model): the guide, the request and at most one repair. So the key can
+ * only ever be used for this one model and this one job.
  *
- *   POST /generate   {"request": "...", "token": "...", "refine": {"task": "...", "changes": ["..."], "spec": "..."}}
- *
- *   refine is optional: it changes the current interface instead of starting
- *   over (src/model/context.ts). Its text is only ever data in the request;
- *   the instructions are still the worker's own.
+ *   POST /answer   {"question": "...", "rows": 18217, "columns": [{"name": "country", "type": "text", "distinct": 12}, ...],
+ *                   "sample": [{"country": "Germany", ...}, ...], "token": "..."}
  *   → 200 application/x-ndjson, one JSON object per line:
  *       {"t":"phase","v":"writing"}   what the model is doing
  *       {"t":"text","v":"card\n"}     clean SayShape lines, to push into the engine
  *       {"t":"reset"}                 throw away what was shown: a repair is coming
- *       {"t":"done","spec":"…","problems":0,"repaired":false,"ms":1234}
+ *       {"t":"done","spec":"…","problems":0,"repaired":false,"ms":1234,"model":"…","tokens":{"in":10900,"out":180}}
  *       {"t":"error","message":"…"}   a message to show; the stream ends
  *
  * Plain functions with no Cloudflare types, so test/worker.test.ts can run
@@ -26,37 +24,52 @@
 import { generateSpec, ModelError, type Phase } from "../../src/model";
 import { coreComponents } from "../../src/components";
 import { Registry } from "../../src/registry";
-import { playgroundGuide } from "../../playground/model-guide";
+import { answerGuide, answerRequest, checkAnswer, DATA, readQuestion } from "./answer";
+
+/** The part of a Workers KV namespace the daily count uses. */
+export interface Counter {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
+}
 
 export interface Env {
-  /** The provider key. A secret: `wrangler secret put OPENROUTER_API_KEY`. */
-  OPENROUTER_API_KEY?: string;
-  /** The one model this proxy calls, e.g. nvidia/nemotron-3-ultra-550b-a55b:free. */
+  /** The provider key. A secret: `wrangler secret put MODEL_API_KEY`. */
+  MODEL_API_KEY?: string;
+  /** The one model this proxy calls, as the provider names it. */
   MODEL?: string;
-  /** OpenAI-compatible base URL. Default: OpenRouter. */
+  /** The model's name as people see it on the page. Default: MODEL. */
+  MODEL_LABEL?: string;
+  /** OpenAI-compatible base URL. Default: NVIDIA's API. */
   MODEL_URL?: string;
+  /** "false" when the provider refuses stream_options (then the page shows no token counts). */
+  STREAM_USAGE?: string;
   /** Comma-separated origins allowed to call, e.g. https://premmannava.github.io */
   ALLOWED_ORIGINS?: string;
   /** Turnstile secret. When set, every request needs a valid token. */
   TURNSTILE_SECRET?: string;
-  /** "false" turns generation off without redeploying the site. */
+  /** "false" turns answers off without redeploying the site. */
   GENERATION_ENABLED?: string;
   /** Workers rate limiting binding, keyed by IP. Optional. */
   RATE_LIMITER?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
+  /** Questions answered per day (UTC) for the whole site, counted in ANSWER_COUNT. Default 500. */
+  DAILY_ANSWERS?: string;
+  /** A KV namespace for the daily count. Without it there's no daily cap. */
+  ANSWER_COUNT?: Counter;
 }
 
 export interface Deps {
   fetch?: typeof fetch;
   /** Keeps the worker running until the stream ends (ctx.waitUntil on Cloudflare). */
   waitUntil?: (p: Promise<unknown>) => void;
+  /** Today's date, for the daily count. */
+  today?: () => string;
 }
 
-export const MAX_REQUEST_CHARS = 400;
-const MAX_BODY_BYTES = 24_000;
-export const MAX_REFINE_SPEC_CHARS = 12_000;
-export const MAX_REFINE_CHANGES = 10;
+/** Big enough for 40 columns and 3 rows of 100-character cells; far too small for a spreadsheet. */
+export const MAX_BODY_BYTES = 16_000;
 const MAX_TOKENS = 3_000;
-const SITE = "https://premmannava.github.io/sayshape/";
+const DEFAULT_URL = "https://integrate.api.nvidia.com/v1";
+const DEFAULT_DAILY = 500;
 const registry = new Registry(coreComponents);
 
 const json = (status: number, body: unknown, headers: HeadersInit = {}) =>
@@ -74,16 +87,18 @@ function corsHeaders(origin: string): Record<string, string> {
 
 const allowedOrigins = (env: Env) => (env.ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 
+export const DAILY_LIMIT_MESSAGE = "Today's free questions are used up. Try the sample spreadsheets, or come back tomorrow.";
+
 /** What a person sees when the model call fails. Never the provider's raw reply. */
 export function friendlyError(e: unknown): string {
   if (e instanceof ModelError) {
-    if (e.status === 429) return "The free model has reached its limit for now. Try again later, or run SayShape locally with your own model.";
-    if (e.status === 401 || e.status === 403) return "The model service rejected this site's credentials. Generation is unavailable right now.";
-    if (e.status === 402) return "The model service needs credits for this request. Generation is unavailable right now.";
+    if (e.status === 429) return "The model is busy right now. Try again in a minute, or try the sample spreadsheets.";
+    if (e.status === 401 || e.status === 403) return "The model service rejected this site's credentials. Live answers are unavailable right now.";
+    if (e.status === 402) return "The model service needs credits for this request. Live answers are unavailable right now.";
     if (e.status !== undefined && e.status >= 500) return "The model service had a problem. Try again in a minute.";
-    return "The model didn't answer as expected. Try again, or with a shorter request.";
+    return "The model didn't answer as expected. Try again, or ask it another way.";
   }
-  return "Something went wrong while generating. Try again.";
+  return "Something went wrong while answering. Try again.";
 }
 
 async function verifyTurnstile(env: Env, token: string, ip: string, doFetch: typeof fetch): Promise<boolean> {
@@ -100,17 +115,19 @@ async function verifyTurnstile(env: Env, token: string, ip: string, doFetch: typ
   }
 }
 
-/** A refinement from the browser, checked for shape and size; null when there is none. */
-function readRefine(v: unknown): { task: string; changes: string[]; spec: string } | null | "invalid" {
-  if (v === undefined || v === null) return null;
-  if (typeof v !== "object" || Array.isArray(v)) return "invalid";
-  const r = v as Record<string, unknown>;
-  const task = typeof r.task === "string" ? r.task.trim() : "";
-  const spec = typeof r.spec === "string" ? r.spec : "";
-  const changes = Array.isArray(r.changes) ? r.changes : [];
-  if (!task || task.length > MAX_REQUEST_CHARS || !spec.trim() || spec.length > MAX_REFINE_SPEC_CHARS) return "invalid";
-  if (changes.length > MAX_REFINE_CHANGES || !changes.every((c) => typeof c === "string" && c.length <= MAX_REQUEST_CHARS)) return "invalid";
-  return { task, changes: changes as string[], spec };
+/**
+ * Count one more answer today, or say the day's are used up. KV is eventually
+ * consistent, so two requests at the same moment can both get through: the
+ * cap is a guard against runaway use, not an exact count.
+ */
+async function takeDaily(env: Env, today: string): Promise<boolean> {
+  if (!env.ANSWER_COUNT) return true;
+  const cap = Number(env.DAILY_ANSWERS ?? DEFAULT_DAILY);
+  const key = `answers:${today}`;
+  const used = Number((await env.ANSWER_COUNT.get(key)) ?? 0) || 0;
+  if (Number.isFinite(cap) && used >= cap) return false;
+  await env.ANSWER_COUNT.put(key, String(used + 1), { expirationTtl: 2 * 24 * 60 * 60 });
+  return true;
 }
 
 export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<Response> {
@@ -119,26 +136,28 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   const origin = req.headers.get("Origin") ?? "";
   const allowed = allowedOrigins(env);
 
-  if (url.pathname !== "/generate") return json(404, { error: "Not found" });
+  if (url.pathname !== "/answer") return json(404, { error: "Not found" });
   // Only the site may call. (Origin can be forged outside a browser; Turnstile and rate limits cover that.)
   if (!allowed.includes(origin)) return json(403, { error: "This origin isn't allowed" });
   const cors = corsHeaders(origin);
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return json(405, { error: "Use POST" }, cors);
 
-  if (env.GENERATION_ENABLED === "false") return json(503, { error: "Generation is turned off right now." }, cors);
-  if (!env.OPENROUTER_API_KEY || !env.MODEL) return json(503, { error: "Generation isn't configured." }, cors);
+  if (env.GENERATION_ENABLED === "false") return json(503, { error: "Live answers are turned off right now. The sample spreadsheets still work." }, cors);
+  if (!env.MODEL_API_KEY || !env.MODEL) return json(503, { error: "Live answers aren't configured." }, cors);
 
   const raw = await req.text();
-  if (raw.length > MAX_BODY_BYTES) return json(413, { error: "Request too large" }, cors);
-  let body: { request?: unknown; token?: unknown; refine?: unknown };
-  try { body = JSON.parse(raw) as typeof body; } catch { return json(400, { error: "Send JSON" }, cors); }
-  const request = typeof body.request === "string" ? body.request.trim() : "";
-  if (!request) return json(400, { error: "Describe the interface you want." }, cors);
-  if (request.length > MAX_REQUEST_CHARS) return json(400, { error: `Keep the request under ${MAX_REQUEST_CHARS} characters.` }, cors);
-
-  const refine = readRefine(body.refine);
-  if (refine === "invalid") return json(400, { error: "The conversation is too long to continue. Start a new interface." }, cors);
+  if (new TextEncoder().encode(raw).length > MAX_BODY_BYTES) return json(413, { error: "That's more than a question: only the columns and three sample rows are sent." }, cors);
+  let body: Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error();
+    body = parsed as Record<string, unknown>;
+  } catch {
+    return json(400, { error: "Send JSON" }, cors);
+  }
+  const q = readQuestion(body);
+  if ("error" in q) return json(400, { error: q.error }, cors);
 
   const ip = req.headers.get("CF-Connecting-IP") ?? "";
   if (env.TURNSTILE_SECRET) {
@@ -147,8 +166,10 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   }
   if (env.RATE_LIMITER) {
     const { success } = await env.RATE_LIMITER.limit({ key: ip || "unknown" });
-    if (!success) return json(429, { error: "Too many requests. Wait a minute and try again." }, cors);
+    if (!success) return json(429, { error: "That's a lot of questions at once. Wait a minute and try again." }, cors);
   }
+  const today = deps.today?.() ?? new Date().toISOString().slice(0, 10);
+  if (!(await takeDaily(env, today))) return json(429, { error: DAILY_LIMIT_MESSAGE, daily: true }, cors);
 
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();
@@ -159,17 +180,18 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
     try {
       const result = await generateSpec({
         config: {
-          url: env.MODEL_URL ?? "https://openrouter.ai/api/v1",
+          url: env.MODEL_URL ?? DEFAULT_URL,
           model: env.MODEL!,
-          apiKey: env.OPENROUTER_API_KEY,
+          apiKey: env.MODEL_API_KEY,
           maxTokens: MAX_TOKENS,
-          headers: { "HTTP-Referer": SITE, "X-Title": "SayShape playground" },
+          streamUsage: env.STREAM_USAGE !== "false",
         },
         registry,
-        request,
-        refine: refine ?? undefined,
-        guide: playgroundGuide([]),
-        // One repair, only for lines the parser had to skip: a free model has few requests a day.
+        request: answerRequest(q),
+        guide: answerGuide(),
+        stateNames: [DATA],
+        check: checkAnswer,
+        // One repair, only for errors: lines the parser had to skip, or an answer that doesn't read the data.
         repairOn: "errors",
         signal: req.signal,
         fetch: doFetch,
@@ -177,7 +199,21 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
         onReset: () => void send({ t: "reset" }),
         onPhase: (v: Phase) => void send({ t: "phase", v }),
       });
-      await send({ t: "done", spec: result.spec, problems: result.diagnostics.length, repaired: !!result.repair, ms: Math.round(result.timings.totalMs) });
+      const errors = result.diagnostics.filter((d) => d.severity === "error");
+      if (!result.spec.trim() || errors.some((d) => /never reads data|Don't declare data/.test(d.message))) {
+        await send({ t: "error", message: "The model couldn't answer that one from the spreadsheet. Try asking it another way." });
+        return;
+      }
+      const { promptTokens, completionTokens } = result.usage;
+      await send({
+        t: "done",
+        spec: result.spec,
+        problems: result.diagnostics.length,
+        repaired: !!result.repair,
+        ms: Math.round(result.timings.totalMs),
+        model: env.MODEL_LABEL?.trim() || env.MODEL,
+        ...(promptTokens !== undefined && completionTokens !== undefined ? { tokens: { in: promptTokens, out: completionTokens } } : {}),
+      });
     } catch (e) {
       if (!req.signal?.aborted) await send({ t: "error", message: friendlyError(e) });
     } finally {

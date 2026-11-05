@@ -7,6 +7,7 @@
  */
 import { withBase } from "vitepress";
 import DataDemo from "./DataDemo.vue";
+import { generationAvailable, MODEL_LABEL } from "../sayshape/generate";
 
 const reasons = [
   { title: "Private", text: "Your AI sees column names and a few rows. The rest never leaves the browser." },
@@ -38,7 +39,10 @@ const href = (p: string) => withBase(p);
     </section>
 
     <DataDemo />
-    <p class="made-up">The sample spreadsheets are made up. Each answer is a saved one, drawn live by the engine.</p>
+    <p class="made-up">
+      The sample spreadsheets are made up. Their suggested questions replay saved answers, drawn live by the engine.
+      <template v-if="generationAvailable">Anything you type, and any question about your own file, is answered live by {{ MODEL_LABEL }}.</template>
+    </p>
 
     <section class="why" aria-label="Why SayShape">
       <div v-for="r in reasons" :key="r.title" class="why-item">

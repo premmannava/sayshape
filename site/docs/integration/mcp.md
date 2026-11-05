@@ -57,4 +57,4 @@ Then restart the app. The [server's README](https://github.com/premmannava/saysh
 
 ## Compared with the website
 
-The [Build with AI](/chat) page uses a free hosted model through a proxy with a small daily limit. The MCP server uses the model you already chat with, so its results depend on that model, and there's no shared limit.
+The [landing page](/#demo) answers questions about a spreadsheet with a hosted model through a proxy with a daily limit. The MCP server uses the model you already chat with, so its results depend on that model, and there's no shared limit.

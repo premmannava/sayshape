@@ -45,6 +45,7 @@
     "new:component": "vite-node scripts/new-component.ts --",
     "eval": "vite-node scripts/eval.ts --",
     "compare": "vite-node scripts/compare.ts --",
+    "eval:answers": "vite-node scripts/eval-answers.ts --",
     "guide:size": "vite-node scripts/guide-size.ts",
     "site:docs": "vite-node scripts/gen-site-docs.ts",
     "site:dev": "npm run site:docs && npm --prefix site run dev",

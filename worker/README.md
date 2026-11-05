@@ -1,34 +1,44 @@
 # SayShape model proxy
 
-A Cloudflare Worker that lets the public website generate specs with a model **without exposing the API key**. GitHub Pages only serves files, so the key can't live there: it lives here, as a Cloudflare secret.
+A Cloudflare Worker that answers questions about a spreadsheet on the website's landing page, **without exposing the API key and without the spreadsheet leaving the visitor's browser**. GitHub Pages only serves files, so the key can't live there: it lives here, as a Cloudflare secret.
 
 ```
-playground (GitHub Pages) ──request text──▶ this worker ──key + guide + request──▶ OpenRouter
-          ▲                                      │
-          └──────── SayShape lines, streamed ────┘
+landing page (GitHub Pages)                          this worker                          NVIDIA
+the file is read in the browser;
+its rows stay there
+   │  question + column names + 3 sample rows (≈1 KB)
+   └──────────────────────────────────────────────▶ checks, limits ── key + guide + request ──▶ model
+   ◀───────────── SayShape lines, streamed ────────────┘
+the engine draws the answer with every row
 ```
 
-The browser sends only what the person typed (at most 400 characters) and a Turnstile token. The worker builds every message itself with SayShape's model client (`src/model`): the playground's guide, the request, and one repair if the parser had to skip lines. It always calls the one model set in `wrangler.toml`, so the key can't be borrowed for anything else.
+The browser sends the question (at most 400 characters), the column names with a type and how many different values each has, three sample rows (cells cut to 100 characters) and a Turnstile token. The worker builds every message itself with SayShape's model client (`src/model`): a guide for data answers, the request with the sample rows fenced as data, and one repair if the parser had to skip lines or the answer doesn't read the data. It always calls the one model set in `wrangler.toml`, so the key can't be borrowed for anything else. An answer must read the spreadsheet by name (`data`) and may not declare it, so the model can't make up or copy rows.
 
-Protections, all in `src/handler.ts` and tested in `test/worker.test.ts`:
+Protections, in `src/handler.ts` and `src/answer.ts`, tested in `test/worker.test.ts`:
 
 - only origins in `ALLOWED_ORIGINS` may call it;
 - an optional [Turnstile](https://developers.cloudflare.com/turnstile/) check on every request;
 - a per-IP rate limit (4 a minute, `[[ratelimits]]` in `wrangler.toml`);
-- request size limits and a cap on reply length;
+- a daily cap for the whole site (`DAILY_ANSWERS`, counted in a KV namespace);
+- a 16 KB request limit, far too small for a spreadsheet, and a cap on reply length;
+- spreadsheet cells reach the model only as quoted, fenced data;
 - provider errors become plain messages; the provider's raw reply is never forwarded;
-- `GENERATION_ENABLED = "false"` turns it off without touching the site.
-
-OpenRouter's free models also allow 20 requests a minute and 50 a day per account (1,000 a day once you've bought $10 of credits), shared by every visitor.
+- `GENERATION_ENABLED = "false"` turns live answers off without touching the site. The sample spreadsheets keep working.
 
 ## Deploy (one time)
 
-You need a free Cloudflare account. Run these from this folder:
+You need a free Cloudflare account and an NVIDIA API key from [build.nvidia.com](https://build.nvidia.com). Run these from this folder:
 
 ```bash
 npm ci
 npx wrangler login                          # opens the browser to sign in to Cloudflare
-npx wrangler secret put OPENROUTER_API_KEY  # paste the key when asked; it's stored encrypted by Cloudflare
+npx wrangler secret put MODEL_API_KEY       # paste the NVIDIA key when asked; Cloudflare stores it encrypted
+npx wrangler kv namespace create ANSWER_COUNT
+```
+
+Paste the id that last command prints into the `[[kv_namespaces]]` lines in `wrangler.toml` and uncomment them. Set `MODEL` to the model's id as NVIDIA's API example shows it, and `MODEL_LABEL` to the name the page should show. Then:
+
+```bash
 npx wrangler deploy                         # prints the worker's URL, e.g. https://sayshape-model.<you>.workers.dev
 ```
 
@@ -41,25 +51,25 @@ Then tell the website where the worker is. In GitHub: **Settings → Secrets and
 
 | Variable | Value |
 |---|---|
-| `SAYSHAPE_MODEL_ENDPOINT` | `https://sayshape-model.<you>.workers.dev/generate` |
-| `SAYSHAPE_MODEL_LABEL` | `NVIDIA Nemotron 3 Ultra (free)` |
+| `SAYSHAPE_MODEL_ENDPOINT` | `https://sayshape-model.<you>.workers.dev` |
 | `TURNSTILE_SITE_KEY` | the widget's **site key** (public), if you made one |
 
-These are public values, so they're Variables, not Secrets. Re-run the **Website** workflow (or push to `main`) and the site gets a **Build with AI** page in its navigation. Without `SAYSHAPE_MODEL_ENDPOINT`, the site keeps running saved specs only.
-
-Also in OpenRouter, give this key a **credit limit of $0** (Settings → Keys), so even if something went wrong it couldn't spend money.
+These are public values, so they're Variables, not Secrets. Re-run the **Website** workflow (or push to `main`). The landing page then takes visitors' own files and questions. Without `SAYSHAPE_MODEL_ENDPOINT`, it shows the sample spreadsheets and their saved answers only.
 
 ## Change or turn off
 
-- Another model: edit `MODEL` in `wrangler.toml` and `npx wrangler deploy`.
-- Turn generation off: set `GENERATION_ENABLED = "false"` and deploy. The site says generation is off.
-- Rotate the key: create a new one in OpenRouter, `npx wrangler secret put OPENROUTER_API_KEY`, delete the old one.
+- Another model: edit `MODEL` and `MODEL_LABEL` in `wrangler.toml` and `npx wrangler deploy`.
+- Another provider: any OpenAI-compatible API works. Change `MODEL_URL`, `MODEL` and the `MODEL_API_KEY` secret.
+- More or fewer questions a day: change `DAILY_ANSWERS` and deploy.
+- Turn live answers off: set `GENERATION_ENABLED = "false"` and deploy.
+- Rotate the key: create a new one at NVIDIA, `npx wrangler secret put MODEL_API_KEY`, revoke the old one.
+- If answers fail with "didn't answer as expected" for every question, the model may refuse `stream_options`: set `STREAM_USAGE = "false"`.
 
 ## Run it locally
 
 ```bash
-printf 'OPENROUTER_API_KEY=sk-or-...\nALLOWED_ORIGINS=http://localhost:4173\n' > .dev.vars   # ignored by git
-npx wrangler dev                            # http://localhost:8787/generate
+printf 'MODEL_API_KEY=nvapi-...\nMODEL=<model id>\nALLOWED_ORIGINS=http://localhost:4173\n' > .dev.vars   # ignored by git
+npx wrangler dev                            # http://localhost:8787/answer
 ```
 
-Build the site against it with `VITE_SAYSHAPE_MODEL_ENDPOINT=http://localhost:8787/generate npm run site:build`, then `npm run site:preview`.
+Build the site against it with `VITE_SAYSHAPE_MODEL_ENDPOINT=http://localhost:8787 npm run site:build`, then `npm run site:preview`.

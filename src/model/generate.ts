@@ -109,6 +109,13 @@ export interface GenerateOptions {
    * reads them isn't sent back for repair as using unknown names.
    */
   stateNames?: readonly string[];
+  /**
+   * The app's own checks on a spec, beyond the parser's: problems it returns
+   * join the parser's diagnostics, so they're reported and an error one sends
+   * the spec back for repair with its message. For rules only the app knows,
+   * like "read the data by name, never copy its rows".
+   */
+  check?: (spec: string) => Diagnostic[];
   /** Repair when the first spec has: any diagnostic (default), only errors, or never. */
   repairOn?: "any" | "errors" | "never";
   /** Clean SayShape text as it streams. */
@@ -194,7 +201,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
       const found = again.push(text).text + again.end().text;
       if (found.trim()) { recovered = true; emit({ text: found.trimEnd() + "\n", reset: false }); }
     }
-    const diagnostics = parse(spec, checkWith, { knownNames: o.stateNames }).diagnostics;
+    const diagnostics = [...parse(spec, checkWith, { knownNames: o.stateNames }).diagnostics, ...(spec.trim() ? o.check?.(spec) ?? [] : [])];
     const inputChars = msgs.reduce((n, m) => n + m.content.length, 0);
     const thinkingChars = thinking.length + filter.thinkingChars;
     return {

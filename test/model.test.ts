@@ -238,6 +238,17 @@ describe("generateSpec", () => {
     expect(m.requests).toHaveLength(1);
   });
 
+  it("adds the app's own checks to the parser's, and repairs on them with their message", async () => {
+    const noData = (spec: string) => (/\bdata\b/.test(spec) ? [] : [{ line: 1, severity: "error" as const, message: "Read the spreadsheet as data" }]);
+    const m = fakeModel([{ content: [`text "Hello"\n`] }, { content: [`text "{len(data)} rows"\n`] }]);
+    const r = await generateSpec({ config, registry, request: "x", fetch: m.fetch, stateNames: ["data"], check: noData, repairOn: "errors" });
+    expect(m.requests).toHaveLength(2);
+    expect(m.requests[1]!.body.messages.at(-1)!.content).toContain("Read the spreadsheet as data");
+    expect(r.first.diagnostics).toEqual([{ line: 1, severity: "error", message: "Read the spreadsheet as data" }]);
+    expect(r.spec).toBe(`text "{len(data)} rows"\n`);
+    expect(r.diagnostics).toEqual([]);
+  });
+
   it("measures time to the first token and the first SayShape line", async () => {
     let t = 0;
     const m = fakeModel([{ reasoning: ["hmm"], content: ["card\n"] }]);
