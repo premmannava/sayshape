@@ -144,7 +144,7 @@ state qty=2 price=24 gift=false name="Ada"
 state todos=[{text: "Pack water", done: false}, {text: "Snacks", done: true}]
 ```
 
-A value must fit on one line, however long, so a streamed spec can render line by line. Lists and records hold data only: they're parsed, never run, and are limited to 20 levels deep and 10,000 values.
+A value must fit on one line, however long, so a streamed spec can render line by line. Lists and records hold data only: they're parsed, never run, and are limited to 20 levels deep and 10,000 values. Data your app passes in with `state.set` may hold up to 1,000,000 values (each row and field counts).
 
 State declared in a spec only sets the starting value. A value the user has already changed is kept when the spec is re-parsed with the same declaration (while streaming, or after an edit elsewhere). When a new spec declares a different starting value, such as a refined screen with new data, the new value replaces the old one. Values your app set itself are never replaced by a declaration. Your app can supply data too, with `ui.state.set("products", rows)` ([Lists](#lists)).
 
@@ -160,7 +160,7 @@ derive total={subtotal + tax}
 stat label="Total" value={total}
 ```
 
-- **Grammar.** `derive name={expression}`, unindented, at the top level of the spec; several pairs may share a line, as with `state`. A line with one derived value may leave out the braces, as models often do: `derive order=find(orders, 'id', picked)` and `derive byCat=[{name: 'Food', total: sum(filter(spend, 'cat', 'Food'), 'amt')}]` both work. A fixed value (`derive b=5`) still gets a warning to use `state` instead. The expression is the same safe kind as everywhere else in SayShape, with the same functions; there are no functions of your own, callbacks or side effects.
+- **Grammar.** `derive name={expression}`, unindented, at the top level of the spec; several pairs may share a line, as with `state`. A line with one derived value may leave out the braces, as models often do: `derive order=find(orders, 'id', picked)` and `derive byCat=sort(group(spend, 'cat', 'amt'), 'amt', 'desc')` both work. A fixed value (`derive b=5`) still gets a warning to use `state` instead. The expression is the same safe kind as everywhere else in SayShape, with the same functions; there are no functions of your own, callbacks or side effects.
 - **Reading.** A derived name reads like state, in text, props, `if=`, `items=` and other `derive` lines. Its expression can read state, data your app sets with `ui.state.set`, and other derived values.
 - **Order.** Declarations can come in any order: a value is worked out from whatever it reads, wherever that's declared. While a spec streams in, a value whose inputs haven't arrived yet shows as nothing (—) until they do.
 - **Updates.** A value is worked out the first time it's read and kept until something it reads changes, directly or through other derived values; then it's worked out again the next time it's read. Changes to state it doesn't read leave it alone, and a render reads each value at most once per change.
@@ -268,6 +268,7 @@ List functions, for computing instead of typing numbers:
 | `sort(list, 'price')`, `sort(list, 'price', 'desc')`, `sort(list)` | The list in order, by a field or by value |
 | `take(list, 3)` | The first items |
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
+| `group(list, 'region')`, `group(list, 'region', 'revenue')`, `group(list, 'region', 'revenue', 'avg')` | Totals per category: one record per region, in the order each first appears, with `count` (how many items) and, given a field, its total under the field's own name: `[{region: "West", count: 12, revenue: 48200}, …]`. A fourth argument works out `'avg'`, `'min'` or `'max'` instead. Totals follow `sum()`'s rules. Values group as they are (`"US"` and `"USA"` are two groups), and items without the field share a `null` group. The groups are new, read-only records |
 
 They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. Use them for counts and totals, and for the lists people work with: items of a filtered, sorted or searched list keep their place in state, so `bind=t.done` inside `each items=shown` (with `derive shown={filter(tasks, 'owner', owner)}`) ticks the task in `tasks`, and totals worked out from `tasks` follow. To hide items without a derived list, put `if=` on the `each` or on the repeated element. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
 

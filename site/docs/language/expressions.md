@@ -64,6 +64,7 @@ Anything that can't be read (a missing field, an item past the end of a list) sh
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
 | `join(list)`, `join(list, 'name', ' / ')` | Text listing the items, or a field of each |
 | `includes(list, value)` | Whether the list holds a value (or text contains other text) |
+| `group(list, 'cat')`, `group(list, 'cat', 'amt')`, `group(list, 'cat', 'amt', 'avg')` | One record per category, with `count` and, given a field, its total (or `'avg'`, `'min'`, `'max'`) under the field's own name |
 
 Only numbers count in `sum`, `avg`, `min` and `max`: a missing field, `null`, true/false or text (even `"12"`) makes the result `—` instead of being read as a number. An empty list totals 0. Functions that return lists return new, frozen lists, so sorting or filtering never changes the list in state.
 
@@ -76,6 +77,26 @@ card
   text "Biggest: {first(sort(tx, 'amount', 'desc')).name}"
   text "{join(tx, 'name', ', ')}" tone=muted
 ```
+
+### Totals per category
+
+`group()` turns a list into one record per category, ready for a chart or a table. `group(spend, 'cat', 'amt')` gives `{cat, count, amt}` for each category: `count` is how many items it has and `amt` their total.
+
+```sayshape live
+state spend=[{cat: "Food", amt: 64.5}, {cat: "Travel", amt: 420}, {cat: "Food", amt: 87.5}, {cat: "Fun", amt: 30}, {cat: "Travel", amt: 96}]
+derive byCat={sort(group(spend, 'cat', 'amt'), 'amt', 'desc')}
+card
+  chart "Spending by category" kind=hbar items=byCat x=cat y=amt format=money
+  table items=byCat
+    table-column "Category" field=cat
+    table-column "Items" field=count
+    table-column "Spent" field=amt format=money
+```
+
+- **In order of first appearance.** Sort the groups to rank them, and `take()` the top few for a chart.
+- **Values as they are.** `"US"` and `"USA"` are two groups; items without the field share a `null` group.
+- **Read-only.** The groups are new records worked out from the list. They follow it when it changes, but `bind=` can't write to them.
+- **Large data.** Lists your app passes in can hold up to 1,000,000 values (each row and each field counts, so 100,000 rows of 9 columns). Put `group()`, `sum()` and `filter()` over them in `derive` lines, which are worked out once, rather than in a prop, which is worked out on every redraw.
 
 ## Formatting
 

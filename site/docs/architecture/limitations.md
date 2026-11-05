@@ -36,6 +36,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 | Items per `each` | 500 |
 | Repeated elements per screen | 10,000 |
 | Data literals | 20 levels deep, 10,000 values |
+| Data from the app (`state.set`) | 20 levels deep, 1,000,000 values (each row and field counts) |
 | `select` options | 200, eight shown at once |
 | `table` | 200 rows and 8 columns; a message instead of more |
 | `chart` | 200 items, 6 series, 6 pie or donut slices (the rest summed into Other) |

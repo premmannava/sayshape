@@ -16,8 +16,19 @@ import type { DataList, DataRecord, Value } from "./types";
 
 /** How deeply lists and records may nest. */
 export const MAX_DATA_DEPTH = 20;
-/** How many values one literal or one host value may hold in total. */
+/**
+ * How many values one literal a spec writes may hold in total. Specs come
+ * from a model, so this keeps a runaway or hostile spec small.
+ */
 export const MAX_DATA_VALUES = 10_000;
+/**
+ * How many values one value from the host app may hold in total (every list,
+ * record and field counts: 1,000 rows of 10 fields is 11,001). Host data is
+ * the app's own, like an uploaded spreadsheet, so the limit is about memory
+ * and speed instead: about 100,000 rows of 10 columns still loads and draws
+ * in well under a second on a laptop.
+ */
+export const MAX_HOST_VALUES = 1_000_000;
 
 export class DataError extends Error {}
 
@@ -87,7 +98,7 @@ export function toData(v: unknown): Value {
   let count = 0;
   const seen = new Set<object>();
   const copy = (x: unknown, depth: number, where: string): Value => {
-    if (++count > MAX_DATA_VALUES) throw new DataError(`More than ${MAX_DATA_VALUES} values; pass less data`);
+    if (++count > MAX_HOST_VALUES) throw new DataError(`More than ${MAX_HOST_VALUES.toLocaleString("en-US")} values; pass fewer rows or columns`);
     if (isScalar(x)) {
       if (typeof x === "number" && !Number.isFinite(x)) throw new DataError(`${where} is ${x}, which isn't a usable number`);
       return x;
