@@ -1141,10 +1141,30 @@ export class SayShape {
       const p = this.popup;
       const a = p?.area;
       const at = local(e);
-      if (!p || !a || at.x < a.x || at.x > a.x + a.w || at.y < a.y || at.y > a.y + a.h) return;
-      e.preventDefault();
-      this.registry.get(p.owner.node.type)?.popup?.wheel?.(this.popupContext(p.owner), e.deltaY);
-      this.invalidate("paint");
+      if (p) {
+        // Keep popup wheel handling exclusive: nothing underneath should zoom.
+        if (!a || at.x < a.x || at.x > a.x + a.w || at.y < a.y || at.y > a.y + a.h) return;
+        e.preventDefault();
+        this.registry.get(p.owner.node.type)?.popup?.wheel?.(this.popupContext(p.owner), e.deltaY);
+        this.invalidate("paint");
+        return;
+      }
+      if (this.inspector.inspecting) return;
+      const target = this.targetAt(at.x, at.y);
+      const wheel = target && this.registry.get(target.node.type)?.wheel;
+      if (!target || !wheel) return;
+      // WheelEvent deltaMode may be lines or pages rather than CSS pixels.
+      const factor = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.metrics.height : 1;
+      const handled = wheel({
+        ...this.pressContext(target),
+        x: at.x, y: at.y,
+        deltaY: e.deltaY * factor,
+        ctrlKey: !!e.ctrlKey,
+      });
+      if (handled) {
+        e.preventDefault();
+        this.invalidate("layout");
+      }
     };
     c.addEventListener("wheel", onWheel as EventListener, { passive: false });
     c.addEventListener("pointermove", onMove);
