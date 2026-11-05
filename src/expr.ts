@@ -178,9 +178,14 @@ const BUILTINS: Record<string, Fn> = {
   compact: (n, currency) => {
     const x = amountOf(n);
     if (!isFinite(x)) return NaN;
-    const opts = { notation: "compact", maximumFractionDigits: 1, maximumSignificantDigits: 3, roundingPriority: "morePrecision" } as Intl.NumberFormatOptions;
+    // Both roundings, keeping the one that shows more digits. Intl's roundingPriority does the same,
+    // but Node 18 and older browsers ignore it.
+    const cur: Intl.NumberFormatOptions = currency === undefined ? {} : { style: "currency", currency: textOf(currency), minimumFractionDigits: 0 };
     try {
-      return new Intl.NumberFormat(LOCALE, currency === undefined ? opts : { ...opts, style: "currency", currency: textOf(currency) }).format(x);
+      const sig = new Intl.NumberFormat(LOCALE, { notation: "compact", maximumSignificantDigits: 3, ...cur }).format(x);
+      const dec = new Intl.NumberFormat(LOCALE, { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1, ...cur }).format(x);
+      const digits = (t: string) => t.replace(/\D/g, "").length;
+      return digits(dec) > digits(sig) ? dec : sig;
     } catch { return NaN; }
   },
   /** plural(1, 'item') is "1 item", plural(3, 'item') is "3 items"; plural(n, 'child', 'children') for irregular words. */
