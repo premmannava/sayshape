@@ -4,6 +4,9 @@ import { mapComponents } from "../src/components/map";
 import { overlappingGroups, spiderfy } from "../src/components/map/overlap";
 import { layoutBubbleLabels } from "../src/components/map/labels";
 import { MAX_ZOOM, worldView, zoomAt } from "../src/components/map/viewport";
+import stateLines from "../src/components/map/states.json";
+import { mixedColor } from "../src/components/map/analytics";
+import { lightTheme } from "../src/theme";
 import { render } from "../src/testing";
 
 const components = [...coreComponents, ...mapComponents];
@@ -67,6 +70,22 @@ describe("collision-aware bubble labels", () => {
     }
     const winner = labels.get(7);
     expect(winner).toBeDefined();
+  });
+});
+
+describe("regional basemap boundaries", () => {
+  it("embeds public-domain state outlines without cluttering world views", () => {
+    expect(stateLines.states.length).toBe(51);
+    expect(stateLines.states.some((state) => state[0] === "Arizona")).toBe(true);
+    const zoomed = render(sameCoords, { components });
+    expect((zoomed.find("map").box!.data as { view: { zoom: number } }).view.zoom).toBeGreaterThan(4);
+    const outline = mixedColor(lightTheme.colors.muted, lightTheme.colors.surface, 0.2);
+    expect(zoomed.drawOps.filter((op) => op.op === "stroke" && op.strokeStyle === outline)).toHaveLength(51);
+    zoomed.destroy();
+
+    const world = render("map", { components });
+    expect(world.drawOps.some((op) => op.op === "stroke" && op.strokeStyle === outline)).toBe(false);
+    world.destroy();
   });
 });
 
