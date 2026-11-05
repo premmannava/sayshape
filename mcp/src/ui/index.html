@@ -16,10 +16,43 @@
       body { overflow-x: hidden; overflow-y: auto; }
       #wrap { width: 100%; }
       canvas { display: block; }
+      /* This panel is only shown when the host can save model context but
+         cannot send a new chat message. Keep it visible inside capped iframes. */
+      #action-handoff[hidden] { display: none; }
+      #action-handoff {
+        position: fixed; z-index: 5; left: 12px; right: 12px; bottom: 12px;
+        box-sizing: border-box; max-width: 720px; padding: 12px;
+        background: var(--ss-handoff-bg, #fff); color: var(--ss-handoff-ink, #222);
+        border: 1px solid var(--ss-handoff-line, #aaa); border-radius: 12px;
+        box-shadow: 0 5px 24px rgba(0, 0, 0, 0.2);
+        font: 13px/1.5 system-ui, sans-serif;
+      }
+      #action-handoff p { margin: 0 0 8px; }
+      #action-handoff input {
+        display: block; box-sizing: border-box; width: 100%; padding: 8px;
+        color: inherit; background: transparent; border: 1px solid var(--ss-handoff-line, #aaa);
+        border-radius: 6px; font: inherit;
+      }
+      #action-handoff .actions { display: flex; gap: 8px; margin-top: 8px; }
+      #action-handoff button {
+        padding: 6px 12px; border-radius: 6px; cursor: pointer;
+        border: 1px solid var(--ss-handoff-line, #aaa);
+        background: transparent; color: inherit; font: inherit;
+      }
+      #action-handoff button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
     </style>
   </head>
   <body>
     <div id="wrap"><canvas id="loom" aria-label="An interface drawn by SayShape"></canvas></div>
+    <aside id="action-handoff" hidden aria-labelledby="action-handoff-label">
+      <p id="action-handoff-label" role="status" aria-live="polite"></p>
+      <p>Send this message in your chat to continue:</p>
+      <input id="action-handoff-prompt" aria-label="Follow-up message for the assistant" readonly />
+      <div class="actions">
+        <button id="action-handoff-copy" type="button">Copy message</button>
+        <button id="action-handoff-dismiss" type="button">Dismiss</button>
+      </div>
+    </aside>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>
