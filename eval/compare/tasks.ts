@@ -49,13 +49,13 @@ const HOSTILE = `<img src=x onerror=alert(1)>`;
 export const tasks: Task[] = [
   // KPIs
   { id: "k1", category: "kpi", request: "Show three KPI cards: Revenue $1.24M up 12%, Active users 48,210 up 5.4%, Churn 2.1% down 0.4 points. For churn, going down is good news.",
-    checks: [{ label: "shows the three figures", shows: [/1\.24\s?M|1,240,000/, /48,210/, /2\.1\s?%/] }, { label: "shows each change", shows: [/12\s?%/, /5\.4\s?%/, /0\.4/] }] },
+    checks: [{ label: "shows the three figures", shows: [/1\.24\s?M|1,?240,?000/, /48,?210/, /2\.1\s?%/] }, { label: "shows each change", shows: [/12\s?%/, /5\.4\s?%/, /0\.4/] }] },
   { id: "k2", category: "kpi", request: "Website visits for the last 7 days were 1200, 1350, 1280, 1500, 1620, 1580, 1710. Show today's visits as a big number, the percent change from the first day, and a small trend line of all 7 days.",
-    checks: [{ label: "shows today's visits (1,710)", shows: [/1,?710/] }, { label: "shows the change from the first day (42.5%)", shows: [/42\.5\s?%/] }] },
+    checks: [{ label: "shows today's visits (1,710)", shows: [/1,?710/] }, { label: "shows the change from the first day (42.5%)", shows: [/42\.5\d*\s?%/] }] },
   { id: "k3", category: "kpi", request: "Budget tracker: $7,400 spent of a $10,000 budget. Show percent used, a progress bar, and the amount remaining.",
-    checks: [{ label: "shows 74% used", shows: [/74(\.0)?\s?%/] }, { label: "shows $2,600 remaining", shows: [/2,600/] }] },
+    checks: [{ label: "shows 74% used", shows: [/74(\.0)?\s?%/] }, { label: "shows $2,600 remaining", shows: [/2,?600/] }] },
   { id: "k4", category: "kpi", request: "Compare this month with last month: orders 320 vs 290, average order value $58 vs $61, refunds 12 vs 18. Show each metric with its change; fewer refunds is good.",
-    checks: [{ label: "shows this month's figures", shows: [/320/, /\$58/, /\b12\b/] }, { label: "shows the changes", shows: [/10\.3\s?%|\+\s?30\b/, /4\.9\s?%|[-−–]\s?\$?3(\.00)?\b/, /33(\.3)?\s?%|[-−–]\s?6\b/] }] },
+    checks: [{ label: "shows this month's figures", shows: [/320/, /\$58/, /\b12\b/] }, { label: "shows the changes", shows: [/10\.3\d*\s?%|\+\s?30\b/, /4\.9\d*\s?%|[-−–]\s?\$?3(\.00)?\b/, /33(\.3\d*)?\s?%|[-−–]\s?6\b/] }] },
 
   // Charts
   { id: "c1", category: "chart", request: "Bar chart of sales by region: NA 420, EU 310, APAC 280, LATAM 120 (thousands of dollars).",
@@ -83,7 +83,7 @@ export const tasks: Task[] = [
   { id: "t3", category: "table", request: "Table of orders (A1 Acme $1,200 Shipped; A2 Globex $860 Pending; A3 Initech $2,310 Shipped; A4 Umbrella $410 Cancelled). Clicking a row shows that order's details below the table.",
     checks: [{ label: "clicking A3 shows its details", steps: [{ press: /\bA3\b/ }], test: (after, before) => count(after, /Initech/) > count(before, /Initech/) || count(after, /2,310/) > count(before, /2,310/) }] },
   { id: "t4", category: "table", request: "Invoice list with a status badge per row and a total of all amounts at the bottom: INV-1 $500 Paid, INV-2 $1,250 Overdue, INV-3 $320 Draft, INV-4 $780 Paid. Paid is green, Overdue red, Draft grey.",
-    checks: [{ label: "shows every status", shows: [/Paid/, /Overdue/, /Draft/] }, { label: "shows the total ($2,850)", shows: [/2,850/] }] },
+    checks: [{ label: "shows every status", shows: [/Paid/, /Overdue/, /Draft/] }, { label: "shows the total ($2,850)", shows: [/2,?850/] }] },
 
   // Forms
   { id: "f1", category: "form", request: "Sign-up form with name, email, a plan choice (Free, Pro, Team) and an 'I agree to the terms' checkbox. The submit button only works when name and email are filled and the box is ticked; after submitting, show 'Welcome, <name>!'.",
@@ -110,8 +110,8 @@ export const tasks: Task[] = [
   { id: "d1", category: "dashboard", request: "Sales dashboard. Orders: A101 Acme NA Direct Shipped $12,400; A102 Globex EU Partner Pending $8,600; A103 Initech NA Online Shipped $23,100; A104 Umbrella APAC Direct Cancelled $4,100; A105 Stark NA Direct Pending $31,500; A106 Wayne EU Online Shipped $17,800; A107 Tyrell APAC Partner Shipped $9,900; A108 Soylent APAC Online Pending $14,300. Include a region filter (All, NA, EU, APAC), a customer search, KPIs for revenue, order count, average order and pending count that follow the filter, a chart of the top customers, and a sortable orders table.",
     checks: [
       // $117,600 leaves out the cancelled order, which is a fair reading of revenue.
-      { label: "revenue for all regions ($121,700, or $117,600 without the cancelled order)", shows: [/121[.,]7|117[.,]6/] },
-      { label: "EU shows $26,400 and hides NA orders", steps: [{ press: /^\s*(EU|Europe)\s*$|\(EU\)/ }], shows: [/26[.,]4/], hides: [/Stark/] },
+      { label: "revenue for all regions ($121,700, or $117,600 without the cancelled order)", shows: [/121[.,]?7|117[.,]?6/] },
+      { label: "EU shows $26,400 and hides NA orders", steps: [{ press: /^\s*(EU|Europe)\s*$|\(EU\)/ }], shows: [/26[.,]?4/], hides: [/Stark/] },
     ] },
   { id: "d2", category: "dashboard", request: "Support dashboard. Tickets per day Mon-Fri: 34, 41, 29, 38, 45. Open tickets: #201 'Login fails' High Ana; #202 'Slow export' Medium Ben; #203 'Typo on page' Low Ana; #204 'Data missing' High Chen; #205 'Billing error' Medium Chen. Show open count, high-priority count, a chart of tickets per day, and the open tickets table with a priority filter (All, High, Medium, Low).",
     checks: [

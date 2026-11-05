@@ -103,6 +103,17 @@ card
     expect(r).toEqual({ label: r.label, passed: true });
   });
 
+  it("accepts figures written without thousands commas or with more decimals", async () => {
+    const spec = `state spent=7400 budget=10000
+card
+  text "Budget tracker" style=title
+  progress value={spent} max={budget} label="{round(spent / budget * 100)}% used"
+  text "\${budget - spent} remaining"`;
+    expect((await score("sayshape", tasks.find((t) => t.id === "k3")!, spec)).checks.every((c) => c.passed)).toBe(true);
+    const html = `<p>Orders 320 (+10.34%) · Avg order $58 (-4.92%) · Refunds 12 (-33.33%)</p>`;
+    expect((await score("html", tasks.find((t) => t.id === "k4")!, html)).checks.every((c) => c.passed)).toBe(true);
+  });
+
   it("presses the button inside a header cell, not the cell", async () => {
     const html = reference.t1!.html.replace(/<th data-k="(\w+)">(\w+)<\/th>/g, '<th><button data-k="$1">$2</button></th>').replace("document.querySelectorAll('th').forEach(th=>th.onclick=()=>{dir=key===th.dataset.k?-dir:1;key=th.dataset.k;draw();});", "document.querySelectorAll('th button').forEach(b=>b.onclick=()=>{dir=key===b.dataset.k?-dir:1;key=b.dataset.k;draw();});");
     expect(html).toContain("th button");
