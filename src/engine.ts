@@ -744,8 +744,8 @@ export class SayShape {
     const target = region ? { node: region.box.node, box: region.box, detail: region.detail } : t;
     this.dragging = phase === "end" ? null : target;
     const def = this.registry.get(target.node.type);
-    def?.drag?.({ ...this.pressContext(target), x, y, phase });
-    this.invalidate("paint");
+    const relayout = def?.drag?.({ ...this.pressContext(target), x, y, phase });
+    this.invalidate(relayout ? "layout" : "paint");
   }
 
   /** Let the focused element handle a key. Returns true if it did. */
