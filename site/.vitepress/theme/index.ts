@@ -21,6 +21,7 @@ import Atlas from "./components/Atlas.vue";
 import ElementPage from "./components/ElementPage.vue";
 import Learn from "./components/Learn.vue";
 import Ask from "./components/Ask.vue";
+import Compare from "./components/Compare.vue";
 
 export default {
   extends: DefaultTheme,
@@ -36,5 +37,6 @@ export default {
     app.component("Atlas", Atlas);
     app.component("ElementPage", ElementPage);
     app.component("Learn", Learn);
+    app.component("Compare", Compare);
   },
 } satisfies Theme;

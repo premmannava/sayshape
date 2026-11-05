@@ -11,7 +11,7 @@
  * Each recording goes to site/public/compare/<model>/<task>.json, and
  * site/public/compare/index.json lists them all.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { coreComponents } from "../src/components";
 import { generateSpec } from "../src/model/generate";
@@ -78,13 +78,31 @@ async function sayshape(config: ModelConfig, registry: Registry, request: string
   return out;
 }
 
+/**
+ * The list the page reads, made from every recording on disk (not edited in
+ * place), so recordings made in parallel all end up in it: by model, then in
+ * gallery order.
+ */
+function writeIndex(dir: string): void {
+  const index: Array<{ id: string; model: string; file: string; request: string }> = [];
+  for (const sub of readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort()) {
+    const files = readdirSync(resolve(dir, sub)).filter((f) => f.endsWith(".json"));
+    const rank = (f: string) => { const i = GALLERY.indexOf(f.replace(/\.json$/, "")); return i < 0 ? GALLERY.length : i; };
+    for (const f of files.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))) {
+      const r = JSON.parse(readFileSync(resolve(dir, sub, f), "utf8")) as Recording;
+      index.push({ id: r.id, model: r.model, file: `${sub}/${f}`, request: r.request });
+    }
+  }
+  writeFileSync(resolve(dir, "index.json"), JSON.stringify(index, null, 2) + "\n");
+}
+
 async function main(): Promise<void> {
   const env = readModelEnv("development", resolve(__dirname, ".."));
   const model = arg("model") ?? env.model;
   if (!model) throw new Error("No model: pass --model, or set LOOM_MODEL in .env.local.");
   const ids = arg("only")?.split(",").map((s) => s.trim()).filter(Boolean) ?? GALLERY;
   const chosen = ids.map((id) => tasks.find((t) => t.id === id) ?? (() => { throw new Error(`No task "${id}"`); })());
-  const config: ModelConfig = { url: env.url, apiKey: env.apiKey || undefined, model, streamUsage: true, maxTokens: 8000 };
+  const config: ModelConfig = { url: env.url, apiKey: env.apiKey || undefined, model, streamUsage: true, maxTokens: 16000 };
   const registry = new Registry(coreComponents);
   const a2ui = a2uiPrompt();
   const slug = model.replace(/[^\w.-]+/g, "_");
@@ -101,16 +119,7 @@ async function main(): Promise<void> {
     console.log(`${task.id}: SayShape ${sec(s)}, HTML ${sec(h)}, A2UI ${sec(a)}`);
   }
 
-  // The index the page reads: every recording on disk, newest model runs included.
-  const indexPath = resolve(dir, "index.json");
-  const index: Array<{ id: string; model: string; file: string; request: string }> = existsSync(indexPath) ? JSON.parse(readFileSync(indexPath, "utf8")) : [];
-  for (const task of chosen) {
-    const file = `${slug}/${task.id}.json`;
-    const entry = { id: task.id, model, file, request: task.request };
-    const i = index.findIndex((e) => e.file === file);
-    if (i >= 0) index[i] = entry; else index.push(entry);
-  }
-  writeFileSync(indexPath, JSON.stringify(index, null, 2) + "\n");
+  writeIndex(dir);
 }
 
 main().catch((e: unknown) => {

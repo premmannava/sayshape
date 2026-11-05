@@ -115,6 +115,7 @@ export default defineConfig({
       ...(HAS_MODEL ? [{ text: "Build with AI", link: "/chat", activeMatch: "^/chat" }] : []),
       { text: "Learn", link: "/learn/", activeMatch: "^/learn/" },
       { text: "Playground", link: "/playground", activeMatch: "^/playground" },
+      { text: "Compare", link: "/compare", activeMatch: "^/compare" },
       { text: "Examples", link: "/examples/", activeMatch: "^/examples" },
       { text: "Elements", link: "/docs/elements/", activeMatch: "^/docs/elements/" },
       { text: "Docs", link: "/docs/", activeMatch: "^/docs/(?!architecture/limitations|elements/)" },
@@ -136,6 +137,8 @@ export default defineConfig({
       md.use(loomLivePlugin);
     },
   },
+  // A2UI's renderer is made of custom elements (a2ui-surface and the basic catalog's), drawn by the compare page.
+  vue: { template: { compilerOptions: { isCustomElement: (tag) => tag.startsWith("a2ui-") } } },
   vite: {
     resolve: {
       alias: { "@loom": here("../../src") },
