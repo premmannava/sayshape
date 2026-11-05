@@ -1506,7 +1506,7 @@ The report starts with a side-by-side table on the requests every variant can bu
 
 ### Compare it with HTML
 
-`npm run compare` asks each model for the same 26 requests twice, once in SayShape and once as an HTML fragment (markup, CSS and JavaScript, with Chart.js allowed for charts), and judges both the same way: by what's on screen and what happens when it's used.
+`npm run compare` asks each model for the same 30 requests twice, once in SayShape and once as an HTML fragment (markup, CSS and JavaScript, with Chart.js allowed for charts), and judges both the same way: by what's on screen and what happens when it's used.
 
 ```bash
 npm run compare                                           # the model from .env.local, every request once
@@ -1517,7 +1517,7 @@ npm run compare -- --guide compact                        # SayShape's compact g
 npm run compare -- --cache 1h                             # mark the guide for prompt caching
 ```
 
-The requests (`eval/compare/tasks.ts`) cover KPIs, charts, tables, forms, calculators, dashboards and two security cases, where data that looks like HTML must stay text. Every figure a check looks for is in the request. SayShape answers are rendered by the real engine and HTML answers run in jsdom; checks type into fields, press things by their visible text and read the visible text, so they mean the same for both. `eval/compare/reference.ts` holds a working answer to every request in both formats, and the tests check that each passes every check.
+The requests (`eval/compare/tasks.ts`) cover KPIs, charts, tables, forms, calculators, dashboards, maps and two security cases, where data that looks like HTML must stay text. Every figure a check looks for is in the request. SayShape answers are rendered by the real engine and HTML answers run in jsdom; checks type into fields, press things by their visible text and read the visible text, so they mean the same for both. `eval/compare/reference.ts` holds a working answer to every request in both formats, and the tests check that each passes every check.
 
 Every answer is a first try with no repair. The report gives, per model and format: how many answers worked, checks passed, input and output tokens as the server reported them, time to the first token and in total, cost (looked up for OpenRouter models), code size, and for HTML the patterns that cost safety or theming: HTML inserted as strings, code built from strings, external scripts and fixed colors. It's written to `eval/compare/results/<date>/` with every answer.
 

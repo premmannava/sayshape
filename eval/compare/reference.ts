@@ -352,6 +352,49 @@ card
     html: `<input id="n" placeholder="Your name"><p id="h">Hello, !</p>
 <script>document.getElementById('n').oninput=e=>{document.getElementById('h').textContent='Hello, '+e.target.value+'!';};</script>`,
   },
+  m1: {
+    sayshape: `map fit=pins
+  pin "Phoenix" lat=33.45 lon=-112.07
+  pin "London" lat=51.51 lon=-0.13
+  pin "Mumbai" lat=19.08 lon=72.88
+  pin "Sydney" lat=-33.87 lon=151.21
+  pin "São Paulo" lat=-23.55 lon=-46.63`,
+    html: `<svg viewBox="0 0 360 180" width="100%"><rect width="360" height="180" fill="#dde"/><g font-size="9">
+<circle cx="67" cy="56" r="3"/><text x="71" y="59">Phoenix</text><circle cx="180" cy="38" r="3"/><text x="184" y="41">London</text>
+<circle cx="253" cy="71" r="3"/><text x="257" y="74">Mumbai</text><circle cx="331" cy="124" r="3"/><text x="335" y="127">Sydney</text>
+<circle cx="134" cy="114" r="3"/><text x="138" y="117">São Paulo</text></g></svg>`,
+  },
+  m2: {
+    sayshape: `state rows=[{country: "United States", revenue: 4200000}, {country: "Germany", revenue: 1800000}, {country: "Japan", revenue: 1500000}, {country: "India", revenue: 1100000}, {country: "Brazil", revenue: 600000}]
+map kind=choropleth items={rows} region=country value=revenue legendTitle="Revenue ($)"`,
+    html: `<svg viewBox="0 0 360 180" width="100%"><rect width="360" height="180" fill="#eee"/></svg>
+<div><span>Revenue</span> <span>$0.6M</span> <span style="display:inline-block;width:80px;height:8px;background:linear-gradient(90deg,#cde,#036)"></span> <span>$4.2M</span></div>`,
+  },
+  m3: {
+    sayshape: `state rows=[{city: "Dallas", lat: 32.78, lon: -96.80, units: 1200}, {city: "Chicago", lat: 41.88, lon: -87.63, units: 800}, {city: "Atlanta", lat: 33.75, lon: -84.39, units: 450}, {city: "Seattle", lat: 47.61, lon: -122.33, units: 300}]
+map kind=bubble items={rows} lat=lat lon=lon label=city value=units legendTitle="Units on hand"`,
+    html: `<svg viewBox="0 0 360 180" width="100%"><circle cx="90" cy="70" r="14"/><circle cx="100" cy="60" r="11"/><circle cx="105" cy="68" r="8"/><circle cx="60" cy="50" r="7"/></svg>
+<div>Units on hand: <span>300</span> <span>1,200</span></div>`,
+  },
+  m4: {
+    sayshape: `state store=""
+state sales=[{name: "Austin", amount: "$42K"}, {name: "Denver", amount: "$35K"}, {name: "Boston", amount: "$51K"}, {name: "Miami", amount: "$28K"}]
+card
+  map bind=store fit=pins
+    pin "Austin" lat=30.27 lon=-97.74
+    pin "Denver" lat=39.74 lon=-104.99
+    pin "Boston" lat=42.36 lon=-71.06
+    pin "Miami" lat=25.76 lon=-80.19
+  if={store != ""}
+    text "{store}: {find(sales, 'name', store).amount} this month"`,
+    html: `<svg viewBox="0 0 360 180" width="100%" font-size="9">
+<g class="s" data-n="Austin" data-v="$42K"><circle cx="100" cy="100" r="5"/><text x="107" y="103">Austin</text></g>
+<g class="s" data-n="Denver" data-v="$35K"><circle cx="80" cy="70" r="5"/><text x="87" y="73">Denver</text></g>
+<g class="s" data-n="Boston" data-v="$51K"><circle cx="200" cy="60" r="5"/><text x="207" y="63">Boston</text></g>
+<g class="s" data-n="Miami" data-v="$28K"><circle cx="180" cy="130" r="5"/><text x="187" y="133">Miami</text></g></svg>
+<p id="o"></p>
+<script>document.querySelectorAll('.s').forEach(g=>g.addEventListener('click',()=>{document.getElementById('o').textContent=g.dataset.n+': '+g.dataset.v+' this month';}));</script>`,
+  },
 };
 
 /** Broken answers, one per kind of mistake, that the checks must catch. */
