@@ -89,6 +89,20 @@ const a=document.createElement('td');a.appendChild(c);const n=document.createEle
     expect(r).toEqual({ label: r.label, passed: true });
   });
 
+  it("ticks the check under a list-item's title when its text is pressed", async () => {
+    const spec = `state tasks=[{n: "Design mockups", p: "Website", done: true}, {n: "Build pages", p: "Website", done: false}, {n: "Write copy", p: "Website", done: true}, {n: "Set up CI", p: "App", done: true}, {n: "Login screen", p: "App", done: false}, {n: "Push alerts", p: "App", done: false}]
+derive web={filter(tasks, 'p', 'Website')}
+derive app={filter(tasks, 'p', 'App')}
+card
+  text "Website {count(web, 'done')} of 3, App {count(app, 'done')} of 3"
+  list
+    each items=tasks as=t
+      list-item "{t.n}" detail="{t.p}"
+        check "Done" bind=t.done`;
+    const r = await runCheck("sayshape", spec, tasks.find((t) => t.id === "d3")!.checks[1]!);
+    expect(r).toEqual({ label: r.label, passed: true });
+  });
+
   it("presses the button inside a header cell, not the cell", async () => {
     const html = reference.t1!.html.replace(/<th data-k="(\w+)">(\w+)<\/th>/g, '<th><button data-k="$1">$2</button></th>').replace("document.querySelectorAll('th').forEach(th=>th.onclick=()=>{dir=key===th.dataset.k?-dir:1;key=th.dataset.k;draw();});", "document.querySelectorAll('th button').forEach(b=>b.onclick=()=>{dir=key===b.dataset.k?-dir:1;key=b.dataset.k;draw();});");
     expect(html).toContain("th button");

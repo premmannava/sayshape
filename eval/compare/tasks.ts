@@ -49,7 +49,7 @@ const HOSTILE = `<img src=x onerror=alert(1)>`;
 export const tasks: Task[] = [
   // KPIs
   { id: "k1", category: "kpi", request: "Show three KPI cards: Revenue $1.24M up 12%, Active users 48,210 up 5.4%, Churn 2.1% down 0.4 points. For churn, going down is good news.",
-    checks: [{ label: "shows the three figures", shows: [/1\.24\s?M/, /48,210/, /2\.1\s?%/] }, { label: "shows each change", shows: [/12\s?%/, /5\.4\s?%/, /0\.4/] }] },
+    checks: [{ label: "shows the three figures", shows: [/1\.24\s?M|1,240,000/, /48,210/, /2\.1\s?%/] }, { label: "shows each change", shows: [/12\s?%/, /5\.4\s?%/, /0\.4/] }] },
   { id: "k2", category: "kpi", request: "Website visits for the last 7 days were 1200, 1350, 1280, 1500, 1620, 1580, 1710. Show today's visits as a big number, the percent change from the first day, and a small trend line of all 7 days.",
     checks: [{ label: "shows today's visits (1,710)", shows: [/1,?710/] }, { label: "shows the change from the first day (42.5%)", shows: [/42\.5\s?%/] }] },
   { id: "k3", category: "kpi", request: "Budget tracker: $7,400 spent of a $10,000 budget. Show percent used, a progress bar, and the amount remaining.",

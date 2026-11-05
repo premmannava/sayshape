@@ -47,6 +47,20 @@ export function sayshapeScreen(spec: string): Screen {
   // Each piece on its own and all together: a popup's option sits over other text, and a label can span pieces.
   const labelsIn = (b: { x: number; y: number; w: number; h: number }): string[] => { const p = piecesIn(b); return [...p, p.join(" ")]; };
 
+  /**
+   * Text that isn't pressable itself but holds one check or switch (a list-item with a Done box
+   * under its title): that box, as a person would tick it. The HTML screen does the same for rows.
+   */
+  const checkUnder = (label: RegExp) => {
+    const within = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
+      a.x >= b.x - 1 && a.y >= b.y - 1 && a.x + a.w <= b.x + b.w + 1 && a.y + a.h <= b.y + b.h + 1;
+    for (const f of ui.findAll({}).filter((x) => x.box && x.shownText !== undefined && label.test(x.shownText))) {
+      const boxes = ui.hits.filter((h) => (h.box.node.type === "check" || h.box.node.type === "switch") && within(h.box, f.box!));
+      if (boxes.length === 1) return boxes[0];
+    }
+    return undefined;
+  };
+
   /** Choose an option by its text in any select on screen: open it, press the option, or close it again. */
   const chooseOption = (label: RegExp): boolean => {
     for (const f of ui.findAll("select").filter((x) => x.box)) {
@@ -85,7 +99,7 @@ export function sayshapeScreen(spec: string): Screen {
         })
         .filter((m) => m.labels.some((l) => label.test(l)))
         .sort((a, b) => a.h.box.w * a.h.box.h - b.h.box.w * b.h.box.h);
-      const hit = matches[0]?.h;
+      const hit = matches[0]?.h ?? checkUnder(label);
       if (hit) {
         ui.click(hit.box.x + hit.box.w / 2, hit.box.y + hit.box.h / 2);
         ui.loom.renderNow();
