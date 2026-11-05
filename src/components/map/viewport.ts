@@ -7,7 +7,7 @@ export interface Viewport {
 
 export interface Point { x: number; y: number }
 
-export const MAX_ZOOM = 48;
+export const MAX_ZOOM = 128;
 export const worldView = (): Viewport => ({ zoom: 1, dx: 0, dy: 0 });
 const finite = (value: number, fallback: number) => Number.isFinite(value) ? value : fallback;
 
@@ -48,13 +48,15 @@ export function fitPins(points: readonly Point[], width: number, height: number,
     minY = Math.min(minY, y); maxY = Math.max(maxY, y);
   }
   const base = width / worldWidth;
+  // Keep bubbles, their outlines and nearby labels inside the viewport.
+  const padding = Math.min(112, Math.max(64, Math.min(width, height) * 0.38));
   // A single point should zoom to regional context, not a giant empty pixel.
   // The smaller fitted dimension limits zoom.
   const fittedZoom = points.length === 1 ? 8 : Math.min(
     MAX_ZOOM,
     Math.max(1, Math.min(
-      (width - 64) / (Math.max(1, maxX - minX) * base),
-      (height - 64) / (Math.max(1, maxY - minY) * base),
+      (width - padding) / (Math.max(1, maxX - minX) * base),
+      (height - padding) / (Math.max(1, maxY - minY) * base),
     )),
   );
   return constrain({
