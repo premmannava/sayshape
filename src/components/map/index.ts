@@ -124,11 +124,11 @@ export const map: ComponentDef = {
     fit: { type: "enum", values: ["world", "pins"], default: "world", description: "Initial framing: whole world, or zoom to the current pin locations. Re-fits when the pins change." },
     cluster: { type: "boolean", default: false, description: "Group nearby pins into clickable counts. Zooming in separates them." },
     interactive: { type: "boolean", default: true, description: "Enable mouse-wheel zoom and drag pan." },
-    controls: { type: "boolean", default: true, description: "Show Canvas zoom in, zoom out and reset controls." },
+    controls: { type: "boolean", default: false, description: "Show Canvas zoom in, zoom out and reset controls. Opt in to preserve the original minimal map appearance." },
   },
   children: ["pin"],
   example: `state selected=""
-map bind=selected fit=pins cluster=true
+map bind=selected fit=pins cluster=true controls=true
   pin "Phoenix" lat=33.4484 lon=-112.074 detail="Status: delayed | Contract: 120000" tone=bad size=8`,
   minWidth: () => 200,
   layout(box, ctx) {
@@ -171,7 +171,7 @@ map bind=selected fit=pins cluster=true
     const groups = p.bool("cluster", false)
       ? clusterPoints(visible)
       : visible.map(({ item, x, y }) => ({ items: [item], x, y }));
-    box.data = { scale, pins, groups, view, runtime, fit, controls: p.bool("controls", true) } satisfies MapData;
+    box.data = { scale, pins, groups, view, runtime, fit, controls: p.bool("controls", false) } satisfies MapData;
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
