@@ -108,14 +108,20 @@ export function eachInstances(each: SayShapeNode, scope: Scope, warn?: (message:
   const out: SayShapeNode[] = [];
   const n = Math.min(items.length, MAX_EACH_ITEMS);
   const perItem = each.children.reduce((sum, c) => sum + size(c), 0);
+  // if= on each keeps the items it's true for, read with the item in scope: each items=tasks as=t if={t.owner == owner}.
+  const keep = each.props.if === undefined ? undefined : bare(each.props.if);
   for (let i = 0; i < n; i++) {
+    const item = items[i]!;
+    const own: Scope = (name) => (name === as ? item : name === index ? i : scope(name));
+    if (keep !== undefined) {
+      const k = evaluate(keep, own);
+      if (!k.ok || !k.value) continue;
+    }
     if (budget.left < perItem) {
       warn?.(`each on line ${each.line}: lists made more than ${MAX_EACH_ELEMENTS} elements, so only the first ${i} of ${items.length} items are shown`);
       break;
     }
     budget.left -= perItem;
-    const item = items[i]!;
-    const own: Scope = (name) => (name === as ? item : name === index ? i : scope(name));
     const place = listPlace && { key: listPlace.key, steps: [...listPlace.steps, i] };
     const locate: Locate = (name) => (name === as ? place : name === index ? null : outer(name));
     let key = String(i);

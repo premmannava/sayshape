@@ -233,6 +233,20 @@ const RESERVED = new Set(["__proto__", "constructor", "prototype", "screen"]);
 
 /** One derive line: name={expression} pairs. Problems skip the pair, not the line. */
 function parseDeriveLine(body: string, line: number, diags: Diagnostic[]): DerivedDef[] {
+  // A derived value is always an expression, so models often leave out the braces:
+  // derive order=find(orders, 'id', picked). One such pair takes the rest of the line.
+  const bare = /^([A-Za-z_]\w*)\s*=\s*(?!\{)(\S.*)$/.exec(body.trim());
+  // A fixed value (derive b=5) still gets the advice to use state.
+  if (bare && !RESERVED.has(bare[1]!) && (checkSyntax(bare[2]!.trim()) !== null || identifiers(bare[2]!.trim()).length > 0)) {
+    const expr = bare[2]!.trim();
+    const err = checkSyntax(expr);
+    if (err === null) return [{ name: bare[1]!, expr, line, reads: identifiers(expr) }];
+    // Not several name=value pairs: report the expression's own problem, not missing braces.
+    if (!/\s[A-Za-z_]\w*=/.test(expr)) {
+      diags.push({ line, severity: "warning", message: `derive ${bare[1]}: ${err}` });
+      return [];
+    }
+  }
   const t = tokenizeLine("derive " + body);
   for (const p of t.problems) diags.push({ line, severity: "warning", message: p });
   if (t.text !== undefined) diags.push({ line, severity: "warning", message: `derive lines take name={expression} pairs, not quoted text, like derive total={price * qty}` });
@@ -319,9 +333,6 @@ export const ON_BLOCK_MESSAGE =
 function cantContain(parentName: string, parentType: string, type: string, accepts: ComponentDef["children"]): string {
   let msg = `${parentName} can't contain "${type}"`;
   if (Array.isArray(accepts)) msg += `; it holds ${accepts.join(", ")}`;
-  if (parentType === "list" && (type === "button" || type === "link")) {
-    msg += `. Make the row itself pressable, like list-item "{item.name}" on=emit:choose:{item.name}, or use a column of cards for rows with buttons`;
-  }
   return msg;
 }
 

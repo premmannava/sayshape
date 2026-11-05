@@ -21,7 +21,7 @@ card
 
 ## Rules
 
-- **Grammar.** `derive name={expression}`, unindented, at the top level. Several pairs can share a line, as with `state`. The expression is the same [safe kind](./expressions) as everywhere else: no functions of your own, callbacks or side effects.
+- **Grammar.** `derive name={expression}`, unindented, at the top level. Several pairs can share a line, as with `state`. A line with one derived value may leave out the braces: `derive order=find(orders, 'id', picked)`. The expression is the same [safe kind](./expressions) as everywhere else: no functions of your own, callbacks or side effects.
 - **Reading.** A derived name reads like state, in text, props, `if=`, `items=` and other `derive` lines. It can read state, data your app sets with `ui.state.set`, and other derived values.
 - **Order.** Declarations can come in any order. While a spec streams in, a value whose inputs haven't arrived yet shows as `—` until they do.
 - **Updates.** A value is worked out the first time it's read, then kept until something it reads changes, directly or through other derived values.

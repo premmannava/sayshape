@@ -162,7 +162,7 @@ derive total={subtotal + tax}
 stat label="Total" value={total}
 ```
 
-- **Grammar.** `derive name={expression}`, unindented, at the top level of the spec; several pairs may share a line, as with `state`. The expression is the same safe kind as everywhere else in SayShape, with the same functions; there are no functions of your own, callbacks or side effects.
+- **Grammar.** `derive name={expression}`, unindented, at the top level of the spec; several pairs may share a line, as with `state`. A line with one derived value may leave out the braces, as models often do: `derive order=find(orders, 'id', picked)` and `derive byCat=[{name: 'Food', total: sum(filter(spend, 'cat', 'Food'), 'amt')}]` both work. A fixed value (`derive b=5`) still gets a warning to use `state` instead. The expression is the same safe kind as everywhere else in SayShape, with the same functions; there are no functions of your own, callbacks or side effects.
 - **Reading.** A derived name reads like state, in text, props, `if=`, `items=` and other `derive` lines. Its expression can read state, data your app sets with `ui.state.set`, and other derived values.
 - **Order.** Declarations can come in any order: a value is worked out from whatever it reads, wherever that's declared. While a spec streams in, a value whose inputs haven't arrived yet shows as nothing (—) until they do.
 - **Updates.** A value is worked out the first time it's read and kept until something it reads changes, directly or through other derived values; then it's worked out again the next time it's read. Changes to state it doesn't read leave it alone, and a render reads each value at most once per change.
@@ -271,7 +271,7 @@ List functions, for computing instead of typing numbers:
 | `take(list, 3)` | The first items |
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
 
-They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. Use them for counts and totals. To hide items people can still change (`bind=t.done`), keep `each items=todos` and put `if=` on the repeated element, because a filtered list is a copy and can't be written to.
+They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. Use them for counts and totals. To show only some items people can still change (`bind=t.done`), keep `each items=todos` and put `if=` on the `each` or on the repeated element, because a filtered list is a copy and can't be written to. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
 
 Formatting, for text people read:
 
@@ -279,7 +279,7 @@ Formatting, for text people read:
 |---|---|
 | `money(2400)`, `money(-84.1)`, `money(n, 'EUR')` | `$2,400.00`, `-$84.10`, `€…` |
 | `number(37000)`, `number(n, 2)` | `37,000`; always two decimals |
-| `compact(12345678)`, `compact(n, 'USD')` | `12.3M`, `$12.3M`: big figures in small spaces, like a `stat` |
+| `compact(12345678)`, `compact(n, 'USD')` | `12.3M`, `$12.3M`: big figures in small spaces, like a `stat`. Keeps 3 significant digits or 1 decimal, whichever says more: `compact(1240000)` is `1.24M` |
 | `plural(n, 'item')`, `plural(n, 'child', 'children')` | `1 item`, `3 items`, `2 children` |
 | `lower(text)`, `upper(text)`, `trim(text)` | Text in lower or upper case, or without spaces at the ends |
 
@@ -528,9 +528,9 @@ card on=emit:open_order
 
 ### `list`
 
-A bordered list of rows, separated by lines. Use list-item children.
+A bordered list of rows, separated by lines. Use list-item children; any other element (a row, a check) becomes a row of its own.
 
-Children: `list-item`.
+Children: any elements.
 
 ```
 list
@@ -540,7 +540,7 @@ list
 
 ### `list-item`
 
-One row of a list: a title, an optional detail line and an optional value on the right. Give it on= to make it pressable.
+One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title. Give it on= to make it pressable.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -549,6 +549,8 @@ One row of a list: a title, an optional detail line and an optional value on the
 | `trailing` | string | A short value on the right, like a price or a count. |
 | `icon` | string | An icon before the text, by name from icon's list, e.g. icon=check-circle. |
 | `on` | action | Actions to run when the row is pressed, e.g. emit:changed. Separate several with ; |
+
+Children: any elements.
 
 Only inside: `list`.
 
@@ -599,7 +601,7 @@ spacer size=16
 
 ### `each`
 
-Repeats what's inside it once per item of a list, in place, with no look of its own. Inside, the current item is called item (or the name given by as=).
+Repeats what's inside it once per item of a list, in place, with no look of its own; inside, the current item is called item (or the name given by as=). if= on each keeps only the items it's true for: each items=tasks as=t if={owner == 'All' || t.owner == owner}.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -1101,7 +1103,7 @@ text "{plural(len(todos), 'item')}" tone=muted
 
 ### `segmented`
 
-Two to six short options in one track, one chosen, like Week | Month | Year or Chart | Table. Show different content for each with if=.
+Two to six short options in one track, one chosen, like Week, Month and Year, or Chart and Table. Show different content for each with if=.
 
 | Prop | Type | Description |
 |---|---|---|

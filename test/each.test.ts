@@ -128,6 +128,25 @@ map
 });
 
 describe("nesting and conditions", () => {
+  it("keeps the items an each's if= is true for, read with the item in scope", () => {
+    const ui = render(`state owner="Ben" tasks=[{n: "Build pages", o: "Ben", done: false}, {n: "Write copy", o: "Ana", done: true}, {n: "Login screen", o: "Ben", done: false}]
+column
+  segmented bind=owner options="All,Ana,Ben"
+  each items=tasks as=t if={owner == 'All' || t.o == owner}
+    check "{t.n}" bind=t.done
+  text "{count(tasks, 'done')} done"`);
+    expect(ui.diagnostics).toEqual([]);
+    expect(ui.text()).toEqual(["All", "Ana", "Ben", "Build pages", "Login screen", "1 done"]);
+    // Ticking one of the shown items writes to that item in state, not to its position on screen.
+    ui.press({ type: "check", text: "Login screen" });
+    expect((ui.state.tasks as Array<{ n: string; done: boolean }>).map((t) => t.done)).toEqual([false, true, true]);
+    expect(ui.text()).toContain("2 done");
+    ui.set("owner", "All");
+    expect(ui.text()).toContain("Write copy");
+    // An if= that doesn't read the item still shows all or nothing.
+    expect(render(`state on=false xs=[1, 2]\neach items=xs if={on}\n  text "{item}"`).text()).toEqual([]);
+  });
+
   it("nests, with inner items seeing outer ones", () => {
     const ui = render(`state groups=[{name: "Shelter", items: ["Tent", "Pad"]}, {name: "Kitchen", items: ["Stove"]}]
 each items=groups as=g index=gi
@@ -295,11 +314,11 @@ tabs bind=t
     text "{item}"
 `)).toEqual([{ line: 4, severity: "error", message: `"tabs" (line 2) can't contain "text"; it holds tab` }]);
     expect(diags(`state xs=[1]
-list
+tabs bind=t
   each items=xs
     each items=xs
       button "x"
-`)).toEqual([{ line: 5, severity: "error", message: `"list" (line 2) can't contain "button"; it holds list-item. Make the row itself pressable, like list-item "{item.name}" on=emit:choose:{item.name}, or use a column of cards for rows with buttons` }]);
+`)).toEqual([{ line: 5, severity: "error", message: `"tabs" (line 2) can't contain "button"; it holds tab` }]);
     expect(diags(`state xs=[1]
 column
   each items=xs

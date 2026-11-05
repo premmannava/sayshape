@@ -72,6 +72,15 @@ describe("segmented", () => {
     ui.destroy();
   });
 
+  it("reads bars between options as commas, as models often write them", () => {
+    for (const options of ["Week | Month", "Week|Month"]) {
+      const ui = render(`state view="Week"\nsegmented bind=view options="${options}"\n`);
+      expect(ui.diagnostics, options).toEqual([]);
+      expect(ui.hits.map((h) => h.detail), options).toEqual(["Week", "Month"]);
+      ui.destroy();
+    }
+  });
+
   it("needs two to six options", () => {
     expect(warnings(`segmented bind=v options="Only"\n`)[0]).toMatch(/at least two options/);
     expect(warnings(`segmented bind=v options="a,b,c,d,e,f,g"\n`)[0]).toMatch(/at most 6 options/);

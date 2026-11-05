@@ -56,6 +56,9 @@ export interface ResolvedProfile {
  * needs tab). Throws for a component the renderer doesn't have, since that's
  * an app configuration mistake.
  */
+/** Containers that take any element but have one they're made for: a list's rows are list-items. */
+const USUAL_CHILD: Record<string, readonly string[]> = { list: ["list-item"] };
+
 export function resolveProfile(renderer: Registry, profile?: string | ComponentProfile | readonly string[]): ResolvedProfile {
   if (profile === undefined || profile === "all") {
     return { name: "all", types: renderer.all().map((c) => c.type), registry: renderer };
@@ -68,13 +71,13 @@ export function resolveProfile(renderer: Registry, profile?: string | ComponentP
   for (const t of want) {
     if (!renderer.has(t)) throw new Error(`Profile "${name}" includes "${t}", which the renderer doesn't have. Register it, or leave it out of the profile`);
   }
-  // Add parents and required children until nothing changes.
+  // Add parents, required children and usual rows until nothing changes.
   let grew = true;
   while (grew) {
     grew = false;
     for (const t of [...want]) {
       const def = renderer.get(t)!;
-      const needs = [...(def.parents ?? []).filter((p) => p !== "root"), ...(Array.isArray(def.children) ? def.children : [])];
+      const needs = [...(def.parents ?? []).filter((p) => p !== "root"), ...(Array.isArray(def.children) ? def.children : []), ...(USUAL_CHILD[t] ?? [])];
       for (const n of needs) {
         if (!want.has(n) && renderer.has(n)) { want.add(n); grew = true; }
       }

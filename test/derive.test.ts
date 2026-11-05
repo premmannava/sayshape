@@ -44,6 +44,20 @@ describe("derive lines", () => {
     expect(parse(`derive toString={1} valueOf={2}\n`, registry)).toMatchObject({ diagnostics: [], derived: [{ name: "toString" }, { name: "valueOf" }] });
   });
 
+  it("take an expression without braces, as models often write them", () => {
+    const r = parse(`state spend=[{cat: "Food", amt: 82}, {cat: "Fun", amt: 18}] picked="Fun"\nderive sel=find(spend, 'cat', picked)\nderive byCat=[{name: "Food", total: sum(filter(spend, 'cat', 'Food'), 'amt')}]\nderive n=len(spend) + 1\n`, registry);
+    expect(r.diagnostics).toEqual([]);
+    expect(r.derived.map((d) => [d.name, d.expr])).toEqual([
+      ["sel", "find(spend, 'cat', picked)"],
+      ["byCat", `[{name: "Food", total: sum(filter(spend, 'cat', 'Food'), 'amt')}]`],
+      ["n", "len(spend) + 1"],
+    ]);
+    // A broken one says what's wrong with the expression, not that braces are missing.
+    expect(messages(`state a=1\nderive b=a +\n`)).toEqual(["2: derive b: Expression ended early"]);
+    // Several pairs still need braces each.
+    expect(parse(`state a=1\nderive b={a} c={a * 2}\n`, registry).derived.map((d) => d.name)).toEqual(["b", "c"]);
+  });
+
   it("go at the top level only", () => {
     const r = parse(`state a=1\ncard\n  derive b={a}\n  text "{a}"\n`, registry);
     expect(r.derived).toEqual([]);

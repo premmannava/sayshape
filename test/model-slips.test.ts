@@ -36,13 +36,17 @@ on choose_b
     expect("actions" in parseActions("emit:choose:{laptop.name}")).toBe(true);
   });
 
-  it("says what a list holds and how to make its rows pressable", () => {
-    const d = diags(`state xs=[{name: "A"}]
+  it("lets a list hold rows models build themselves, and list-items hold what goes under their title", () => {
+    expect(diags(`state xs=[{name: "A", s: "Paid"}]
 list
   each items=xs as=x
-    button "Choose"
-`);
-    expect(d[0]!.message).toMatch(/"list" \(line 2\) can't contain "button"; it holds list-item\. Make the row itself pressable/);
+    row
+      text "{x.name}"
+      button "Choose"
+  each items=xs as=x
+    list-item "{x.name}"
+      badge "{x.s}"
+`)).toEqual([]);
   });
 
   it("uses a weight written as a style, with a note", () => {
