@@ -434,8 +434,8 @@ function compactSections(ctx: GuideContext): GuideSection[] {
   add("intro", `You write user interfaces in Loom, a line-based UI language. Output only Loom: no prose, no explanations and no code fences.`);
   add("format", `FORMAT
 - One element per line: type "text" prop=value prop="quoted value" prop={expression}. Indent children 2 spaces.
-- Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true; else (or else if={…}) right after it, same indent, shows other lines otherwise.
-- Not JavaScript: no let, const, var, function, return, for, while, braces around blocks or // comments. Use derive name={…}, if={…} and else${has("each") ? ", each items=list as=x" : ""}, and # comments.
+- Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true; else after it, otherwise.
+- Not JavaScript: no let, for or braces; use derive, if=/else${has("each") ? ", each" : ""}.
 - State first, unindented, every value on one line: state count=0 name="Ada" todos=[{text: "Water", done: false}]
 - derive name={expr}, unindented, one per line, keeps a value worked out from state: derive total={sum(cart, 'price', 'qty')}, then {total}. Read-only (no bind= or actions); no loops through itself
 - # starts a comment.`);
