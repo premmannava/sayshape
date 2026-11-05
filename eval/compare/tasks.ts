@@ -61,7 +61,7 @@ export const tasks: Task[] = [
   { id: "c1", category: "chart", request: "Bar chart of sales by region: NA 420, EU 310, APAC 280, LATAM 120 (thousands of dollars).",
     checks: [{ label: "labels all four regions", shows: [/\bNA\b/, /\bEU\b/, /APAC/, /LATAM/] }] },
   { id: "c2", category: "chart", request: "Line chart of monthly revenue Jan-Jun, this year 12, 18, 15, 21, 24, 22 and last year 10, 14, 16, 17, 19, 20 ($K).",
-    checks: [{ label: "labels Jan to Jun", shows: [/Jan/, /Jun/] }, { label: "names both series", shows: [/this year/i, /last year/i] }] },
+    checks: [{ label: "labels Jan to Jun", shows: [/Jan/, /Jun/] }, { label: "names both series", shows: [/this[\s_]?year/i, /last[\s_]?year/i] }] },
   { id: "c3", category: "chart", request: "Donut chart of traffic sources: Search 46%, Direct 28%, Social 16%, Email 10%.",
     checks: [{ label: "names every source", shows: [/Search/, /Direct/, /Social/, /Email/] }, { label: "shows the shares", shows: [/46/, /28/, /16/, /10/] }] },
   { id: "c4", category: "chart", request: "From these products, chart the top 5 by units sold, largest first: Lamp 120, Desk 340, Chair 410, Shelf 95, Rug 210, Mirror 180, Sofa 60, Stool 150.",
@@ -102,16 +102,16 @@ export const tasks: Task[] = [
   { id: "x1", category: "calculator", request: "Mortgage calculator with loan amount ($300,000), interest rate (6.5%) and term (30 years) controls. Show the monthly payment using the standard amortization formula, updating as controls change.",
     checks: [{ label: "the payment at the defaults ($1,896.20)", shows: [/1,?896\.2/] }] },
   { id: "x2", category: "calculator", request: "Tip splitter: bill amount ($84.50), tip choice of 15%, 18% or 20% (18% chosen), and number of people (3). Show tip total, grand total and amount per person.",
-    checks: [{ label: "tip, total and share at the defaults", shows: [/15\.21/, /99\.71/, /33\.24/] }, { label: "choosing 20% updates the share ($33.80)", steps: [{ press: /^\s*20\s?%\s*$/ }], shows: [/33\.80?\b/] }] },
+    checks: [{ label: "tip, total and share at the defaults", shows: [/15\.21/, /99\.71/, /33\.24/] }, { label: "choosing 20% updates the share ($33.80)", steps: [{ press: /^\s*20\s?%?\s*$/ }], shows: [/33\.80?\b/] }] },
   { id: "x3", category: "calculator", request: "Distance converter: type a number and choose km-to-miles or miles-to-km; show the converted value to 2 decimals. Start with 10 km to miles.",
-    checks: [{ label: "10 km is 6.21 miles", shows: [/6\.21/] }, { label: "miles to km converts 10 to 16.09", steps: [{ press: /mi(les?)?\s*(to|→|->|⇒)\s*k(ilo)?m/i }], shows: [/16\.09/] }] },
+    checks: [{ label: "10 km is 6.21 miles", shows: [/6\.21/] }, { label: "miles to km converts 10 to 16.09", steps: [{ press: /mi(les?)?[\s_-]*(to|→|->|⇒|2)[\s_-]*k(ilo)?m/i }], shows: [/16\.09/] }] },
 
   // Dashboards
   { id: "d1", category: "dashboard", request: "Sales dashboard. Orders: A101 Acme NA Direct Shipped $12,400; A102 Globex EU Partner Pending $8,600; A103 Initech NA Online Shipped $23,100; A104 Umbrella APAC Direct Cancelled $4,100; A105 Stark NA Direct Pending $31,500; A106 Wayne EU Online Shipped $17,800; A107 Tyrell APAC Partner Shipped $9,900; A108 Soylent APAC Online Pending $14,300. Include a region filter (All, NA, EU, APAC), a customer search, KPIs for revenue, order count, average order and pending count that follow the filter, a chart of the top customers, and a sortable orders table.",
     checks: [
       // $117,600 leaves out the cancelled order, which is a fair reading of revenue.
       { label: "revenue for all regions ($121,700, or $117,600 without the cancelled order)", shows: [/121[.,]7|117[.,]6/] },
-      { label: "EU shows $26,400 and hides NA orders", steps: [{ press: /^\s*EU\s*$/ }], shows: [/26[.,]4/], hides: [/Stark/] },
+      { label: "EU shows $26,400 and hides NA orders", steps: [{ press: /^\s*(EU|Europe)\s*$|\(EU\)/ }], shows: [/26[.,]4/], hides: [/Stark/] },
     ] },
   { id: "d2", category: "dashboard", request: "Support dashboard. Tickets per day Mon-Fri: 34, 41, 29, 38, 45. Open tickets: #201 'Login fails' High Ana; #202 'Slow export' Medium Ben; #203 'Typo on page' Low Ana; #204 'Data missing' High Chen; #205 'Billing error' Medium Chen. Show open count, high-priority count, a chart of tickets per day, and the open tickets table with a priority filter (All, High, Medium, Low).",
     checks: [

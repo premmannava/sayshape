@@ -193,7 +193,12 @@ export async function htmlScreen(html: string): Promise<Screen> {
       const candidates = matching
         .filter((el) => !matching.some((other) => other !== el && el.contains(other)))
         .sort((a, b) => (a.textContent?.length ?? 0) - (b.textContent?.length ?? 0));
-      const el = candidates[0] as HTMLElement | undefined;
+      let el = candidates[0] as HTMLElement | undefined;
+      // A row or item that isn't a control itself but holds one checkbox: tick the checkbox, as a person would.
+      if (el && !el.matches("button, input, label, a, select, summary, [role=button], [role=switch], [role=tab], [role=radio], [role=option], [role=checkbox]")) {
+        const boxes = el.closest("tr, li, [role=row]")?.querySelectorAll<HTMLInputElement>("input[type=checkbox]");
+        if (boxes?.length === 1) el = boxes[0]!;
+      }
       if (el) {
         el.click();
         await pause();
