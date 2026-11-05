@@ -761,7 +761,7 @@ A small rounded label for a status or a short tag, like Shipped or New.
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text, required | The label, one or two words. |
-| `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Color role: accent, good, warn, bad or muted. |
+| `tone` | `ink` / `accent` / `good` / `warn` / `bad` / `muted` | Color role: accent, good, warn, bad or muted. |
 
 ```
 badge "Shipped" tone=good
@@ -776,7 +776,7 @@ A person's initials in a circle, with their name and an optional detail line bes
 | `"text"` | text, required | The person's name. The initials come from it. |
 | `detail` | string | A second line under the name, like a role. |
 | `size` | `sm` / `md` / `lg` | sm, md or lg. |
-| `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Circle color role: accent, good, warn, bad or muted. |
+| `tone` | `ink` / `accent` / `good` / `warn` / `bad` / `muted` | Circle color role: accent, good, warn, bad or muted. |
 | `name` | boolean | Show the name beside the circle (default true). |
 
 ```
@@ -1300,7 +1300,7 @@ A labelled point on a map, placed by latitude and longitude.
 | `"text"` | text, required | The place name shown next to the pin. |
 | `lat` | number, required | Latitude in degrees (-90 to 90). |
 | `lon` | number, required | Longitude in degrees (-180 to 180). |
-| `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Theme color for a marker: accent, good, warn, bad or muted. Supports state expressions for data-driven status colors. |
+| `tone` | `ink` / `accent` / `good` / `warn` / `bad` / `muted` | Theme color for a marker: ink, accent, good, warn, bad or muted. Supports state expressions for data-driven status colors. |
 | `size` | number | Marker radius in screen pixels, clamped to 2..18. Supports expressions for bubble-like visualizations. |
 
 Only inside: `map`.
