@@ -149,7 +149,8 @@ function applySayShape() {
   const text = texts.value.sayshape;
   if (sStreaming && text.startsWith(sShown)) {
     if (text.length > sShown.length) l.push(text.slice(sShown.length));
-  } else if (text !== sShown || !sStreaming) {
+  } else if (text !== sShown) {
+    // Started over, or scrubbed back: stream it again from the start.
     l.beginStream();
     sStreaming = true;
     if (text) l.push(text);
@@ -157,7 +158,8 @@ function applySayShape() {
   sShown = text;
   if (doneAt("sayshape") && sStreaming) { l.endStream(); sStreaming = false; }
 }
-watch(() => [texts.value.sayshape, doneAt("sayshape")], applySayShape);
+// A string, so the watcher fires when the text or the end changes, not on every frame.
+watch(() => `${doneAt("sayshape") ? 1 : 0}${texts.value.sayshape}`, applySayShape);
 
 // --- HTML: a sandboxed iframe, refreshed as markup arrives ------------------
 
@@ -245,8 +247,15 @@ watch(() => texts.value.a2ui, applyA2ui);
 
 async function loadA2ui() {
   try {
-    const [core, lit] = await Promise.all([import("@a2ui/web_core/v0_9"), import("@a2ui/lit/v0_9")]);
+    const [core, lit, md] = await Promise.all([import("@a2ui/web_core/v0_9"), import("@a2ui/lit/v0_9"), import("@a2ui/markdown-it")]);
+    // Set up the way A2UI's own renderers are: its styles, its Markdown renderer for Text,
+    // and the icon font its Icon component draws with (Material Symbols, from Google Fonts).
     core.injectBasicCatalogStyles(document);
+    core.setMarkdownRenderer(md.renderMarkdown);
+    if (!document.getElementById("a2ui-icons")) {
+      const link = Object.assign(document.createElement("link"), { id: "a2ui-icons", rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" });
+      document.head.appendChild(link);
+    }
     a2 = { core, lit };
     resetA2ui();
     applyA2ui();
@@ -298,7 +307,7 @@ const toggle = (k: Key) => { open.value = { ...open.value, [k]: !open.value[k] }
         <button type="button" class="cmp-secondary" :disabled="!rec" @click="restart">Start over</button>
         <label class="cmp-scrub">
           <span>Replay position</span>
-          <input type="range" min="0" :max="end" step="50" :value="now" :disabled="!rec" @input="scrub">
+          <input type="range" min="0" :max="end" step="any" :value="now" :disabled="!rec" @input="scrub">
         </label>
         <span class="cmp-time" aria-live="off">{{ seconds }} s</span>
       </div>
@@ -394,7 +403,7 @@ const toggle = (k: Key) => { open.value = { ...open.value, [k]: !open.value[k] }
 .cmp-pill.done { background: var(--vp-c-success-soft); color: var(--vp-c-success-1); }
 .cmp-pill.failed { background: var(--vp-c-danger-soft); color: var(--vp-c-danger-1); }
 .cmp-stage { padding: 14px; min-height: 360px; background: var(--vp-c-bg-alt); display: flex; flex-direction: column; gap: 10px; }
-.cmp-frame { width: 100%; height: 520px; border: 1px solid var(--vp-c-divider); border-radius: 10px; background: #fff; }
+.cmp-frame { width: 100%; height: 520px; border: 1px solid var(--vp-c-divider); border-radius: 10px; background: var(--vp-c-bg); }
 .cmp-a2ui { background: var(--vp-c-bg); border: 1px solid var(--vp-c-divider); border-radius: 10px; padding: 12px; overflow: auto; max-height: 640px; }
 .cmp-empty { margin: auto; color: var(--vp-c-text-2); font-size: 15px; }
 .cmp-error { margin: 0; color: var(--vp-c-danger-1); font-size: 14px; }
