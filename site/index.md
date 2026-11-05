@@ -1,8 +1,8 @@
 ---
 layout: page
-title: A UI language for AI, and an engine that brings it to life
+title: Ask your data, see the answer
 titleTemplate: SayShape
-description: SayShape is a compact, line-based UI language designed for models to write, and a canvas engine with its own parser, layout, painting, state and input that renders it.
+description: Your AI writes a few lines. SayShape draws the answer in the browser, and your rows stay with you. A UI language for AI models and the canvas engine that renders it.
 ---
 
 <Landing />
