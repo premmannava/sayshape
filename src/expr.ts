@@ -170,11 +170,15 @@ const BUILTINS: Record<string, Fn> = {
     const digits = d === undefined ? undefined : Math.min(10, Math.max(0, Math.floor(toNumber(d)) || 0));
     return new Intl.NumberFormat(LOCALE, digits === undefined ? { maximumFractionDigits: 2 } : { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(x);
   },
-  /** compact(12345678) is 12.3M, compact(4500) is 4.5K; compact(n, 'USD') is $12.3M. For big figures in small spaces. */
+  /**
+   * compact(12345678) is 12.3M, compact(4500) is 4.5K, compact(1240000) is 1.24M; compact(n, 'USD') is $12.3M.
+   * For big figures in small spaces. Keeps 3 significant digits or 1 decimal, whichever says more,
+   * so a figure someone gave as $1.24M doesn't come back as $1.2M.
+   */
   compact: (n, currency) => {
     const x = amountOf(n);
     if (!isFinite(x)) return NaN;
-    const opts: Intl.NumberFormatOptions = { notation: "compact", maximumFractionDigits: 1 };
+    const opts = { notation: "compact", maximumFractionDigits: 1, maximumSignificantDigits: 3, roundingPriority: "morePrecision" } as Intl.NumberFormatOptions;
     try {
       return new Intl.NumberFormat(LOCALE, currency === undefined ? opts : { ...opts, style: "currency", currency: textOf(currency) }).format(x);
     } catch { return NaN; }

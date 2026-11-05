@@ -192,10 +192,9 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
           out.push({ node: n, box: boxes.get(n.id) ?? null, shownText });
         }
       }
-      // An each stands for its copies, one set per item; a hidden each shows none.
-      if (n.type === "each") {
-        if (isVisible(n, scope, loom.registry)) eachInstances(n, scopeOf(n, scope)).forEach(walk);
-      } else n.children.forEach(walk);
+      // An each stands for its copies, one set per item; its if= picks items (see eachInstances).
+      if (n.type === "each") eachInstances(n, scopeOf(n, scope)).forEach(walk);
+      else n.children.forEach(walk);
     };
     if (loom.tree) walk(loom.tree);
     return out;

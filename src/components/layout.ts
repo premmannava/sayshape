@@ -56,7 +56,7 @@ export const row: ComponentDef = {
 export const each: ComponentDef = {
   type: "each",
   category: "layout",
-  description: "Repeats what's inside it once per item of a list, in place, with no look of its own. Inside, the current item is called item (or the name given by as=).",
+  description: "Repeats what's inside it once per item of a list, in place, with no look of its own; inside, the current item is called item (or the name given by as=). if= on each keeps only the items it's true for: each items=tasks as=t if={owner == 'All' || t.owner == owner}.",
   props: {
     items: { type: "expression", required: true, description: "The list to repeat over, like todos or {cart}." },
     as: { type: "name", default: "item", description: "Name for the current item, used inside: as=t makes {t.text} work." },
@@ -219,14 +219,25 @@ export const grid: ComponentDef = {
 export const list: ComponentDef = {
   type: "list",
   category: "layout",
-  description: "A bordered list of rows, separated by lines. Use list-item children.",
+  description: "A bordered list of rows, separated by lines. Use list-item children; any other element (a row, a check) becomes a row of its own.",
   props: {},
-  children: ["list-item"],
+  children: "any",
   example: `list
   list-item "Trail runner socks" detail="Merino blend" trailing="$24"
   list-item "Rain shell" detail="Packs into its pocket" trailing="$129" on=emit:open_shell`,
   layout(box, ctx) {
-    stack(box, ctx, 0, 0);
+    // A list-item brings its own padding; anything else gets the same, so every row lines up.
+    const rows: ListRow[] = [];
+    let y = box.y;
+    for (const k of ctx.visibleChildren(box.node)) {
+      const own = k.type === "list-item";
+      const kb = own ? ctx.layout(k, box.x, y, box.w) : ctx.layout(k, box.x + ITEM_PAD_X, y + ITEM_PAD_Y, box.w - ITEM_PAD_X * 2);
+      box.children.push(kb);
+      rows.push({ y, inset: ITEM_PAD_X + (own ? ((kb.data as { iconW?: number } | undefined)?.iconW ?? 0) : 0) });
+      y += own ? kb.h : kb.h + ITEM_PAD_Y * 2;
+    }
+    box.data = { rows };
+    box.h = y - box.y;
   },
   paint(box, ctx) {
     const { g, theme } = ctx;
@@ -240,10 +251,8 @@ export const list: ComponentDef = {
     g.save();
     g.globalAlpha *= 0.7;
     g.fillStyle = theme.colors.line;
-    box.children.slice(1).forEach((k) => {
-      const inset = ITEM_PAD_X + ((k.data as { iconW?: number } | undefined)?.iconW ?? 0);
-      g.fillRect(k.x + inset, k.y, k.w - inset, 1);
-    });
+    const rows = (box.data as { rows?: ListRow[] } | undefined)?.rows ?? [];
+    rows.slice(1).forEach((r) => g.fillRect(box.x + r.inset, r.y, box.w - r.inset, 1));
     g.restore();
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
     g.strokeStyle = theme.colors.line;
@@ -254,11 +263,13 @@ export const list: ComponentDef = {
 
 const ITEM_PAD_X = 16, ITEM_PAD_Y = 12;
 const ITEM_ICON = 20, ITEM_ICON_GAP = 12;
+/** Where a list's row starts, and how far in its separator begins. */
+interface ListRow { y: number; inset: number }
 
 export const listItem: ComponentDef = {
   type: "list-item",
   category: "layout",
-  description: "One row of a list: a title, an optional detail line and an optional value on the right. Give it on= to make it pressable.",
+  description: "One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title. Give it on= to make it pressable.",
   text: { description: "The row's title.", required: true },
   props: {
     detail: { type: "string", description: "A second, quieter line under the title." },
@@ -267,6 +278,7 @@ export const listItem: ComponentDef = {
     on: onProp("when the row is pressed"),
   },
   parents: ["list"],
+  children: "any",
   example: `list-item "Rain shell" detail="Packs into its pocket" trailing="$129" icon=package on=emit:open_shell`,
   check: (props) => iconProblems(props.icon, "icon"),
   layout(box, ctx) {
@@ -282,7 +294,16 @@ export const listItem: ComponentDef = {
     const detail = p.has("detail") ? wrapText(p.str("detail"), textW, detailFont, ctx.measure) : [];
     const titleLH = Math.round(t.text.body * 1.35), detailLH = 18;
     box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW };
-    box.h = ITEM_PAD_Y * 2 + title.length * titleLH + (detail.length ? 2 + detail.length * detailLH : 0);
+    let y = box.y + ITEM_PAD_Y + title.length * titleLH + (detail.length ? 2 + detail.length * detailLH : 0);
+    // Elements inside go under the text, lined up with it.
+    const left = ITEM_PAD_X + iconW;
+    for (const k of ctx.visibleChildren(box.node)) {
+      y += 8;
+      const kb = ctx.layout(k, box.x + left, y, Math.max(40, box.w - left - ITEM_PAD_X - chevronW));
+      box.children.push(kb);
+      y += kb.h;
+    }
+    box.h = y - box.y + ITEM_PAD_Y;
   },
   paint(box, ctx) {
     const { g, theme } = ctx;

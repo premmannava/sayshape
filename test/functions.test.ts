@@ -116,6 +116,10 @@ describe("formatting", () => {
     expect(val("compact(950)")).toBe("950");
     expect(val("compact(-2500000)")).toBe("-2.5M");
     expect(val("compact(1200000000, 'USD')")).toBe("$1.2B");
+    // 3 significant digits or 1 decimal, whichever says more: a KPI given as $1.24M stays $1.24M.
+    expect(val("compact(1240000, 'USD')")).toBe("$1.24M");
+    expect(val("compact(121700, 'USD')")).toBe("$121.7K");
+    expect(val("compact(48210)")).toBe("48.2K");
     expect(interpolate("{compact('lots')}", store.scope)).toBe("—");
     expect(interpolate("{compact(5, 'nope')}", store.scope)).toBe("—");
   });

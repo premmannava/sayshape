@@ -37,10 +37,11 @@ export function shownChildren(node: SayShapeNode, scope: Scope, registry?: Regis
   const out: SayShapeNode[] = [];
   const add = (kids: readonly SayShapeNode[]) => {
     for (const c of kids) {
+      // An each's if= is worked out per item, with the item in scope (see eachInstances).
+      if (c.type === "each") { add(eachInstances(c, scopeOf(c, scope), warn, budget)); continue; }
       if (!isVisible(c, scope, registry)) continue;
-      if (c.type === "each") add(eachInstances(c, scopeOf(c, scope), warn, budget));
       // A passing if= block stands for the lines under it.
-      else if (c.type === "if") add(c.children);
+      if (c.type === "if") add(c.children);
       else out.push(c);
     }
   };

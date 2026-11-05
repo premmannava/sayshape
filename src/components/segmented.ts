@@ -1,7 +1,7 @@
 /**
  * segmented: a few options side by side in one track, one of them chosen.
  * The everyday way to switch a view (Chart | Table) or a period
- * (Week | Month | Year), lighter than tabs or a select.
+ * (Week, Month, Year), lighter than tabs or a select.
  */
 import { isDarkTheme } from "../theme";
 import { MOTION } from "../design";
@@ -12,9 +12,16 @@ import { fillTint, onProp, partBox, runOn, themeFont } from "./util";
 const H = 36, PAD = 14, INSET = 3;
 const MAX_OPTIONS = 6;
 
-/** The options as written: comma-separated, trimmed, at most MAX_OPTIONS. */
+/**
+ * The options as written: comma-separated, trimmed, at most MAX_OPTIONS. Bars
+ * are read as commas too, since models often write options="Week | Month".
+ */
 function optionsOf(raw: string): string[] {
-  return raw.split(",").map((s) => s.trim()).filter(Boolean).slice(0, MAX_OPTIONS);
+  return allOptions(raw).slice(0, MAX_OPTIONS);
+}
+
+function allOptions(raw: string): string[] {
+  return raw.split(/[,|]/).map((s) => s.trim()).filter(Boolean);
 }
 
 function choose(ctx: PressContext, value: string): void {
@@ -27,7 +34,7 @@ function choose(ctx: PressContext, value: string): void {
 export const segmented: ComponentDef = {
   type: "segmented",
   category: "input",
-  description: "Two to six short options in one track, one chosen, like Week | Month | Year or Chart | Table. Show different content for each with if=.",
+  description: "Two to six short options in one track, one chosen, like Week, Month and Year, or Chart and Table. Show different content for each with if=.",
   props: {
     bind: { type: "state", required: true, description: "The state name holding the chosen option's text." },
     options: { type: "string", required: true, description: "The options, comma-separated, e.g. options=\"Week,Month,Year\". At most 6, one or two words each." },
@@ -38,7 +45,7 @@ segmented bind=view options="Chart,Table"
 text "Showing the {lower(view)}" tone=muted`,
   check(props) {
     const n = optionsOf(props.options ?? "").length;
-    const all = (props.options ?? "").split(",").filter((s) => s.trim()).length;
+    const all = allOptions(props.options ?? "").length;
     if (props.options !== undefined && n < 2) return ["segmented needs at least two options, like options=\"Week,Month\""];
     if (all > MAX_OPTIONS) return [`segmented shows at most ${MAX_OPTIONS} options; use a select for more`];
     return [];
