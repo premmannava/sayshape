@@ -1,18 +1,18 @@
 /**
  * The playground's "Ask a model" box. Requests go to /api/model, which the dev
- * server passes through to LOOM_MODEL_URL (LM Studio by default), so the
+ * server passes through to SAYSHAPE_MODEL_URL (LM Studio by default), so the
  * browser needs no CORS from the model server and never sees an API key.
  */
 import type { SayShape } from "../src";
 import { generateSpec, ModelError, nextRefineContext, type GenerateResult, type Phase, type RefineContext } from "../src/model";
 import type { GuideOptions } from "../src/prompt";
 
-declare const __LOOM_MODEL__: string;
-declare const __LOOM_MODEL_URL__: string;
-declare const __LOOM_USER_SUFFIX__: string;
+declare const __SAYSHAPE_MODEL__: string;
+declare const __SAYSHAPE_MODEL_URL__: string;
+declare const __SAYSHAPE_USER_SUFFIX__: string;
 
 export interface AskDeps {
-  loom: SayShape;
+  sayshape: SayShape;
   guide: GuideOptions;
   /** Stop a sample that's still streaming. */
   stopSample(): void;
@@ -24,9 +24,9 @@ export interface AskDeps {
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const PROXY = "/api/model";
-const modelUrl = typeof __LOOM_MODEL_URL__ === "string" ? __LOOM_MODEL_URL__ : "";
-const defaultModel = typeof __LOOM_MODEL__ === "string" ? __LOOM_MODEL__ : "";
-const userSuffix = typeof __LOOM_USER_SUFFIX__ === "string" ? __LOOM_USER_SUFFIX__ : "";
+const modelUrl = typeof __SAYSHAPE_MODEL_URL__ === "string" ? __SAYSHAPE_MODEL_URL__ : "";
+const defaultModel = typeof __SAYSHAPE_MODEL__ === "string" ? __SAYSHAPE_MODEL__ : "";
+const userSuffix = typeof __SAYSHAPE_USER_SUFFIX__ === "string" ? __SAYSHAPE_USER_SUFFIX__ : "";
 
 const secs = (ms?: number) => (ms === undefined ? "—" : `${(ms / 1000).toFixed(1)} s`);
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -53,7 +53,7 @@ export function setupAsk(d: AskDeps): void {
     status.className = "ask-status" + (kind ? " " + kind : "");
   };
   const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-  const where = `<code>${esc(modelUrl || "LOOM_MODEL_URL")}</code>`;
+  const where = `<code>${esc(modelUrl || "SAYSHAPE_MODEL_URL")}</code>`;
 
   // ---------------------------------------------------------------- models
 
@@ -78,7 +78,7 @@ export function setupAsk(d: AskDeps): void {
         select.add(new Option(defaultModel, defaultModel));
       }
       say(
-        `No model server answered at ${where}. In LM Studio, open the Developer tab and start the server, or set <code>LOOM_MODEL_URL</code> in <code>.env.local</code> and restart <code>npm run dev</code>. This box only works with <code>npm run dev</code>.`,
+        `No model server answered at ${where}. In LM Studio, open the Developer tab and start the server, or set <code>SAYSHAPE_MODEL_URL</code> in <code>.env.local</code> and restart <code>npm run dev</code>. This box only works with <code>npm run dev</code>.`,
         "error",
       );
     }
@@ -118,10 +118,10 @@ export function setupAsk(d: AskDeps): void {
     d.setPrompt(request);
 
     // Refining sends the editor's current text, which the user may have edited.
-    const refining = refine.checked && context ? { ...context, spec: d.loom.spec } : undefined;
+    const refining = refine.checked && context ? { ...context, spec: d.sayshape.spec } : undefined;
 
     const startScreen = () => {
-      d.loom.beginStream({ keepState: !!refining });
+      d.sayshape.beginStream({ keepState: !!refining });
       d.setEditor("", { readOnly: true });
     };
     startScreen();
@@ -134,13 +134,13 @@ export function setupAsk(d: AskDeps): void {
     try {
       const r = await generateSpec({
         config: { url: PROXY, model },
-        registry: d.loom.registry,
+        registry: d.sayshape.registry,
         guide: d.guide,
         request,
         refine: refining,
         userSuffix,
         signal: controller.signal,
-        onText: (t) => { d.loom.push(t); d.setEditor(t, { append: true, readOnly: true }); },
+        onText: (t) => { d.sayshape.push(t); d.setEditor(t, { append: true, readOnly: true }); },
         onReset: () => startScreen(),
         onPhase: (p) => {
           if (p === "done") return;
@@ -150,15 +150,15 @@ export function setupAsk(d: AskDeps): void {
         },
       });
       context = refining ? nextRefineContext(refining, request, r.spec) : r.spec.trim() ? { task: request, spec: r.spec } : null;
-      d.loom.endStream();
+      d.sayshape.endStream();
       d.setEditor(r.spec, { readOnly: false });
       // The final spec may be the first attempt if the repair came out worse.
-      if (d.loom.spec !== r.spec) d.loom.setSpec(r.spec);
+      if (d.sayshape.spec !== r.spec) d.sayshape.setSpec(r.spec);
       say(esc(summary(r)));
       refine.disabled = !context;
     } catch (e) {
-      d.loom.endStream();
-      d.setEditor(d.loom.spec, { readOnly: false });
+      d.sayshape.endStream();
+      d.setEditor(d.sayshape.spec, { readOnly: false });
       if (controller.signal.aborted) say("Stopped.");
       else if (e instanceof ModelError) say(esc(e.message), "error");
       else say(esc(`Something went wrong: ${e instanceof Error ? e.message : String(e)}`), "error");

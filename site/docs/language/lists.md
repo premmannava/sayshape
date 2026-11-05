@@ -7,7 +7,7 @@ description: Repeating elements with each in SayShape, writing to list items, an
 
 `each` repeats what's indented under it once per item of a list. It has no look of its own: the copies sit in the container around it, so `each` inside a `row`, `grid`, `list` or `tabs` makes one cell, row or tab per item.
 
-```loom live
+```sayshape live
 state todos=[{text: "Pack water", done: true}, {text: "Charge headlamp", done: false}]
 card
   text "{count(todos, 'done')} of {len(todos)} packed" tone=muted
@@ -41,7 +41,7 @@ Inside `each`, `bind=` and actions can write to the current item: `bind=t.done`,
 | `clear:todos` | Empties the list |
 | `set:todos:{filter(todos, 'done', false)}` | Replaces the list with a computed one |
 
-```loom live
+```sayshape live
 state task="" nextId=3 todos=[{id: 1, text: "Book campsite", done: false}, {id: 2, text: "Check weather", done: true}]
 card
   each items=todos as=t key={t.id}
@@ -56,7 +56,7 @@ card
 
 Put an `each` inside an `each`. Inner items can read outer ones:
 
-```loom live
+```sayshape live
 state orders=[{date: "May 2", lines: [{name: "Tent", price: 180}, {name: "Stove", price: 45}]}, {date: "May 9", lines: [{name: "Headlamp", price: 30}]}]
 each items=orders as=o
   card
@@ -72,7 +72,7 @@ each items=orders as=o
 
 Filtering, sorting, searching and taking keep the items themselves, so an item of a list worked out from state still writes back to the list it came from. Tick a task in the filtered list and the task in `tasks` changes, along with every total worked out from `tasks`:
 
-```loom live
+```sayshape live
 state owner="All" tasks=[{text: "Mockups", owner: "Ana", done: true}, {text: "Pages", owner: "Ben", done: false}, {text: "Copy", owner: "Ana", done: false}]
 derive shown={owner == 'All' ? tasks : filter(tasks, 'owner', owner)}
 card
@@ -88,7 +88,7 @@ Items an expression builds, like `each items={[{on: false}]}`, aren't in state, 
 
 `if=` on the repeated element hides items in place:
 
-```loom live
+```sayshape live
 state hide=false gear=[{id: 1, name: "Tent", done: true}, {id: 2, name: "Stove", done: false}, {id: 3, name: "Headlamp", done: false}]
 card
   switch "Hide packed" bind=hide

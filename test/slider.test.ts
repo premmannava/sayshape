@@ -34,7 +34,7 @@ describe("slider", () => {
     const button = ui.find("button").box!;
     ui.drag("slider", button.x + 10, button.y + 10);
     expect(ui.state.pressed).toBe(false);
-    expect(ui.loom.hitRegions.length).toBe(2);
+    expect(ui.sayshape.hitRegions.length).toBe(2);
   });
 
   it("moves with the arrow, page, home and end keys, running on= each time", () => {
@@ -85,10 +85,10 @@ describe("slider", () => {
     ui.canvas.dispatch("pointerdown", { clientX: at(100), clientY: h.y + 16, pointerId: 1 });
     ui.canvas.dispatch("pointermove", { clientX: at(200), clientY: h.y + 16 });
     ui.canvas.dispatch("pointercancel", {});
-    ui.loom.renderNow();
+    ui.sayshape.renderNow();
     expect(ui.state).toMatchObject({ price: 200, n: 1 });
     ui.canvas.dispatch("pointermove", { clientX: at(300), clientY: h.y + 16 });
-    ui.loom.renderNow();
+    ui.sayshape.renderNow();
     expect(ui.state.price).toBe(200);
   });
 });

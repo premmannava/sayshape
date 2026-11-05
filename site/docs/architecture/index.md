@@ -19,10 +19,10 @@ description: SayShape's architecture. Parser, layout, painter, state, actions, p
 | Engine | `src/engine.ts` | The `SayShape` class: the staged pipeline, canvas sizing, painting, hit testing, pointer and keyboard |
 | Components | `src/components/` | One `ComponentDef` per component; the map is a separate entry point |
 | Popups | `src/popup.ts` | One popup at a time (a select's list, a date picker's calendar), painted last and hit-tested first |
-| Theme | `src/theme.ts` | Design tokens, light and dark, `--loom-*` overrides |
+| Theme | `src/theme.ts` | Design tokens, light and dark, `--sayshape-*` overrides |
 | Model guide | `src/prompt.ts`, `src/profiles.ts` | The guide generated from components, in full and compact modes, with profiles |
-| Model client | `src/model/` | `loom-ui/model`: streaming, cleaning, checking and one repair |
-| Testing | `src/testing/` | `loom-ui/testing`: the real engine in Node against a recording canvas |
+| Model client | `src/model/` | `sayshape/model`: streaming, cleaning, checking and one repair |
+| Testing | `src/testing/` | `sayshape/testing`: the real engine in Node against a recording canvas |
 
 ## Staged rendering
 
@@ -51,6 +51,6 @@ Browser developer tools can't see inside a canvas, so SayShape has its own. All 
 | Inspect mode | `ui.inspector.setInspecting(true)` | Hover to highlight, click to select; `selectLine(n)` selects the element on a spec line |
 | Describe | `ui.inspector.describe(node)` | A node's type, line, props and box |
 | Frame capture | `await ui.inspector.captureFrame()` | Every canvas call made in one frame |
-| Console | `ui.expose()` | Puts the instance on `window.loom` |
+| Console | `ui.expose()` | Puts the instance on `window.sayshape` |
 
 To find a bug, decide which stage it's in: an element missing or wrong is the parse (check `ui.diagnostics`); a wrong position or size is layout (turn on boxes); a right box that looks wrong is paint (capture a frame); a click that does nothing is input (turn on hit regions).

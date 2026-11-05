@@ -1,6 +1,6 @@
 /**
  * Text input: the input component and typing through the editor host. In
- * Node, loom-ui/testing's fake host stands in for the browser's <input>.
+ * Node, sayshape/testing's fake host stands in for the browser's <input>.
  */
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";

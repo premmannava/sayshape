@@ -127,7 +127,7 @@ map
     const [x, y] = project(-112.074, 33.4484);
     const scale = (box.data as { scale: number }).scale;
     ui.canvas.dispatch("pointermove", { clientX: box.x + x * scale, clientY: box.y + y * scale, pointerId: 1 });
-    ui.loom.renderNow();
+    ui.sayshape.renderNow();
     expect(ui.text()).toContain("Status: Delayed");
     expect(ui.text()).toContain("Contract: 120000");
   });
@@ -137,7 +137,7 @@ map
     const b = ui.find("map").box!;
     const x = b.x + b.w / 2, y = b.y + b.h / 2;
     expect(ui.canvas.dispatch("wheel", { clientX: x, clientY: y, deltaY: -100 })).toBe(false);
-    ui.loom.renderNow();
+    ui.sayshape.renderNow();
     expect((ui.find("map").box!.data as { view: { zoom: number } }).view.zoom).toBe(1);
   });
 });

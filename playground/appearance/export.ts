@@ -1,6 +1,6 @@
 /**
  * "Copy theme code": TypeScript that sets up the theme the playground is
- * showing, with loom-ui's public API only (extendTheme, lightTheme,
+ * showing, with sayshape's public API only (extendTheme, lightTheme,
  * darkTheme, SayShape#setTheme). It writes the effective colors, after any
  * contrast adjustment, not the ones asked for.
  */
@@ -32,34 +32,34 @@ export function themeCode(p: AppearancePrefs): string {
   const plan = exportPlan(p);
   const preset = presetById(p.preset)?.label ?? p.preset;
   const about = `// SayShape theme: ${preset}${p.accent ? `, accent ${p.accent}` : ""}, ${plan.mode === "system" ? "following the system's light or dark mode" : `${plan.mode} mode`}.\n` +
-    `// Assumes \`loom\` is your SayShape instance: const loom = new SayShape(canvas, { components: coreComponents }).`;
+    `// Assumes \`sayshape\` is your SayShape instance: const sayshape = new SayShape(canvas, { components: coreComponents }).`;
   if (plan.mode !== "system") {
     const base = plan.mode === "dark" ? "darkTheme" : "lightTheme";
     const needsExtend = Object.keys(plan.changes).length > 0;
     return [
-      `import { ${needsExtend ? "extendTheme, " : ""}${base}, type SayShape } from "loom-ui";`,
+      `import { ${needsExtend ? "extendTheme, " : ""}${base}, type SayShape } from "sayshape";`,
       "",
       about,
       `export const theme = ${themeExpr(base, plan.changes)};`,
       "",
-      `export function applyTheme(loom: SayShape): void {`,
-      `  loom.setTheme(theme);`,
+      `export function applyTheme(sayshape: SayShape): void {`,
+      `  sayshape.setTheme(theme);`,
       `}`,
       "",
     ].join("\n");
   }
   const needsExtend = Object.keys(plan.light).length + Object.keys(plan.dark).length > 0;
   return [
-    `import { ${needsExtend ? "extendTheme, " : ""}darkTheme, lightTheme, type SayShape } from "loom-ui";`,
+    `import { ${needsExtend ? "extendTheme, " : ""}darkTheme, lightTheme, type SayShape } from "sayshape";`,
     "",
     about,
     `export const light = ${themeExpr("lightTheme", plan.light)};`,
     `export const dark = ${themeExpr("darkTheme", plan.dark)};`,
     "",
     `/** Use the light or dark theme to match the system, now and when it changes. Returns a function that stops following it. */`,
-    `export function followSystemAppearance(loom: SayShape): () => void {`,
+    `export function followSystemAppearance(sayshape: SayShape): () => void {`,
     `  const query = window.matchMedia("(prefers-color-scheme: dark)");`,
-    `  const apply = () => loom.setTheme(query.matches ? dark : light);`,
+    `  const apply = () => sayshape.setTheme(query.matches ? dark : light);`,
     `  apply();`,
     `  query.addEventListener("change", apply);`,
     `  return () => query.removeEventListener("change", apply);`,

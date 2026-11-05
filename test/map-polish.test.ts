@@ -104,7 +104,7 @@ describe("bubble map spiderfy interactions", () => {
     const spots = expanded.spiderPoints;
     expect(spots[0]!.x + ":" + spots[0]!.y).not.toBe(spots[1]!.x + ":" + spots[1]!.y);
     for (const spot of spots) {
-      const t = ui.loom.targetAt(expandedBox.x + spot.x, expandedBox.y + spot.y);
+      const t = ui.sayshape.targetAt(expandedBox.x + spot.x, expandedBox.y + spot.y);
       expect(t?.detail).toBe("@map:spider:" + spot.index);
     }
     const second = spots.find((p) => p.index === 1)!;

@@ -19,14 +19,14 @@ Any prefix of a valid spec, cut at a line boundary, is a valid and smaller spec,
 
 ## Cleaning
 
-Models don't always send just SayShape. `loom-ui/model` cleans the text as it streams: it drops thinking (`<think>…</think>`, and reasoning a server sends separately), Markdown code fences and chatter before the spec starts, and joins a state value a model spread over several lines back into one line. When a model writes its whole spec inside a thinking block it never closes, the spec is recovered from there (`result.first.recovered`).
+Models don't always send just SayShape. `sayshape/model` cleans the text as it streams: it drops thinking (`<think>…</think>`, and reasoning a server sends separately), Markdown code fences and chatter before the spec starts, and joins a state value a model spread over several lines back into one line. When a model writes its whole spec inside a thinking block it never closes, the spec is recovered from there (`result.first.recovered`).
 
 ## Validation
 
 When the response is complete, it's parsed with the same registry the engine uses. Every problem is a [diagnostic](../language/diagnostics) with a line number. You can do the same on a server without rendering:
 
 ```ts
-import { parse, Registry, coreComponents } from "loom-ui";
+import { parse, Registry, coreComponents } from "sayshape";
 
 const registry = new Registry(coreComponents);
 const { diagnostics } = parse(specText, registry, { knownNames: ["products"] });
@@ -56,7 +56,7 @@ There's one repair at most. A spec that's valid can still do the wrong thing, wh
 To change the current screen ("make the total bigger"), pass a `refine` context instead of the whole conversation. It sends the original task, requirements that must always hold, the changes asked for since, the current spec (hand edits included) and the new change, so a change costs about the same on the tenth turn as on the second.
 
 ```ts
-import { generateSpec, nextRefineContext, type RefineContext } from "loom-ui/model";
+import { generateSpec, nextRefineContext, type RefineContext } from "sayshape/model";
 
 let context: RefineContext = { task: "A packing list for a 3-day hike", requirements: ["Prices in euros"], spec: first.spec };
 const r = await generateSpec({ config, registry, request: "Add a progress bar", refine: { ...context, spec: ui.spec } });

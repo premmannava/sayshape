@@ -12,7 +12,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { withBase } from "vitepress";
-import { useLoom } from "../loom/useLoom";
+import { useSayShape } from "../sayshape/useSayShape";
 
 type Chunk = [number, string | null];
 interface FormatRecording { chunks: Chunk[]; doneMs?: number; error?: string }
@@ -141,10 +141,10 @@ function scrub(ev: Event) { pause(); now.value = Number((ev.target as HTMLInputE
 const canvas = ref<HTMLCanvasElement | null>(null);
 let sShown = "";
 let sStreaming = false;
-const { loom } = useLoom(canvas, () => { sShown = "\u0000"; applySayShape(); });
+const { sayshape } = useSayShape(canvas, () => { sShown = "\u0000"; applySayShape(); });
 
 function applySayShape() {
-  const l = loom.value;
+  const l = sayshape.value;
   if (!l) return;
   const text = texts.value.sayshape;
   if (sStreaming && text.startsWith(sShown)) {
@@ -320,7 +320,7 @@ const toggle = (k: Key) => { open.value = { ...open.value, [k]: !open.value[k] }
           <p class="cmp-what">Lines of text. Each line is drawn the moment it arrives.</p>
         </div>
         <div class="cmp-stage">
-          <div class="loom-canvas-wrap"><canvas ref="canvas" aria-label="The SayShape answer, drawn by the engine"></canvas></div>
+          <div class="sayshape-canvas-wrap"><canvas ref="canvas" aria-label="The SayShape answer, drawn by the engine"></canvas></div>
         </div>
         <div class="cmp-pane-foot">
           <button type="button" class="cmp-secondary" :aria-expanded="open.sayshape" @click="toggle('sayshape')">{{ open.sayshape ? "Hide" : "Show" }} what the model sent</button>

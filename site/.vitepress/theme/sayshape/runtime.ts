@@ -6,7 +6,7 @@
  * pages to static HTML. Every demo on the site goes through here, so they
  * all run the same engine from ../../src with no second implementation.
  */
-import type { SayShape, Theme } from "@loom/index";
+import type { SayShape, Theme } from "@sayshape/index";
 
 export type { SayShape, Theme };
 
@@ -29,26 +29,26 @@ export interface CreateOptions {
   today?: string;
 }
 
-export interface LoomModules {
-  SayShape: typeof import("@loom/index").SayShape;
+export interface SayShapeModules {
+  SayShape: typeof import("@sayshape/index").SayShape;
   lightTheme: Theme;
   darkTheme: Theme;
-  parse: typeof import("@loom/index").parse;
-  Registry: typeof import("@loom/index").Registry;
+  parse: typeof import("@sayshape/index").parse;
+  Registry: typeof import("@sayshape/index").Registry;
 }
 
-let core: Promise<typeof import("@loom/index")> | null = null;
-let mapMod: Promise<typeof import("@loom/components/map/index")> | null = null;
+let core: Promise<typeof import("@sayshape/index")> | null = null;
+let mapMod: Promise<typeof import("@sayshape/components/map/index")> | null = null;
 
-export async function loomModules(): Promise<LoomModules> {
-  core ??= import("@loom/index");
+export async function sayShapeModules(): Promise<SayShapeModules> {
+  core ??= import("@sayshape/index");
   const m = await core;
   return { SayShape: m.SayShape, lightTheme: m.lightTheme, darkTheme: m.darkTheme, parse: m.parse, Registry: m.Registry };
 }
 
-export async function createLoom(canvas: HTMLCanvasElement, opts: CreateOptions = {}): Promise<SayShape> {
-  core ??= import("@loom/index");
-  if (opts.map) mapMod ??= import("@loom/components/map/index");
+export async function createSayShape(canvas: HTMLCanvasElement, opts: CreateOptions = {}): Promise<SayShape> {
+  core ??= import("@sayshape/index");
+  if (opts.map) mapMod ??= import("@sayshape/components/map/index");
   const [m, map] = await Promise.all([core, opts.map ? mapMod : null, loadFonts()]);
   const components = [...m.coreComponents, ...(map ? map.mapComponents : [])];
   return new m.SayShape(canvas, {
@@ -66,8 +66,8 @@ export async function createLoom(canvas: HTMLCanvasElement, opts: CreateOptions 
 export const isSiteDark = () => typeof document !== "undefined" && document.documentElement.classList.contains("dark");
 
 /** Keep an instance in step with the site's light/dark switch. Returns a cleanup function. */
-export function watchSiteTheme(loom: SayShape, themes: { light: Theme; dark: Theme }, enabled: () => boolean = () => true): () => void {
-  const apply = () => { if (enabled()) loom.setTheme(isSiteDark() ? themes.dark : themes.light); };
+export function watchSiteTheme(sayshape: SayShape, themes: { light: Theme; dark: Theme }, enabled: () => boolean = () => true): () => void {
+  const apply = () => { if (enabled()) sayshape.setTheme(isSiteDark() ? themes.dark : themes.light); };
   const mo = new MutationObserver(apply);
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
   apply();
@@ -93,11 +93,11 @@ export function toBase64Url(text: string): string {
  * beginStream, push chunks, endStream. Nothing is generated; the text is
  * already known. Resolves false if cancelled.
  */
-export function replayStream(loom: SayShape, spec: string, opts: { signal: { cancelled: boolean }; onProgress?: (shown: string) => void; instant?: boolean }): Promise<boolean> {
-  loom.beginStream();
+export function replayStream(sayshape: SayShape, spec: string, opts: { signal: { cancelled: boolean }; onProgress?: (shown: string) => void; instant?: boolean }): Promise<boolean> {
+  sayshape.beginStream();
   if (opts.instant) {
-    loom.push(spec);
-    loom.endStream();
+    sayshape.push(spec);
+    sayshape.endStream();
     opts.onProgress?.(spec);
     return Promise.resolve(true);
   }
@@ -107,11 +107,11 @@ export function replayStream(loom: SayShape, spec: string, opts: { signal: { can
       if (opts.signal.cancelled) return done(false);
       // A few characters at a time, like tokens; only complete lines render.
       const n = Math.min(spec.length, i + 3 + Math.floor(Math.random() * 6));
-      loom.push(spec.slice(i, n));
+      sayshape.push(spec.slice(i, n));
       i = n;
       opts.onProgress?.(spec.slice(0, i));
       if (i < spec.length) setTimeout(tick, 16);
-      else { loom.endStream(); done(true); }
+      else { sayshape.endStream(); done(true); }
     };
     tick();
   });

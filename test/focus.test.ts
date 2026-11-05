@@ -50,7 +50,7 @@ describe("keyboard focus", () => {
     const stops: string[] = [];
     for (let i = 0; i < 4; i++) {
       ui.tab();
-      const f = ui.loom.focus;
+      const f = ui.sayshape.focus;
       stops.push(f ? `${f.node.type}${f.detail ? ":" + String(f.detail) : ""}` : "none");
     }
     expect(stops).toEqual(["button", "pair:left", "pair:right", "button"]);
@@ -60,7 +60,7 @@ describe("keyboard focus", () => {
     const ui = render(`state got=none\npair bind=got\n`, { components, width: 400 });
     ui.tab();
     ui.tab();
-    expect(ui.loom.focus?.box.x).toBeGreaterThan(150);
+    expect(ui.sayshape.focus?.box.x).toBeGreaterThan(150);
     ui.key("Enter");
     expect(ui.state.got).toBe("right");
   });

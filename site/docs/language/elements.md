@@ -7,7 +7,7 @@ description: SayShape's line syntax. One element per line, quoted text, props, i
 
 A SayShape spec is a list of lines. Each line is one element: its type, then optional quoted text, then `name=value` props.
 
-```loom live
+```sayshape live
 button "Save changes" variant=secondary on=emit:save
 ```
 
@@ -23,7 +23,7 @@ A prop value can be written three ways:
 
 Quotes inside quoted text are escaped with a backslash. Quoted text can also include `{expressions}`, which are filled in from state:
 
-```loom live
+```sayshape live
 state guests=2 nights=3
 text "Cabin for {guests} guests, {nights} nights"
 text "She said \"see you there\"" tone=muted
@@ -35,7 +35,7 @@ Each component accepts the props listed in the [component reference](../componen
 
 Indent children under their container. Two spaces is the convention; a tab counts as two spaces.
 
-```loom live
+```sayshape live
 card
   text "Your order" style=title
   row
@@ -57,7 +57,7 @@ Indentation is the only structure. There are no closing lines, which is what let
 | `if={condition}` | Shows what's indented under it only while the condition holds ([Conditions](./conditions)) |
 | `# a comment` | Ignored |
 
-```loom live
+```sayshape live
 # Starting values come first.
 state ready=false
 card
@@ -69,7 +69,7 @@ card
 
 Specs never set colors, fonts or pixel sizes. They choose roles instead, and the theme decides what each role looks like:
 
-```loom live
+```sayshape live
 text "Section" style=title
 text "Saved" tone=good
 text "Card declined" tone=bad

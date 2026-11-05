@@ -13,7 +13,7 @@ export interface AppearancePrefs {
   accent: string | null;
 }
 
-export const STORAGE_KEY = "loom-playground-appearance:v1";
+export const STORAGE_KEY = "sayshape-playground-appearance:v1";
 export const DEFAULT_PREFS: AppearancePrefs = { preset: "teal", mode: "system", accent: null };
 const MODES: readonly Mode[] = ["light", "dark", "system"];
 

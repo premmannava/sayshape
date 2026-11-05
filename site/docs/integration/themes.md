@@ -11,21 +11,21 @@ SayShape ships `lightTheme` and `darkTheme`. With `theme: "auto"` (the default) 
 
 ## Overriding colors from CSS
 
-With `theme: "auto"`, color tokens can be set as `--loom-*` CSS variables on the canvas or any ancestor:
+With `theme: "auto"`, color tokens can be set as `--sayshape-*` CSS variables on the canvas or any ancestor:
 
 ```css
 canvas {
-  --loom-accent: #6d28d9;
-  --loom-on-accent: #ffffff;
+  --sayshape-accent: #6d28d9;
+  --sayshape-on-accent: #ffffff;
 }
 ```
 
-Token names become kebab case: `onAccent` is `--loom-on-accent`, `landHighlight` is `--loom-land-highlight`.
+Token names become kebab case: `onAccent` is `--sayshape-on-accent`, `landHighlight` is `--sayshape-land-highlight`.
 
 ## Building a theme in code
 
 ```ts
-import { extendTheme, lightTheme, darkTheme } from "loom-ui";
+import { extendTheme, lightTheme, darkTheme } from "sayshape";
 
 const brand = extendTheme(lightTheme, {
   colors: { accent: "#6d28d9" },

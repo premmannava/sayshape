@@ -61,7 +61,7 @@ export interface SayShapeEvents {
 
 export interface SayShapeOptions {
   components: ComponentDef[];
-  /** A fixed theme, or "auto" to follow light/dark mode and --loom-* CSS variables. */
+  /** A fixed theme, or "auto" to follow light/dark mode and --sayshape-* CSS variables. */
   theme?: Theme | "auto";
   /** Fixed CSS width. Default: the canvas parent's width, tracked on resize. */
   width?: number;
@@ -83,7 +83,7 @@ export interface SayShapeOptions {
   /**
    * Places a real text box over a field while someone types in it. Default:
    * an <input> next to the canvas in browsers, nothing elsewhere.
-   * loom-ui/testing passes a fake one.
+   * sayshape/testing passes a fake one.
    */
   editor?: EditorHost;
   /**
@@ -1235,7 +1235,7 @@ export class SayShape {
   }
 
   /** Make this instance available in the browser console as window[name]. */
-  expose(name = "loom"): this {
+  expose(name = "sayshape"): this {
     if (typeof window !== "undefined") (window as unknown as Record<string, unknown>)[name] = this;
     return this;
   }
@@ -1249,7 +1249,7 @@ export class SayShape {
     this.events.clear();
   }
 
-  /** Find nodes by type (handy in the console: loom.find("button")). */
+  /** Find nodes by type (handy in the console: sayshape.find("button")). */
   find(type: string): SayShapeNode[] {
     const out: SayShapeNode[] = [];
     const walk = (n: SayShapeNode) => { if (n.type === type) out.push(n); n.children.forEach(walk); };

@@ -63,12 +63,12 @@ describe("segmented", () => {
     const week = ui.drawOps.find((o) => o.op === "fillText" && o.args[0] === "Week")!;
     expect(week.fillStyle).toBe(lightTheme.colors.ink);
     const year = ui.hits.find((h) => h.detail === "Year")!;
-    ui.loom.activate({ node: year.box.node, box: year.box, detail: "Year" });
-    ui.loom.renderNow();
-    expect(ui.loom.state.get("view")).toBe("Year");
-    ui.loom.focus = { node: year.box.node, box: year.box, detail: "Year" };
+    ui.sayshape.activate({ node: year.box.node, box: year.box, detail: "Year" });
+    ui.sayshape.renderNow();
+    expect(ui.sayshape.state.get("view")).toBe("Year");
+    ui.sayshape.focus = { node: year.box.node, box: year.box, detail: "Year" };
     ui.key("ArrowLeft");
-    expect(ui.loom.state.get("view")).toBe("Month");
+    expect(ui.sayshape.state.get("view")).toBe("Month");
     ui.destroy();
   });
 
@@ -95,9 +95,9 @@ describe("carousel", () => {
     const ui = render(`state page=0\ncarousel bind=page\n${cards(5)}\n`, { width: 600 });
     expect(texts(ui).filter((t) => t.startsWith("Card"))).toEqual(["Card 1", "Card 2"]);
     const next = ui.hits.find((h) => String(h.detail).startsWith("next"))!;
-    ui.loom.activate({ node: next.box.node, box: next.box, detail: next.detail });
-    ui.loom.renderNow();
-    expect(ui.loom.state.get("page")).toBe(1);
+    ui.sayshape.activate({ node: next.box.node, box: next.box, detail: next.detail });
+    ui.sayshape.renderNow();
+    expect(ui.sayshape.state.get("page")).toBe(1);
     expect(texts(ui).filter((t) => t.startsWith("Card"))).toEqual(["Card 3", "Card 4"]);
     ui.destroy();
   });

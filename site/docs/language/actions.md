@@ -27,7 +27,7 @@ The key of `inc`, `dec`, `toggle` and `set` can be a path, like `toggle:t.done`.
 
 Separate them with `;`, and quote the whole value. They run in order:
 
-```loom live
+```sayshape live
 state items=0
 card
   text "{plural(items, 'item')} in your cart"
@@ -39,7 +39,7 @@ card
 
 `emit` is how an interface hands something to the app around it. The engine fires an `action` event with the name and value; what happens next is up to your app.
 
-```loom live
+```sayshape live
 state qty=2 placed=false
 card
   stepper "Quantity" bind=qty min=1 max=5
@@ -61,7 +61,7 @@ A value can be a record built from state: `emit:request:{item: item, qty: qty}` 
 
 A spec can hold several screens. Only one shows at a time: the first, until an action moves to another with `go:name`. `back` returns to the previous one.
 
-```loom live
+```sayshape live
 state qty=1
 screen name=product title="Trail socks"
   stepper "Quantity" bind=qty min=1

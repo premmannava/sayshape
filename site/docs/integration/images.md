@@ -16,7 +16,7 @@ const ui = new SayShape(canvas, {
 
 Images load with CORS (`crossOrigin="anonymous"`), so their server must send `Access-Control-Allow-Origin`. The space for each image is kept from its `ratio=` while it loads, so the screen doesn't jump.
 
-```loom live warns
+```sayshape live warns
 card
   text "Same-origin image" weight=semibold
   image "Screenshot of the development playground: a spec on the left, a world map rendered on the right" src="/sayshape/images/playground.png" ratio=16:9 fit=contain

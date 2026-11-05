@@ -12,7 +12,7 @@
     "noEmit": true,
     "jsx": "preserve",
     "types": ["node", "vite/client"],
-    "paths": { "@loom/*": ["../src/*"] }
+    "paths": { "@sayshape/*": ["../src/*"] }
   },
   "include": [".vitepress/**/*.ts", ".vitepress/**/*.vue", "examples/**/*.ts", "learn/**/*.ts", "ask/**/*.ts"]
 }

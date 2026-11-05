@@ -1,0 +1,76 @@
+{
+  "name": "sayshape",
+  "displayName": "SayShape",
+  "scopeName": "source.sayshape",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#declaration" },
+    { "include": "#element" },
+    { "include": "#line-rest" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "^\\s*#.*$",
+      "name": "comment.line.number-sign.sayshape"
+    },
+    "declaration": {
+      "match": "^(state|derive)\\b",
+      "name": "keyword.control.declaration.sayshape"
+    },
+    "element": {
+      "match": "^(\\s*)(each|if)(?=[\\s=]|$)|^(\\s*)([a-z][a-z0-9-]*)\\b",
+      "captures": {
+        "2": { "name": "keyword.control.flow.sayshape" },
+        "4": { "name": "entity.name.tag.sayshape" }
+      }
+    },
+    "line-rest": {
+      "patterns": [
+        { "include": "#prop" },
+        { "include": "#string" },
+        { "include": "#expression" },
+        { "include": "#constant" }
+      ]
+    },
+    "prop": {
+      "match": "\\b([A-Za-z_][\\w-]*)(=)",
+      "captures": {
+        "1": { "name": "entity.other.attribute-name.sayshape" },
+        "2": { "name": "punctuation.separator.key-value.sayshape" }
+      }
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.sayshape",
+      "patterns": [
+        { "match": "\\\\.", "name": "constant.character.escape.sayshape" },
+        { "include": "#expression" }
+      ]
+    },
+    "expression": {
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.sayshape" } },
+      "endCaptures": { "0": { "name": "punctuation.section.embedded.end.sayshape" } },
+      "name": "meta.embedded.expression.sayshape",
+      "patterns": [
+        { "match": "'(?:[^'\\\\]|\\\\.)*'", "name": "string.quoted.single.sayshape" },
+        { "match": "\"(?:[^\"\\\\]|\\\\.)*\"", "name": "string.quoted.double.sayshape" },
+        { "match": "\\b([a-z][A-Za-z0-9_]*)(?=\\()", "name": "support.function.sayshape" },
+        { "match": "\\b(true|false|null)\\b", "name": "constant.language.sayshape" },
+        { "match": "\\b\\d+(?:\\.\\d+)?\\b", "name": "constant.numeric.sayshape" },
+        { "match": "==|!=|<=|>=|&&|\\|\\||[-+*/%<>!?:]", "name": "keyword.operator.sayshape" },
+        { "include": "#expression" },
+        { "match": "\\[|\\]", "name": "punctuation.section.brackets.sayshape" }
+      ]
+    },
+    "constant": {
+      "patterns": [
+        { "match": "\\b(true|false|null)\\b", "name": "constant.language.sayshape" },
+        { "match": "(?<![\\w.-])-?\\d+(?:\\.\\d+)?\\b", "name": "constant.numeric.sayshape" },
+        { "match": "'(?:[^'\\\\]|\\\\.)*'", "name": "string.quoted.single.sayshape" }
+      ]
+    }
+  }
+}

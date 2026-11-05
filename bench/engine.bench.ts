@@ -5,7 +5,7 @@
  *   npm run bench -- --outputJson bench.json        save them (CI does this per commit)
  *   npm run bench -- --compare bench.json           compare against a saved run
  *
- * Paint runs against the recording canvas from loom-ui/testing, so it
+ * Paint runs against the recording canvas from sayshape/testing, so it
  * measures the engine's and components' own work, not the browser's raster.
  */
 import { bench, describe } from "vitest";
@@ -59,13 +59,13 @@ for (const size of [1000, 5000]) {
 
     const ui = render(spec, { width: 1024 });
     bench("full frame (parse, layout, paint)", () => {
-      ui.loom.setSpec(spec);
-      ui.loom.renderNow();
+      ui.sayshape.setSpec(spec);
+      ui.sayshape.renderNow();
     });
 
     bench("state change (layout and paint)", () => {
-      ui.loom.state.set("qty", (Number(ui.state.qty) + 1) % 10);
-      ui.loom.renderNow();
+      ui.sayshape.state.set("qty", (Number(ui.state.qty) + 1) % 10);
+      ui.sayshape.renderNow();
     });
   });
 }
@@ -88,14 +88,14 @@ describe("each over 500 items", () => {
   ui.set("orders", orders as never);
 
   bench("state change (expand, layout and paint)", () => {
-    ui.loom.state.set("picked", (Number(ui.state.picked) + 1) % 500);
-    ui.loom.renderNow();
+    ui.sayshape.state.set("picked", (Number(ui.state.picked) + 1) % 500);
+    ui.sayshape.renderNow();
   });
 
   bench("list change (one item updated)", () => {
     const i = Math.floor(Math.random() * 500);
     const next = orders.map((o) => (o.id === i ? { ...o, qty: o.qty + 1 } : o));
     ui.set("orders", next as never);
-    ui.loom.renderNow();
+    ui.sayshape.renderNow();
   });
 });

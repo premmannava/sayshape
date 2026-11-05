@@ -8,7 +8,7 @@ description: The instructions a model gets for writing SayShape, generated from 
 A model learns SayShape from a guide: a system prompt that explains the syntax and describes every element it may use. The guide is **generated** by `languageGuide(registry, options)` from the same component definitions the parser validates against, so it can't describe a prop that doesn't exist or miss one that does.
 
 ```ts
-import { languageGuide } from "loom-ui";
+import { languageGuide } from "sayshape";
 
 const guide = languageGuide(ui.registry, { mode: "compact", profile: "forms" });
 ```

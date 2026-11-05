@@ -31,7 +31,7 @@ describe("design showcase", () => {
       const ui = render(spec, { width, theme, today: "2026-11-04" });
       expect(ui.diagnostics).toEqual([]);
       expect(ui.warnings).toEqual([]);
-      expect(textOverflows(ui.loom.boxes!, ui.drawOps)).toEqual([]);
+      expect(textOverflows(ui.sayshape.boxes!, ui.drawOps)).toEqual([]);
       expect(ui.findAll("stat")).toHaveLength(4);
       expect(ui.findAll("chart")).toHaveLength(2);
       ui.destroy();

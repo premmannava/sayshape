@@ -7,7 +7,7 @@ description: Showing and hiding SayShape elements with if=, if blocks for severa
 
 Every element accepts `if=`. The element, and everything inside it, is shown only while the condition is true.
 
-```loom live
+```sayshape live
 state water=true read=false walk=true
 card
   check "Water" bind=water
@@ -23,7 +23,7 @@ card
 
 Put the lines under a line holding only `if=`. Like `each`, it has no look of its own:
 
-```loom live
+```sayshape live
 state todos=[{text: "Water", done: true}, {text: "Map", done: true}]
 card
   each items=todos as=t
@@ -38,7 +38,7 @@ card
 
 Right after an `if=` line (a block or an element with `if=`), at the same indent, `else` shows its lines when the condition doesn't hold. `else if={…}` adds another case:
 
-```loom live
+```sayshape live
 state view="Week"
 card
   segmented bind=view options="Week,Month,Year"
@@ -56,7 +56,7 @@ Like `if`, `else` needs nothing to close it, so a spec still streams line by lin
 
 Props that take a fixed set of values, such as `tone=` and `variant=`, can also be expressions, which is often clearer than two elements with opposite conditions:
 
-```loom live
+```sayshape live
 state remaining=-40
 card
   stat label="Remaining" value={money(remaining)} tone={remaining < 0 ? 'bad' : 'good'}

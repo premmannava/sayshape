@@ -166,17 +166,17 @@ describe("hbar while loading", () => {
   it("draws rows of label pills and bars, then the real chart", () => {
     // As a chat app does it: the names first, then the spec.
     const ui = render("");
-    ui.loom.setLoading(["artists"]);
-    ui.loom.setSpec(`chart "Top artists" kind=hbar items=artists x=name y=sales\n`);
-    ui.loom.renderNow();
+    ui.sayshape.setLoading(["artists"]);
+    ui.sayshape.setSpec(`chart "Top artists" kind=hbar items=artists x=name y=sales\n`);
+    ui.sayshape.renderNow();
     const d = geo(ui);
     expect(d.loading).toEqual({ series: 1 });
     expect(texts(ui)).toEqual(["Top artists"]);
     expect(ui.drawOps.some((o) => o.op === "fill" && o.fillStyle === c.line)).toBe(true);
     expect(ui.warnings).toEqual([]);
-    ui.loom.state.set("artists", [{ name: "Queen", sales: 3 }, { name: "Abba", sales: 2 }]);
-    ui.loom.setLoading([]);
-    ui.loom.renderNow();
+    ui.sayshape.state.set("artists", [{ name: "Queen", sales: 3 }, { name: "Abba", sales: 2 }]);
+    ui.sayshape.setLoading([]);
+    ui.sayshape.renderNow();
     expect(texts(ui)).toEqual(expect.arrayContaining(["Queen", "Abba", "3", "2"]));
     ui.destroy();
   });
@@ -185,7 +185,7 @@ describe("hbar while loading", () => {
     const ui = hbar(rowsOf(4, () => 10));
     const box = ui.find("chart").box!;
     const widths: number[] = [];
-    const engine = ui.loom as unknown as { paintContext(g: CanvasRenderingContext2D): PaintContext };
+    const engine = ui.sayshape as unknown as { paintContext(g: CanvasRenderingContext2D): PaintContext };
     const base = engine.paintContext(ui.canvas.getContext("2d")!);
     const at = (reveal: number) => {
       widths.length = 0;

@@ -8,16 +8,16 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { withBase } from "vitepress";
-import type { Diagnostic, SayShapeNode } from "@loom/index";
+import type { Diagnostic, SayShapeNode } from "@sayshape/index";
 import { examples, exampleById } from "../../../examples/catalog";
 import { samples } from "../../../../playground/samples";
 import { PRESETS, resolveTheme, type PresetId } from "../../../../playground/appearance/presets";
 import { themeCode } from "../../../../playground/appearance/export";
-import { highlightSpec } from "../loom/highlight";
-import { useLoom } from "../loom/useLoom";
-import { fromBase64, isSiteDark, prefersReducedMotion, replayStream, toBase64Url } from "../loom/runtime";
-import { generationAvailable, MODEL_LABEL } from "../loom/generate";
-import { onHostEvents, type HostEvent } from "../loom/events";
+import { highlightSpec } from "../sayshape/highlight";
+import { useSayShape } from "../sayshape/useSayShape";
+import { fromBase64, isSiteDark, prefersReducedMotion, replayStream, toBase64Url } from "../sayshape/runtime";
+import { generationAvailable, MODEL_LABEL } from "../sayshape/generate";
+import { onHostEvents, type HostEvent } from "../sayshape/events";
 
 // ------------------------------------------------------------ what can be loaded
 
@@ -85,7 +85,7 @@ function say(message: string) {
 
 // ------------------------------------------------------------ engine
 
-const { loom } = useLoom(canvas, (l) => {
+const { sayshape } = useSayShape(canvas, (l) => {
   const offs = [
     l.on("diagnostics", (d) => { diagnostics.value = d; }),
     l.on("change", ({ key }) => { flashKey.value = key; queueMicrotask(renderState); }),
@@ -101,7 +101,7 @@ const { loom } = useLoom(canvas, (l) => {
   ];
   // The guide a model would get; copy it into any chat assistant to try generation without a server here.
   import("../../../../playground/model-guide").then(({ playgroundGuide }) => {
-    import("@loom/index").then(({ languageGuide }) => { guideText.value = languageGuide(l.registry, playgroundGuide([])); });
+    import("@sayshape/index").then(({ languageGuide }) => { guideText.value = languageGuide(l.registry, playgroundGuide([])); });
   });
   applyTheme();
   l.setSpec(text.value);
@@ -112,7 +112,7 @@ const { loom } = useLoom(canvas, (l) => {
 
 /** The preview's theme: the chosen style, in the chosen scheme or the site's. */
 function applyTheme() {
-  const l = loom.value;
+  const l = sayshape.value;
   if (!l) return;
   const scheme = forcedScheme.value ?? (isSiteDark() ? "dark" : "light");
   l.setTheme(resolveTheme(preset.value, scheme, null).theme);
@@ -125,9 +125,9 @@ onMounted(() => {
   siteObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 });
 
-const passwordKeys = () => new Set((loom.value?.find("input") ?? []).filter((n: SayShapeNode) => n.props.kind === "password" && n.props.bind).map((n: SayShapeNode) => n.props.bind!.split(".")[0]!));
+const passwordKeys = () => new Set((sayshape.value?.find("input") ?? []).filter((n: SayShapeNode) => n.props.kind === "password" && n.props.bind).map((n: SayShapeNode) => n.props.bind!.split(".")[0]!));
 function renderState() {
-  const l = loom.value;
+  const l = sayshape.value;
   if (!l) return;
   const secret = passwordKeys();
   stateRows.value = Object.entries(l.state.snapshot()).map(([k, v]) => {
@@ -147,9 +147,9 @@ function load(key: string, spec = sourceOf(key)) {
   original.value = spec;
   events.value = [];
   selectedLine.value = 0;
-  if (loom.value) {
-    loom.value.inspector.selected = null;
-    loom.value.setSpec(spec, { resetState: true });
+  if (sayshape.value) {
+    sayshape.value.inspector.selected = null;
+    sayshape.value.setSpec(spec, { resetState: true });
   }
   const url = new URL(location.href);
   url.hash = "";
@@ -174,25 +174,25 @@ function resetExample() {
 
 /** Same spec, fresh state: only what the interface remembers is cleared. */
 function resetState() {
-  loom.value?.setSpec(text.value, { resetState: true });
+  sayshape.value?.setSpec(text.value, { resetState: true });
   events.value = [];
   say("State reset. The spec is unchanged");
 }
 
 function onInput() {
-  if (streaming.value || !loom.value) return;
-  loom.value.setSpec(text.value);
+  if (streaming.value || !sayshape.value) return;
+  sayshape.value.setSpec(text.value);
 }
 
 // ------------------------------------------------------------ streaming replay
 
 function cancelStream() {
   signal.cancelled = true;
-  if (streaming.value) { streaming.value = false; loom.value?.endStream(); }
+  if (streaming.value) { streaming.value = false; sayshape.value?.endStream(); }
 }
 
 async function replay() {
-  const l = loom.value;
+  const l = sayshape.value;
   if (!l) return;
   cancelStream();
   signal = { cancelled: false };
@@ -224,7 +224,7 @@ function download() {
   const blob = new Blob([text.value.endsWith("\n") ? text.value : text.value + "\n"], { type: "text/plain" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${sourceKey.value || "spec"}.loom`;
+  a.download = `${sourceKey.value || "spec"}.sayshape`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -258,7 +258,7 @@ function syncCursorLine() {
   const line = t.value.slice(0, t.selectionStart).split("\n").length;
   if (line !== selectedLine.value) {
     selectedLine.value = line;
-    loom.value?.inspector.selectLine(line);
+    sayshape.value?.inspector.selectLine(line);
   }
 }
 
@@ -281,12 +281,12 @@ function goToLine(line: number) {
 
 // ------------------------------------------------------------ debug tools
 
-watch(boxes, (v) => loom.value?.inspector.setBoxes(v));
-watch(hits, (v) => loom.value?.inspector.setHits(v));
-watch(inspecting, (v) => loom.value?.inspector.setInspecting(v));
+watch(boxes, (v) => sayshape.value?.inspector.setBoxes(v));
+watch(hits, (v) => sayshape.value?.inspector.setHits(v));
+watch(inspecting, (v) => sayshape.value?.inspector.setInspecting(v));
 
 async function captureFrame() {
-  const l = loom.value;
+  const l = sayshape.value;
   if (!l) return;
   const calls = await l.inspector.captureFrame();
   const counts = new Map<string, number>();
@@ -318,7 +318,7 @@ function loadFromHash(): boolean {
 
 // A #spec= link followed while already on this page (from Ask, say) only changes the hash.
 function onHashChange() {
-  if (loadFromHash()) loom.value?.setSpec(text.value, { resetState: true });
+  if (loadFromHash()) sayshape.value?.setSpec(text.value, { resetState: true });
 }
 
 onMounted(() => {
@@ -329,7 +329,7 @@ onMounted(() => {
     if (key && sources.some((s) => s.key === key)) { sourceKey.value = key; text.value = sourceOf(key); original.value = text.value; }
   }
   // The engine may already be running with the default spec.
-  if (loom.value) loom.value.setSpec(text.value, { resetState: true });
+  if (sayshape.value) sayshape.value.setSpec(text.value, { resetState: true });
 });
 
 onBeforeUnmount(() => {
@@ -380,14 +380,14 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
         </select>
       </label>
       <div class="pg-group" role="group" aria-label="Reset">
-        <button class="loom-btn quiet small" type="button" :disabled="!loom" title="Restore the spec as it was loaded and start its state over" @click="resetExample">Reset example</button>
-        <button class="loom-btn quiet small" type="button" :disabled="!loom" title="Keep the spec as it is and start its state over" @click="resetState">Reset state</button>
-        <button class="loom-btn primary small" type="button" :disabled="!loom || streaming" title="Play the current spec into the preview line by line, as a model's response would arrive" @click="replay">▶ Replay as stream</button>
+        <button class="sayshape-btn quiet small" type="button" :disabled="!sayshape" title="Restore the spec as it was loaded and start its state over" @click="resetExample">Reset example</button>
+        <button class="sayshape-btn quiet small" type="button" :disabled="!sayshape" title="Keep the spec as it is and start its state over" @click="resetState">Reset state</button>
+        <button class="sayshape-btn primary small" type="button" :disabled="!sayshape || streaming" title="Play the current spec into the preview line by line, as a model's response would arrive" @click="replay">▶ Replay as stream</button>
       </div>
       <div class="pg-group" role="group" aria-label="Share">
-        <button class="loom-btn quiet small" type="button" @click="copySpec">Copy spec</button>
-        <button class="loom-btn quiet small" type="button" @click="download">Download</button>
-        <button class="loom-btn quiet small" type="button" title="A link with this spec in it" @click="copyLink">Copy link</button>
+        <button class="sayshape-btn quiet small" type="button" @click="copySpec">Copy spec</button>
+        <button class="sayshape-btn quiet small" type="button" @click="download">Download</button>
+        <button class="sayshape-btn quiet small" type="button" title="A link with this spec in it" @click="copyLink">Copy link</button>
       </div>
       <div class="pg-group pg-right">
         <label class="pg-field">
@@ -404,7 +404,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
             <option v-for="p in PRESETS" :key="p.id" :value="p.id">{{ p.label }}</option>
           </select>
         </label>
-        <button class="loom-btn quiet small pg-hide" type="button" :aria-pressed="hideEditor" @click="hideEditor = !hideEditor">{{ hideEditor ? "Show editor" : "Hide editor" }}</button>
+        <button class="sayshape-btn quiet small pg-hide" type="button" :aria-pressed="hideEditor" @click="hideEditor = !hideEditor">{{ hideEditor ? "Show editor" : "Hide editor" }}</button>
       </div>
     </div>
     <p class="pg-help"><span class="pg-notice" role="status" aria-live="polite">{{ notice }}</span></p>
@@ -463,8 +463,8 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
             <label><input v-model="inspecting" type="checkbox"> Inspect</label>
           </div>
         </div>
-        <div class="loom-stage pg-stage" :data-scheme="forcedScheme ?? undefined">
-          <div class="loom-canvas-wrap"><canvas ref="canvas" aria-label="Preview of the spec, drawn by SayShape on a canvas. The editor holds the readable source."></canvas></div>
+        <div class="sayshape-stage pg-stage" :data-scheme="forcedScheme ?? undefined">
+          <div class="sayshape-canvas-wrap"><canvas ref="canvas" aria-label="Preview of the spec, drawn by SayShape on a canvas. The editor holds the readable source."></canvas></div>
         </div>
       </section>
 
@@ -483,7 +483,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
           </ul>
         </div>
         <div class="pg-pane">
-          <div class="pg-pane-head"><h2>State</h2><span class="pg-hint">loom.state.snapshot()</span></div>
+          <div class="pg-pane-head"><h2>State</h2><span class="pg-hint">sayshape.state.snapshot()</span></div>
           <table class="pg-state">
             <tbody>
               <tr v-for="[k, v] in stateRows" :key="k" :class="{ flash: k === flashKey }"><th scope="row">{{ k }}</th><td>{{ v }}</td></tr>
@@ -496,7 +496,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
           </ol>
         </div>
         <div class="pg-pane">
-          <div class="pg-pane-head"><h2>Inspector</h2><button class="loom-btn-text" type="button" :disabled="!loom" @click="captureFrame">Capture frame</button></div>
+          <div class="pg-pane-head"><h2>Inspector</h2><button class="sayshape-btn-text" type="button" :disabled="!sayshape" @click="captureFrame">Capture frame</button></div>
           <pre class="pg-inspect">{{ inspectText }}</pre>
         </div>
       </section>
@@ -509,13 +509,13 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
           The instructions a model gets, generated from the component definitions: the compact guide the development playground sends.
           Paste it into a chat assistant, describe a screen, and paste the reply into the editor. Results depend on the model.
         </p>
-        <button class="loom-btn quiet small" type="button" :disabled="!guideText" @click="copyGuide">Copy model guide</button>
+        <button class="sayshape-btn quiet small" type="button" :disabled="!guideText" @click="copyGuide">Copy model guide</button>
         <pre class="pg-guide">{{ guideText || "Loading…" }}</pre>
       </details>
       <details>
         <summary>Theme code for this style</summary>
-        <p>TypeScript that sets the preview's style in your own app, using <code>extendTheme</code> and <code>loom.setTheme</code>.</p>
-        <button class="loom-btn quiet small" type="button" @click="copyTheme">Copy theme code</button>
+        <p>TypeScript that sets the preview's style in your own app, using <code>extendTheme</code> and <code>sayshape.setTheme</code>.</p>
+        <button class="sayshape-btn quiet small" type="button" @click="copyTheme">Copy theme code</button>
       </details>
     </div>
   </div>
@@ -524,7 +524,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 <style scoped>
 .pg { max-width: 1440px; margin: 0 auto; padding: 28px 28px 56px }
 .pg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 40px; align-items: end; margin-bottom: 22px }
-.pg-head h1 { font-family: var(--loom-display); font-weight: 800; font-size: clamp(40px, 5.6vw, 68px); letter-spacing: -0.045em; margin: 8px 0 12px; line-height: 0.98 }
+.pg-head h1 { font-family: var(--sayshape-display); font-weight: 800; font-size: clamp(40px, 5.6vw, 68px); letter-spacing: -0.045em; margin: 8px 0 12px; line-height: 0.98 }
 .pg-note { margin: 0; max-width: 64ch; color: var(--vp-c-text-2); line-height: 1.55; font-size: 16px }
 .pg-note a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
 .pg-metrics { display: flex; margin: 0; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; overflow: hidden; background: var(--ss-card) }
@@ -568,9 +568,9 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .pg-preview { border: 2px solid var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow) }
 .pg-pane-head h2 { margin: 0 auto 0 0; font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--vp-c-brand-1) }
 .pg-edited { color: var(--vp-c-text-2); font-weight: 500 }
-.pg-diag-summary { font-size: 12.5px; color: var(--loom-ok); font-weight: 600 }
-.pg-diag-summary.bad { color: var(--loom-bad) }
-.pg-diag-summary.warn { color: var(--loom-warn) }
+.pg-diag-summary { font-size: 12.5px; color: var(--sayshape-ok); font-weight: 600 }
+.pg-diag-summary.bad { color: var(--sayshape-bad) }
+.pg-diag-summary.warn { color: var(--sayshape-warn) }
 .pg-count { font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
 .pg-hint { font: 11.5px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
 .pg-tools { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--vp-c-text-2) }
@@ -578,13 +578,13 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .pg-tools input { accent-color: var(--vp-c-brand-1) }
 
 /* Editor: a transparent textarea over highlighted text, sharing one font and metrics. */
-.ed { position: relative; display: flex; height: 640px; background: var(--loom-code-bg) }
+.ed { position: relative; display: flex; height: 640px; background: var(--sayshape-code-bg) }
 .ed-gutter { flex: none; width: 46px; overflow: hidden; border-right: 1px solid var(--vp-c-divider); padding: 12px 0; font: 13px/1.7 var(--vp-font-family-mono); color: var(--vp-c-text-3); text-align: right; user-select: none }
 .ed-gutter div div { padding-right: 9px; position: relative; height: 1.7em }
-.ed-gutter .error { color: var(--loom-bad); font-weight: 600 }
-.ed-gutter .error::before { content: ""; position: absolute; left: 6px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--loom-bad) }
-.ed-gutter .warning { color: var(--loom-warn); font-weight: 600 }
-.ed-gutter .sel { background: var(--loom-hl); color: var(--vp-c-brand-1) }
+.ed-gutter .error { color: var(--sayshape-bad); font-weight: 600 }
+.ed-gutter .error::before { content: ""; position: absolute; left: 6px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--sayshape-bad) }
+.ed-gutter .warning { color: var(--sayshape-warn); font-weight: 600 }
+.ed-gutter .sel { background: var(--sayshape-hl); color: var(--vp-c-brand-1) }
 .ed-body { position: relative; flex: 1; min-width: 0; overflow: hidden }
 .ed-hl, .ed-input {
   margin: 0;
@@ -609,22 +609,22 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
   overflow: auto;
   outline: none;
 }
-.ed-input::selection { background: var(--loom-hl); color: transparent }
+.ed-input::selection { background: var(--sayshape-hl); color: transparent }
 .ed-input:focus-visible { box-shadow: inset 0 0 0 2px var(--vp-c-brand-1) }
 .ed-input[readonly] { cursor: progress }
 
 .pg-stage { height: 640px; overflow: auto }
-.pg-stage[data-scheme="light"] { --loom-stage: #edf1ef; --loom-stage-dot: #cbd4d0 }
-.pg-stage[data-scheme="dark"] { --loom-stage: #0b0f14; --loom-stage-dot: #222b35 }
+.pg-stage[data-scheme="light"] { --sayshape-stage: #edf1ef; --sayshape-stage-dot: #cbd4d0 }
+.pg-stage[data-scheme="dark"] { --sayshape-stage: #0b0f14; --sayshape-stage-dot: #222b35 }
 
 .pg-diags, .pg-events { list-style: none; margin: 0; padding: 6px 0; max-height: 280px; overflow: auto; font-size: 13.5px }
 .pg-diags li button { all: unset; box-sizing: border-box; display: grid; grid-template-columns: auto auto 1fr; gap: 10px; width: 100%; padding: 6px 14px; cursor: pointer; line-height: 1.45 }
-.pg-diags li button:hover { background: var(--loom-hl) }
+.pg-diags li button:hover { background: var(--sayshape-hl) }
 .pg-diags li button:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: -2px }
 .pg-diags .ln { font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2); padding-top: 2px }
 .pg-diags .sev { font-size: 12px; font-weight: 600; padding-top: 1px }
-.pg-diags .error .sev, .pg-diags .error .msg { color: var(--loom-bad) }
-.pg-diags .warning .sev { color: var(--loom-warn) }
+.pg-diags .error .sev, .pg-diags .error .msg { color: var(--sayshape-bad) }
+.pg-diags .warning .sev { color: var(--sayshape-warn) }
 .pg-diags .empty, .pg-events .empty { padding: 6px 14px; color: var(--vp-c-text-2) }
 .pg-state { display: table; width: calc(100% - 28px); margin: 8px 14px; border-collapse: collapse; font-size: 13px }
 .pg-state th { font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2); text-align: left; padding: 3px 12px 3px 0; vertical-align: top; border: 0; white-space: nowrap; background: none }
@@ -641,7 +641,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .pg-extra summary { cursor: pointer; padding: 12px 0; font-weight: 600 }
 .pg-extra p { margin: 0 0 12px; color: var(--vp-c-text-2); font-size: 14px; max-width: 80ch; line-height: 1.6 }
 .pg-extra details > button { margin-bottom: 14px }
-.pg-guide { margin: 0 0 16px; padding: 12px 14px; max-height: 360px; overflow: auto; font: 12px/1.55 var(--vp-font-family-mono); white-space: pre-wrap; background: var(--loom-code-bg); border: 1px solid var(--vp-c-divider); border-radius: 8px }
+.pg-guide { margin: 0 0 16px; padding: 12px 14px; max-height: 360px; overflow: auto; font: 12px/1.55 var(--vp-font-family-mono); white-space: pre-wrap; background: var(--sayshape-code-bg); border: 1px solid var(--vp-c-divider); border-radius: 8px }
 
 @media (max-width: 1100px) {
   .pg-details { grid-template-columns: 1fr 1fr }

@@ -47,7 +47,7 @@ const failures = [];
 const check = (ok, what) => { console.log(`${ok ? "✓" : "✗"} ${what}`); if (!ok) failures.push(what); };
 const frameBackground = async (page) => {
   const frame = page.frames().find((f) => f !== page.mainFrame());
-  return frame.evaluate(() => getComputedStyle(document.querySelector("#loom")).backgroundColor);
+  return frame.evaluate(() => getComputedStyle(document.querySelector("#sayshape")).backgroundColor);
 };
 const colorPixels = (frame, selector, rgb) => frame.evaluate(({ selector, rgb }) => {
   const c = document.querySelector(selector);
@@ -96,7 +96,7 @@ try {
 
   const frame = page.frames().find((f) => f !== page.mainFrame());
   const painted = await frame.evaluate(() => {
-    const c = document.querySelector("#loom");
+    const c = document.querySelector("#sayshape");
     const g = c.getContext("2d");
     const d = g.getImageData(0, 0, c.width, c.height).data;
     let ink = 0;
@@ -110,11 +110,11 @@ try {
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await page.waitForTimeout(350);
-  check(await colorPixels(frame, "#loom", [109, 40, 217]) > 0, "selecting Purple updates the chart palette");
+  check(await colorPixels(frame, "#sayshape", [109, 40, 217]) > 0, "selecting Purple updates the chart palette");
   check((await page.evaluate(() => window.host.messages)).length === 0, "theme selection stays local and sends nothing to the model");
 
   // Press the emit button with the keyboard: focus the canvas, Tab through the controls, Enter.
-  await frame.locator("#loom").focus();
+  await frame.locator("#sayshape").focus();
   let sent = [];
   for (let i = 0; i < 12 && !sent.length; i++) {
     await page.keyboard.press("Tab");
@@ -136,7 +136,7 @@ try {
   check(await frame.evaluate(() => document.documentElement.dataset.theme === "dark"), "the view follows the host's dark theme");
   const darkBacking = await frameBackground(page);
   check(darkBacking === "rgb(18, 25, 28)", `Canvas gutter updates when the host switches to dark theme (${darkBacking})`);
-  check(await colorPixels(frame, "#loom", [182, 156, 247]) > 0, "the selected Purple preset follows the host's dark palette");
+  check(await colorPixels(frame, "#sayshape", [182, 156, 247]) > 0, "the selected Purple preset follows the host's dark palette");
 
   
   // VS Code can cap an MCP App's iframe height. A tall canvas then extends
@@ -179,10 +179,10 @@ try {
   await styled.waitForTimeout(700);
   await styled.screenshot({ path: out + "5-host-styles.png" });
   const styledFrame = styled.frames().find((f) => f !== styled.mainFrame());
-  const hostBacking = await styledFrame.evaluate(() => getComputedStyle(document.querySelector("#loom")).backgroundColor);
+  const hostBacking = await styledFrame.evaluate(() => getComputedStyle(document.querySelector("#sayshape")).backgroundColor);
   check(hostBacking === "rgb(48, 48, 46)", `Canvas gutter respects the host's custom surface color (${hostBacking})`);
   const cardPixel = await styledFrame.evaluate(() => {
-    const c = document.querySelector("#loom");
+    const c = document.querySelector("#sayshape");
     // A point inside the card, left of the title and above it.
     const d = c.getContext("2d").getImageData(Math.round(c.width * 0.1), Math.round(c.height * 0.06), 1, 1).data;
     return [d[0], d[1], d[2]];
@@ -215,7 +215,7 @@ try {
   await fixing.p.screenshot({ path: out + "7-fixing.png" });
   check(fixing.folded < 200 && fixing.full > 300, `a view whose spec needs fixing folds into a short note (${fixing.full}px → ${fixing.folded}px)`);
   const foldedFrame = fixing.p.frames().find((f) => f !== fixing.p.mainFrame());
-  await foldedFrame.locator("#loom").focus();
+  await foldedFrame.locator("#sayshape").focus();
   let restored = fixing.folded;
   for (let i = 0; i < 4 && restored < 300; i++) {
     await fixing.p.keyboard.press("Tab");

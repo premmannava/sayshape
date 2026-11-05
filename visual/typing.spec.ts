@@ -7,34 +7,34 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function open(page: Page, spec: string): Promise<void> {
   await page.goto(`/visual/index.html?case=component-button&theme=light&width=600`);
-  await page.waitForFunction(() => window.__loomReady || window.__loomError);
-  await page.evaluate((s) => { window.__loom!.setSpec(s, { resetState: true }); window.__loom!.renderNow(); }, spec);
+  await page.waitForFunction(() => window.__sayShapeReady || window.__sayShapeError);
+  await page.evaluate((s) => { window.__sayshape!.setSpec(s, { resetState: true }); window.__sayshape!.renderNow(); }, spec);
 }
 
 /** The page position of the nth field's centre. */
 async function field(page: Page, n = 0): Promise<{ x: number; y: number }> {
   return page.evaluate((i) => {
-    const loom = window.__loom!;
-    loom.renderNow();
-    const hits = loom.hitRegions.filter((h) => h.box.node.type === "input");
+    const sayshape = window.__sayshape!;
+    sayshape.renderNow();
+    const hits = sayshape.hitRegions.filter((h) => h.box.node.type === "input");
     const b = hits[i]!.box;
     const r = (document.getElementById("canvas") as HTMLCanvasElement).getBoundingClientRect();
     return { x: r.left + b.x + b.w / 2, y: r.top + b.y + b.h / 2 };
   }, n);
 }
 
-const state = (page: Page, key: string) => page.evaluate((k) => window.__loom!.state.get(k), key);
-const editor = (page: Page) => page.locator("input[data-loom-editor]");
+const state = (page: Page, key: string) => page.evaluate((k) => window.__sayshape!.state.get(k), key);
+const editor = (page: Page) => page.locator("input[data-sayshape-editor]");
 
 /** Where the input is versus where the engine says the field's text sits, in page pixels. */
 async function offset(page: Page): Promise<{ dx: number; dy: number }> {
   return page.evaluate(() => {
-    const el = document.querySelector("input[data-loom-editor]") as HTMLInputElement;
-    const loom = window.__loom!;
-    const t = loom.editing!;
+    const el = document.querySelector("input[data-sayshape-editor]") as HTMLInputElement;
+    const sayshape = window.__sayshape!;
+    const t = sayshape.editing!;
     const r = (document.getElementById("canvas") as HTMLCanvasElement).getBoundingClientRect();
     // The field's own pressable box, under its label.
-    const box = loom.hitRegions.find((h) => h.box.node.id === t.node.id)!.box;
+    const box = sayshape.hitRegions.find((h) => h.box.node.id === t.node.id)!.box;
     const e = el.getBoundingClientRect();
     // The field's text starts 12 px in from its box (FIELD_PAD in components/input.ts).
     return { dx: e.left - (r.left + box.x + 12), dy: e.top - (r.top + box.y + 1) };
@@ -66,7 +66,7 @@ test("Tab moves through fields and buttons, and Enter presses the button", async
   await expect(editor(page)).toHaveCount(0);
   await expect(page.locator("#canvas")).toBeFocused();
   await page.keyboard.press("Enter");
-  expect(await page.evaluate(() => window.__loom!.state.snapshot())).toMatchObject({ first: "Ada", last: "Lovelace", saved: true });
+  expect(await page.evaluate(() => window.__sayshape!.state.snapshot())).toMatchObject({ first: "Ada", last: "Lovelace", saved: true });
   await page.keyboard.press("Shift+Tab");
   await expect(editor(page)).toHaveValue("Lovelace");
 });
@@ -118,15 +118,15 @@ test("input methods: state is written when composition finishes, not mid-way", a
   const p = await field(page);
   await page.mouse.click(p.x, p.y);
   const during = await page.evaluate(() => {
-    const el = document.querySelector("input[data-loom-editor]") as HTMLInputElement;
+    const el = document.querySelector("input[data-sayshape-editor]") as HTMLInputElement;
     el.dispatchEvent(new CompositionEvent("compositionstart"));
     el.value = "とうきょう";
     el.dispatchEvent(new InputEvent("input", { isComposing: true }));
-    return window.__loom!.state.get("city");
+    return window.__sayshape!.state.get("city");
   });
   expect(during).toBe("");
   await page.evaluate(() => {
-    const el = document.querySelector("input[data-loom-editor]") as HTMLInputElement;
+    const el = document.querySelector("input[data-sayshape-editor]") as HTMLInputElement;
     el.value = "東京";
     el.dispatchEvent(new CompositionEvent("compositionend"));
   });
@@ -142,7 +142,7 @@ test("Escape stops typing and keeps focus on the canvas; a hidden field closes i
   await expect(page.locator("#canvas")).toBeFocused();
   await page.mouse.click(p.x, p.y);
   await expect(editor(page)).toHaveCount(1);
-  await page.evaluate(() => { window.__loom!.state.set("show", false); window.__loom!.renderNow(); });
+  await page.evaluate(() => { window.__sayshape!.state.set("show", false); window.__sayshape!.renderNow(); });
   await expect(editor(page)).toHaveCount(0);
 });
 
@@ -160,10 +160,10 @@ test("kind sets the input type, and number fields write numbers", async ({ page 
 
 test("the typed text lines up with the text the canvas draws", async ({ page }) => {
   await open(page, `state name="Ada Lovelace"\ninput "Name" bind=name\n`);
-  await page.addStyleTag({ content: "input[data-loom-editor]{caret-color:transparent!important}" });
+  await page.addStyleTag({ content: "input[data-sayshape-editor]{caret-color:transparent!important}" });
   const clip = await page.evaluate(() => {
-    const loom = window.__loom!;
-    const b = loom.hitRegions.find((h) => h.box.node.type === "input")!.box;
+    const sayshape = window.__sayshape!;
+    const b = sayshape.hitRegions.find((h) => h.box.node.type === "input")!.box;
     const r = (document.getElementById("canvas") as HTMLCanvasElement).getBoundingClientRect();
     // Just the text, inside the border.
     return { x: r.left + b.x + 8, y: r.top + b.y + 6, width: 140, height: b.h - 12 };
@@ -171,7 +171,7 @@ test("the typed text lines up with the text the canvas draws", async ({ page }) 
   const before = (await page.screenshot({ clip })).toString("base64");
   const p = await field(page);
   await page.mouse.click(p.x, p.y);
-  await page.evaluate(() => (document.querySelector("input[data-loom-editor]") as HTMLInputElement).setSelectionRange(0, 0));
+  await page.evaluate(() => (document.querySelector("input[data-sayshape-editor]") as HTMLInputElement).setSelectionRange(0, 0));
   const after = (await page.screenshot({ clip })).toString("base64");
   const changed = await page.evaluate(async ([a, b]) => {
     const load = (src: string) => new Promise<HTMLImageElement>((res) => { const i = new Image(); i.onload = () => res(i); i.src = `data:image/png;base64,${src}`; });

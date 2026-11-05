@@ -7,29 +7,29 @@ import { connectOrderDemo } from "../playground/connected-order/host";
 describe("connected equipment example", () => {
   it("parses the example and loads service data", async () => {
     const ui = render(orderSpec);
-    const host = connectOrderDemo(ui.loom, createDemoService(0, "2026-10-21"));
+    const host = connectOrderDemo(ui.sayshape, createDemoService(0, "2026-10-21"));
     await host.load();
-    expect(ui.loom.diagnostics).toEqual([]);
-    expect(ui.loom.state.get("equipment")).toHaveLength(6);
-    expect(ui.loom.state.get("loading")).toBe(false);
+    expect(ui.sayshape.diagnostics).toEqual([]);
+    expect(ui.sayshape.state.get("equipment")).toHaveLength(6);
+    expect(ui.sayshape.state.get("loading")).toBe(false);
     host.dispose();
-    ui.loom.destroy();
+    ui.sayshape.destroy();
   });
   it("returns an order and updates stock; ignores a duplicate in-flight submission", async () => {
     const ui = render(orderSpec);
     const service = createDemoService(0, "2026-10-21");
-    const host = connectOrderDemo(ui.loom, service);
+    const host = connectOrderDemo(ui.sayshape, service);
     await host.load();
-    ui.loom.state.set("selected", "laptop");
-    ui.loom.state.set("quantity", 2);
-    ui.loom.state.set("delivery", "2026-11-10");
+    ui.sayshape.state.set("selected", "laptop");
+    ui.sayshape.state.set("quantity", 2);
+    ui.sayshape.state.set("delivery", "2026-11-10");
     await Promise.all([host.submit(), host.submit()]);
     expect(await service.orders()).toMatchObject([{ id: "DEMO-001", total: 2592 }]);
     expect((await service.catalog())[0]?.stock).toBe(6);
-    expect(ui.loom.state.get("orders")).toHaveLength(1);
-    expect(ui.loom.state.get("submitting")).toBe(false);
+    expect(ui.sayshape.state.get("orders")).toHaveLength(1);
+    expect(ui.sayshape.state.get("submitting")).toBe(false);
     host.dispose();
-    ui.loom.destroy();
+    ui.sayshape.destroy();
   });
   it("does not create orders on failure and permits a successful retry", async () => {
     const service = createDemoService(0, "2026-10-21");

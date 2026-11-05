@@ -15,7 +15,7 @@ derive tax={subtotal * taxRate}
 derive total={subtotal + tax}
 stat label="Total" value={total}
 `;
-const derived = (ui: Rendered) => ui.loom.state.derivedSnapshot();
+const derived = (ui: Rendered) => ui.sayshape.state.derivedSnapshot();
 const messages = (spec: string) => parse(spec, registry).diagnostics.map((d) => `${d.line}: ${d.message}`);
 
 describe("derive lines", () => {
@@ -272,10 +272,10 @@ each items=made as=x
     ]);
   });
 
-  it("refuses the app's own writes through loom.state.set", () => {
+  it("refuses the app's own writes through sayshape.state.set", () => {
     const ui = render(spec);
-    expect(() => ui.loom.state.set("b", 5)).toThrow(DerivedWriteError);
-    expect(() => ui.loom.state.set("b", 5)).toThrow(/Can't set b: it's derived \(derive b on line 3\)/);
+    expect(() => ui.sayshape.state.set("b", 5)).toThrow(DerivedWriteError);
+    expect(() => ui.sayshape.state.set("b", 5)).toThrow(/Can't set b: it's derived \(derive b on line 3\)/);
     expect(derived(ui).b).toBe(2);
     // Snapshots of state don't include derived values.
     expect(Object.keys(ui.state).sort()).toEqual(["a", "todos"]);

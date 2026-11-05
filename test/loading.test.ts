@@ -66,9 +66,9 @@ describe("elements while their data loads", () => {
   it("draw placeholders instead of empty states, with no warnings about the missing data", () => {
     // As a chat app does it: the names first, then the spec.
     const ui = render("");
-    ui.loom.setLoading(["sales"]);
-    ui.loom.setSpec(SPEC);
-    ui.loom.renderNow();
+    ui.sayshape.setLoading(["sales"]);
+    ui.sayshape.setSpec(SPEC);
+    ui.sayshape.renderNow();
     const shown = texts(ui);
     expect(shown).not.toContain("No data to chart");
     expect(shown).not.toContain("No data");
@@ -84,26 +84,26 @@ describe("elements while their data loads", () => {
 
   it("keep about the size they'll have, so little moves when the data arrives", () => {
     const ui = render(SPEC);
-    ui.loom.setLoading(["sales"]);
-    ui.loom.renderNow();
+    ui.sayshape.setLoading(["sales"]);
+    ui.sayshape.renderNow();
     const chart = ui.find("chart").box!;
     const table = ui.find("table").box!;
     expect(chart.h).toBeGreaterThan(150);
     expect(table.h).toBeGreaterThan(200);
-    ui.loom.state.set("sales", sales);
-    ui.loom.setLoading([]);
-    ui.loom.renderNow();
+    ui.sayshape.state.set("sales", sales);
+    ui.sayshape.setLoading([]);
+    ui.sayshape.renderNow();
     expect(Math.abs(ui.find("chart").box!.h - chart.h)).toBeLessThan(30);
     ui.destroy();
   });
 
   it("show the real content once the data arrives", () => {
     const ui = render(SPEC);
-    ui.loom.setLoading(["sales"]);
-    ui.loom.renderNow();
-    ui.loom.state.set("sales", sales);
-    ui.loom.setLoading([]);
-    ui.loom.renderNow();
+    ui.sayshape.setLoading(["sales"]);
+    ui.sayshape.renderNow();
+    ui.sayshape.state.set("sales", sales);
+    ui.sayshape.setLoading([]);
+    ui.sayshape.renderNow();
     const shown = texts(ui);
     expect(shown).toEqual(expect.arrayContaining(["Best: Feb", "$450.00", "Jan", "Feb"]));
     ui.destroy();
@@ -112,8 +112,8 @@ describe("elements while their data loads", () => {
   it("use theme colors only, in both themes", async () => {
     const { darkTheme } = await import("../src/theme");
     const ui = render(SPEC, { theme: darkTheme });
-    ui.loom.setLoading(["sales"]);
-    ui.loom.renderNow();
+    ui.sayshape.setLoading(["sales"]);
+    ui.sayshape.renderNow();
     const palette = new Set<string>(Object.values(darkTheme.colors));
     for (const op of ui.drawOps) expect(palette.has(op.fillStyle || op.strokeStyle), op.op).toBe(true);
     ui.destroy();

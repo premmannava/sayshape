@@ -1,6 +1,6 @@
 # Example: an ecommerce store built with SayShape
 
-This is the design for **SayShape Shop**, the reference app in [Phase 6 of the plan](../PLAN.md#phase-6-loom-shop-the-reference-app): a small outdoor-gear store called *Trailhead Outfitters*. It shows how a complete, working store fits together: fixed screens for the parts that must be exact, a shopping assistant whose screens a model generates on the fly, and the host code that connects both to real data and payments.
+This is the design for **SayShape Shop**, the reference app in [Phase 6 of the plan](../PLAN.md#phase-6-sayshape-shop-the-reference-app): a small outdoor-gear store called *Trailhead Outfitters*. It shows how a complete, working store fits together: fixed screens for the parts that must be exact, a shopping assistant whose screens a model generates on the fly, and the host code that connects both to real data and payments.
 
 > **This uses proposed syntax.** Lists (`each`), data (`source`), host commands (`call:`), screens, `notify:` and the components `input`, `image`, `grid`, `select`, `stepper`, `slider`, `badge`, `rating`, `skeleton` and `empty` are designed in [Phase 2](../PLAN.md#phase-2-language-02-data-lists-screens) and [Phase 3](../PLAN.md#phase-3-components-and-engine-capabilities). None of them work in SayShape 0.1. This document is the target those phases build toward.
 
@@ -109,7 +109,7 @@ interface Cart {
 
 ## The fixed screens
 
-All five screens live in one spec, `shop.loom`. It's written once (by a developer, or drafted by a model and then reviewed) and loaded with `loom.setSpec()`.
+All five screens live in one spec, `shop.sayshape`. It's written once (by a developer, or drafted by a model and then reviewed) and loaded with `sayshape.setSpec()`.
 
 ### Shared state and sources
 
@@ -284,9 +284,9 @@ When the payment provider redirects back (for example to `/order/ord_8841`), the
 The host registers sources and commands with their schemas, loads the fixed spec, and connects the assistant. The API names below are the ones proposed in Phase 2 and Phase 4.
 
 ```ts
-import { SayShape, coreComponents } from "loom-ui";
-import { connectAssistant } from "loom-ui/client";
-import shopSpec from "./shop.loom?raw";
+import { SayShape, coreComponents } from "sayshape";
+import { connectAssistant } from "sayshape/client";
+import shopSpec from "./shop.sayshape?raw";
 import { api } from "./api";
 
 const shop = new SayShape(document.querySelector("#shop")!, {
@@ -420,8 +420,8 @@ shop.on("action", ({ name, value }) => {
 The server builds the prompt from the same registrations, gives the model tools to look at the catalog, streams SayShape to the browser, and repairs once if the spec has errors.
 
 ```ts
-import { languageGuide, parse, sourceGuide, commandGuide } from "loom-ui/server";
-import { registry, sources, commands } from "./loom-setup";
+import { languageGuide, parse, sourceGuide, commandGuide } from "sayshape/server";
+import { registry, sources, commands } from "./sayshape-setup";
 import { streamModel } from "./model"; // your model provider's streaming client
 
 export async function assistant(req: Request): Promise<Response> {
@@ -568,13 +568,13 @@ These rules are why the assistant can be trusted with generated screens in a sto
 
 Following the [testing strategy](../PLAN.md#testing-strategy):
 
-**Spec tests:** `shop.loom` parses with the commerce rules and no diagnostics; every prefix parses while streaming.
+**Spec tests:** `shop.sayshape` parses with the commerce rules and no diagnostics; every prefix parses while streaming.
 
 **Interaction tests** with mocked sources and commands:
 
 ```ts
-import { render } from "loom-ui/testing";
-import shopSpec from "../shop.loom?raw";
+import { render } from "sayshape/testing";
+import shopSpec from "../shop.sayshape?raw";
 
 test("adding to cart needs a size and calls cart.add", async () => {
   const cartAdd = vi.fn();

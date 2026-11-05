@@ -9,9 +9,9 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import { withBase } from "vitepress";
 import { heroExamples } from "../../../examples/catalog";
-import { highlightLine } from "../loom/highlight";
-import { useLoom } from "../loom/useLoom";
-import { prefersReducedMotion, replayStream } from "../loom/runtime";
+import { highlightLine } from "../sayshape/highlight";
+import { useSayShape } from "../sayshape/useSayShape";
+import { prefersReducedMotion, replayStream } from "../sayshape/runtime";
 
 const active = ref(0);
 const typed = ref("");
@@ -36,7 +36,7 @@ const status = computed(() =>
 );
 
 const motion = () => !prefersReducedMotion();
-const { loom } = useLoom(canvas, (l) => {
+const { sayshape } = useSayShape(canvas, (l) => {
   const off = l.on("diagnostics", (d) => { problems.value = d.length; });
   void play(active.value, motion());
   return off;
@@ -52,7 +52,7 @@ function stop() {
 async function play(i: number, animate = true) {
   // Before the engine has loaded, remember the choice; it plays once the engine starts.
   active.value = i;
-  const l = loom.value;
+  const l = sayshape.value;
   if (!l) return;
   stop();
   signal = { cancelled: false };
@@ -86,7 +86,7 @@ async function play(i: number, animate = true) {
   if (finished) phase.value = "done";
 }
 
-function reset() { loom.value?.setSpec(current.value.example.spec, { resetState: true }); }
+function reset() { sayshape.value?.setSpec(current.value.example.spec, { resetState: true }); }
 
 onBeforeUnmount(stop);
 </script>
@@ -98,8 +98,8 @@ onBeforeUnmount(stop);
       <div class="hero-side">
         <p class="hero-lede">Your AI writes a few lines. SayShape turns them into a working screen.</p>
         <div class="hero-cta">
-          <a class="loom-btn primary" :href="withBase('/learn/')">Start the build-along →</a>
-          <a class="loom-btn quiet" :href="withBase('/playground.html')">Open the playground</a>
+          <a class="sayshape-btn primary" :href="withBase('/learn/')">Start the build-along →</a>
+          <a class="sayshape-btn quiet" :href="withBase('/playground.html')">Open the playground</a>
         </div>
         <a class="hero-status" :href="withBase('/docs/architecture/limitations.html')">v0.1 · not screen-reader ready yet · Status</a>
       </div>
@@ -122,13 +122,13 @@ onBeforeUnmount(stop);
         <div class="hd-row">
           <p class="ss-eyebrow">3 · You get</p>
           <span class="hd-actions">
-            <button type="button" class="loom-btn-text" :disabled="!loom" @click="play(active, motion())">Replay</button>
-            <button type="button" class="loom-btn-text" :disabled="!loom || phase !== 'done'" @click="reset">Reset</button>
+            <button type="button" class="sayshape-btn-text" :disabled="!sayshape" @click="play(active, motion())">Replay</button>
+            <button type="button" class="sayshape-btn-text" :disabled="!sayshape || phase !== 'done'" @click="reset">Reset</button>
           </span>
         </div>
         <div class="ss-card hd-card">
-          <div class="loom-stage hd-stage">
-            <div class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`${current.example.title}, drawn by SayShape on a canvas. The spec beside it is the readable source.`"></canvas></div>
+          <div class="sayshape-stage hd-stage">
+            <div class="sayshape-canvas-wrap"><canvas ref="canvas" :aria-label="`${current.example.title}, drawn by SayShape on a canvas. The spec beside it is the readable source.`"></canvas></div>
           </div>
         </div>
       </div>
@@ -139,7 +139,7 @@ onBeforeUnmount(stop);
 <style scoped>
 .hero { display: grid; gap: 28px; margin-bottom: 72px }
 .hero-top { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 24px 48px; align-items: end }
-.hero-title { margin: 0; font: 800 clamp(76px, 12vw, 168px)/0.84 var(--loom-display); letter-spacing: -0.055em; color: var(--vp-c-text-1) }
+.hero-title { margin: 0; font: 800 clamp(76px, 12vw, 168px)/0.84 var(--sayshape-display); letter-spacing: -0.055em; color: var(--vp-c-text-1) }
 .hero-title .ss-mark { color: var(--vp-c-brand-1); background-size: 100% 0.16em; background-position: 0 84% }
 .hero-side { display: grid; gap: 18px; padding-bottom: 12px }
 .hero-lede { margin: 0; font-size: 19px; line-height: 1.5; color: var(--vp-c-text-2); text-wrap: pretty }
@@ -154,7 +154,7 @@ onBeforeUnmount(stop);
 .hd-chips button { height: 38px; padding: 0 16px; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--vp-c-text-1); background: var(--ss-card) }
 .hd-chips button:hover { border-color: var(--ss-rule) }
 .hd-chips button[aria-pressed="true"] { background: var(--vp-c-text-1); border-color: var(--vp-c-text-1); color: var(--ss-on-ink) }
-.hd-prompt { margin: 0; min-height: 2.4em; font: 500 clamp(20px, 2.1vw, 27px)/1.22 var(--loom-display); letter-spacing: -0.015em; color: var(--vp-c-text-1) }
+.hd-prompt { margin: 0; min-height: 2.4em; font: 500 clamp(20px, 2.1vw, 27px)/1.22 var(--sayshape-display); letter-spacing: -0.015em; color: var(--vp-c-text-1) }
 .caret { display: inline-block; width: 3px; height: 0.95em; margin-left: 3px; vertical-align: -3px; background: var(--vp-c-text-1); animation: blink 1s steps(1) infinite }
 @keyframes blink { 50% { opacity: 0 } }
 .hd-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px }

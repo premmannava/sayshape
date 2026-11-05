@@ -146,7 +146,7 @@ describe("repair", () => {
       const format: Format = (typeof system === "string" ? system : JSON.stringify(system)).includes("You write interactive UI") ? "html" : "sayshape";
       seen[format] = (seen[format] ?? 0) + 1;
       lastUser.push(String(body.messages.at(-1)!.content));
-      // Mid-spec, where models write it: a leading non-Loom line is dropped as prose before the spec.
+      // Mid-spec, where models write it: a leading non-SayShape line is dropped as prose before the spec.
       const broken = format === "sayshape" ? `${reference.k3!.sayshape}\nlet left = budget - spent` : `<p id="x"></p><script>document.getElementById('missing').textContent = 'x';</script>`;
       const text = seen[format] === 1 ? broken : reference.k3![format];
       return new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 1000, completion_tokens: 100 } })}\n\ndata: [DONE]\n\n`, { status: 200 });
@@ -157,7 +157,7 @@ describe("repair", () => {
     }
     expect(seen).toEqual({ sayshape: 2, html: 2 });
     // The second message to each carries the first one's problems.
-    expect(lastUser.find((m) => m.includes("Loom has no variables"))).toBeDefined();
+    expect(lastUser.find((m) => m.includes("SayShape has no variables"))).toBeDefined();
     expect(lastUser.find((m) => m.startsWith("Your HTML had these problems when it ran:"))).toBeDefined();
     const sum = summarize(results);
     expect(sum.map((x) => [x.firstSuccessRate, x.successRate, x.repaired])).toEqual([[0, 1, 1], [0, 1, 1]]);
@@ -185,7 +185,7 @@ describe("prompt caching", () => {
     expect(costOf({ promptTokens: 11000 }, prices)).toBeUndefined();
   });
 
-  it("reads the LOOM_PROMPT_CACHE setting", () => {
+  it("reads the SAYSHAPE_PROMPT_CACHE setting", () => {
     expect(parseCache("1h")).toBe("1h");
     for (const on of ["1", "true", "on", "yes", "5m", " 1 "]) expect(parseCache(on)).toBe(true);
     for (const off of [undefined, "", "0", "false", "off", "2h"]) expect(parseCache(off)).toBeUndefined();

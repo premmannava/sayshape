@@ -11,7 +11,7 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "@fontsource/bricolage-grotesque/700.css";
 import "@fontsource/bricolage-grotesque/800.css";
 import "./style.css";
-import LoomLive from "./components/LoomLive.vue";
+import SayShapeLive from "./components/SayShapeLive.vue";
 import Landing from "./components/Landing.vue";
 import Gallery from "./components/Gallery.vue";
 import Playground from "./components/Playground.vue";
@@ -28,7 +28,7 @@ export default {
   // "Ask the docs" sits in the nav on every page, before the menu links.
   Layout: () => h(DefaultTheme.Layout, null, { "nav-bar-content-before": () => h(Ask) }),
   enhanceApp({ app }) {
-    app.component("LoomLive", LoomLive);
+    app.component("SayShapeLive", SayShapeLive);
     app.component("Landing", Landing);
     app.component("Gallery", Gallery);
     app.component("Playground", Playground);

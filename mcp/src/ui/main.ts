@@ -25,10 +25,10 @@ import { DEFAULT_PRESET, isPresetId, THEME_CONTROL_SPEC, themeForPreset } from "
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
 
 const themeCanvas = document.querySelector<HTMLCanvasElement>("#theme-picker")!;
-const canvas = document.querySelector<HTMLCanvasElement>("#loom")!;
+const canvas = document.querySelector<HTMLCanvasElement>("#sayshape")!;
 const app = new App({ name: "SayShape", version: "0.1.0" }, {}, { autoResize: true });
 
-let loom: SayShape | null = null;
+let sayshape: SayShape | null = null;
 let themePicker: SayShape | null = null;
 let activePreset = DEFAULT_PRESET;
 /** The spec text the engine has been given so far in the current stream. */
@@ -68,24 +68,24 @@ let folded: string | null = null;
 let pendingOutcome: "fixing" | "repeat" | null = null;
 
 function fold(outcome: "fixing" | "repeat"): void {
-  if (!loom) { pendingOutcome = outcome; return; }
-  folded = loom.spec;
+  if (!sayshape) { pendingOutcome = outcome; return; }
+  folded = sayshape.spec;
   loadingData.clear();
   awaiting = false;
   syncLoading();
-  loom.setSpec(outcome === "fixing" ? FIXING_SPEC : REPEAT_SPEC, { resetState: true });
+  sayshape.setSpec(outcome === "fixing" ? FIXING_SPEC : REPEAT_SPEC, { resetState: true });
 }
 
 function unfold(): void {
-  if (!loom || folded === null) return;
-  loom.setSpec(folded, { resetState: true });
+  if (!sayshape || folded === null) return;
+  sayshape.setSpec(folded, { resetState: true });
   folded = null;
   applyHostData();
 }
 
 function syncLoading(): void {
-  loom?.setLoading(loadingData);
-  loom?.setAwaiting(awaiting);
+  sayshape?.setLoading(loadingData);
+  sayshape?.setAwaiting(awaiting);
 }
 
 const prefersDark = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches;
@@ -154,38 +154,38 @@ async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
   // or making the entire iframe opaque.
   canvas.style.backgroundColor = theme.colors.surface;
   themeCanvas.style.backgroundColor = theme.colors.surface;
-  loom?.setTheme(theme);
+  sayshape?.setTheme(theme);
   themePicker?.setTheme(theme);
   return theme;
 }
 
 function show(spec: string, final: boolean): void {
-  if (!loom) { pending = { spec, final }; return; }
-  if (introShowing) { introShowing = false; loom.beginStream(); shown = ""; applyHostData(); }
+  if (!sayshape) { pending = { spec, final }; return; }
+  if (introShowing) { introShowing = false; sayshape.beginStream(); shown = ""; applyHostData(); }
   const next = nextChunk(shown, spec);
-  if (next.restart) { loom.beginStream(); shown = ""; applyHostData(); }
-  if (next.add) { loom.push(next.add); shown += next.add; }
+  if (next.restart) { sayshape.beginStream(); shown = ""; applyHostData(); }
+  if (next.add) { sayshape.push(next.add); shown += next.add; }
   if (final) {
-    if (loom.isStreaming) loom.endStream();
+    if (sayshape.isStreaming) sayshape.endStream();
     // The streamed text can differ from the final arguments (healed JSON); the final spec wins.
-    if (loom.spec !== spec) { loom.setSpec(spec, { resetState: true }); applyHostData(); }
+    if (sayshape.spec !== spec) { sayshape.setSpec(spec, { resetState: true }); applyHostData(); }
   }
 }
 
 function applyHostData(): void {
-  if (!loom) return;
+  if (!sayshape) return;
   for (const [name, rows] of hostData) {
-    try { loom.state.set(name, rows); } catch { loom.notify(`Couldn't show the data for ${name}`); }
+    try { sayshape.state.set(name, rows); } catch { sayshape.notify(`Couldn't show the data for ${name}`); }
   }
 }
 
 /** Fetch each dataset's rows from the server (fetch_dataset, which only the interface may call) and show them. */
 async function loadData(wanted: Record<string, string>): Promise<void> {
-  if (!loom) { pendingData = wanted; return; }
+  if (!sayshape) { pendingData = wanted; return; }
   if (!app.getHostCapabilities()?.serverTools) {
     loadingData.clear();
     syncLoading();
-    loom.notify("This chat app doesn't let interfaces load data");
+    sayshape.notify("This chat app doesn't let interfaces load data");
     return;
   }
   await Promise.all(Object.entries(wanted).map(async ([name, id]) => {
@@ -194,9 +194,9 @@ async function loadData(wanted: Record<string, string>): Promise<void> {
       const rows = (r.structuredContent as { rows?: unknown } | undefined)?.rows;
       if (r.isError || !Array.isArray(rows)) throw new Error("no rows");
       hostData.set(name, rows as Value);
-      try { loom?.state.set(name, rows as Value); } catch { loom?.notify(`Couldn't show the data for ${name}`); }
+      try { sayshape?.state.set(name, rows as Value); } catch { sayshape?.notify(`Couldn't show the data for ${name}`); }
     } catch {
-      loom?.notify(`Couldn't load the data for ${name}`);
+      sayshape?.notify(`Couldn't load the data for ${name}`);
     }
     // Each dataset draws in as soon as it's here, without waiting for the others.
     loadingData.delete(name);
@@ -252,8 +252,8 @@ app.onhostcontextchanged = () => {
   void applyTheme(app.getHostContext());
 };
 app.onteardown = async () => {
-  loom?.destroy();
-  loom = null;
+  sayshape?.destroy();
+  sayshape = null;
   themePicker?.destroy();
   themePicker = null;
   return {};
@@ -268,7 +268,7 @@ app.onteardown = async () => {
 async function deliver(name: string, value: Value | undefined, state: Record<string, Value>): Promise<void> {
   const caps = app.getHostCapabilities();
   const plan = eventDelivery({ message: !!caps?.message, updateModelContext: !!caps?.updateModelContext }, name, value, state);
-  if (!plan) { loom?.notify("This chat app can't receive actions from interfaces"); return; }
+  if (!plan) { sayshape?.notify("This chat app can't receive actions from interfaces"); return; }
   const content = (text: string) => [{ type: "text" as const, text }];
   try {
     if (plan.context !== undefined) {
@@ -276,12 +276,12 @@ async function deliver(name: string, value: Value | undefined, state: Record<str
     }
     if (plan.message !== undefined) {
       const r = await app.sendMessage({ role: "user", content: content(plan.message) });
-      loom?.notify(r?.isError ? "Couldn't send that to the assistant" : "Sent to the assistant");
+      sayshape?.notify(r?.isError ? "Couldn't send that to the assistant" : "Sent to the assistant");
     } else {
-      loom?.notify("Saved for the assistant's next reply");
+      sayshape?.notify("Saved for the assistant's next reply");
     }
   } catch {
-    loom?.notify("Couldn't send that to the assistant");
+    sayshape?.notify("Couldn't send that to the assistant");
   }
 }
 
@@ -304,21 +304,21 @@ async function start(): Promise<void> {
     void applyTheme(app.getHostContext());
   });
   themePicker.setSpec(THEME_CONTROL_SPEC);
-  loom = new SayShape(canvas, {
+  sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents],
     theme,
     // The view has no network access of its own; the client's sandbox blocks it too.
     imageHosts: [],
     onWarning: () => {},
   });
-  loom.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
-    if (!loom) return;
+  sayshape.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
+    if (!sayshape) return;
     if (name === SHOW_ANYWAY) { unfold(); return; }
-    void deliver(name, value, loom.state.snapshot());
+    void deliver(name, value, sayshape.state.snapshot());
   });
   syncLoading();
   if (pending) { const p = pending; pending = null; show(p.spec, p.final); }
-  else { loom.setSpec(INTRO); introShowing = true; }
+  else { sayshape.setSpec(INTRO); introShowing = true; }
   if (pendingData) { const d = pendingData; pendingData = null; void loadData(d); }
   if (pendingOutcome) { const o = pendingOutcome; pendingOutcome = null; fold(o); }
 }

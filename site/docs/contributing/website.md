@@ -5,7 +5,7 @@ description: How the SayShape website is built with VitePress and deployed to Gi
 
 # Publishing this site
 
-This website lives in `site/` and is built with [VitePress](https://vitepress.dev). It has its own `package.json` and lockfile, so its dependencies (VitePress, Vue, fonts) never become dependencies of the `loom-ui` library. Its demos import the engine straight from `src/`, so they always run the code in the repository.
+This website lives in `site/` and is built with [VitePress](https://vitepress.dev). It has its own `package.json` and lockfile, so its dependencies (VitePress, Vue, fonts) never become dependencies of the `sayshape` library. Its demos import the engine straight from `src/`, so they always run the code in the repository.
 
 ## Run it locally
 
@@ -43,8 +43,8 @@ After the next push to `main` (or running the workflow by hand from the **Action
 | `site/index.md`, `site/playground.md`, `site/examples/` | The landing page, playground and gallery, as Vue components in the theme |
 | `site/examples/catalog.ts` | The gallery's specs: plain data, tested in `test/site.test.ts` |
 | `site/docs/` | The documentation; `docs/components/` is generated |
-| `site/.vitepress/theme/loom/` | Creating SayShape instances in the browser, highlighting, events |
-| `site/.vitepress/markdown.ts` | ` ```loom live ` blocks: highlighted source plus a live render |
+| `site/.vitepress/theme/sayshape/` | Creating SayShape instances in the browser, highlighting, events |
+| `site/.vitepress/markdown.ts` | ` ```sayshape live ` blocks: highlighted source plus a live render |
 | `scripts/gen-site-docs.ts` | Generates the component reference and guide pages |
 | `scripts/check-site.mjs` | Checks the built site's links, assets and contents |
 

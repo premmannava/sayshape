@@ -6,15 +6,15 @@ import { mapComponents } from "../../src/components/map";
 import { generateSpec } from "../../src/model";
 import { playgroundGuide } from "../model-guide";
 import { resultTimings, timingLines, type RunTiming } from "./timings";
-import monthlyBudgetSpec from "./monthly-budget.loom?raw";
+import monthlyBudgetSpec from "./monthly-budget.sayshape?raw";
 
-declare const __LOOM_MODEL__: string;
-const configuredModel = typeof __LOOM_MODEL__ === "string" ? __LOOM_MODEL__.trim() : "";
+declare const __SAYSHAPE_MODEL__: string;
+const configuredModel = typeof __SAYSHAPE_MODEL__ === "string" ? __SAYSHAPE_MODEL__.trim() : "";
 
-const loom = new SayShape(document.querySelector<HTMLCanvasElement>("#app")!, {
+const sayshape = new SayShape(document.querySelector<HTMLCanvasElement>("#app")!, {
   components: [...coreComponents, ...mapComponents], theme: "auto",
 });
-loom.setSpec('text "Your generated interface will appear here." tone=muted');
+sayshape.setSpec('text "Your generated interface will appear here." tone=muted');
 const controls = new SayShape(document.querySelector<HTMLCanvasElement>("#generator")!, { components: coreComponents, theme: "auto" });
 controls.setSpec(`state request="" generating=false status="" elapsed=""
 column
@@ -63,13 +63,13 @@ async function generate() {
     run.discoveryMs = performance.now() - started;
     const models = Array.isArray(data) ? data.flatMap((m) => m && typeof m.id === "string" ? [m.id] : []) : [];
     const model = configuredModel || (models.find((m) => m === "qwen3-14b-uncensored") ?? models.find((m) => /qwen/i.test(m) && !/embedding/i.test(m)));
-    if (!model) throw new Error("Configure LOOM_MODEL or load a Qwen chat model in the local server, then try again.");
+    if (!model) throw new Error("Configure SAYSHAPE_MODEL or load a Qwen chat model in the local server, then try again.");
     run.model = model;
     const guide = playgroundGuide([]);
     guide.notes += "\nThis is a general UI sandbox. Follow the user's requested domain; do not add equipment or ordering unless requested. Generate the complete spec, including state and derived values. Use working local interactions. No backend services are connected; do not claim to send, save remotely or purchase anything.";
     const result = await generateSpec({
       config: { url: "/api/model", model, maxTokens: 3000, streamUsage: true },
-      registry: loom.registry, guide, request, signal: current.signal,
+      registry: sayshape.registry, guide, request, signal: current.signal,
       onPhase: (phase) => { if (!disposed) controls.state.set("status", phase === "repairing" ? "The model is correcting the interface…" : "The model is building your interface…"); },
     });
     Object.assign(run, resultTimings(result));
@@ -77,8 +77,8 @@ async function generate() {
     if (!result.spec.trim()) throw new Error("The model returned an empty interface. Try a simpler request.");
     if (result.diagnostics.length) throw new Error(`The model could not finish a valid interface: ${result.diagnostics.slice(0, 2).map((d) => d.message).join(" ")}`);
     const renderStarted = performance.now();
-    loom.setSpec(result.spec, { resetState: true });
-    loom.renderNow();
+    sayshape.setSpec(result.spec, { resetState: true });
+    sayshape.renderNow();
     run.renderMs = performance.now() - renderStarted;
     run.outcome = "success";
     controls.state.set("status", "Ready. Try your interface below, or describe something new.");
@@ -105,19 +105,19 @@ const stopControls = controls.on("action", ({ name }) => {
   if (name === "generate") void generate();
   if (name === "cancel") controller?.abort();
   if (name === "budget" && !controller) {
-    loom.setSpec(monthlyBudgetSpec, { resetState: true });
-    loom.renderNow();
+    sayshape.setSpec(monthlyBudgetSpec, { resetState: true });
+    sayshape.renderNow();
     controls.state.set("status", "Monthly budget example loaded. Change the filters, select rows and adjust the budget.");
   }
 });
-const stopActions = loom.on("action", ({ name }) => {
+const stopActions = sayshape.on("action", ({ name }) => {
   controls.state.set("status", `The interface requested “${name}”. This sandbox has no backend connected for that action.`);
 });
 const stopTimings = timings.on("action", ({ name }) => {
   if (name !== "download") return;
   const url = URL.createObjectURL(new Blob([JSON.stringify(runs, null, 2)], { type: "application/json" }));
-  const link = document.createElement("a"); link.href = url; link.download = "loom-generation-timings.json"; link.click();
+  const link = document.createElement("a"); link.href = url; link.download = "sayshape-generation-timings.json"; link.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-void document.fonts.ready.then(() => { if (!disposed) { loom.invalidate("layout"); controls.invalidate("layout"); timings.invalidate("layout"); } });
-if (import.meta.hot) import.meta.hot.dispose(() => { disposed = true; controller?.abort(); stopControls(); stopActions(); stopTimings(); timings.destroy(); controls.destroy(); loom.destroy(); });
+void document.fonts.ready.then(() => { if (!disposed) { sayshape.invalidate("layout"); controls.invalidate("layout"); timings.invalidate("layout"); } });
+if (import.meta.hot) import.meta.hot.dispose(() => { disposed = true; controller?.abort(); stopControls(); stopActions(); stopTimings(); timings.destroy(); controls.destroy(); sayshape.destroy(); });

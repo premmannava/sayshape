@@ -7,7 +7,7 @@
  *   npx vite-node scripts/record.ts -- --model deepseek/deepseek-v4.1-flash --only k3,f2
  *
  * Answers are first tries, saved as they came: nothing is repaired or edited.
- * Settings come from .env.local like `npm run compare` (LOOM_MODEL_URL, LOOM_API_KEY).
+ * Settings come from .env.local like `npm run compare` (SAYSHAPE_MODEL_URL, SAYSHAPE_API_KEY).
  * Each recording goes to site/public/compare/<model>/<task>.json, and
  * site/public/compare/index.json lists them all.
  */
@@ -99,7 +99,7 @@ function writeIndex(dir: string): void {
 async function main(): Promise<void> {
   const env = readModelEnv("development", resolve(__dirname, ".."));
   const model = arg("model") ?? env.model;
-  if (!model) throw new Error("No model: pass --model, or set LOOM_MODEL in .env.local.");
+  if (!model) throw new Error("No model: pass --model, or set SAYSHAPE_MODEL in .env.local.");
   const ids = arg("only")?.split(",").map((s) => s.trim()).filter(Boolean) ?? GALLERY;
   const chosen = ids.map((id) => tasks.find((t) => t.id === id) ?? (() => { throw new Error(`No task "${id}"`); })());
   const config: ModelConfig = { url: env.url, apiKey: env.apiKey || undefined, model, streamUsage: true, maxTokens: 16000 };

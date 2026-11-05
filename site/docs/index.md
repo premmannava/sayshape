@@ -10,7 +10,7 @@ SayShape is two things designed together:
 1. **A UI language for models to write.** One element per line, indentation for nesting. A spec describes elements, state, calculations and actions. It can't run code, and it never contains colors, fonts or pixel sizes.
 2. **An engine that renders that language on its own.** SayShape has its own parser, layout, painter, state store and pointer and keyboard handling, and draws onto a single `<canvas>`. It doesn't use HTML elements, CSS layout, React or any other UI framework for the interface it renders.
 
-```loom live
+```sayshape live
 state days=2 hikers=3
 card
   text "Weekend hike" style=title
@@ -46,10 +46,6 @@ These are design properties, not benchmark results. SayShape hasn't been measure
 ## Status
 
 SayShape is an **early prototype, version 0.1**: the engine, the language, 48 elements, a model client and the tests work today. Canvas content isn't available to screen readers yet, so don't use it where accessibility is required. [Status and limits](./architecture/limitations) lists what else isn't built.
-
-::: info Earlier working name
-SayShape was called Loom while it was being built, and a few names still say so: the package (`loom-ui`), the CSS variables (`--loom-*`), the ` ```loom ` code fence, and the model guide, which tells models they're writing "Loom". These will be renamed before the first npm release.
-:::
 
 ## Where to go next
 

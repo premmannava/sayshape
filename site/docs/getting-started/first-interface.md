@@ -14,7 +14,7 @@ A SayShape interface needs three things: a `<canvas>`, the components the instan
 ```
 
 ```ts
-import { SayShape, coreComponents } from "loom-ui";
+import { SayShape, coreComponents } from "sayshape";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#ui")!;
 const ui = new SayShape(canvas, { components: coreComponents });
@@ -27,7 +27,7 @@ card
 
 The canvas fills its parent's width and grows to fit its content, so size the parent rather than the canvas. That spec renders as:
 
-```loom live
+```sayshape live
 state count=0
 card
   text "Clicked {count} times"
@@ -65,8 +65,8 @@ The full list of options, methods and events is in [Embedding SayShape](../integ
 The world map ships separately because its country outlines are large:
 
 ```ts
-import { SayShape, coreComponents } from "loom-ui";
-import { mapComponents } from "loom-ui/map";
+import { SayShape, coreComponents } from "sayshape";
+import { mapComponents } from "sayshape/map";
 
 const ui = new SayShape(canvas, { components: [...coreComponents, ...mapComponents] });
 ```

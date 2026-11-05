@@ -1,5 +1,5 @@
 /**
- * Test helpers for SayShape (`loom-ui/testing`).
+ * Test helpers for SayShape (`sayshape/testing`).
  *
  * `render()` runs the real engine (parse, layout, paint, hit testing,
  * pointer and keyboard handling) against a recording stand-in for the
@@ -73,7 +73,7 @@ export interface Emitted {
 
 export interface Rendered {
   /** The engine instance, for anything the helpers don't cover. */
-  loom: SayShape;
+  sayshape: SayShape;
   /** The stand-in canvas, for sending raw events. */
   canvas: FakeCanvas;
   /** Current state, as a plain object. */
@@ -142,7 +142,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
   const canvas = new FakeCanvas();
   let editingNode = (): string | null => null;
   const editor = new FakeEditorHost(() => editingNode());
-  const loom: SayShape = new SayShape(canvas as unknown as HTMLCanvasElement, {
+  const sayshape: SayShape = new SayShape(canvas as unknown as HTMLCanvasElement, {
     editor,
     components: opts.components ?? coreComponents,
     theme: opts.theme ?? lightTheme,
@@ -159,19 +159,19 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
   const emitted: Emitted[] = [];
   const warnings: string[] = [];
   let drawOps: DrawOp[] = [];
-  loom.on("action", (e: SayShapeEvents["action"]) => emitted.push({ name: e.name, value: e.value }));
-  loom.on("render", () => { drawOps = canvas.takeDrawOps(); });
-  editingNode = () => loom.editing?.node.id ?? null;
+  sayshape.on("action", (e: SayShapeEvents["action"]) => emitted.push({ name: e.name, value: e.value }));
+  sayshape.on("render", () => { drawOps = canvas.takeDrawOps(); });
+  editingNode = () => sayshape.editing?.node.id ?? null;
 
-  const flush = () => loom.renderNow();
-  loom.setSpec(spec);
+  const flush = () => sayshape.renderNow();
+  sayshape.setSpec(spec);
   flush();
 
   const describeQuery = (q: Query) => (typeof q === "string" ? q : JSON.stringify(q, (_k, v) => (v instanceof RegExp ? String(v) : v)));
 
   const boxesById = () => {
     const map = new Map<string, Box>();
-    if (loom.boxes) walkBoxes(loom.boxes, (b) => { if (!map.has(b.node.id)) map.set(b.node.id, b); });
+    if (sayshape.boxes) walkBoxes(sayshape.boxes, (b) => { if (!map.has(b.node.id)) map.set(b.node.id, b); });
     return map;
   };
 
@@ -179,7 +179,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     const q = typeof query === "string" ? { type: query } : query;
     const boxes = boxesById();
     const out: Found[] = [];
-    const scope = loom.state.scope;
+    const scope = sayshape.state.scope;
     const walk = (n: SayShapeNode) => {
       if (n.id !== "root") {
         const shownText = n.text === undefined ? undefined : interpolate(n.text, scopeOf(n, scope));
@@ -196,7 +196,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
       if (n.type === "each") eachInstances(n, scopeOf(n, scope)).forEach(walk);
       else n.children.forEach(walk);
     };
-    if (loom.tree) walk(loom.tree);
+    if (sayshape.tree) walk(sayshape.tree);
     return out;
   };
 
@@ -215,13 +215,13 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
       const found = find(query);
       const name = `"${found.node.type}" on line ${found.node.line}`;
       if (!found.box) throw new Error(`${name} is hidden, so it can't be pressed`);
-      const region = loom.hitRegions.find((h) => h.box.node.id === found.node.id);
+      const region = sayshape.hitRegions.find((h) => h.box.node.id === found.node.id);
       if (!region) throw new Error(`${name} isn't pressable right now (it may be disabled or not interactive)`);
       // Click the centre, or the first point in the region that this element
       // receives itself (a button inside a pressable card covers its centre).
       const b = region.box;
       const ours = (x: number, y: number) => {
-        const t = loom.targetAt(x, y);
+        const t = sayshape.targetAt(x, y);
         return !!t && t.node.id === found.node.id && t.detail === region.detail;
       };
       const points = [[0.5, 0.5], ...[0.1, 0.3, 0.5, 0.7, 0.9].flatMap((fy) => [0.05, 0.25, 0.5, 0.75, 0.95].map((fx) => [fx, fy]))];
@@ -231,16 +231,16 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
   };
 
   const ui: Rendered = {
-    loom,
+    sayshape,
     canvas,
-    get state() { return loom.state.snapshot(); },
-    get diagnostics() { return loom.diagnostics; },
+    get state() { return sayshape.state.snapshot(); },
+    get diagnostics() { return sayshape.diagnostics; },
     get emitted() { return emitted; },
     get warnings() { return warnings; },
     get drawOps() { return drawOps; },
-    get hits() { return loom.hitRegions; },
-    get focused() { return loom.focus?.node ?? null; },
-    get popup() { return loom.openPopupInfo; },
+    get hits() { return sayshape.hitRegions; },
+    get focused() { return sayshape.focus?.node ?? null; },
+    get popup() { return sayshape.openPopupInfo; },
 
     findAll,
     find,
@@ -310,28 +310,28 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     },
 
     set(key, value) {
-      loom.state.set(key, value);
+      sayshape.state.set(key, value);
       flush();
     },
 
     setSpec(next, o) {
-      loom.setSpec(next, o);
+      sayshape.setSpec(next, o);
       flush();
     },
 
     stream(chunks, o) {
-      loom.beginStream(o);
+      sayshape.beginStream(o);
       flush();
       for (const c of chunks) {
-        loom.push(c);
+        sayshape.push(c);
         flush();
       }
-      loom.endStream();
+      sayshape.endStream();
       flush();
     },
 
     destroy() {
-      loom.destroy();
+      sayshape.destroy();
     },
   };
   return ui;

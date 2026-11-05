@@ -52,13 +52,13 @@ describe("theme surfaces", () => {
 
   it("take raised from CSS, or derive it from a CSS surface", () => {
     const el = {} as Element;
-    const vars: Record<string, string> = { "--loom-surface": "#000000" };
+    const vars: Record<string, string> = { "--sayshape-surface": "#000000" };
     const g = globalThis as { getComputedStyle?: unknown };
     const before = g.getComputedStyle;
     g.getComputedStyle = () => ({ getPropertyValue: (n: string) => vars[n] ?? "" });
     try {
       expect(themeFromCSS(el, darkTheme).colors.raised).toBe(mixColors("#000000", darkTheme.colors.ink, 0.045));
-      vars["--loom-raised"] = "#222222";
+      vars["--sayshape-raised"] = "#222222";
       expect(themeFromCSS(el, darkTheme).colors.raised).toBe("#222222");
     } finally {
       g.getComputedStyle = before;

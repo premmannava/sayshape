@@ -11,14 +11,14 @@
  */
 import type { EditorEvents, EditorHost, EditorSpec, InputKind } from "./editor";
 
-const MARK = "data-loom-editor";
+const MARK = "data-sayshape-editor";
 
 /** Styles an inline style can't set: the placeholder's color and the search box's clear button. */
 function ensureSheet(): void {
-  if (document.getElementById("loom-editor-style")) return;
+  if (document.getElementById("sayshape-editor-style")) return;
   const style = document.createElement("style");
-  style.id = "loom-editor-style";
-  style.textContent = `[${MARK}]::placeholder{color:var(--loom-editor-placeholder);opacity:1}
+  style.id = "sayshape-editor-style";
+  style.textContent = `[${MARK}]::placeholder{color:var(--sayshape-editor-placeholder);opacity:1}
 [${MARK}]::-webkit-search-cancel-button,[${MARK}]::-webkit-search-decoration{-webkit-appearance:none}`;
   document.head.append(style);
 }
@@ -57,7 +57,7 @@ export function domEditorHost(canvas: HTMLCanvasElement): EditorHost {
       background: "transparent", boxShadow: "none", boxSizing: "border-box", appearance: "none",
       font: s.font, lineHeight: "normal", color: s.color, caretColor: s.accent, textAlign: "left",
     });
-    el.style.setProperty("--loom-editor-placeholder", s.muted);
+    el.style.setProperty("--sayshape-editor-placeholder", s.muted);
     el.style.setProperty("-webkit-appearance", "none");
     el.placeholder = s.placeholder;
     el.maxLength = s.max;

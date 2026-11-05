@@ -51,7 +51,7 @@ export const repeats = (n: number): Check => ({
       if (node.type === "each") items += Math.max(0, ...node.children.map((c) => shown.get(c.id) ?? 0));
       node.children.forEach(walk);
     };
-    if (ui.loom.tree) walk(ui.loom.tree);
+    if (ui.sayshape.tree) walk(ui.sayshape.tree);
     return items >= n;
   },
 });
@@ -62,7 +62,7 @@ export const nested: Check = {
   test: (_spec, ui) => {
     const inside = (n: SayShapeNode, depth: number): boolean =>
       n.children.some((c) => (c.type === "each" && depth > 0) || inside(c, depth + (c.type === "each" ? 1 : 0)));
-    return !!ui.loom.tree && inside(ui.loom.tree, 0);
+    return !!ui.sayshape.tree && inside(ui.sayshape.tree, 0);
   },
 };
 
@@ -73,8 +73,8 @@ function pressFirst(ui: Rendered, type: string, part: "first" | "last" = "last")
   const regions = ui.hits.filter((h) => h.box.node.id === found.node.id);
   const region = part === "last" ? regions.at(-1) : regions[0];
   if (!region) return false;
-  ui.loom.activate({ node: region.box.node, box: region.box, detail: region.detail });
-  ui.loom.renderNow();
+  ui.sayshape.activate({ node: region.box.node, box: region.box, detail: region.detail });
+  ui.sayshape.renderNow();
   return true;
 }
 
@@ -117,7 +117,7 @@ export const allDoneShowsMore: Check = {
 
 /** Whether a check's bind= is true, read through the element's own scope (t.done inside each). */
 function isTicked(ui: Rendered, node: SayShapeNode): boolean {
-  return !!new PropReader(node, scopeOf(node, ui.loom.state.scope)).bound();
+  return !!new PropReader(node, scopeOf(node, ui.sayshape.state.scope)).bound();
 }
 
 /** Type into the first field, stop typing, and see the screen change (a greeting, a count, the field's value). */

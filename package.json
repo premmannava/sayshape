@@ -1,16 +1,16 @@
 {
-  "name": "loom-ui",
+  "name": "sayshape",
   "version": "0.1.0",
   "description": "A canvas UI engine and a UI language designed for AI models to write.",
   "type": "module",
   "license": "MIT",
-  "main": "./dist/loom.js",
-  "module": "./dist/loom.js",
+  "main": "./dist/sayshape.js",
+  "module": "./dist/sayshape.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "import": "./dist/loom.js"
+      "import": "./dist/sayshape.js"
     },
     "./map": {
       "types": "./dist/types/components/map/index.d.ts",

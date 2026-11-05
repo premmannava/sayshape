@@ -5,19 +5,19 @@
  * listener removed when the component unmounts.
  */
 import { onBeforeUnmount, onMounted, shallowRef, type Ref } from "vue";
-import { createLoom, loomModules, watchSiteTheme, type CreateOptions, type SayShape, type LoomModules } from "./runtime";
+import { createSayShape, sayShapeModules, watchSiteTheme, type CreateOptions, type SayShape, type SayShapeModules } from "./runtime";
 
-export interface UseLoomOptions extends CreateOptions {
+export interface UseSayShapeOptions extends CreateOptions {
   /** Create the instance only when this element comes near the viewport. */
   lazy?: Ref<HTMLElement | null>;
   /** Follow the site's light/dark switch (default true). Return false while something else sets the theme. */
   followSiteTheme?: () => boolean;
 }
 
-type Setup = (loom: SayShape, mods: LoomModules) => void | (() => void);
+type Setup = (sayshape: SayShape, mods: SayShapeModules) => void | (() => void);
 
-export function useLoom(canvas: Ref<HTMLCanvasElement | null>, setup: Setup, opts: UseLoomOptions = {}) {
-  const loom = shallowRef<SayShape | null>(null);
+export function useSayShape(canvas: Ref<HTMLCanvasElement | null>, setup: Setup, opts: UseSayShapeOptions = {}) {
+  const sayshape = shallowRef<SayShape | null>(null);
   const failed = shallowRef<string | null>(null);
   const cleanups: Array<() => void> = [];
   let alive = true;
@@ -25,11 +25,11 @@ export function useLoom(canvas: Ref<HTMLCanvasElement | null>, setup: Setup, opt
 
   async function start() {
     const el = canvas.value;
-    if (!el || loom.value) return;
+    if (!el || sayshape.value) return;
     try {
-      const [instance, mods] = await Promise.all([createLoom(el, opts), loomModules()]);
+      const [instance, mods] = await Promise.all([createSayShape(el, opts), sayShapeModules()]);
       if (!alive) { instance.destroy(); return; }
-      loom.value = instance;
+      sayshape.value = instance;
       cleanups.push(watchSiteTheme(instance, { light: mods.lightTheme, dark: mods.darkTheme }, opts.followSiteTheme));
       const undo = setup(instance, mods);
       if (undo) cleanups.push(undo);
@@ -56,9 +56,9 @@ export function useLoom(canvas: Ref<HTMLCanvasElement | null>, setup: Setup, opt
     alive = false;
     observer?.disconnect();
     cleanups.splice(0).forEach((f) => f());
-    loom.value?.destroy();
-    loom.value = null;
+    sayshape.value?.destroy();
+    sayshape.value = null;
   });
 
-  return { loom, failed };
+  return { sayshape, failed };
 }

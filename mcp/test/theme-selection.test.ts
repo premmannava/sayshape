@@ -44,8 +44,8 @@ chart "Sales" kind=line items=sales x=month y=this_year,last_year
     const purple = themeForPreset("purple", "light");
     expect(drawnColors(ui.drawOps)).toEqual(expect.arrayContaining(seriesColors(purple).slice(0, 2)));
 
-    ui.loom.setTheme(themeForPreset("blue", "light"));
-    ui.loom.renderNow();
+    ui.sayshape.setTheme(themeForPreset("blue", "light"));
+    ui.sayshape.renderNow();
     const blue = themeForPreset("blue", "light");
     expect(drawnColors(ui.drawOps)).toEqual(expect.arrayContaining(seriesColors(blue).slice(0, 2)));
     expect(blue.colors.series1).toBe(blue.colors.accent);
@@ -78,12 +78,12 @@ text "Count: {count}"
 button "Add" on=inc:count
 `);
     ui.set("count", 7);
-    const before = ui.loom.state.snapshot();
+    const before = ui.sayshape.state.snapshot();
 
-    ui.loom.setTheme(themeForPreset("neutral", "dark"));
-    ui.loom.renderNow();
+    ui.sayshape.setTheme(themeForPreset("neutral", "dark"));
+    ui.sayshape.renderNow();
 
-    expect(ui.loom.state.snapshot()).toEqual(before);
+    expect(ui.sayshape.state.snapshot()).toEqual(before);
     expect(ui.text()).toContain("Count: 7");
     ui.destroy();
   });

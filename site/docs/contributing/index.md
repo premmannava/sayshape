@@ -27,10 +27,10 @@ npm run build
 | Visual | `visual/` | Component examples and samples in light and dark at two widths, against baselines (Playwright) |
 | Benchmarks | `bench/` | Parse, layout and paint timings; pull requests are compared with their base |
 
-Interaction tests use `loom-ui/testing`, which runs the real engine in Node against a canvas that records what's drawn:
+Interaction tests use `sayshape/testing`, which runs the real engine in Node against a canvas that records what's drawn:
 
 ```ts
-import { render } from "loom-ui/testing";
+import { render } from "sayshape/testing";
 
 const ui = render(`state n=0
 button "Add" on=inc:n

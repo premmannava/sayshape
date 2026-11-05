@@ -171,12 +171,12 @@ describe("theme code", () => {
     expect(code).not.toContain(`accent: "#ffff00"`);
   });
 
-  it("is valid TypeScript using only loom-ui's public API", () => {
+  it("is valid TypeScript using only sayshape's public API", () => {
     for (const p of combos) {
       const code = themeCode(p);
       const out = ts.transpileModule(code, { reportDiagnostics: true, compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
       expect(out.diagnostics ?? [], code).toEqual([]);
-      const imports = /import \{ ([^}]+) \} from "loom-ui";/.exec(code)![1]!.split(",").map((s) => s.trim().replace(/^type /, ""));
+      const imports = /import \{ ([^}]+) \} from "sayshape";/.exec(code)![1]!.split(",").map((s) => s.trim().replace(/^type /, ""));
       for (const name of imports) expect(["extendTheme", "lightTheme", "darkTheme", "SayShape"], name).toContain(name);
       expect(code).not.toMatch(/playground|appearance\//);
     }
@@ -190,7 +190,7 @@ describe("theme code", () => {
     const fixed = themeCode({ preset: "blue", mode: "dark", accent: null });
     expect(fixed).not.toContain("matchMedia");
     expect(fixed).not.toContain("lightTheme");
-    expect(fixed).toContain("loom.setTheme(theme)");
+    expect(fixed).toContain("sayshape.setTheme(theme)");
   });
 
   it("is just SayShape's own theme for the defaults", () => {

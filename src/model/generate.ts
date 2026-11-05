@@ -9,7 +9,7 @@ import { languageGuide, type GuideMode, type GuideOptions } from "../prompt";
 import { resolveProfile } from "../profiles";
 import type { Registry } from "../registry";
 import type { Diagnostic } from "../types";
-import { loomLineTest, SpecFilter } from "./clean";
+import { sayShapeLineTest, SpecFilter } from "./clean";
 import { refineMessages, sumUsage, type ContextInfo, type ContextPolicy, type RefineContext, type UsageTotals } from "./context";
 import { streamChat, type ChatMessage, type ModelConfig, type Usage } from "./stream";
 
@@ -105,7 +105,7 @@ export interface GenerateOptions {
   /** Appended to the user's request, e.g. "/no_think" to turn off Qwen3's thinking. */
   userSuffix?: string;
   /**
-   * Names of state the app supplies itself (loom.state.set), so a spec that
+   * Names of state the app supplies itself (sayshape.state.set), so a spec that
    * reads them isn't sent back for repair as using unknown names.
    */
   stateNames?: readonly string[];
@@ -126,7 +126,7 @@ const clock = () => (typeof performance !== "undefined" ? performance.now() : Da
 /** The message asking the model to fix its spec, listing what the parser found. */
 export function repairPrompt(diagnostics: Diagnostic[]): string {
   const list = diagnostics.map((d) => `- Line ${d.line} (${d.severity}): ${d.message}`).join("\n");
-  return `Your Loom has these problems:\n${list}\n\nWrite the whole interface again with them fixed. Output only Loom.`;
+  return `Your SayShape has these problems:\n${list}\n\nWrite the whole interface again with them fixed. Output only SayShape.`;
 }
 
 export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> {
@@ -139,7 +139,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
   const guideInfo = (mode: GuideMode | "custom") => ({ mode, profile: profile.name });
   const firstGuide = guideInfo(guideOpts ? guideOpts.mode ?? "full" : "custom");
   const checkWith = o.enforceProfile ? profile.registry : o.registry;
-  const isLoomLine = loomLineTest((name) => o.registry.has(name));
+  const isSayShapeLine = sayShapeLineTest((name) => o.registry.has(name));
   const timings: GenerateResult["timings"] = { totalMs: 0 };
 
   // The guide first, then the context, then the request: the guide is the
@@ -162,7 +162,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
 
   const run = async (msgs: ChatMessage[], g: Attempt["guide"]): Promise<Attempt> => {
     const began = now();
-    const filter = new SpecFilter(isLoomLine);
+    const filter = new SpecFilter(isSayShapeLine);
     const usage: Usage = {};
     let raw = "", spec = "", thinking = "", phase: Phase = "waiting";
     let firstTokenMs: number | undefined;
@@ -189,7 +189,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
     // Nothing but thinking: look for the spec inside it before giving up.
     let recovered = false;
     if (!spec.trim()) {
-      const again = new SpecFilter(isLoomLine);
+      const again = new SpecFilter(isSayShapeLine);
       const text = `${thinking}\n${raw}`.replace(/<\/?think>/g, "\n");
       const found = again.push(text).text + again.end().text;
       if (found.trim()) { recovered = true; emit({ text: found.trimEnd() + "\n", reset: false }); }

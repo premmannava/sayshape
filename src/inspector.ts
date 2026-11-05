@@ -26,31 +26,31 @@ export class Inspector {
   private capture: DrawCall[] | null = null;
   private captureDone: ((calls: DrawCall[]) => void) | null = null;
 
-  constructor(private loom: SayShape) {}
+  constructor(private sayshape: SayShape) {}
 
-  setBoxes(on: boolean): void { this.showBoxes = on; this.loom.invalidate("paint"); }
-  setHits(on: boolean): void { this.showHits = on; this.loom.invalidate("paint"); }
+  setBoxes(on: boolean): void { this.showBoxes = on; this.sayshape.invalidate("paint"); }
+  setHits(on: boolean): void { this.showHits = on; this.sayshape.invalidate("paint"); }
 
   setInspecting(on: boolean): void {
     this.inspecting = on;
     if (!on) this.hovered = null;
-    this.loom.canvas.style.cursor = on ? "crosshair" : "default";
-    this.loom.invalidate("paint");
+    this.sayshape.canvas.style.cursor = on ? "crosshair" : "default";
+    this.sayshape.invalidate("paint");
   }
 
   pointerMove(x: number, y: number): void {
-    const root = this.loom.boxes;
+    const root = this.sayshape.boxes;
     const b = root ? boxAt(root, x, y) : null;
     const next = b && b.node.id !== "root" ? b : null;
-    if (next !== this.hovered) { this.hovered = next; this.loom.invalidate("paint"); }
+    if (next !== this.hovered) { this.hovered = next; this.sayshape.invalidate("paint"); }
   }
 
   pointerLeave(): void {
-    if (this.hovered) { this.hovered = null; this.loom.invalidate("paint"); }
+    if (this.hovered) { this.hovered = null; this.sayshape.invalidate("paint"); }
   }
 
   select(x: number, y: number): void {
-    const root = this.loom.boxes;
+    const root = this.sayshape.boxes;
     const b = root ? boxAt(root, x, y) : null;
     this.selectBox(b && b.node.id !== "root" ? b : null);
   }
@@ -64,14 +64,14 @@ export class Inspector {
 
   boxForLine(line: number): Box | null {
     let found: Box | null = null;
-    if (this.loom.boxes) walkBoxes(this.loom.boxes, (b) => { if (!found && b.node.line === line) found = b; });
+    if (this.sayshape.boxes) walkBoxes(this.sayshape.boxes, (b) => { if (!found && b.node.line === line) found = b; });
     return found;
   }
 
   private selectBox(b: Box | null): void {
     this.selected = b;
-    this.loom.emitInspect(b ? { node: b.node, box: b } : null);
-    this.loom.invalidate("paint");
+    this.sayshape.emitInspect(b ? { node: b.node, box: b } : null);
+    this.sayshape.invalidate("paint");
   }
 
   /** A plain summary of a node, for panels and the console. */
@@ -89,7 +89,7 @@ export class Inspector {
 
   private findBox(node: SayShapeNode): Box | null {
     let found: Box | null = null;
-    if (this.loom.boxes) walkBoxes(this.loom.boxes, (b) => { if (!found && b.node.id === node.id) found = b; });
+    if (this.sayshape.boxes) walkBoxes(this.sayshape.boxes, (b) => { if (!found && b.node.id === node.id) found = b; });
     return found;
   }
 
@@ -98,7 +98,7 @@ export class Inspector {
     return new Promise((resolve) => {
       this.capture = [];
       this.captureDone = resolve;
-      this.loom.invalidate("paint");
+      this.sayshape.invalidate("paint");
     });
   }
 
@@ -134,8 +134,8 @@ export class Inspector {
 
   /** @internal */
   paintOverlay(g: CanvasRenderingContext2D, root: Box, hits: HitRegion[]): void {
-    const c = this.loom.theme.colors;
-    const mono = this.loom.theme.font.mono;
+    const c = this.sayshape.theme.colors;
+    const mono = this.sayshape.theme.font.mono;
     g.save();
     if (this.showHits) {
       hits.forEach((h, i) => {

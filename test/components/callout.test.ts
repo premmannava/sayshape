@@ -101,17 +101,17 @@ describe("callout while loading", () => {
 
   it("keeps its panel and draws placeholders for the words", () => {
     const ui = render(SPEC);
-    ui.loom.setLoading(["sales"]);
-    ui.loom.renderNow();
+    ui.sayshape.setLoading(["sales"]);
+    ui.sayshape.renderNow();
     expect(texts(ui)).toEqual([]);
     expect(ui.warnings).toEqual([]);
     // The tint and the border are real; the text, detail and icon are one placeholder.
     expect(ui.drawOps.find((o) => o.op === "stroke" && o.strokeStyle === c.accent)).toBeDefined();
     expect(ui.drawOps.some((o) => o.op === "fill" && o.fillStyle === c.line)).toBe(true);
     const loadingH = ui.find("callout").box!.h;
-    ui.loom.state.set("sales", [{ month: "Jan", revenue: 3 }, { month: "Feb", revenue: 5 }]);
-    ui.loom.setLoading([]);
-    ui.loom.renderNow();
+    ui.sayshape.state.set("sales", [{ month: "Jan", revenue: 3 }, { month: "Feb", revenue: 5 }]);
+    ui.sayshape.setLoading([]);
+    ui.sayshape.renderNow();
     expect(texts(ui)).toEqual(["Best month: Feb", "From 2 months"]);
     expect(ui.find("callout").box!.h).toBe(loadingH);
     ui.destroy();
@@ -120,7 +120,7 @@ describe("callout while loading", () => {
   it("fades its words in as the data arrives", () => {
     const ui = render(`callout "A"\n`);
     const box = ui.find("callout").box!;
-    const engine = ui.loom as unknown as { paintContext(g: CanvasRenderingContext2D): PaintContext };
+    const engine = ui.sayshape as unknown as { paintContext(g: CanvasRenderingContext2D): PaintContext };
     const ctx = engine.paintContext(ui.canvas.getContext("2d")!);
     ui.canvas.takeDrawOps();
     callout.paint!(box, { ...ctx, reveal: () => 0.1 });

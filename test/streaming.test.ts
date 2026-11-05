@@ -64,21 +64,21 @@ describe.each(corpus)("%s", (_name, spec) => {
     fc.assert(
       fc.property(fc.array(fc.integer({ min: 1, max: 40 }), { minLength: 1, maxLength: 200 }), (sizes) => {
         const ui = render("", { components: ALL_COMPONENTS });
-        ui.loom.beginStream();
+        ui.sayshape.beginStream();
         let pos = 0, i = 0, lastNodes = 0;
         while (pos < spec.length) {
           const n = sizes[i++ % sizes.length]!;
-          ui.loom.push(spec.slice(pos, pos + n));
+          ui.sayshape.push(spec.slice(pos, pos + n));
           pos += n;
-          ui.loom.renderNow();
+          ui.sayshape.renderNow();
           // Already rendered elements never disappear while streaming.
-          expect(ui.loom.metrics.nodes).toBeGreaterThanOrEqual(lastNodes);
-          lastNodes = ui.loom.metrics.nodes;
-          expect(finalOutline.slice(0, outline(ui.loom.tree!).length)).toEqual(outline(ui.loom.tree!));
+          expect(ui.sayshape.metrics.nodes).toBeGreaterThanOrEqual(lastNodes);
+          lastNodes = ui.sayshape.metrics.nodes;
+          expect(finalOutline.slice(0, outline(ui.sayshape.tree!).length)).toEqual(outline(ui.sayshape.tree!));
         }
-        ui.loom.endStream();
-        ui.loom.renderNow();
-        expect(outline(ui.loom.tree!)).toEqual(finalOutline);
+        ui.sayshape.endStream();
+        ui.sayshape.renderNow();
+        expect(outline(ui.sayshape.tree!)).toEqual(finalOutline);
         expect(ui.diagnostics).toEqual(full.diagnostics);
         ui.destroy();
       }),

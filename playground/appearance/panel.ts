@@ -1,7 +1,7 @@
 /**
  * The playground's Appearance panel: wires the controls in index.html to
  * the presets, preferences and export modules. Themes reach the canvas
- * through loom.setTheme only: the spec, state, selections and any open
+ * through sayshape.setTheme only: the spec, state, selections and any open
  * popup stay as they are, and nothing is sent to a model.
  */
 import type { SayShape } from "../../src";
@@ -17,7 +17,7 @@ function storage(): PrefStore | null {
   try { return window.localStorage; } catch { return null; }
 }
 
-export function setupAppearance(loom: SayShape): void {
+export function setupAppearance(sayshape: SayShape): void {
   const panel = $<HTMLDetailsElement>("appearance");
   const presetsBox = $("apPresets");
   const hex = $<HTMLInputElement>("apHex");
@@ -51,12 +51,12 @@ export function setupAppearance(loom: SayShape): void {
     if (prefs.mode === "system") delete root.dataset.theme;
     else root.dataset.theme = prefs.mode;
     if (isDefault(prefs)) {
-      // Exactly SayShape's default: the engine follows the system and any --loom-* CSS by itself.
-      loom.setTheme("auto");
+      // Exactly SayShape's default: the engine follows the system and any --sayshape-* CSS by itself.
+      sayshape.setTheme("auto");
       root.style.removeProperty("--accent");
       root.style.removeProperty("--hl");
     } else {
-      loom.setTheme(r.theme);
+      sayshape.setTheme(r.theme);
       root.style.setProperty("--accent", r.theme.colors.accent);
       root.style.setProperty("--hl", mix(r.theme.colors.accent, r.theme.colors.surface, 0.85));
     }

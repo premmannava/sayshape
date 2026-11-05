@@ -14,7 +14,7 @@ The scaffold creates `src/components/ribbon.ts` and its test file, and registers
 ## The definition
 
 ```ts
-import type { ComponentDef } from "loom-ui";
+import type { ComponentDef } from "sayshape";
 
 export const ribbon: ComponentDef = {
   type: "ribbon",

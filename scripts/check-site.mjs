@@ -150,7 +150,7 @@ async function browserCheck() {
       });
       await page.waitForTimeout(400);
       const blank = await page.evaluate(() =>
-        [...document.querySelectorAll(".loom-canvas-wrap canvas")].filter((c) => {
+        [...document.querySelectorAll(".sayshape-canvas-wrap canvas")].filter((c) => {
           if (c.offsetParent === null) return false; // hidden on purpose (a closed tab)
           return c.width === 0 || c.height === 0;
         }).length,

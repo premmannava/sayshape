@@ -44,7 +44,7 @@ npm run docs:check  # the README's component reference is up to date
 
 ## Using it from another project
 
-Build the library, then install the repository folder into your app as a local dependency. npm records it as a `file:` dependency, and the package's own `exports` give you `loom-ui`, `loom-ui/map`, `loom-ui/testing` and `loom-ui/model`.
+Build the library, then install the repository folder into your app as a local dependency. npm records it as a `file:` dependency, and the package's own `exports` give you `sayshape`, `sayshape/map`, `sayshape/testing` and `sayshape/model`.
 
 ```bash
 # in the sayshape folder
@@ -54,6 +54,6 @@ npm run build
 npm install ../sayshape
 ```
 
-Rebuild SayShape after pulling changes. The package is still named `loom-ui`, SayShape's earlier working name; it will be renamed before it's published. When SayShape is published, this becomes an ordinary `npm install`.
+Rebuild SayShape after pulling changes. When SayShape is published, this becomes an ordinary `npm install`.
 
 Next: [render your first interface](./first-interface).

@@ -49,8 +49,8 @@ const href = (p: string) => withBase(p);
     <section class="start" aria-labelledby="start">
       <h2 id="start">Try it in <span class="ss-mark">10 minutes.</span></h2>
       <div class="start-links">
-        <a class="loom-btn primary" :href="href('/learn/')">Start the build-along →</a>
-        <a class="loom-btn quiet" :href="href('/playground.html')">Open the playground</a>
+        <a class="sayshape-btn primary" :href="href('/learn/')">Start the build-along →</a>
+        <a class="sayshape-btn quiet" :href="href('/playground.html')">Open the playground</a>
       </div>
     </section>
   </div>
@@ -60,22 +60,22 @@ const href = (p: string) => withBase(p);
 .landing { max-width: 1320px; margin: 0 auto; padding: 40px 32px 72px }
 
 .why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 40px; padding: 32px 0; border-top: 2px solid var(--ss-rule) }
-.why h2 { margin: 0; font: 800 clamp(28px, 3.2vw, 40px)/1 var(--loom-display); letter-spacing: -0.035em }
+.why h2 { margin: 0; font: 800 clamp(28px, 3.2vw, 40px)/1 var(--sayshape-display); letter-spacing: -0.035em }
 .why p { margin: 10px 0 0; font-size: 18px; line-height: 1.45; color: var(--vp-c-text-2) }
 
 .build { padding: 40px 0 8px; border-top: 2px solid var(--ss-rule) }
 .build-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px }
-.build-head h2 { margin: 0; font: 800 clamp(32px, 4vw, 52px)/1 var(--loom-display); letter-spacing: -0.04em }
+.build-head h2 { margin: 0; font: 800 clamp(32px, 4vw, 52px)/1 var(--sayshape-display); letter-spacing: -0.04em }
 .build-head a { flex: none; white-space: nowrap; font-weight: 600; color: var(--vp-c-brand-1); text-decoration: none }
 .build-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px }
 .build-card { color: var(--vp-c-text-1); display: flex; flex-direction: column; border: 1.5px solid var(--vp-c-divider); border-radius: 18px; overflow: hidden; background: var(--ss-card); text-decoration: none; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s }
 .build-card:hover, .build-card:focus-visible { border-color: var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow); transform: translate(-2px, -2px) }
 /* A preview, not a control: the card itself is the link, so the canvas inside ignores the pointer. */
 .build-live { height: 300px; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(#000 78%, transparent); mask-image: linear-gradient(#000 78%, transparent) }
-.build-title { padding: 12px 16px 14px; font: 800 20px/1.2 var(--loom-display); letter-spacing: -0.02em; border-top: 1px solid var(--vp-c-divider) }
+.build-title { padding: 12px 16px 14px; font: 800 20px/1.2 var(--sayshape-display); letter-spacing: -0.02em; border-top: 1px solid var(--vp-c-divider) }
 
 .start { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px 40px; margin-top: 56px; padding-top: 36px; border-top: 2px solid var(--ss-rule) }
-.start h2 { margin: 0; font: 800 clamp(34px, 4.6vw, 60px)/1 var(--loom-display); letter-spacing: -0.045em }
+.start h2 { margin: 0; font: 800 clamp(34px, 4.6vw, 60px)/1 var(--sayshape-display); letter-spacing: -0.045em }
 .start-links { display: flex; flex-wrap: wrap; gap: 10px }
 
 @media (max-width: 960px) {
