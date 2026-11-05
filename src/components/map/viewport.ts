@@ -49,13 +49,8 @@ export function fitPins(points: readonly Point[], width: number, height: number,
   }
   const base = width / worldWidth;
   // A single point should zoom to regional context, not a giant empty pixel.
-  const zoom = points.length === 1 ? 8 : Math.min(
-    MAX_ZOOM,
-    Math.max(1, (width - 64) / (Math.max(1, maxX - minX) * base)),
-    Math.max(1, (height - 64) / (Math.max(1, maxY - minY) * base)),
-  );
   // The smaller fitted dimension limits zoom.
-  const fittedZoom = points.length === 1 ? zoom : Math.min(
+  const fittedZoom = points.length === 1 ? 8 : Math.min(
     MAX_ZOOM,
     Math.max(1, Math.min(
       (width - 64) / (Math.max(1, maxX - minX) * base),
