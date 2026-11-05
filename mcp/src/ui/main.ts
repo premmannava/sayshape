@@ -144,6 +144,12 @@ async function loadFaces(theme: Theme): Promise<void> {
 async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
   const theme = themeFor(ctx);
   await loadFaces(theme);
+  // The engine clears its bitmap to transparency each frame and leaves 20px
+  // around the content. In an MCP iframe, that transparent gutter can expose
+  // a black host surface even beside a light card. Paint the canvas element's
+  // background using the resolved host-aware theme, without changing layout
+  // or making the entire iframe opaque.
+  canvas.style.backgroundColor = theme.colors.surface;
   loom?.setTheme(theme);
   return theme;
 }

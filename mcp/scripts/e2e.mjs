@@ -45,6 +45,10 @@ card
 
 const failures = [];
 const check = (ok, what) => { console.log(`${ok ? "✓" : "✗"} ${what}`); if (!ok) failures.push(what); };
+const frameBackground = async (page) => {
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  return frame.evaluate(() => getComputedStyle(document.querySelector("canvas")).backgroundColor);
+};
 
 const browser = await chromium.launch();
 try {
@@ -76,6 +80,9 @@ try {
   await page.evaluate(() => window.host.bridge.sendToolResult({ content: [{ type: "text", text: "The interface is showing in the conversation, with no problems." }] }));
   await page.waitForTimeout(600);
   await page.screenshot({ path: out + "2-final-light.png" });
+  // The 20px root padding outside a card must not expose a dark iframe background.
+  const lightBacking = await frameBackground(page);
+  check(lightBacking === "rgb(255, 255, 255)", `light MCP Canvas gutter follows the light theme (${lightBacking})`);
 
   const sizes = await page.evaluate(() => window.host.sizes);
   check(sizes.length > 0 && Math.max(...sizes) > 300, `the view reported its height to the host (${Math.max(0, ...sizes)}px)`);
@@ -112,6 +119,8 @@ try {
   await page.waitForTimeout(400);
   await page.screenshot({ path: out + "4-dark.png" });
   check(await frame.evaluate(() => document.documentElement.dataset.theme === "dark"), "the view follows the host's dark theme");
+  const darkBacking = await frameBackground(page);
+  check(darkBacking === "rgb(18, 25, 28)", `Canvas gutter updates when the host switches to dark theme (${darkBacking})`);
 
   
   // VS Code can cap an MCP App's iframe height. A tall canvas then extends
@@ -154,6 +163,8 @@ try {
   await styled.waitForTimeout(700);
   await styled.screenshot({ path: out + "5-host-styles.png" });
   const styledFrame = styled.frames().find((f) => f !== styled.mainFrame());
+  const hostBacking = await styledFrame.evaluate(() => getComputedStyle(document.querySelector("canvas")).backgroundColor);
+  check(hostBacking === "rgb(48, 48, 46)", `Canvas gutter respects the host's custom surface color (${hostBacking})`);
   const cardPixel = await styledFrame.evaluate(() => {
     const c = document.querySelector("canvas");
     // A point inside the card, left of the title and above it.
