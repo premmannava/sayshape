@@ -266,8 +266,11 @@ map bind=selected fit=pins cluster=true controls=true
       radius: pin.size,
     }));
     const expanded = runtime.spider;
-    const active = expanded?.fingerprint === key && overlaps.some((group) =>
-      group.length === expanded.indices.length && group.every((id) => expanded.indices.includes(id)));
+    const sameIndices = (indices: readonly number[]) =>
+      expanded && indices.length === expanded.indices.length && indices.every((id) => expanded.indices.includes(id));
+    const active = expanded?.fingerprint === key && (
+      overlaps.some(sameIndices) || groups.some((group) =>
+        group.items.length > 1 && sameIndices(group.items.map((item) => item.id))));
     if (expanded && !active) runtime.spider = null;
     const spiderPoints = active && expanded ? spiderfy(expanded.indices, allCircles, box.w, box.h) : [];
     box.data = {
@@ -316,7 +319,7 @@ map bind=selected fit=pins cluster=true controls=true
     const data = details(box);
     const selected = ctx.props(box.node).raw("bind") ? ctx.props(box.node).bound() : null;
     const hover = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
-    const hoverId = typeof hover === "string" && /^@map:(bubble|spider):\\d+$/.test(hover)
+    const hoverId = typeof hover === "string" && /^@map:(bubble|spider):\d+$/.test(hover)
       ? Number(hover.split(":")[2]) : -1;
     const expanded = new Set(data.spiderPoints.map((p) => p.index));
 
