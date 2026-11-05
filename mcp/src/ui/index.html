@@ -8,7 +8,12 @@
     <style>
       /*FONTS*/
       html, body { margin: 0; padding: 0; background: transparent; }
-      body { overflow: hidden; }
+      /* Hosts such as VS Code cap tall MCP App iframes. Allow the document to
+         scroll inside that cap so wheel gestures over the canvas are not lost.
+         At scroll boundaries VS Code forwards the wheel to the chat pane.
+         A hidden body overflow leaves scrollHeight > clientHeight but prevents
+         the document from moving, trapping the wheel in the iframe. */
+      body { overflow-x: hidden; overflow-y: auto; }
       #wrap { width: 100%; }
       canvas { display: block; }
     </style>
