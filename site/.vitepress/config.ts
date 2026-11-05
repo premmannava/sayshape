@@ -14,8 +14,6 @@ const SITE_URL = `https://premmannava.github.io${BASE}`;
 const TITLE = "SayShape";
 const DESCRIPTION = "A UI language for AI models to write, and a canvas engine that renders it: parser, layout, painting, state and input of its own.";
 
-// The chat page only works when the site is built with a model proxy (worker/); see generate.ts.
-const HAS_MODEL = /^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(process.env.VITE_SAYSHAPE_MODEL_ENDPOINT ?? "");
 
 const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1);
 
@@ -112,7 +110,6 @@ export default defineConfig({
   themeConfig: {
     siteTitle: "SayShape",
     nav: [
-      ...(HAS_MODEL ? [{ text: "Build with AI", link: "/chat", activeMatch: "^/chat" }] : []),
       { text: "Learn", link: "/learn/", activeMatch: "^/learn/" },
       { text: "Playground", link: "/playground", activeMatch: "^/playground" },
       { text: "Compare", link: "/compare", activeMatch: "^/compare" },

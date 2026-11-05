@@ -1,47 +1,47 @@
 /**
- * Asking the hosted model proxy (worker/) for a spec, from the browser.
+ * Asking the hosted model proxy (worker/) to answer a question about a
+ * spreadsheet, from the browser.
  *
  * Everything here is public: the proxy's URL, the Turnstile site key and the
  * model's display name come from build-time variables (VITE_*), and the API
- * key never leaves the proxy. When no proxy URL is set, generation is off
- * and the playground only runs saved and edited specs.
+ * key never leaves the proxy. Only the question, the column names and three
+ * sample rows are sent; the rows stay in the page. When no proxy URL is set,
+ * live answers are off and the landing page shows its saved answers only.
  */
 
-const ENDPOINT = (import.meta.env.VITE_SAYSHAPE_MODEL_ENDPOINT as string | undefined)?.trim() || "";
+/** The proxy's URL. An older setting ending in /generate still works. */
+const BASE = ((import.meta.env.VITE_SAYSHAPE_MODEL_ENDPOINT as string | undefined)?.trim() || "").replace(/\/(generate|answer)\/?$/, "").replace(/\/+$/, "");
 const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || "";
 export const MODEL_LABEL = (import.meta.env.VITE_SAYSHAPE_MODEL_LABEL as string | undefined)?.trim() || "a hosted model";
-export const MAX_REQUEST_CHARS = 400;
+export const MAX_QUESTION_CHARS = 400;
 
 // https only, except a local proxy (wrangler dev) while developing.
-export const generationAvailable = /^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(ENDPOINT);
+export const generationAvailable = /^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?($|\/)/.test(BASE);
 export const needsHumanCheck = generationAvailable && !!TURNSTILE_SITE_KEY;
 
 export type GenerateEvent =
   | { t: "phase"; v: string }
   | { t: "text"; v: string }
   | { t: "reset" }
-  | { t: "done"; spec: string; problems: number; repaired: boolean; ms: number }
+  | { t: "done"; spec: string; problems: number; repaired: boolean; ms: number; model?: string; tokens?: { in: number; out: number } }
   | { t: "error"; message: string };
 
-/** Send a request and call onEvent for each line the proxy streams back. */
-/** What a follow-up message changes: the first request, the changes since, and the current spec. */
-export interface Refinement {
-  task: string;
-  changes: string[];
-  spec: string;
-}
-/** The proxy accepts at most this many earlier changes; older ones are dropped (the spec already has their effect). */
-export const MAX_CHANGES = 10;
+export type ColumnType = "number" | "text" | "date" | "yes/no" | "mixed";
 
-export async function generate(request: string, opts: { token?: string; refine?: Refinement; signal: AbortSignal; onEvent: (e: GenerateEvent) => void }): Promise<void> {
-  const res = await fetch(ENDPOINT, {
+/** What the proxy is sent about a spreadsheet: never its rows, only these. */
+export interface AskPayload {
+  question: string;
+  rows: number;
+  columns: Array<{ name: string; type: ColumnType; distinct: number }>;
+  sample: Array<Record<string, string | number | boolean | null>>;
+}
+
+/** Ask a question and call onEvent for each line the proxy streams back. */
+export async function ask(payload: AskPayload, opts: { token?: string; signal: AbortSignal; onEvent: (e: GenerateEvent) => void }): Promise<void> {
+  const res = await fetch(`${BASE}/answer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      request,
-      token: opts.token,
-      refine: opts.refine ? { ...opts.refine, changes: opts.refine.changes.slice(-MAX_CHANGES) } : undefined,
-    }),
+    body: JSON.stringify({ ...payload, token: opts.token }),
     signal: opts.signal,
   });
   if (!res.ok || !res.body) {

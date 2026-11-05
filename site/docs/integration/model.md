@@ -8,7 +8,7 @@ description: Generating SayShape specs with a model. The development playground'
 SayShape doesn't include a model. It works with any server that speaks the OpenAI chat completions format: LM Studio, Ollama, vLLM or llama.cpp on your own machine, or hosted APIs such as DeepSeek, OpenAI and OpenRouter.
 
 ::: info Generating on this website
-GitHub Pages serves static files only, so it can't keep an API key secret. On the **Build with AI** page, requests go through a small proxy (`worker/` in the repository, a Cloudflare Worker) that holds the key and calls one fixed free model. The browser never sees the key. Without the proxy, that page isn't shown and the playground runs saved and edited specs only.
+GitHub Pages serves static files only, so it can't keep an API key secret. For the landing page's live answers, questions go through a small proxy (`worker/` in the repository, a Cloudflare Worker) that holds the key and calls one fixed model. The browser never sees the key, and the visitor's spreadsheet stays in the browser: only the question, the column names and three sample rows are sent. Without the proxy, the landing page shows its sample spreadsheets with saved answers, and the playground runs saved and edited specs only.
 :::
 
 ## Try it locally
