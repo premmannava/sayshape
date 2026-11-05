@@ -58,7 +58,7 @@ export const map: ComponentDef = {
   description: "A world map with clickable countries and selectable pins. Highlight countries by name; plot places with optional status colors and sizes.",
   props: {
     highlight: { type: "string", description: "Comma-separated country names to tint, e.g. \"Japan,Brazil\"." },
-    bind: { type: "state", description: "State name that receives the clicked country's name." },
+    bind: { type: "state", description: "State name that receives the clicked country or marker label." },
   },
   children: ["pin"],
   example: `state picked=none
