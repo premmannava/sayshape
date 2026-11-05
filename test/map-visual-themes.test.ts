@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { choroplethColor, choroplethStops, mapVisual } from "../src/components/map/visual";
-import { darkTheme, extendTheme, lightTheme, type Theme } from "../src/theme";
+import { darkTheme, extendTheme, lightTheme } from "../src/theme";
 import { render } from "../src/testing";
 
 const components = [...coreComponents, ...mapComponents];
