@@ -65,13 +65,13 @@ describe("image component", () => {
     expect(draws(ui)).toHaveLength(0);
     expect(ui.text()).toEqual([]);
     finish(picture);
-    await ui.loom.imagesLoaded();
+    await ui.sayshape.imagesLoaded();
     expect(draws(ui)).toHaveLength(1);
   });
 
   it("crops to cover the box by default", async () => {
     const ui = render(`image "Shoe" src="/s.jpg" ratio=1:1\n`, { width: 440, padding: 20, loadImage: async () => picture });
-    await ui.loom.imagesLoaded();
+    await ui.sayshape.imagesLoaded();
     const [, sx, sy, sw, sh, dx, dy, dw, dh] = draws(ui)[0]!.args as number[];
     expect([sx, sy, sw, sh]).toEqual([100, 0, 600, 600]);
     expect([dx, dy, dw, dh]).toEqual([20, 20, 400, 400]);
@@ -79,7 +79,7 @@ describe("image component", () => {
 
   it("shows its description when the image fails", async () => {
     const ui = render(`image "Blue trail runners" src="/missing.jpg"\n`, { loadImage: async () => { throw new Error("404"); } });
-    await ui.loom.imagesLoaded();
+    await ui.sayshape.imagesLoaded();
     expect(ui.text()).toEqual(["Blue trail runners"]);
     expect(draws(ui)).toHaveLength(0);
   });
@@ -87,8 +87,8 @@ describe("image component", () => {
   it("never asks the loader for a blocked image, and says why once", async () => {
     const loadImage = vi.fn(async () => picture);
     const ui = render(`image "Pixel" src="https://tracker.example.org/p.gif"\n`, { loadImage });
-    ui.loom.invalidate("paint");
-    ui.loom.renderNow();
+    ui.sayshape.invalidate("paint");
+    ui.sayshape.renderNow();
     expect(loadImage).not.toHaveBeenCalled();
     expect(ui.text()).toEqual(["Pixel"]);
     expect(ui.warnings).toEqual([expect.stringMatching(/tracker\.example\.org isn't in imageHosts/)]);
@@ -97,18 +97,18 @@ describe("image component", () => {
   it("warns on the console by default", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     // render() collects warnings itself, so build an engine with the defaults.
-    const loom = new SayShape(new FakeCanvas() as unknown as HTMLCanvasElement, { components: coreComponents, width: 400, animate: false });
-    loom.setSpec(`image "Pixel" src="https://tracker.example.org/p.gif"\n`);
-    loom.renderNow();
+    const sayshape = new SayShape(new FakeCanvas() as unknown as HTMLCanvasElement, { components: coreComponents, width: 400, animate: false });
+    sayshape.setSpec(`image "Pixel" src="https://tracker.example.org/p.gif"\n`);
+    sayshape.renderNow();
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]![0])).toMatch(/^SayShape: Image .* isn't in imageHosts/);
-    loom.destroy();
+    sayshape.destroy();
   });
 
   it("loads from hosts the app allows", async () => {
     const loadImage = vi.fn(async () => picture);
     const ui = render(`image "Shoe" src="https://cdn.example.com/s.jpg"\n`, { loadImage, imageHosts: ["cdn.example.com"] });
-    await ui.loom.imagesLoaded();
+    await ui.sayshape.imagesLoaded();
     expect(loadImage).toHaveBeenCalledWith("https://cdn.example.com/s.jpg");
     expect(draws(ui)).toHaveLength(1);
   });
@@ -116,7 +116,7 @@ describe("image component", () => {
   it("loads each URL once, however often it's drawn", async () => {
     const loadImage = vi.fn(async () => picture);
     const ui = render(`state n=0\nimage "A" src="/a.jpg"\nimage "A again" src="/a.jpg"\nbutton "Go" on=inc:n\n`, { loadImage });
-    await ui.loom.imagesLoaded();
+    await ui.sayshape.imagesLoaded();
     ui.press("button");
     expect(loadImage).toHaveBeenCalledTimes(1);
     expect(draws(ui)).toHaveLength(2);
@@ -125,9 +125,9 @@ describe("image component", () => {
   it("follows a src that changes with state", async () => {
     const loadImage = vi.fn(async (_url: string) => picture);
     const ui = render(`state c=blue\nimage "Shoe" src="/shoe-{c}.jpg"\nbutton "Red" on=set:c:red\n`, { loadImage });
-    await ui.loom.imagesLoaded();
+    await ui.sayshape.imagesLoaded();
     ui.press("button");
-    await ui.loom.imagesLoaded();
+    await ui.sayshape.imagesLoaded();
     expect(loadImage.mock.calls.map((c) => c[0])).toEqual(["http://localhost/shoe-blue.jpg", "http://localhost/shoe-red.jpg"]);
   });
 });

@@ -16,7 +16,7 @@ ui.state.set("user", { name: "Ada", plan: "pro" });
 
 A spec reads host data like any other state:
 
-```loom known=products
+```sayshape known=products
 card
   text "{plural(len(products), 'product')}" style=title
   each items=products as=p key={p.id}

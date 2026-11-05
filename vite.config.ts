@@ -22,14 +22,14 @@ export default defineConfig(({ mode }) => {
     },
     // Not secret: which model to preselect and what to add to requests.
     define: {
-      __LOOM_MODEL__: JSON.stringify(model.model),
-      __LOOM_MODEL_URL__: JSON.stringify(model.url),
-      __LOOM_USER_SUFFIX__: JSON.stringify(model.userSuffix),
+      __SAYSHAPE_MODEL__: JSON.stringify(model.model),
+      __SAYSHAPE_MODEL_URL__: JSON.stringify(model.url),
+      __SAYSHAPE_USER_SUFFIX__: JSON.stringify(model.userSuffix),
     },
     build: {
       lib: {
         entry: {
-          loom: resolve(__dirname, "src/index.ts"),
+          sayshape: resolve(__dirname, "src/index.ts"),
           map: resolve(__dirname, "src/components/map/index.ts"),
           testing: resolve(__dirname, "src/testing/index.ts"),
           model: resolve(__dirname, "src/model/index.ts"),

@@ -176,7 +176,7 @@ function checkEngine(spec: string): void {
   const finite = (root: Box | null) => {
     if (root) walkBoxes(root, (b) => { for (const v of [b.x, b.y, b.w, b.h]) expect(Number.isFinite(v)).toBe(true); });
   };
-  finite(ui.loom.boxes);
+  finite(ui.sayshape.boxes);
   for (const h of [...ui.hits]) {
     ui.click(h.box.x + h.box.w / 2, h.box.y + h.box.h / 2);
   }
@@ -192,10 +192,10 @@ function checkEngine(spec: string): void {
     ui.canvas.dispatch("pointerdown", { clientX: b.x + 1, clientY: b.y + 1, pointerId: 1 });
     ui.canvas.dispatch("pointermove", { clientX: b.x + b.w * 3, clientY: -50 });
     ui.canvas.dispatch("pointerup", { clientX: -20, clientY: b.y });
-    ui.loom.renderNow();
+    ui.sayshape.renderNow();
   }
   ui.setSpec(spec);
-  finite(ui.loom.boxes);
+  finite(ui.sayshape.boxes);
   for (const v of Object.values(ui.state)) expect(isValue(v)).toBe(true);
   ui.destroy();
 }

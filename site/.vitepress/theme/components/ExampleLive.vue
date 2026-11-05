@@ -7,9 +7,9 @@
 import { computed, ref } from "vue";
 import type { Example } from "../../../examples/catalog";
 import { resolveTheme } from "../../../../playground/appearance/presets";
-import { useLoom } from "../loom/useLoom";
-import { usesMap } from "../loom/runtime";
-import { onHostEvents, type HostEvent } from "../loom/events";
+import { useSayShape } from "../sayshape/useSayShape";
+import { usesMap } from "../sayshape/runtime";
+import { onHostEvents, type HostEvent } from "../sayshape/events";
 
 const props = defineProps<{ example: Example; eager?: boolean }>();
 const emit = defineEmits<{ event: [e: HostEvent] }>();
@@ -20,20 +20,20 @@ const theme = computed(() => resolveTheme(props.example.look.preset, props.examp
 // The stage takes the example's own page color, so a dark example sits on dark.
 const stage = computed(() => ({ background: theme.value.colors.surface, "--dot": theme.value.colors.line }));
 
-const { loom, failed } = useLoom(canvas, (l) => {
+const { sayshape, failed } = useSayShape(canvas, (l) => {
   l.setTheme(theme.value);
   const off = onHostEvents(l, (e) => emit("event", e));
   l.setSpec(props.example.spec);
   return off;
 }, { lazy: props.eager ? undefined : root, followSiteTheme: () => false, map: usesMap(props.example.spec), today: "2026-10-21" });
 
-defineExpose({ reset: () => loom.value?.setSpec(props.example.spec, { resetState: true }) });
+defineExpose({ reset: () => sayshape.value?.setSpec(props.example.spec, { resetState: true }) });
 </script>
 
 <template>
   <div ref="root" class="xl" :style="stage">
-    <div class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`${example.title}, running live on a canvas`"></canvas></div>
-    <p v-if="failed" class="loom-live__failed">Couldn't start: {{ failed }}</p>
+    <div class="sayshape-canvas-wrap"><canvas ref="canvas" :aria-label="`${example.title}, running live on a canvas`"></canvas></div>
+    <p v-if="failed" class="sayshape-live__failed">Couldn't start: {{ failed }}</p>
   </div>
 </template>
 

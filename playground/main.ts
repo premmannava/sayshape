@@ -12,14 +12,14 @@ const canvas = $<HTMLCanvasElement>("cv");
 
 // The samples use real photos from Unsplash; images from any other host are blocked.
 const imageHosts = ["images.unsplash.com"];
-const loom = new SayShape(canvas, { components: [...coreComponents, ...mapComponents], imageHosts }).expose("loom");
-// Style presets, light/dark/system and a custom accent, through loom.setTheme.
-setupAppearance(loom);
+const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents], imageHosts }).expose("sayshape");
+// Style presets, light/dark/system and a custom accent, through sayshape.setTheme.
+setupAppearance(sayshape);
 // The same guide a model gets from "Ask a model", so copying it into a chat app works the same way.
 // Leave room for the request, generated spec and a repair on local 8K models.
 // Keep the library default unchanged; this is the playground's configuration.
 const guideOptions = playgroundGuide(imageHosts);
-const guideText = languageGuide(loom.registry, guideOptions);
+const guideText = languageGuide(sayshape.registry, guideOptions);
 $("guide").textContent = guideText;
 $("copyGuide").addEventListener("click", async (e) => {
   e.preventDefault(); // inside <summary>: don't toggle the panel
@@ -56,7 +56,7 @@ function setStatus(live: boolean, text: string) {
   $("statusText").textContent = text;
 }
 
-/** Simulates a model streaming tokens. A real model would call loom.push() the same way. */
+/** Simulates a model streaming tokens. A real model would call sayshape.push() the same way. */
 function stream(key: string) {
   const sample = samples[key]!;
   current = key;
@@ -65,8 +65,8 @@ function stream(key: string) {
   $("promptText").textContent = sample.prompt;
   $("events").innerHTML = "";
   selectedLine = 0;
-  loom.inspector.selected = null;
-  loom.beginStream();
+  sayshape.inspector.selected = null;
+  sayshape.beginStream();
   ta.value = "";
   ta.readOnly = true;
   setStatus(true, "Streaming");
@@ -78,13 +78,13 @@ function stream(key: string) {
     const n = reduce ? full.length : Math.min(full.length, i + (key === "designShowcase" ? 24 : 2) + Math.floor(Math.random() * 5));
     const chunk = full.slice(i, n);
     i = n;
-    loom.push(chunk);
+    sayshape.push(chunk);
     ta.value = full.slice(0, i);
     ta.scrollTop = ta.scrollHeight;
     renderGutter();
     if (i < full.length) setTimeout(tick, 22);
     else {
-      loom.endStream();
+      sayshape.endStream();
       ta.readOnly = false;
       setStatus(false, "Done. Edit freely");
     }
@@ -96,7 +96,7 @@ function stream(key: string) {
 
 ta.addEventListener("input", () => {
   if (ta.readOnly) return;
-  loom.setSpec(ta.value);
+  sayshape.setSpec(ta.value);
   renderGutter();
 });
 ta.addEventListener("scroll", () => { gutter.scrollTop = ta.scrollTop; });
@@ -105,7 +105,7 @@ const syncCursorLine = () => {
   const line = ta.value.slice(0, ta.selectionStart).split("\n").length;
   if (line !== selectedLine) {
     selectedLine = line;
-    loom.inspector.selectLine(line);
+    sayshape.inspector.selectLine(line);
     renderGutter();
   }
 };
@@ -146,21 +146,21 @@ function goToLine(line: number) {
 
 // ------------------------------------------------------------ debug tools
 
-$<HTMLInputElement>("tBoxes").addEventListener("change", (e) => loom.inspector.setBoxes((e.target as HTMLInputElement).checked));
-$<HTMLInputElement>("tHits").addEventListener("change", (e) => loom.inspector.setHits((e.target as HTMLInputElement).checked));
-$<HTMLInputElement>("tInspect").addEventListener("change", (e) => loom.inspector.setInspecting((e.target as HTMLInputElement).checked));
+$<HTMLInputElement>("tBoxes").addEventListener("change", (e) => sayshape.inspector.setBoxes((e.target as HTMLInputElement).checked));
+$<HTMLInputElement>("tHits").addEventListener("change", (e) => sayshape.inspector.setHits((e.target as HTMLInputElement).checked));
+$<HTMLInputElement>("tInspect").addEventListener("change", (e) => sayshape.inspector.setInspecting((e.target as HTMLInputElement).checked));
 
 const inspectOut = $("inspect");
 function showNode(node: SayShapeNode | null) {
-  inspectOut.textContent = node ? JSON.stringify(loom.inspector.describe(node), null, 2) : "Nothing selected.";
+  inspectOut.textContent = node ? JSON.stringify(sayshape.inspector.describe(node), null, 2) : "Nothing selected.";
 }
-loom.on("inspect", (sel) => {
+sayshape.on("inspect", (sel) => {
   showNode(sel?.node ?? null);
-  if (sel && loom.inspector.inspecting) goToLine(sel.node.line);
+  if (sel && sayshape.inspector.inspecting) goToLine(sel.node.line);
 });
 
 $("capture").addEventListener("click", async () => {
-  const calls = await loom.inspector.captureFrame();
+  const calls = await sayshape.inspector.captureFrame();
   const counts = new Map<string, number>();
   for (const c of calls) counts.set(c.op, (counts.get(c.op) ?? 0) + 1);
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -169,12 +169,12 @@ $("capture").addEventListener("click", async () => {
     top.map(([op, n]) => `${String(n).padStart(5)}  ${op}`).join("\n") +
     `\n\nFirst calls:\n` +
     calls.slice(0, 14).map((c) => `${c.op}(${c.args.map((a) => JSON.stringify(a)).join(", ")})`).join("\n") +
-    `\n\nFull list: await loom.inspector.captureFrame() in the console.`;
+    `\n\nFull list: await sayshape.inspector.captureFrame() in the console.`;
 });
 
 // ------------------------------------------------------------ panels
 
-loom.on("diagnostics", (d) => {
+sayshape.on("diagnostics", (d) => {
   diagnostics = d;
   $("diagCount").textContent = String(d.length);
   const list = $("diags");
@@ -196,9 +196,9 @@ loom.on("diagnostics", (d) => {
 const stateBody = $("state").querySelector("tbody")!;
 let flashKey = "";
 /** State bound to password fields, shown masked: typed passwords shouldn't sit on screen in plain text. */
-const passwordKeys = () => new Set(loom.find("input").filter((n) => n.props.kind === "password" && n.props.bind).map((n) => n.props.bind!.split(".")[0]!));
+const passwordKeys = () => new Set(sayshape.find("input").filter((n) => n.props.kind === "password" && n.props.bind).map((n) => n.props.bind!.split(".")[0]!));
 function renderState() {
-  const snap = loom.state.snapshot();
+  const snap = sayshape.state.snapshot();
   const secret = passwordKeys();
   stateBody.innerHTML = "";
   for (const [k, v0] of Object.entries(snap)) {
@@ -211,17 +211,17 @@ function renderState() {
     stateBody.appendChild(tr);
   }
 }
-loom.on("change", ({ key }) => { flashKey = key; queueMicrotask(renderState); });
+sayshape.on("change", ({ key }) => { flashKey = key; queueMicrotask(renderState); });
 function logEvent(text: string) {
   const li = document.createElement("li");
   li.textContent = text;
   $("events").prepend(li);
 }
-loom.on("action", ({ name, value }) => logEvent(`emit ${name}${value === undefined ? "" : " → " + JSON.stringify(value)}`));
-loom.on("navigate", ({ screen, from }) => logEvent(`screen ${from ?? "—"} → ${screen}`));
-loom.on("notify", ({ text }) => logEvent(`notify "${text}"`));
+sayshape.on("action", ({ name, value }) => logEvent(`emit ${name}${value === undefined ? "" : " → " + JSON.stringify(value)}`));
+sayshape.on("navigate", ({ screen, from }) => logEvent(`screen ${from ?? "—"} → ${screen}`));
+sayshape.on("notify", ({ text }) => logEvent(`notify "${text}"`));
 
-loom.on("render", (m) => {
+sayshape.on("render", (m) => {
   $("mNodes").textContent = String(m.nodes);
   $("mParse").textContent = m.parseMs.toFixed(2) + " ms";
   $("mLayout").textContent = m.layoutMs.toFixed(2) + " ms";
@@ -236,7 +236,7 @@ fontsReady.then(() => stream("designShowcase"));
 // ------------------------------------------------------------ ask a model
 
 setupAsk({
-  loom,
+  sayshape,
   guide: guideOptions,
   stopSample: () => {
     streamId++;

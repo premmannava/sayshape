@@ -19,20 +19,20 @@ describe("screens", () => {
     const ui = render(shop);
     expect(ui.state.screen).toBe("catalog");
     expect(ui.text()).toEqual(["Shop", "Trail socks", "View"]);
-    expect(ui.loom.screens).toEqual(["catalog", "product", "cart"]);
+    expect(ui.sayshape.screens).toEqual(["catalog", "product", "cart"]);
   });
 
   it("moves forward with go: and back with back, remembering the way", () => {
     const ui = render(shop);
     ui.press({ text: "View" });
-    expect(ui.loom.currentScreen).toBe("product");
+    expect(ui.sayshape.currentScreen).toBe("product");
     ui.press({ text: "Add to cart" });
     expect(ui.text()).toContain("1 in your cart, on the cart screen");
     ui.press({ text: "Keep shopping" });
-    expect(ui.loom.currentScreen).toBe("product");
+    expect(ui.sayshape.currentScreen).toBe("product");
     ui.press({ text: "Back" });
-    expect(ui.loom.currentScreen).toBe("catalog");
-    expect(ui.loom.canGoBack).toBe(false);
+    expect(ui.sayshape.currentScreen).toBe("catalog");
+    expect(ui.sayshape.canGoBack).toBe(false);
   });
 
   it("keeps state across screens", () => {
@@ -47,7 +47,7 @@ describe("screens", () => {
   it("reports each move to the host", () => {
     const ui = render(shop);
     const moves: string[] = [];
-    ui.loom.on("navigate", (e) => moves.push(`${e.from}→${e.screen}`));
+    ui.sayshape.on("navigate", (e) => moves.push(`${e.from}→${e.screen}`));
     ui.press({ text: "View" });
     ui.press({ text: "Back" });
     expect(moves).toEqual(["catalog→product", "product→catalog"]);
@@ -57,7 +57,7 @@ describe("screens", () => {
     const ui = render(`screen name=a\n  button "Nowhere" on=go:missing\n  button "Back" on=back\nscreen name=b\n  text "B"\n`);
     ui.press({ text: "Nowhere" });
     ui.press({ text: "Back" });
-    expect(ui.loom.currentScreen).toBe("a");
+    expect(ui.sayshape.currentScreen).toBe("a");
   });
 
   it("only lays out, paints and focuses the visible screen", () => {
@@ -73,17 +73,17 @@ describe("screens", () => {
     const ui = render(shop);
     ui.tab();
     ui.key("Enter");
-    expect(ui.loom.currentScreen).toBe("product");
+    expect(ui.sayshape.currentScreen).toBe("product");
     expect(ui.focused).toBeNull();
   });
 
   it("can be moved by the host", () => {
     const ui = render(shop);
-    ui.loom.go("cart");
-    ui.loom.renderNow();
-    expect(ui.loom.currentScreen).toBe("cart");
-    ui.loom.back();
-    expect(ui.loom.currentScreen).toBe("catalog");
+    ui.sayshape.go("cart");
+    ui.sayshape.renderNow();
+    expect(ui.sayshape.currentScreen).toBe("cart");
+    ui.sayshape.back();
+    expect(ui.sayshape.currentScreen).toBe("catalog");
   });
 
   it("only allows screens at the top level, with plain names", () => {
@@ -96,27 +96,27 @@ describe("screens", () => {
 
   it("streams: the first screen shows as soon as it arrives and stays put", () => {
     const ui = render("");
-    ui.loom.beginStream();
+    ui.sayshape.beginStream();
     let sawCatalog = false;
     for (const line of shop.split(/(?<=\n)/)) {
-      ui.loom.push(line);
-      ui.loom.renderNow();
-      if (ui.loom.screens.length) {
-        expect(ui.loom.currentScreen).toBe("catalog");
+      ui.sayshape.push(line);
+      ui.sayshape.renderNow();
+      if (ui.sayshape.screens.length) {
+        expect(ui.sayshape.currentScreen).toBe("catalog");
         sawCatalog = true;
       }
     }
-    ui.loom.endStream();
-    ui.loom.renderNow();
+    ui.sayshape.endStream();
+    ui.sayshape.renderNow();
     expect(sawCatalog).toBe(true);
-    expect(ui.loom.currentScreen).toBe("catalog");
+    expect(ui.sayshape.currentScreen).toBe("catalog");
   });
 
   it("forgets history when state is reset", () => {
     const ui = render(shop);
     ui.press({ text: "View" });
     ui.setSpec(shop, { resetState: true });
-    expect(ui.loom.currentScreen).toBe("catalog");
-    expect(ui.loom.canGoBack).toBe(false);
+    expect(ui.sayshape.currentScreen).toBe("catalog");
+    expect(ui.sayshape.canGoBack).toBe(false);
   });
 });

@@ -65,7 +65,7 @@ This is the approach the project brief already allows (rule 7: "a temporary nati
 - The `<input>` follows the field when the page scrolls, the window resizes, or the layout changes while typing (for example a list growing above it). If the field disappears (its `if=` turns false), the `<input>` goes too.
 - **Phones:** iPhones only open the keyboard if focus happens during the tap itself, so the engine focuses the `<input>` inside the pointer event, not on the next frame.
 
-**For tests and Node:** the engine talks to an *editor host* interface. The browser host makes the `<input>`. `loom-ui/testing` uses a fake one, and gains `ui.type(query, text)`, so typing is tested in Node like everything else.
+**For tests and Node:** the engine talks to an *editor host* interface. The browser host makes the `<input>`. `sayshape/testing` uses a fake one, and gains `ui.type(query, text)`, so typing is tested in Node like everything else.
 
 ### 3. Language and guide
 

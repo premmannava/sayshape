@@ -66,22 +66,22 @@ each items=tasks as=t
   });
 });
 
-describe("code and prose where Loom goes", () => {
+describe("code and prose where SayShape goes", () => {
   const first = (line: string) => messages(`state n=1\n${line}\n`)[0];
 
   it("says what to write instead of each kind of code", () => {
-    expect(first("let total = sum(items, 'price')")).toBe("2: Loom has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value. This line and anything under it were skipped");
-    expect(first("const x = 1")).toMatch(/^2: Loom has no variables/);
-    expect(first("function total() {")).toMatch(/^2: Loom has no functions of your own/);
-    expect(first("return card")).toMatch(/^2: Loom has no functions or return/);
+    expect(first("let total = sum(items, 'price')")).toBe("2: SayShape has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value. This line and anything under it were skipped");
+    expect(first("const x = 1")).toMatch(/^2: SayShape has no variables/);
+    expect(first("function total() {")).toMatch(/^2: SayShape has no functions of your own/);
+    expect(first("return card")).toMatch(/^2: SayShape has no functions or return/);
     expect(first("for t in tasks:")).toMatch(/^2: To repeat elements, write each items=list as=x/);
-    expect(first("} else {")).toMatch(/^2: Loom has no braces around blocks/);
-    expect(first("})")).toMatch(/^2: Loom has no braces around blocks/);
+    expect(first("} else {")).toMatch(/^2: SayShape has no braces around blocks/);
+    expect(first("})")).toMatch(/^2: SayShape has no braces around blocks/);
     expect(first("else {")).toMatch(/^2: Write else on its own line with nothing after it/);
     expect(first("elif={n > 2}")).toMatch(/^2: Write else if=\{…\} on its own line/);
     expect(first("if (n > 0) {")).toMatch(/^2: Write a line holding only if=\{…\}/);
     expect(first("// totals")).toBe("2: Comments start with #, like # Totals. This line and anything under it were skipped");
-    expect(first("This shows the budget and what's left.")).toMatch(/^2: Only Loom lines go in a spec/);
+    expect(first("This shows the budget and what's left.")).toMatch(/^2: Only SayShape lines go in a spec/);
   });
 
   it("gives one message per line, without the tokenizer's complaints", () => {

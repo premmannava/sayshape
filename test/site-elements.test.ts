@@ -10,7 +10,7 @@ import { componentExampleSpec } from "../src/prompt";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render } from "../src/testing";
-import { editLine, findElementLine, formatValue, readProp, readText, TYPO, writeProp, writeText } from "../site/.vitepress/theme/loom/specEdit";
+import { editLine, findElementLine, formatValue, readProp, readText, TYPO, writeProp, writeText } from "../site/.vitepress/theme/sayshape/specEdit";
 
 const all = [...coreComponents, ...mapComponents];
 type Node = ReturnType<typeof parse>["root"];

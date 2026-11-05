@@ -67,8 +67,8 @@ describe("theme-reactive Canvas map visual language", () => {
   it("changes paint colors when a host switches theme without changing the map spec", () => {
     const ui = render(choropleth, { components, theme: lightTheme });
     const before = (ui.find("map").box!.data as { regions: { values: Map<string, number> } }).regions.values;
-    ui.loom.setTheme(darkTheme);
-    ui.loom.renderNow();
+    ui.sayshape.setTheme(darkTheme);
+    ui.sayshape.renderNow();
     const ops = ui.drawOps;
     expect(ops.some((o) => o.op === "fillRect" && o.fillStyle === darkTheme.colors.surface)).toBe(true);
     expect(ops.some((o) => o.op === "fill" && o.fillStyle === darkTheme.colors.accent)).toBe(true);

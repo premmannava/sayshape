@@ -55,8 +55,7 @@ const components = [...coreComponents, ...mapComponents];
 const registry = new Registry(components);
 
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
-const CHAT_NOTES = `This guide calls the language Loom, its earlier name: it is the same language as SayShape.
-You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
+const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
 Keep it to one focused screen: a card or column with a title, then the content. Prefer row and grid for side-by-side numbers; avoid more than three columns.
 Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption.
 When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.
@@ -104,7 +103,7 @@ function topics(withData: boolean, withMcp = false): Record<string, string> {
  */
 export function quickStart(withData = false, withMcp = false): string {
   return [
-    "QUICK START (the language is also called Loom)",
+    "QUICK START",
     // The guide's "not JavaScript" line is left out to keep this short: show_interface returns
     // each code line's diagnostic, which says what to write instead.
     sectionText("compact", "format").replace(/^FORMAT\n/, "").replace(/^- Not JavaScript:.*\n/m, ""),

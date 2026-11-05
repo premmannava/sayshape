@@ -72,7 +72,7 @@ export interface ParseOptions {
   /** Props given to the invisible root column. */
   rootProps?: Record<string, string>;
   /**
-   * State the app supplies itself (loom.state.set), so reading it isn't
+   * State the app supplies itself (sayshape.state.set), so reading it isn't
    * reported as an unknown name.
    */
   knownNames?: readonly string[];
@@ -331,16 +331,16 @@ export const ON_BLOCK_MESSAGE =
 
 /**
  * What to write instead of a line of JavaScript (or another language), by its first word.
- * Models reach for code when a spec needs logic; each message names the Loom way, so one
+ * Models reach for code when a spec needs logic; each message names the SayShape way, so one
  * repair can fix it.
  */
 const CODE_WORDS: Record<string, string> = {
-  let: "Loom has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
-  const: "Loom has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
-  var: "Loom has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
-  function: "Loom has no functions of your own. Work a value out with derive name={…}, using the built-in ones like sum(), filter() and find()",
-  def: "Loom has no functions of your own. Work a value out with derive name={…}, using the built-in ones like sum(), filter() and find()",
-  return: "Loom has no functions or return. Write the elements themselves, and work values out with derive name={…}",
+  let: "SayShape has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
+  const: "SayShape has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
+  var: "SayShape has no variables. For a value worked out from state, write derive name={…} at the top level; for a value people change, write state name=value",
+  function: "SayShape has no functions of your own. Work a value out with derive name={…}, using the built-in ones like sum(), filter() and find()",
+  def: "SayShape has no functions of your own. Work a value out with derive name={…}, using the built-in ones like sum(), filter() and find()",
+  return: "SayShape has no functions or return. Write the elements themselves, and work values out with derive name={…}",
   for: "To repeat elements, write each items=list as=x and indent the elements under it",
   foreach: "To repeat elements, write each items=list as=x and indent the elements under it",
   while: "To repeat elements, write each items=list as=x and indent the elements under it",
@@ -348,23 +348,23 @@ const CODE_WORDS: Record<string, string> = {
   elif: "Write else if={…} on its own line, right after the if= block it follows",
   elseif: "Write else if={…} on its own line, right after the if= block it follows",
   switch: "Write a line holding only if={…} for each case, or else if={…} after the first",
-  import: "Loom can't run code or load modules. Write only Loom lines: elements, state and derive",
-  export: "Loom can't run code or load modules. Write only Loom lines: elements, state and derive",
-  class: "Loom can't run code. Write only Loom lines: elements, state and derive",
-  console: "Loom can't run code. Write only Loom lines: elements, state and derive",
-  document: "Loom can't run code. Write only Loom lines: elements, state and derive",
-  window: "Loom can't run code. Write only Loom lines: elements, state and derive",
+  import: "SayShape can't run code or load modules. Write only SayShape lines: elements, state and derive",
+  export: "SayShape can't run code or load modules. Write only SayShape lines: elements, state and derive",
+  class: "SayShape can't run code. Write only SayShape lines: elements, state and derive",
+  console: "SayShape can't run code. Write only SayShape lines: elements, state and derive",
+  document: "SayShape can't run code. Write only SayShape lines: elements, state and derive",
+  window: "SayShape can't run code. Write only SayShape lines: elements, state and derive",
 };
 
-/** A Loom message for a line that's code or prose rather than an element, or undefined. */
+/** A SayShape message for a line that's code or prose rather than an element, or undefined. */
 export function codeLineMessage(body: string): string | undefined {
   if (/^(\/\/|\/\*|\*\/|--\s)/.test(body)) return "Comments start with #, like # Totals";
-  if (/^[}\])](\s*[,;)\]}]*)?(\s*else\b.*)?$/.test(body)) return "Loom has no braces around blocks: the lines under an if= or each line are indented under it instead, and nothing closes it";
+  if (/^[}\])](\s*[,;)\]}]*)?(\s*else\b.*)?$/.test(body)) return "SayShape has no braces around blocks: the lines under an if= or each line are indented under it instead, and nothing closes it";
   const word = /^([A-Za-z_]\w*)/.exec(body)?.[1];
   if (word && Object.prototype.hasOwnProperty.call(CODE_WORDS, word)) return CODE_WORDS[word];
   // A sentence: a capitalised word, then more words, with no props or quoted text.
   if (/^[A-Z][a-z]*\s+\w+(\s+\w+)+[\s\w,.:;'!?-]*$/.test(body) && !/[="]/.test(body)) {
-    return "Only Loom lines go in a spec. Leave explanations out, or start them with # as comments";
+    return "Only SayShape lines go in a spec. Leave explanations out, or start them with # as comments";
   }
   return undefined;
 }
@@ -501,7 +501,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
 
     // JSX or code where an element should be, like {items.map(…)} or <list-item>.
     if (/^[{<]/.test(body) && !openState) {
-      diagnostics.push({ line: lineNo, severity: "warning", message: `Lines start with an element name. Loom has no JSX or code; to repeat elements for each item, use each items=list as=x and put the elements under it` });
+      diagnostics.push({ line: lineNo, severity: "warning", message: `Lines start with an element name. SayShape has no JSX or code; to repeat elements for each item, use each items=list as=x and put the elements under it` });
       skipDeeperThan = indent;
       return;
     }

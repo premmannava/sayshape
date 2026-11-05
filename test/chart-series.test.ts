@@ -262,8 +262,8 @@ describe.each(Object.entries(SPECS))("%s", (_name, spec) => {
     const ui = render(spec, { width });
     expect(ui.diagnostics).toEqual([]);
     expectInside(ui);
-    expect(textOverflows(ui.loom.boxes!, ui.drawOps)).toEqual([]);
-    walkBoxes(ui.loom.boxes!, (b) => { for (const v of [b.x, b.y, b.w, b.h]) expect(Number.isFinite(v)).toBe(true); });
+    expect(textOverflows(ui.sayshape.boxes!, ui.drawOps)).toEqual([]);
+    walkBoxes(ui.sayshape.boxes!, (b) => { for (const v of [b.x, b.y, b.w, b.h]) expect(Number.isFinite(v)).toBe(true); });
     ui.destroy();
   });
 
@@ -333,11 +333,11 @@ describe("series colors in the theme", () => {
     }
   });
 
-  it("can be overridden from CSS as --loom-series-N", () => {
-    expect(cssVarOf("series1")).toBe("--loom-series-1");
-    expect(cssVarOf("series6")).toBe("--loom-series-6");
-    expect(cssVarOf("landHover")).toBe("--loom-land-hover");
-    expect(cssVarOf("accent")).toBe("--loom-accent");
+  it("can be overridden from CSS as --sayshape-series-N", () => {
+    expect(cssVarOf("series1")).toBe("--sayshape-series-1");
+    expect(cssVarOf("series6")).toBe("--sayshape-series-6");
+    expect(cssVarOf("landHover")).toBe("--sayshape-land-hover");
+    expect(cssVarOf("accent")).toBe("--sayshape-accent");
   });
 
   it("keeps series 1 on the accent when only the accent changes", () => {

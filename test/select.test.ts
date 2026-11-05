@@ -168,7 +168,7 @@ describe("choosing with the pointer", () => {
     expect(ui.popup).not.toBeNull();
     // Nothing underneath is hovered while it's open.
     ui.canvas.dispatch("pointermove", { clientX: above.x + 5, clientY: above.y + 5 });
-    expect(ui.loom.hover).toBeNull();
+    expect(ui.sayshape.hover).toBeNull();
     ui.click(above.x + 5, above.y + 5);
     expect(ui.popup).toBeNull();
     expect(ui.state.clicks).toBe(0);
@@ -329,13 +329,13 @@ describe("placement on screen", () => {
 
   it("makes the canvas taller while a list needs it, and gives it back", () => {
     const ui = render(`state xs=${many(6)} x=""\nselect items=xs value=id label=name bind=x\n`);
-    const before = ui.loom.metrics.height;
+    const before = ui.sayshape.metrics.height;
     ui.press("select");
     const a = ui.popup!.area!;
-    expect(ui.loom.metrics.height).toBeGreaterThanOrEqual(a.y + a.h);
-    expect(ui.loom.metrics.height).toBeGreaterThan(before);
+    expect(ui.sayshape.metrics.height).toBeGreaterThanOrEqual(a.y + a.h);
+    expect(ui.sayshape.metrics.height).toBeGreaterThan(before);
     ui.key("Escape");
-    expect(ui.loom.metrics.height).toBe(before);
+    expect(ui.sayshape.metrics.height).toBe(before);
   });
 });
 
@@ -388,8 +388,8 @@ describe("changes while open", () => {
     expect(ui.state.n).toBe(1);
     ui.setSpec(basic);
     ui.press("select");
-    ui.loom.beginStream({ keepState: true });
-    ui.loom.renderNow();
+    ui.sayshape.beginStream({ keepState: true });
+    ui.sayshape.renderNow();
     expect(ui.popup).toBeNull();
   });
 

@@ -676,7 +676,7 @@ export const code: ComponentDef = {
   description: "A short piece of code or a command, in a monospaced font on a tinted block.",
   text: { description: "The code. Long lines wrap.", required: true },
   props: {},
-  example: `code "npm install loom-ui"`,
+  example: `code "npm install sayshape"`,
   layout(box, ctx) {
     const font = themeFont(ctx.theme, 400, CODE_SIZE, "mono");
     const lines = wrapText(ctx.props(box.node).text(), Math.max(20, box.w - CODE_PAD * 2), font, ctx.measure);

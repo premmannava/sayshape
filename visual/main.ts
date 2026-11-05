@@ -3,7 +3,7 @@
  *
  *   /visual/index.html?case=sample-hike&theme=dark&width=375
  *
- * The page sets window.__loomReady once fonts are loaded and the frame is
+ * The page sets window.__sayShapeReady once fonts are loaded and the frame is
  * painted, so screenshots never catch a half-rendered canvas.
  */
 import "@fontsource/instrument-sans/400.css";
@@ -17,7 +17,7 @@ import { fixtureImageLoader } from "./fixture-image";
 import { cases } from "./cases";
 
 declare global {
-  interface Window { __loomReady?: boolean; __loomError?: string; __loom?: SayShape }
+  interface Window { __sayShapeReady?: boolean; __sayShapeError?: string; __sayshape?: SayShape }
 }
 
 async function main(): Promise<void> {
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   await Promise.all([400, 600, 700].map((w) => document.fonts.load(`${w} 16px "Instrument Sans"`)));
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
-  const loom = new SayShape(canvas, {
+  const sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents],
     theme,
     width,
@@ -48,13 +48,13 @@ async function main(): Promise<void> {
     today: () => "2026-10-21",
   });
   // Interaction tests (typing.spec.ts) drive the engine directly.
-  window.__loom = loom;
-  loom.setSpec(visual.spec);
-  loom.renderNow();
-  await loom.imagesLoaded();
-  window.__loomReady = true;
+  window.__sayshape = sayshape;
+  sayshape.setSpec(visual.spec);
+  sayshape.renderNow();
+  await sayshape.imagesLoaded();
+  window.__sayShapeReady = true;
 }
 
 main().catch((e: unknown) => {
-  window.__loomError = e instanceof Error ? e.message : String(e);
+  window.__sayShapeError = e instanceof Error ? e.message : String(e);
 });

@@ -2,9 +2,9 @@
 /** One element on the atlas wall: its example running live, flippable to the spec that draws it. */
 import { computed, ref } from "vue";
 import { withBase } from "vitepress";
-import { useLoom } from "../loom/useLoom";
-import { usesMap } from "../loom/runtime";
-import { highlightSpec } from "../loom/highlight";
+import { useSayShape } from "../sayshape/useSayShape";
+import { usesMap } from "../sayshape/runtime";
+import { highlightSpec } from "../sayshape/highlight";
 
 const props = defineProps<{ type: string; description: string; example: string; live: boolean; bindsState: boolean }>();
 
@@ -15,11 +15,11 @@ const flipped = ref(!props.live);
 const html = computed(() => highlightSpec(props.example));
 const href = computed(() => withBase(`/docs/elements/${props.type}.html`));
 
-const { loom, failed } = useLoom(canvas, (l) => {
+const { sayshape, failed } = useSayShape(canvas, (l) => {
   l.setSpec(props.example);
 }, { lazy: root, map: usesMap(props.example), today: "2026-10-21" });
 
-function reset() { loom.value?.setSpec(props.example, { resetState: true }); }
+function reset() { sayshape.value?.setSpec(props.example, { resetState: true }); }
 </script>
 
 <template>
@@ -27,13 +27,13 @@ function reset() { loom.value?.setSpec(props.example, { resetState: true }); }
     <header class="ac-head">
       <a :href="href" class="ac-name">{{ type }}</a>
       <span class="ac-actions">
-        <button v-if="!flipped && loom" type="button" class="ac-btn" :aria-label="`Reset the ${type} example`" @click="reset">↺</button>
+        <button v-if="!flipped && sayshape" type="button" class="ac-btn" :aria-label="`Reset the ${type} example`" @click="reset">↺</button>
         <button v-if="live" type="button" class="ac-btn" :aria-pressed="flipped" :aria-label="flipped ? `Show the live ${type}` : `Show the spec for ${type}`" @click="flipped = !flipped">{{ flipped ? "Live" : "Spec" }}</button>
       </span>
     </header>
-    <div v-show="!flipped" class="loom-stage ac-stage">
-      <div v-if="live" class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`Live ${type} example`"></canvas></div>
-      <p v-if="failed" class="loom-live__failed">Couldn't start: {{ failed }}</p>
+    <div v-show="!flipped" class="sayshape-stage ac-stage">
+      <div v-if="live" class="sayshape-canvas-wrap"><canvas ref="canvas" :aria-label="`Live ${type} example`"></canvas></div>
+      <p v-if="failed" class="sayshape-live__failed">Couldn't start: {{ failed }}</p>
     </div>
     <pre v-show="flipped" class="spec-view ac-spec" tabindex="0" :aria-label="`Spec for ${type}`"><code v-html="html"></code></pre>
     <footer class="ac-foot">

@@ -224,12 +224,12 @@ export function extendTheme(from: Theme, patch: DeepPartial<Theme>): Theme {
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? Partial<T[K]> : T[K] };
 
-/** The CSS custom property for a color token: accent → --loom-accent, landHover → --loom-land-hover, series2 → --loom-series-2. */
+/** The CSS custom property for a color token: accent → --sayshape-accent, landHover → --sayshape-land-hover, series2 → --sayshape-series-2. */
 export function cssVarOf(key: keyof Theme["colors"]): string {
-  return "--loom-" + key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()).replace(/(\d+)$/, "-$1");
+  return "--sayshape-" + key.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()).replace(/(\d+)$/, "-$1");
 }
 
-/** Color tokens can be supplied from CSS as `--loom-<token>` (e.g. --loom-accent, --loom-series-2). */
+/** Color tokens can be supplied from CSS as `--sayshape-<token>` (e.g. --sayshape-accent, --sayshape-series-2). */
 export function themeFromCSS(el: Element, from: Theme): Theme {
   const cs = getComputedStyle(el);
   const colors = { ...from.colors };

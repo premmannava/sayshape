@@ -28,7 +28,7 @@ describe("the conversation generateSpec returns", () => {
     expect(r.spec).toBe(broken);
     expect(r.messages.at(-1)).toEqual({ role: "assistant", content: broken });
     expect(r.messages).toHaveLength(3);
-    expect(r.messages.some((x) => /Your Loom has these problems/.test(x.content))).toBe(false);
+    expect(r.messages.some((x) => /Your SayShape has these problems/.test(x.content))).toBe(false);
   });
 });
 
@@ -193,7 +193,7 @@ describe("bounded refinement", () => {
     // The next request carries none of the failed attempts.
     const { messages } = refineMessages(next, "Bigger");
     expect(messages.some((x) => x.content.includes("nonsense"))).toBe(false);
-    expect(messages.some((x) => x.content.includes("Your Loom has these problems"))).toBe(false);
+    expect(messages.some((x) => x.content.includes("Your SayShape has these problems"))).toBe(false);
   });
 
   it("can't be mixed with history", async () => {

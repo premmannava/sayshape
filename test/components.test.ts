@@ -7,20 +7,20 @@ import { initials } from "../src/components/content";
 import { pageSlots } from "../src/components/navigation";
 import { render } from "../src/testing";
 
-const types = (ui: ReturnType<typeof render>, root = ui.loom.boxes!) => root.children.map((b) => b.node.type);
+const types = (ui: ReturnType<typeof render>, root = ui.sayshape.boxes!) => root.children.map((b) => b.node.type);
 
 describe("grid", () => {
   const spec = `grid min=200 gap=10\n  stat label="A" value=1\n  stat label="B" value=2\n  stat label="C" value=3\n  stat label="D" value=4\n`;
 
   it("fits as many columns as the width allows", () => {
-    const cols = (width: number) => new Set(render(spec, { width }).loom.boxes!.children[0]!.children.map((b) => b.x)).size;
+    const cols = (width: number) => new Set(render(spec, { width }).sayshape.boxes!.children[0]!.children.map((b) => b.x)).size;
     expect(cols(320)).toBe(1);
     expect(cols(600)).toBe(2);
     expect(cols(1024)).toBe(4);
   });
 
   it("stacks rows with the gap between them", () => {
-    const [a, , c] = render(spec, { width: 600 }).loom.boxes!.children[0]!.children;
+    const [a, , c] = render(spec, { width: 600 }).sayshape.boxes!.children[0]!.children;
     expect(c!.y - (a!.y + a!.h)).toBe(10);
     expect(c!.x).toBe(a!.x);
   });
@@ -41,7 +41,7 @@ describe("list and list-item", () => {
   });
 
   it("makes a row with a detail line taller", () => {
-    const [a, b] = render(spec).loom.boxes!.children[0]!.children;
+    const [a, b] = render(spec).sayshape.boxes!.children[0]!.children;
     expect(b!.h).toBeGreaterThan(a!.h);
   });
 });
@@ -202,7 +202,7 @@ describe("rating", () => {
 
   it("fills part of a star for a fractional value", () => {
     const ui = render(`rating value=2.5 max=3\n`);
-    expect(ui.drawOps.filter((d) => d.op === "fill" && d.fillStyle === ui.loom.theme.colors.warn)).toHaveLength(3);
+    expect(ui.drawOps.filter((d) => d.op === "fill" && d.fillStyle === ui.sayshape.theme.colors.warn)).toHaveLength(3);
   });
 });
 

@@ -8,7 +8,7 @@
  *
  * Adapted from the development playground's samples (playground/samples.ts),
  * the model guide's worked examples (src/prompt.ts) and the monthly budget
- * example (playground/connected-order/monthly-budget.loom).
+ * example (playground/connected-order/monthly-budget.sayshape).
  */
 
 export type Category = "Money" | "Shopping" | "Dashboards" | "Plans";

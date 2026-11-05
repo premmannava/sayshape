@@ -119,8 +119,8 @@ describe("the DATA section", () => {
     expect(cart.diagnostics).toEqual([]);
     expect(cart.text()).toContain("Total $177");
     const plus = cart.hits.filter((h) => h.box.node.id === "7:stepper#1").at(-1)!;
-    cart.loom.activate({ node: plus.box.node, box: plus.box, detail: plus.detail });
-    cart.loom.renderNow();
+    cart.sayshape.activate({ node: plus.box.node, box: plus.box, detail: plus.detail });
+    cart.sayshape.renderNow();
     expect(cart.text()).toContain("Total $306");
   });
 });

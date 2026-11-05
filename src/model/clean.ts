@@ -40,10 +40,10 @@ export class SpecFilter {
   thinkingChars = 0;
 
   /**
-   * @param looksLikeLoom decides whether a line can start the spec, so prose
+   * @param looksLikeSayShape decides whether a line can start the spec, so prose
    *   before it is dropped. Once the spec has started, every line is kept.
    */
-  constructor(private looksLikeLoom: (line: string) => boolean) {}
+  constructor(private looksLikeSayShape: (line: string) => boolean) {}
 
   push(chunk: string): FilterOutput {
     this.partial += chunk;
@@ -112,7 +112,7 @@ export class SpecFilter {
   private keep(line: string): string {
     if (FENCE.test(line)) return "";
     if (!this.started) {
-      if (!this.looksLikeLoom(line)) return "";
+      if (!this.looksLikeSayShape(line)) return "";
       this.started = true;
     }
     if (this.joining.length) {
@@ -138,7 +138,7 @@ export class SpecFilter {
 }
 
 /** A line that could start a spec: a declaration, a comment, or a known element name. */
-export function loomLineTest(isElement: (name: string) => boolean): (line: string) => boolean {
+export function sayShapeLineTest(isElement: (name: string) => boolean): (line: string) => boolean {
   return (line) => {
     const t = line.trim();
     if (!t) return false;

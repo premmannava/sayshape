@@ -50,8 +50,8 @@ column
 describe.each(Object.entries(STRESS))("%s", (_name, spec) => {
   it.each([240, 320, 480])("fits at %ipx", (width) => {
     const ui = render(spec, { components: coreComponents, width });
-    expect(ui.loom.diagnostics).toEqual([]);
-    expect(textOverflows(ui.loom.boxes!, ui.drawOps)).toEqual([]);
+    expect(ui.sayshape.diagnostics).toEqual([]);
+    expect(textOverflows(ui.sayshape.boxes!, ui.drawOps)).toEqual([]);
     ui.destroy();
   });
 });
@@ -67,13 +67,13 @@ row
   stat label="Days" value=2
   stat label="Hikers" value=3
   stat label="Water (L)" value=18`, { components: coreComponents, width: 375 });
-    expect(new Set(boxes(ui.loom.boxes!, "stat").map((b) => b.y)).size).toBe(1);
+    expect(new Set(boxes(ui.sayshape.boxes!, "stat").map((b) => b.y)).size).toBe(1);
     ui.destroy();
   });
 
   it("keep children side by side when they fit, in equal shares as before", () => {
     const ui = render(spec, { components: coreComponents, width: 600 });
-    const [s1, s2] = boxes(ui.loom.boxes!, "stepper");
+    const [s1, s2] = boxes(ui.sayshape.boxes!, "stepper");
     expect(s1!.y).toBe(s2!.y);
     expect(s1!.w).toBeCloseTo(s2!.w);
     ui.destroy();
@@ -81,16 +81,16 @@ row
 
   it("move children onto the next line when they don't fit", () => {
     const ui = render(spec, { components: coreComponents, width: 320 });
-    const [s1, s2] = boxes(ui.loom.boxes!, "stepper");
+    const [s1, s2] = boxes(ui.sayshape.boxes!, "stepper");
     expect(s2!.y).toBeGreaterThan(s1!.y);
     // Alone on its line, each stepper gets the row's whole width.
-    expect(s1!.w).toBeCloseTo(boxes(ui.loom.boxes!, "row")[0]!.w);
+    expect(s1!.w).toBeCloseTo(boxes(ui.sayshape.boxes!, "row")[0]!.w);
     ui.destroy();
   });
 
   it("stay on one line with wrap=false", () => {
     const ui = render(spec.replace("row", "row wrap=false"), { components: coreComponents, width: 320 });
-    const [s1, s2] = boxes(ui.loom.boxes!, "stepper");
+    const [s1, s2] = boxes(ui.sayshape.boxes!, "stepper");
     expect(s1!.y).toBe(s2!.y);
     ui.destroy();
   });
@@ -113,7 +113,7 @@ row
   stat label="Orders" value="1,204"
   stat label="Returns" value="3.1%"
   stat label="Rating" value="4.8"`, { components: coreComponents, width: 220 });
-    const ys = [...new Set(boxes(ui.loom.boxes!, "stat").map((b) => b.y))];
+    const ys = [...new Set(boxes(ui.sayshape.boxes!, "stat").map((b) => b.y))];
     expect(ys.length).toBe(2);
     ui.destroy();
   });
@@ -122,7 +122,7 @@ row
 describe("stat", () => {
   const stat = (value: string, width: number) => {
     const ui = render(`stat label="Total" value="${value}"`, { components: coreComponents, width });
-    const box = boxes(ui.loom.boxes!, "stat")[0]!;
+    const box = boxes(ui.sayshape.boxes!, "stat")[0]!;
     const sizes = ui.drawOps.filter((o) => o.op === "fillText" && o.args[0] !== "Total").map((o) => Number(/(\d+)px/.exec(o.font)![1]));
     ui.destroy();
     return { h: box.h, sizes };
@@ -152,7 +152,7 @@ describe("grid", () => {
 grid min=60
   stepper "Hikers" bind=a
   stepper "Days" bind=b`, { components: coreComponents, width: 320 });
-    const [s1, s2] = boxes(ui.loom.boxes!, "stepper");
+    const [s1, s2] = boxes(ui.sayshape.boxes!, "stepper");
     expect(s2!.y).toBeGreaterThan(s1!.y);
     ui.destroy();
   });

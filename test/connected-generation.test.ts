@@ -17,18 +17,18 @@ describe("generated interface host contract", () => {
   it("preserves service data across interface replacement and still submits orders", async () => {
     const ui = render(connectedSpec(orderBody));
     const service = createDemoService(0, "2026-10-21");
-    const host = connectOrderDemo(ui.loom, service);
+    const host = connectOrderDemo(ui.sayshape, service);
     await host.load();
-    ui.loom.state.set("selected", "monitor");
-    ui.loom.state.set("quantity", 2);
-    ui.loom.state.set("delivery", "2026-11-10");
-    ui.loom.setSpec(connectedSpec(orderBody.replace("Equipment desk", "Generated catalog")));
-    ui.loom.renderNow();
-    expect(ui.loom.diagnostics).toEqual([]);
-    expect(ui.loom.state.get("selected")).toBe("monitor");
-    expect(ui.loom.state.get("equipment")).toHaveLength(6);
+    ui.sayshape.state.set("selected", "monitor");
+    ui.sayshape.state.set("quantity", 2);
+    ui.sayshape.state.set("delivery", "2026-11-10");
+    ui.sayshape.setSpec(connectedSpec(orderBody.replace("Equipment desk", "Generated catalog")));
+    ui.sayshape.renderNow();
+    expect(ui.sayshape.diagnostics).toEqual([]);
+    expect(ui.sayshape.state.get("selected")).toBe("monitor");
+    expect(ui.sayshape.state.get("equipment")).toHaveLength(6);
     await host.submit();
     expect(await service.orders()).toMatchObject([{ name: "Monitor", quantity: 2, total: 756 }]);
-    host.dispose(); ui.loom.destroy();
+    host.dispose(); ui.sayshape.destroy();
   });
 });

@@ -7,7 +7,7 @@ description: How SayShape controls read and write state through bind=, including
 
 Controls connect to state with `bind=`. A bound control shows the state's current value and writes to it when someone uses it. Nothing else is needed: there are no change handlers.
 
-```loom live
+```sayshape live
 state agreed=false size="m" qty=1 volume=40 name=""
 card
   check "I agree to the terms" bind=agreed
@@ -41,7 +41,7 @@ Each component's reference page lists its exact props.
 
 `bind=` already writes the value, so don't add `on=` just to copy it. Use `on=` for something *extra* that should happen after the value is stored, like telling your app:
 
-```loom live
+```sayshape live
 state plan="monthly"
 card
   radio "Monthly" bind=plan value=monthly on="emit:plan:{plan}"
@@ -54,7 +54,7 @@ The `on=` actions run with the new value already in place.
 
 `bind=` can name a field inside a record, or a field of the current item inside [`each`](./lists):
 
-```loom live
+```sayshape live
 state settings={theme: "light", alerts: true} todos=[{text: "Water", done: false}, {text: "Map", done: true}]
 card
   switch "Alerts" bind=settings.alerts

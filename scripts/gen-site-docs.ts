@@ -44,7 +44,7 @@ const TITLES: Record<Category, string> = {
 const INTROS: Record<Category, string> = {
   layout: "Containers that place other elements, plus `each`, which repeats elements once per item of a list.",
   content: "Text, images, code, badges and avatars.",
-  data: "Figures, ratings, charts, tables and the world map. `map` and `pin` ship in the separate `loom-ui/map` entry point because the country outlines add about 76 KB.",
+  data: "Figures, ratings, charts, tables and the world map. `map` and `pin` ship in the separate `sayshape/map` entry point because the country outlines add about 76 KB.",
   input: "Controls people press, type into or drag. Most read and write a state name through `bind=`.",
   navigation: "Screens, tabs, breadcrumbs and pagination.",
   feedback: "Progress, loading placeholders and empty states.",
@@ -76,7 +76,7 @@ function categoryPage(cat: Category, defs: ComponentDef[]): string {
     `<p class="generated-note">Generated from the component definitions in <code>src/components</code>, the same source the parser validates against and the model guide is built from. Every element also accepts ${common}. Each example below is rendered live by the SayShape engine.</p>`,
     "",
     // Examples with images point at files this site doesn't have, so they're shown but not rendered.
-    defs.map((c) => componentSection(c, { fence: /^\s*image\b/m.test(c.example ?? "") ? "loom" : "loom live", link: link(cat), example: (d) => d.example && componentExampleSpec(d, all).trimEnd() }) + `[Try \`${c.type}\` interactively →](../elements/${c.type})\n\n`).join("").trim(),
+    defs.map((c) => componentSection(c, { fence: /^\s*image\b/m.test(c.example ?? "") ? "sayshape" : "sayshape live", link: link(cat), example: (d) => d.example && componentExampleSpec(d, all).trimEnd() }) + `[Try \`${c.type}\` interactively →](../elements/${c.type})\n\n`).join("").trim(),
     "",
   ].join("\n");
 }

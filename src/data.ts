@@ -5,7 +5,7 @@
  *
  * - literals a spec writes on a `state` line, one line each so streaming
  *   keeps working: `state todos=[{text:"Pack water", done:false}]`
- * - data the host app passes in: `loom.state.set("products", rows)`
+ * - data the host app passes in: `sayshape.state.set("products", rows)`
  *
  * Either way the result is plain data: frozen lists, and frozen records with
  * no prototype, holding only numbers, strings, booleans, null, lists and

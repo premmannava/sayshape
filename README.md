@@ -18,8 +18,6 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Name:** SayShape was called Loom while it was being built. The package (`loom-ui`), CSS variables (`--loom-*`) and the model guide still use that name; they'll be renamed before the first npm release.
-
 > **Status: 0.1, early foundation.** The engine, derived values, 48 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie and donut), stats with a change and sparkline, callouts, its own icons, timelines, carousels, segmented toggles, comparisons, tables, a model connection, tests and debugging tools are in place. Accessibility, scrolling and the docs site come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
@@ -467,7 +465,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty) |
 <!-- CATEGORIES:END -->
 
-All components also accept `if=` ([Conditions](#conditions)). `map` and `pin` ship in a separate entry point, `loom-ui/map`, because the country outlines add about 76 KB.
+All components also accept `if=` ([Conditions](#conditions)). `map` and `pin` ship in a separate entry point, `sayshape/map`, because the country outlines add about 76 KB.
 
 <!-- COMPONENTS:START (generated from src/components) -->
 ### `column`
@@ -751,7 +749,7 @@ A short piece of code or a command, in a monospaced font on a tinted block.
 | `"text"` | text, required | The code. Long lines wrap. |
 
 ```
-code "npm install loom-ui"
+code "npm install sayshape"
 ```
 
 ### `badge`
@@ -1328,11 +1326,11 @@ pin "Phoenix" lat=33.4484 lon=-112.074 tone=bad size=9 detail="Status: delayed |
 
 ## Using the engine
 
-> SayShape isn't published to npm yet. Until it is, build it with `npm run build` and import from `dist/`, or import from `src/` in your own bundler. The examples use the package name it will have, `loom-ui`.
+> SayShape isn't published to npm yet. Until it is, build it with `npm run build` and import from `dist/`, or import from `src/` in your own bundler. The examples use the package name it will have, `sayshape`.
 
 ```ts
-import { SayShape, coreComponents } from "loom-ui";
-import { mapComponents } from "loom-ui/map";
+import { SayShape, coreComponents } from "sayshape";
+import { mapComponents } from "sayshape/map";
 
 const canvas = document.querySelector("canvas")!;
 const ui = new SayShape(canvas, {
@@ -1354,7 +1352,7 @@ The canvas fills its parent's width and grows to fit its content.
 | Option | Default | Description |
 |---|---|---|
 | `components` | required | The components this instance understands |
-| `theme` | `"auto"` | A `Theme`, or `"auto"` to follow light/dark mode and `--loom-*` CSS variables |
+| `theme` | `"auto"` | A `Theme`, or `"auto"` to follow light/dark mode and `--sayshape-*` CSS variables |
 | `width` | parent width | A fixed width in CSS pixels |
 | `minHeight` | `0` | Minimum canvas height |
 | `padding` | `20` | Space around the whole screen |
@@ -1362,7 +1360,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `imageHosts` | `[]` | Hosts images may load from besides your own site ([Images](#images)) |
 | `loadImage` | an `<img>` with CORS | Custom image loading, for tests, server rendering or signed URLs |
 | `onWarning` | `console.warn` | Receives problems found while running, like a blocked image |
-| `editor` | an `<input>` over the field | How text fields are typed into ([Typing](#typing)); `loom-ui/testing` passes a fake one |
+| `editor` | an `<input>` over the field | How text fields are typed into ([Typing](#typing)); `sayshape/testing` passes a fake one |
 | `today` | the device's local day | Today's date as `() => "YYYY-MM-DD"`, for date pickers; fix it in tests and screenshots |
 | `viewport` | from the window | The part of the canvas people can see, `() => ({ top, bottom })` in canvas pixels, for placing a select's list ([Popups](#popups)) |
 
@@ -1383,7 +1381,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `imagesLoaded()` | A promise that resolves once every requested image has loaded or failed |
 | `setTheme(theme)` | Switch themes |
 | `find(type)` | All nodes of a type, e.g. `ui.find("button")` |
-| `expose(name?)` | Put the instance on `window` for the console (default `window.loom`) |
+| `expose(name?)` | Put the instance on `window` for the console (default `window.sayshape`) |
 | `destroy()` | Remove listeners and stop rendering |
 
 ### Events
@@ -1460,15 +1458,15 @@ The playground's **Ask a model** box sends your request to a real model and stre
 
 ```bash
 # .env.local
-LOOM_MODEL_URL=http://localhost:1234/v1   # LM Studio (default); Ollama: http://localhost:11434/v1
-LOOM_MODEL=                               # optional: the model to preselect
-LOOM_API_KEY=                             # only for servers that need one
-LOOM_USER_SUFFIX=                         # optional: added to every request, e.g. /no_think for Qwen3
+SAYSHAPE_MODEL_URL=http://localhost:1234/v1   # LM Studio (default); Ollama: http://localhost:11434/v1
+SAYSHAPE_MODEL=                               # optional: the model to preselect
+SAYSHAPE_API_KEY=                             # only for servers that need one
+SAYSHAPE_USER_SUFFIX=                         # optional: added to every request, e.g. /no_think for Qwen3
 ```
 
 The dev server passes the playground's requests through to the model server, so the browser needs no CORS settings and never sees the key. While it runs you'll see the model wait, think, write, and fix problems. When it's done, the status line says how long it took, how long until the first line appeared, and whether SayShape's parser found problems that a second request fixed. Tick **Refine this screen** to ask for changes to the current screen instead of a new one. It sends the first request, the changes since and the screen as it is now, including your own edits (see [Changing a screen](#changing-a-screen)).
 
-Reasoning models such as Qwen3 and DeepSeek R1 think before writing. Their thinking is hidden from the screen, but it delays the first line. With Qwen3, `LOOM_USER_SUFFIX=/no_think` skips it.
+Reasoning models such as Qwen3 and DeepSeek R1 think before writing. Their thinking is hidden from the screen, but it delays the first line. With Qwen3, `SAYSHAPE_USER_SUFFIX=/no_think` skips it.
 
 **Copy guide**, under the model guide at the bottom of the playground, copies the same instructions the model gets, for trying SayShape in any chat app.
 
@@ -1523,10 +1521,10 @@ Every answer is a first try with no repair. The report gives, per model and form
 
 ### In your own app
 
-`loom-ui/model` does what the playground does: it streams a spec from an OpenAI-compatible endpoint, removes thinking and code fences, checks the result with SayShape's parser, and asks once for a fix.
+`sayshape/model` does what the playground does: it streams a spec from an OpenAI-compatible endpoint, removes thinking and code fences, checks the result with SayShape's parser, and asks once for a fix.
 
 ```ts
-import { generateSpec } from "loom-ui/model";
+import { generateSpec } from "sayshape/model";
 
 ui.beginStream();
 const result = await generateSpec({
@@ -1591,7 +1589,7 @@ Examples are chosen explicitly: `examples` turns each element's own short exampl
 To change the current screen ("make the total bigger"), pass a `refine` context instead of the whole conversation:
 
 ```ts
-import { generateSpec, nextRefineContext, type RefineContext } from "loom-ui/model";
+import { generateSpec, nextRefineContext, type RefineContext } from "sayshape/model";
 
 let context: RefineContext = { task: "A packing list for a 3-day hike", requirements: ["Prices in euros"], spec: first.spec };
 
@@ -1629,7 +1627,7 @@ result.usage.cacheWriteTokens;  // input tokens written to it, usually on the fi
 - The cache only pays when requests keep coming before it expires. Don't add anything that changes per request (a date, a user's name) before or inside the guide: put it in the request.
 - `cachedTokens` and `cacheWriteTokens` are read from whichever fields the server uses (`prompt_tokens_details`, or Anthropic's `cache_read_input_tokens` and `cache_creation_input_tokens`), and stay `undefined` when it reports neither.
 
-`npm run eval` and `npm run compare` turn it on with `LOOM_PROMPT_CACHE=1` (or `1h`) in `.env.local`; `npm run compare -- --cache 1h` overrides that for one run, and the report shows how much input came from the cache and prices cache reads and writes at the model's own rates.
+`npm run eval` and `npm run compare` turn it on with `SAYSHAPE_PROMPT_CACHE=1` (or `1h`) in `.env.local`; `npm run compare -- --cache 1h` overrides that for one run, and the report shows how much input came from the cache and prices cache reads and writes at the model's own rates.
 
 Putting the guide first and the request last means requests with the same guide options share a prefix, which servers with prefix caching (vLLM, llama.cpp, many hosted APIs) can reuse. That's the server's doing: SayShape builds the same text each time, but doesn't cache anything itself.
 
@@ -1673,7 +1671,7 @@ Browser DevTools can't see inside a canvas, so SayShape ships its own tools. All
 | Inspect mode | `ui.inspector.setInspecting(true)` | Hover to highlight, click to select. The playground jumps to the spec line, and putting the cursor on a spec line selects its element |
 | Describe | `ui.inspector.describe(node)` | A node's type, line, props and box |
 | Frame capture | `await ui.inspector.captureFrame()` | Every canvas call made in one frame |
-| Console | `ui.expose()` | Puts the instance on `window.loom`: `loom.tree`, `loom.boxes`, `loom.state.snapshot()`, `loom.find("button")` |
+| Console | `ui.expose()` | Puts the instance on `window.sayshape`: `sayshape.tree`, `sayshape.boxes`, `sayshape.state.snapshot()`, `sayshape.find("button")` |
 
 To find a bug, first decide which stage it's in:
 
@@ -1686,10 +1684,10 @@ To find a bug, first decide which stage it's in:
 
 ## Testing
 
-`loom-ui/testing` runs the real engine (parsing, layout, painting, hit testing, pointer and keyboard handling) in Node against a stand-in canvas that records what is drawn. It works with any test runner.
+`sayshape/testing` runs the real engine (parsing, layout, painting, hit testing, pointer and keyboard handling) in Node against a stand-in canvas that records what is drawn. It works with any test runner.
 
 ```ts
-import { render } from "loom-ui/testing";
+import { render } from "sayshape/testing";
 
 const ui = render(`state n=0
 button "Add" on=inc:n
@@ -1733,7 +1731,7 @@ A component is one `ComponentDef` object. Registering it is all it takes: the pa
 In this repository, `npm run new:component -- ribbon` creates the file and its test from a template and registers it. The contract tests then fail until every placeholder is filled in, so `npm test` tells you what's left.
 
 ```ts
-import type { ComponentDef } from "loom-ui";
+import type { ComponentDef } from "sayshape";
 
 export const ribbon: ComponentDef = {
   type: "ribbon",
@@ -1798,23 +1796,23 @@ Use `ctx.props(node)` to read props. It evaluates `{expressions}` and fills temp
 
 Components never use literal colors or sizes. They read design tokens from the theme: `colors`, `space`, `radius`, `font`, `text` sizes and `control` height. SayShape ships `lightTheme` and `darkTheme`, and with `theme: "auto"` it follows the page's light or dark mode.
 
-With `theme: "auto"`, you can override colors from CSS with `--loom-*` variables on the canvas or any ancestor:
+With `theme: "auto"`, you can override colors from CSS with `--sayshape-*` variables on the canvas or any ancestor:
 
 ```css
 canvas {
-  --loom-accent: #6D28D9;
-  --loom-on-accent: #FFFFFF;
+  --sayshape-accent: #6D28D9;
+  --sayshape-on-accent: #FFFFFF;
 }
 ```
 
-Charts color their series and pie slices with six categorical tokens, `series1` to `series6` (`--loom-series-1` to `--loom-series-6` in CSS). `series1` is the accent: change only the accent and it follows. The defaults are checked against the card surface in both modes, and the first four stay distinguishable with protanopia and deuteranopia.
+Charts color their series and pie slices with six categorical tokens, `series1` to `series6` (`--sayshape-series-1` to `--sayshape-series-6` in CSS). `series1` is the accent: change only the accent and it follows. The defaults are checked against the card surface in both modes, and the first four stay distinguishable with protanopia and deuteranopia.
 
-Cards and buttons sit on a soft shadow in the `shadow` color (`--loom-shadow`), a low-opacity color such as `rgba(16, 24, 40, 0.07)`. Set it to `transparent` for a flat look.
+Cards and buttons sit on a soft shadow in the `shadow` color (`--sayshape-shadow`), a low-opacity color such as `rgba(16, 24, 40, 0.07)`. Set it to `transparent` for a flat look.
 
 Or build a theme in code:
 
 ```ts
-import { extendTheme, lightTheme } from "loom-ui";
+import { extendTheme, lightTheme } from "sayshape";
 
 const brand = extendTheme(lightTheme, {
   colors: { accent: "#6D28D9" },
@@ -1831,7 +1829,7 @@ The playground's **Appearance** button opens a small panel for previewing the cu
 - **Mode:** Light, Dark, or System, which follows the operating system as it changes. The page around the canvas follows too.
 - **Accent color:** a color picker and a hex field (`#rgb` or `#rrggbb`; half-typed or invalid values aren't applied). SayShape uses the accent as text and strokes and as the fill behind button labels, so a color that's too close to the background is darkened (light mode) or lightened (dark mode) just enough to reach 4.5:1 contrast, and the panel says what it shows instead. The color you asked for is kept, so each mode adjusts it on its own. The label color on the accent is picked automatically. **Reset color** goes back to the style's accent; **Reset appearance** goes back to SayShape's default.
 - **Copy theme code** copies TypeScript that recreates what you see with `extendTheme`, `lightTheme`, `darkTheme` and `ui.setTheme`, using the colors actually shown (after any adjustment). For Light or Dark it sets one theme; for System it exports both and a `followSystemAppearance(ui)` function that returns a cleanup. If the clipboard isn't available, the code appears in a box to copy by hand.
-- The choice is saved in your browser (`localStorage`, key `loom-playground-appearance:v1`): the style, the mode and the accent you asked for, nothing else.
+- The choice is saved in your browser (`localStorage`, key `sayshape-playground-appearance:v1`): the style, the mode and the accent you asked for, nothing else.
 
 The styles change colors only, through the same theme tokens every component reads; they're a playground feature, not part of the SayShape language, so models still can't choose colors. Teal, Purple and Blue keep SayShape's default field and divider lines, which are lighter than the 3:1 that WCAG asks of control boundaries; Neutral meets it.
 
@@ -1855,8 +1853,8 @@ src/
   text.ts           Text measuring and wrapping
   state.ts          The state store
   components/       Built-in components; map/ is a separate entry point
-  testing/          loom-ui/testing: render() and the recording canvas
-  model/            loom-ui/model: stream, clean, check and repair a model's spec; refinement context
+  testing/          sayshape/testing: render() and the recording canvas
+  model/            sayshape/model: stream, clean, check and repair a model's spec; refinement context
 playground/         The development playground
 test/               Unit, contract, streaming, fuzz and interaction tests (Vitest)
 visual/             Visual regression page, cases and baselines (Playwright)
@@ -1896,7 +1894,7 @@ The full phase-by-phase plan, including the component pipeline, testing strategy
 1. **Foundation** (0.1, done): engine, parser, expressions, actions, keyboard focus, inspector, first components, tests, playground.
 2. **Components and data**: done so far: grid, list, accordion, badge, avatar, code, rating, link, switch, radio, stepper, tabs, breadcrumb, pagination, skeleton, empty, pressable cards and struck-through text, plus images, a slider (with dragging), screens with `go:` and `back`, `notify:` messages, lists and records with `each`, `if` blocks, list functions and formatting, text input (a real input placed over the field while typing), charts (multi-series bar, horizontal bar and line, pie and donut), a stat's change and sparkline, callouts, tables with sorting and selection, a select and a date picker that open in a popup layer on the canvas, and `derive` lines for values worked out from state. Next: scrolling and dialog, plus the accessibility layer.
 3. **Docs site**: started. `site/` is a VitePress site with a playground, an example gallery and documentation whose examples render live with SayShape, deployed to GitHub Pages by `.github/workflows/pages.yml`.
-4. **Model connection**: started. The playground's Ask a model box, `loom-ui/model` (streaming, cleanup and one repair) and `npm run eval` work with any OpenAI-compatible server. Still to do: a production server package, and comparing the results with other generative UI formats.
+4. **Model connection**: started. The playground's Ask a model box, `sayshape/model` (streaming, cleanup and one repair) and `npm run eval` work with any OpenAI-compatible server. Still to do: a production server package, and comparing the results with other generative UI formats.
 5. **An app** built on top.
 
 ---

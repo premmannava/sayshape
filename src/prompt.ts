@@ -1,5 +1,5 @@
 /**
- * Generates the language guide a model needs to write Loom specs, straight
+ * Generates the language guide a model needs to write SayShape specs, straight
  * from the component registry. Because it's generated, the model's view of
  * the language can never drift from what the engine actually supports.
  *
@@ -331,7 +331,7 @@ function dataSection(ctx: GuideContext): string {
     `- Change the list: on="add:todos:{text: 'Map', done: false}", on=remove:t (inside each), on=clear:todos`,
     has("check") ? `- Show only some items with if= on the repeated element: check "{t.text}" bind=t.done if={!t.done}` : `- Show only some items with if= on the repeated element: text "{t.text}" if={!t.done}`,
     `- For a list inside each item (an order's lines, a day's activities), put an each inside the each: each items=o.lines as=line`,
-    `- Loom has no JSX, HTML or JavaScript. {…} only computes values; it never makes elements. Repeat with each.`,
+    `- SayShape has no JSX, HTML or JavaScript. {…} only computes values; it never makes elements. Repeat with each.`,
     ...(has("input") ? [`- To let people add an item they name, bind an input to a state value, add it, then clear it: input "New item" bind=task on="add:todos:{text: task, done: false};set:task:''"`] : []),
     ...(has("input") && has("list") ? [`- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={includes(lower(t.name), lower(query))}; count matches with len(search(trails, 'name', query))`] : []),
   ];
@@ -345,7 +345,7 @@ function fullSections(ctx: GuideContext): GuideSection[] {
   const out: GuideSection[] = [];
   const add = (name: string, text: string) => out.push({ name, text });
 
-  add("intro", `You write user interfaces in Loom, a line-based UI language. Output only Loom: no prose, no explanations and no code fences.`);
+  add("intro", `You write user interfaces in SayShape, a line-based UI language. Output only SayShape: no prose, no explanations and no code fences.`);
   add("format", `FORMAT
 - One element per line: type "optional text" name=value name="quoted value" name={expression}
 - Indent children with 2 spaces under a container.
@@ -355,7 +355,7 @@ function fullSections(ctx: GuideContext): GuideSection[] {
     text "All done!" tone=good
   else
     text "Keep going" tone=muted
-- Loom is not JavaScript: never write let, const, var, function, return, for, while, braces around blocks or // comments. A value worked out from state is derive name={…}; a choice is if={…} and else lines${has("each") ? "; repeating is each items=list as=x" : ""}; comments start with #
+- SayShape is not JavaScript: never write let, const, var, function, return, for, while, braces around blocks or // comments. A value worked out from state is derive name={…}; a choice is if={…} and else lines${has("each") ? "; repeating is each items=list as=x" : ""}; comments start with #
 - Declare state first, at the top, unindented: state count=0 done=false name="Ada"
 - Work a value out once with derive, unindented, one per line: derive total={sum(cart, 'price', 'qty')}. Read it like state ({total}), in text, props and other derive lines; it updates by itself. bind= and actions can't change it, and a derive can't read itself
 - Every element and every state value fits on one line, even a long list: state trails=[{name: "Camelback", miles: 2.5}, {name: "Piestewa", miles: 2.1}]
@@ -431,7 +431,7 @@ function compactSections(ctx: GuideContext): GuideSection[] {
   const out: GuideSection[] = [];
   const add = (name: string, text: string) => out.push({ name, text });
 
-  add("intro", `You write user interfaces in Loom, a line-based UI language. Output only Loom: no prose, no explanations and no code fences.`);
+  add("intro", `You write user interfaces in SayShape, a line-based UI language. Output only SayShape: no prose, no explanations and no code fences.`);
   add("format", `FORMAT
 - One element per line: type "text" prop=value prop="quoted value" prop={expression}. Indent children 2 spaces.
 - Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true; else after it, otherwise.

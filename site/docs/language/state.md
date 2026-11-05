@@ -7,14 +7,14 @@ description: Declaring state in a SayShape spec. Numbers, text, true/false, null
 
 State is what an interface remembers: a quantity, whether a box is ticked, the list of items in a cart. Declare it on unindented `state` lines, usually at the top:
 
-```loom
+```sayshape
 state qty=2 price=24 gift=false name="Ada" picked=null
 state todos=[{text: "Pack water", done: false}, {text: "Snacks", done: true}]
 ```
 
 Values can be numbers, `true` and `false`, `null`, quoted text, lists `[…]` and records `{name: value}`. Several pairs can share one line, and a spec can have as many `state` lines as it needs.
 
-```loom live
+```sayshape live
 state qty=2 price=24
 card
   stepper "Quantity" bind=qty min=1 max=10

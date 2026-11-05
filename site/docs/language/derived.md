@@ -7,7 +7,7 @@ description: derive lines in SayShape. Read-only values computed from state, cac
 
 A `derive` line works a value out from state and keeps it up to date. A total, a filtered list or a chart's data is written once, and every element reads the same thing.
 
-```loom live
+```sayshape live
 state quantity=2 price=350 taxRate=0.08
 derive subtotal={quantity * price}
 derive tax={subtotal * taxRate}
@@ -33,7 +33,7 @@ card
 
 Derived lists are the usual way to filter, search and sort for display, because every element can read the result:
 
-```loom live
+```sayshape live
 state category="All" categories=["All", "Food", "Home"] tx=[{id: 1, cat: "Food", name: "Market", amount: 64.5}, {id: 2, cat: "Home", name: "Internet", amount: 80}, {id: 3, cat: "Food", name: "Bistro", amount: 87.5}]
 derive shown={category == 'All' ? tx : filter(tx, 'cat', category)}
 card
@@ -54,7 +54,7 @@ Each of these skips only the value concerned:
 - a name nothing defines;
 - a cycle, direct or through other values. The values in the loop are left out, with the loop named:
 
-```loom invalid live
+```sayshape invalid live
 derive p={q + 1}
 derive q={p * 2}
 text "p is {p}"

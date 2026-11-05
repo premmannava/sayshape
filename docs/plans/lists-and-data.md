@@ -43,7 +43,7 @@ card
 An app passes its own data the same way, from JavaScript:
 
 ```ts
-loom.state.set("products", await fetchProducts());
+sayshape.state.set("products", await fetchProducts());
 ```
 
 ## The design, piece by piece
@@ -52,7 +52,7 @@ loom.state.set("products", await fetchProducts());
 
 - `Value` grows from `number | string | boolean | null` to also include lists (`Value[]`) and records (`{ [name]: Value }`).
 - **Literals on one line** in `state`: `[…]` and `{name: value}`, with bare or quoted names and single or double quotes. One line keeps streaming working (rule 3).
-- **Data only.** A literal is parsed by a small data parser, not by running anything. Data from the host (`loom.state.set`) is copied into plain records with no prototype. Functions, class instances, dates and cycles are rejected with a clear error.
+- **Data only.** A literal is parsed by a small data parser, not by running anything. Data from the host (`sayshape.state.set`) is copied into plain records with no prototype. Functions, class instances, dates and cycles are rejected with a clear error.
 - **Limits**, so a runaway model can't freeze the page: nesting at most 20 levels deep, at most 10,000 values in one literal. Over the limit, the line becomes an error diagnostic.
 
 ### 2. Reading data in expressions
@@ -115,7 +115,7 @@ Everything after expand reads values through the node's own scope (loop variable
 
 ### 5. The host app's data
 
-- `loom.state.set(key, data)` accepts lists and records, copied and checked as above.
+- `sayshape.state.set(key, data)` accepts lists and records, copied and checked as above.
 - The `change` event reports the new value, so an app can save it ("the user ticked an item").
 - This gives apps a simple way to pass real data today, before data sources (Phase 2.4) exist.
 
@@ -172,7 +172,7 @@ Changes from the design above:
 - **Where copies are made.** Not a separate expand step: layout's `shownChildren` replaces each `each` with its copies when a container asks for its children. It works in every container without changes to them.
 - **A second limit.** 10,000 copied elements per screen, since nested lists multiply (three nested 500-item lists would be 125 million).
 - **`if` blocks.** A line holding only `if={…}` became a condition for the lines under it, because Qwen3 14B kept writing conditions that way even after the repair message.
-- **Help for models.** `loom-ui/model` joins a state list written over several lines and recovers a spec written inside a thinking block that was never closed. The parser warns about unquoted words (`{done ? Yes : No}`), JSX (`{items.map(…)}`) and props on a line of their own, and those warnings go to the repair pass.
+- **Help for models.** `sayshape/model` joins a state list written over several lines and recovers a spec written inside a thinking block that was never closed. The parser warns about unquoted words (`{done ? Yes : No}`), JSX (`{items.map(…)}`) and props on a line of their own, and those warnings go to the repair pass.
 - **Quoted action values** are text: `set:msg:'Hi'` no longer keeps the quotes.
 
 First eval with Qwen3 14B (data and hard categories, 9 requests): valid after repair 5/9, worked when used 4/9. The misses were two answers written inside unclosed thinking, JSX instead of a nested `each`, an invented `input` (there are no text fields yet), `if=` on its own line, and one check in the eval that counted wrongly. Each of those was fixed afterwards; a fresh run is still to do.

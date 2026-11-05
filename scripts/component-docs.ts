@@ -8,7 +8,7 @@ import type { ComponentDef } from "../src/component";
 const esc = (s: string) => s.replace(/\|/g, "\\|");
 
 export interface SectionOptions {
-  /** The info string for the example's code fence: "" in the README, "loom live" on the website. */
+  /** The info string for the example's code fence: "" in the README, "sayshape live" on the website. */
   fence?: string;
   /** Turns a component name into a link, or leaves it as code. */
   link?: (type: string) => string;

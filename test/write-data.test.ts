@@ -91,17 +91,17 @@ describe("bind= inside each, for every component that binds", () => {
     }
     if (how === "pick") {
       // Open the list, then choose the highlighted (first) option.
-      ui.loom.activate(target);
-      ui.loom.renderNow();
+      ui.sayshape.activate(target);
+      ui.sayshape.renderNow();
       ui.key("Enter");
       return;
     }
     if (how === "key") {
-      ui.loom.focus = target;
+      ui.sayshape.focus = target;
       ui.key("ArrowRight");
     } else {
-      ui.loom.activate(target);
-      ui.loom.renderNow();
+      ui.sayshape.activate(target);
+      ui.sayshape.renderNow();
     }
   };
 
@@ -256,7 +256,7 @@ each items=todos as=t
   check "{t.text}" bind=t.done
 `);
     const changes: Array<{ key: string; value: Value }> = [];
-    ui.loom.on("change", (e) => changes.push(e));
+    ui.sayshape.on("change", (e) => changes.push(e));
     const before = ui.state.todos;
     ui.press({ type: "check", text: "Snacks" });
     expect(changes.map((c) => c.key)).toEqual(["todos"]);

@@ -17,7 +17,7 @@
  *
  * Settings come from .env.local (see scripts/model-env.ts). Results go to
  * eval/results/<date>-<model>/: report.md, results.json, and each request's
- * first and final spec as .loom files.
+ * first and final spec as .sayshape files.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -69,7 +69,7 @@ async function main(): Promise<void> {
     const res = await fetch(`${env.url}/models`, { headers: env.apiKey ? { Authorization: `Bearer ${env.apiKey}` } : {} }).catch(() => null);
     const json = res?.ok ? ((await res.json()) as { data?: Array<{ id: string }> }) : null;
     model = json?.data?.map((m) => m.id).find((id) => !/embed/i.test(id)) ?? "";
-    if (!model) throw new Error(`No model given and none listed at ${env.url}/models. Start the model server, or set LOOM_MODEL in .env.local.`);
+    if (!model) throw new Error(`No model given and none listed at ${env.url}/models. Start the model server, or set SAYSHAPE_MODEL in .env.local.`);
   }
 
   const guide: GuideOptions = { imageHosts: [] };
@@ -113,8 +113,8 @@ async function main(): Promise<void> {
   }, null, 2));
   for (const r of results) {
     const base = variants.length > 1 ? `${r.id}.${r.variant}` : r.id;
-    if (r.firstSpec) writeFileSync(resolve(dir, `${base}.first.loom`), r.firstSpec);
-    if (r.finalSpec && r.finalSpec !== r.firstSpec) writeFileSync(resolve(dir, `${base}.final.loom`), r.finalSpec);
+    if (r.firstSpec) writeFileSync(resolve(dir, `${base}.first.sayshape`), r.firstSpec);
+    if (r.finalSpec && r.finalSpec !== r.firstSpec) writeFileSync(resolve(dir, `${base}.final.sayshape`), r.finalSpec);
     // Everything the model sent for the first answer, thinking included, to diagnose empty or odd answers.
     if (r.firstRaw) writeFileSync(resolve(dir, `${base}.raw.txt`), r.firstRaw);
   }

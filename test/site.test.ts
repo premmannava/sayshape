@@ -4,7 +4,7 @@
  *
  * - Every gallery example parses with no diagnostics and renders without
  *   warnings at phone and desktop widths, and its interactions work.
- * - Every ```loom block in the site's Markdown parses with no diagnostics,
+ * - Every ```sayshape block in the site's Markdown parses with no diagnostics,
  *   and live ones render without runtime warnings (unless marked `warns`),
  *   except blocks marked `invalid`, which exist to show diagnostics and must
  *   produce at least one.
@@ -205,7 +205,7 @@ describe("gallery examples", () => {
     ui.press({ type: "button", text: "Add to cart" });
     expect(ui.state.cart).toHaveLength(2);
     ui.press({ type: "button", text: "View cart (2)" });
-    expect(ui.loom.currentScreen).toBe("cart");
+    expect(ui.sayshape.currentScreen).toBe("cart");
     // 139 + 99, free shipping over $150
     expect(shown(ui)).toContain("$238.00");
     expect(shown(ui)).toContain("Free");
@@ -240,12 +240,12 @@ function markdownFiles(dir: string): string[] {
 }
 
 interface Block { file: string; line: number; info: string; spec: string }
-function loomBlocks(): Block[] {
+function sayShapeBlocks(): Block[] {
   const blocks: Block[] = [];
   for (const file of markdownFiles(SITE)) {
     const lines = readFileSync(file, "utf8").split("\n");
     for (let i = 0; i < lines.length; i++) {
-      const open = /^(\s*)```loom\b(.*)$/.exec(lines[i]!);
+      const open = /^(\s*)```sayshape\b(.*)$/.exec(lines[i]!);
       if (!open) continue;
       const start = i;
       const body: string[] = [];
@@ -257,7 +257,7 @@ function loomBlocks(): Block[] {
 }
 
 describe("documentation examples", () => {
-  const blocks = loomBlocks();
+  const blocks = sayShapeBlocks();
 
   // The component pages are generated (npm run site:docs) and ignored by git, so CI's
   // plain `npm test` may not have them; count only the hand-written pages here.
@@ -268,7 +268,7 @@ describe("documentation examples", () => {
   for (const b of blocks) {
     const invalid = b.info.split(/\s+/).includes("invalid");
     it(`${b.file}:${b.line} ${invalid ? "shows diagnostics" : "is valid SayShape"}`, () => {
-      // `known=a,b` names state the host app supplies (loom.state.set), as in the integration docs.
+      // `known=a,b` names state the host app supplies (sayshape.state.set), as in the integration docs.
       const known = /(?:^|\s)known=([\w,]+)/.exec(b.info)?.[1]?.split(",") ?? [];
       const diagnostics = parse(b.spec, registry, { knownNames: known }).diagnostics;
       if (invalid) expect(diagnostics.length).toBeGreaterThan(0);

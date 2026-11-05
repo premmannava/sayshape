@@ -334,7 +334,7 @@ describe("pointer and keyboard", () => {
     const order: string[] = [];
     for (let i = 0; i < 6; i++) {
       ui.tab();
-      order.push(String(ui.loom.focus?.detail));
+      order.push(String(ui.sayshape.focus?.detail));
     }
     expect(order).toEqual(["sort:name", "sort:price", "sort:stock", "row:s:keyboard", "row:s:laptop", "row:s:monitor"]);
     ui.key("Enter");
@@ -343,7 +343,7 @@ describe("pointer and keyboard", () => {
     ui.key(" ");
     expect(ui.state.selected).toBe("laptop");
     for (let i = 0; i < 3; i++) ui.tab(true);
-    expect(ui.loom.focus?.detail).toBe("sort:price");
+    expect(ui.sayshape.focus?.detail).toBe("sort:price");
     ui.key("Enter");
     expect(ui.state.sortField).toBe("price");
   });
@@ -361,7 +361,7 @@ describe("pointer and keyboard", () => {
       const c = theme.colors;
       clickDetail(ui, "row:s:laptop");
       ui.tab();
-      ui.loom.renderNow();
+      ui.sayshape.renderNow();
       const ops = ui.drawOps;
       // The selected row: an accent tint and an accent bar.
       expect(ops.some((o) => o.op === "fill" && o.fillStyle === c.accent && o.globalAlpha < 1)).toBe(true);

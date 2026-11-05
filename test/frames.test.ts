@@ -31,9 +31,9 @@ function runFrames(): void {
 
 function setup(spec: string) {
   const canvas = new FakeCanvas();
-  const loom = new SayShape(canvas as unknown as HTMLCanvasElement, { components: coreComponents, width: 400, animate: true });
-  loom.setSpec(spec);
-  return { canvas, loom };
+  const sayshape = new SayShape(canvas as unknown as HTMLCanvasElement, { components: coreComponents, width: 400, animate: true });
+  sayshape.setSpec(spec);
+  return { canvas, sayshape };
 }
 
 describe("frame loop", () => {

@@ -6,7 +6,7 @@
  * managers and phone keyboards (CLAUDE.md rule 7 allows this one DOM use).
  *
  * The engine only talks to the EditorHost interface. The browser host
- * (domEditorHost) makes an <input>; loom-ui/testing uses a fake one, so
+ * (domEditorHost) makes an <input>; sayshape/testing uses a fake one, so
  * typing is tested in Node like everything else.
  */
 import type { Rect } from "./types";

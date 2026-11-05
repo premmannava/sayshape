@@ -7,7 +7,7 @@ description: Patterns for showing loading, empty, success and error states in a 
 
 SayShape doesn't fetch data or submit forms itself. Your app does, and tells the interface how it went by setting state. A `status` value and a few `if=` lines cover most cases.
 
-```loom live
+```sayshape live
 state status="loading" orders=[]
 card
   text "Recent orders" style=title
@@ -44,7 +44,7 @@ ui.on("action", ({ name }) => { if (name === "retry") load(); });
 
 The same pattern works the other way. The spec emits, your app does the work and reports back:
 
-```loom known=saving,saved
+```sayshape known=saving,saved
 button "Save" on=emit:save disabled={saving}
 text "Saved" tone=good if={saved}
 ```

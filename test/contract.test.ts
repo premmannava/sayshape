@@ -99,7 +99,7 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
   describe.each(WIDTHS)("at %ipx", (width) => {
     it("lays out inside its parent with finite, non-negative sizes", () => {
       const ui = render(exampleSpec(def), { components: ALL, width });
-      const root = ui.loom.boxes!;
+      const root = ui.sayshape.boxes!;
       const check = (b: Box, parent: Box | null) => {
         const where = `${b.node.type} (line ${b.node.line}) at ${width}px`;
         for (const v of [b.x, b.y, b.w, b.h]) expect(Number.isFinite(v), where).toBe(true);
@@ -123,7 +123,7 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
     describe.each(FIT_WIDTHS)("drawn at %ipx", (width) => {
       it("keeps its text inside itself, without squeezing it", () => {
         const ui = render(exampleSpec(def), { components: ALL, width });
-        expect(textOverflows(ui.loom.boxes!, ui.drawOps)).toEqual([]);
+        expect(textOverflows(ui.sayshape.boxes!, ui.drawOps)).toEqual([]);
         ui.destroy();
       });
     });
@@ -152,7 +152,7 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
     describe("interaction", () => {
       it("registers a hit region for every instance that uses an action or state", () => {
         const ui = render(exampleSpec(def), { components: ALL });
-        const boxes = interactiveBoxes(ui.loom.boxes!, def);
+        const boxes = interactiveBoxes(ui.sayshape.boxes!, def);
         expect(boxes.length, "the example should show the component being interactive").toBeGreaterThan(0);
         for (const b of boxes) expect(ui.hits.some((h) => h.box.node.id === b.node.id), `line ${b.node.line}`).toBe(true);
         ui.destroy();
@@ -161,7 +161,7 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
       const gap = NOT_KEYBOARD_REACHABLE_YET[def.type];
       it(gap ? `can't be reached with Tab yet (known gap: ${gap})` : "can be reached with Tab", () => {
         const ui = render(exampleSpec(def), { components: ALL });
-        const want = new Set(interactiveBoxes(ui.loom.boxes!, def).map((b) => b.node.id));
+        const want = new Set(interactiveBoxes(ui.sayshape.boxes!, def).map((b) => b.node.id));
         const reached = new Set<string>();
         for (let i = 0; i < ui.hits.length + 1; i++) {
           ui.tab();

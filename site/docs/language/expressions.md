@@ -7,7 +7,7 @@ description: SayShape's expression language. Operators, field access, and the wh
 
 Anything inside `{…}` is an expression, evaluated against state. Expressions appear in props (`value={price * qty}`), inside quoted text (`"Total: {total}"`), in conditions (`if={count > 0}`) and in action values (`set:total:{a + b}`).
 
-```loom live
+```sayshape live
 state qty=2 price=24 gift=true
 card
   text "Total: ${qty * price + (gift ? 4 : 0)}" style=lead
@@ -69,7 +69,7 @@ Only numbers count in `sum`, `avg`, `min` and `max`: a missing field, `null`, tr
 
 They combine:
 
-```loom live
+```sayshape live
 state tx=[{name: "Market", cat: "Food", amount: 64.5}, {name: "Fuel", cat: "Transit", amount: 42}, {name: "Bistro", cat: "Food", amount: 87.5}]
 card
   text "Food: {money(sum(filter(tx, 'cat', 'Food'), 'amount'))}"

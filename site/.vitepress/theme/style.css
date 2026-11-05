@@ -7,7 +7,7 @@
 :root {
   --vp-font-family-base: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --vp-font-family-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
-  --loom-display: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif;
+  --sayshape-display: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif;
 
   --vp-c-bg: #f4f5f1;
   --vp-c-bg-alt: #eceee8;
@@ -50,15 +50,15 @@
   --ss-shadow: #0f1a17;
   --ss-on-ink: #f4f5f1;
 
-  --loom-stage: #e9ece5;
-  --loom-stage-dot: #cdd3ca;
-  --loom-panel: #ffffff;
-  --loom-code-bg: #ffffff;
-  --loom-ok: #1c7a45;
-  --loom-warn: #9a4a07;
-  --loom-bad: #b42318;
-  --loom-hl: var(--ss-mark-soft);
-  --loom-shadow: 0 1px 0 rgba(15, 26, 23, 0.05), 0 14px 32px -20px rgba(15, 26, 23, 0.35);
+  --sayshape-stage: #e9ece5;
+  --sayshape-stage-dot: #cdd3ca;
+  --sayshape-panel: #ffffff;
+  --sayshape-code-bg: #ffffff;
+  --sayshape-ok: #1c7a45;
+  --sayshape-warn: #9a4a07;
+  --sayshape-bad: #b42318;
+  --sayshape-hl: var(--ss-mark-soft);
+  --sayshape-shadow: 0 1px 0 rgba(15, 26, 23, 0.05), 0 14px 32px -20px rgba(15, 26, 23, 0.35);
 
   /* Spec highlighting (spec view and playground editor) */
   --tk-tag: #0b6b5a;
@@ -102,15 +102,15 @@
   --ss-shadow: #4fd1b2;
   --ss-on-ink: #0f1513;
 
-  --loom-stage: #0b100e;
-  --loom-stage-dot: #1e2724;
-  --loom-panel: #131a17;
-  --loom-code-bg: #121a17;
-  --loom-ok: #5bd69a;
-  --loom-warn: #f5b454;
-  --loom-bad: #f87171;
-  --loom-hl: var(--ss-mark-soft);
-  --loom-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 16px 40px -20px rgba(0, 0, 0, 0.7);
+  --sayshape-stage: #0b100e;
+  --sayshape-stage-dot: #1e2724;
+  --sayshape-panel: #131a17;
+  --sayshape-code-bg: #121a17;
+  --sayshape-ok: #5bd69a;
+  --sayshape-warn: #f5b454;
+  --sayshape-bad: #f87171;
+  --sayshape-hl: var(--ss-mark-soft);
+  --sayshape-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 16px 40px -20px rgba(0, 0, 0, 0.7);
 
   --tk-tag: #4fd1b2;
   --tk-kw: #edf1ec;
@@ -181,7 +181,7 @@
 
 .vp-doc h1,
 .vp-doc h2 {
-  font-family: var(--loom-display);
+  font-family: var(--sayshape-display);
   letter-spacing: -0.03em;
   text-wrap: balance;
 }
@@ -197,7 +197,7 @@
 .vp-doc h3 { font-weight: 600; font-size: 19px }
 .vp-doc p, .vp-doc li { line-height: 1.7 }
 .vp-doc > div > p:first-of-type { font-size: 18px; color: var(--vp-c-text-2) }
-.VPNavBarTitle .title { font-family: var(--loom-display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em }
+.VPNavBarTitle .title { font-family: var(--sayshape-display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em }
 .vp-doc .generated-note {
   font-size: 14px;
   color: var(--vp-c-text-2);
@@ -223,7 +223,7 @@
 
 /* ------------------------------------------------------------ shared controls */
 
-.loom-btn {
+.sayshape-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -237,15 +237,15 @@
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
-.loom-btn.primary { background: var(--vp-button-brand-bg); border-color: var(--vp-button-brand-bg); color: var(--vp-button-brand-text) }
-.loom-btn.primary:hover { background: var(--vp-button-brand-hover-bg); border-color: var(--vp-button-brand-hover-bg) }
-.loom-btn.quiet { background: transparent; color: var(--vp-c-text-1); border-color: var(--ss-rule) }
-.loom-btn.quiet:hover { background: var(--vp-c-text-1); color: var(--ss-on-ink) }
-.loom-btn.small { height: 34px; padding: 0 14px; font-size: 13px }
-.loom-btn[disabled] { opacity: 0.5; cursor: not-allowed }
-.loom-btn.quiet[disabled]:hover { background: transparent; color: var(--vp-c-text-1) }
+.sayshape-btn.primary { background: var(--vp-button-brand-bg); border-color: var(--vp-button-brand-bg); color: var(--vp-button-brand-text) }
+.sayshape-btn.primary:hover { background: var(--vp-button-brand-hover-bg); border-color: var(--vp-button-brand-hover-bg) }
+.sayshape-btn.quiet { background: transparent; color: var(--vp-c-text-1); border-color: var(--ss-rule) }
+.sayshape-btn.quiet:hover { background: var(--vp-c-text-1); color: var(--ss-on-ink) }
+.sayshape-btn.small { height: 34px; padding: 0 14px; font-size: 13px }
+.sayshape-btn[disabled] { opacity: 0.5; cursor: not-allowed }
+.sayshape-btn.quiet[disabled]:hover { background: transparent; color: var(--vp-c-text-1) }
 
-.loom-btn-text {
+.sayshape-btn-text {
   background: none;
   border: 0;
   padding: 2px 0;
@@ -254,31 +254,31 @@
   cursor: pointer;
   text-decoration: none;
 }
-.loom-btn-text:hover { text-decoration: underline; text-underline-offset: 3px }
-.loom-btn-text[disabled] { color: var(--vp-c-text-3); cursor: default; text-decoration: none }
+.sayshape-btn-text:hover { text-decoration: underline; text-underline-offset: 3px }
+.sayshape-btn-text[disabled] { color: var(--vp-c-text-3); cursor: default; text-decoration: none }
 
 /* ------------------------------------------------------------ the stage a canvas sits on */
 
-.loom-stage {
+.sayshape-stage {
   position: relative;
-  background-color: var(--loom-stage);
-  background-image: radial-gradient(var(--loom-stage-dot) 1px, transparent 1px);
+  background-color: var(--sayshape-stage);
+  background-image: radial-gradient(var(--sayshape-stage-dot) 1px, transparent 1px);
   background-size: 16px 16px;
   padding: 18px;
 }
 /* The engine sizes the canvas to its parent's width, so the parent must have no padding. */
-.loom-canvas-wrap { width: 100%; min-width: 0 }
-.loom-stage canvas {
+.sayshape-canvas-wrap { width: 100%; min-width: 0 }
+.sayshape-stage canvas {
   display: block;
   border-radius: 10px;
-  box-shadow: var(--loom-shadow);
+  box-shadow: var(--sayshape-shadow);
 }
-.loom-stage canvas:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 3px }
-@media (max-width: 640px) { .loom-stage { padding: 10px } }
+.sayshape-stage canvas:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 3px }
+@media (max-width: 640px) { .sayshape-stage { padding: 10px } }
 
 /* ------------------------------------------------------------ live examples in docs */
 
-.loom-live {
+.sayshape-live {
   margin: 24px 0 32px;
   border: 2px solid var(--ss-rule);
   border-radius: 16px;
@@ -286,10 +286,10 @@
   background: var(--ss-card);
   box-shadow: 4px 4px 0 var(--ss-shadow);
 }
-.loom-live__code div[class*="language-"] { margin: 0 !important; border-radius: 0 !important }
-.vp-doc .loom-live__code div[class*="language-"] { background: var(--vp-code-block-bg); border: 0 }
+.sayshape-live__code div[class*="language-"] { margin: 0 !important; border-radius: 0 !important }
+.vp-doc .sayshape-live__code div[class*="language-"] { background: var(--vp-code-block-bg); border: 0 }
 .vp-doc div[class*="language-"] { border: 1px solid var(--vp-c-divider) }
-.loom-live__bar {
+.sayshape-live__bar {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 16px;
@@ -301,27 +301,27 @@
   font-size: 13px;
   color: var(--vp-c-text-2);
 }
-.loom-live__label { display: inline-flex; align-items: center; gap: 8px }
-.loom-live__label { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-brand-1) }
-.loom-live__label .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--vp-c-brand-1) }
-.loom-live__actions { display: inline-flex; gap: 16px }
-.loom-live .loom-stage { min-height: 96px }
-.loom-live__failed { margin: 0; color: var(--loom-bad); font-size: 14px }
+.sayshape-live__label { display: inline-flex; align-items: center; gap: 8px }
+.sayshape-live__label { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-brand-1) }
+.sayshape-live__label .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--vp-c-brand-1) }
+.sayshape-live__actions { display: inline-flex; gap: 16px }
+.sayshape-live .sayshape-stage { min-height: 96px }
+.sayshape-live__failed { margin: 0; color: var(--sayshape-bad); font-size: 14px }
 
-.loom-diags {
+.sayshape-diags {
   list-style: none;
   margin: 0 !important;
   padding: 8px 14px !important;
   border-top: 1px solid var(--vp-c-divider);
   font-size: 13px;
 }
-.vp-doc .loom-diags li { margin: 4px 0; line-height: 1.5; display: flex; gap: 10px; align-items: baseline }
-.loom-diags .ln { font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2); flex: none; min-width: 52px }
-.loom-diags .sev { font-size: 12px; font-weight: 600; flex: none; min-width: 56px }
-.loom-diags .error .sev, .loom-diags .error .msg { color: var(--loom-bad) }
-.loom-diags .warning .sev { color: var(--loom-warn) }
+.vp-doc .sayshape-diags li { margin: 4px 0; line-height: 1.5; display: flex; gap: 10px; align-items: baseline }
+.sayshape-diags .ln { font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2); flex: none; min-width: 52px }
+.sayshape-diags .sev { font-size: 12px; font-weight: 600; flex: none; min-width: 56px }
+.sayshape-diags .error .sev, .sayshape-diags .error .msg { color: var(--sayshape-bad) }
+.sayshape-diags .warning .sev { color: var(--sayshape-warn) }
 
-.loom-events {
+.sayshape-events {
   list-style: none;
   margin: 0 !important;
   padding: 8px 14px !important;
@@ -329,8 +329,8 @@
   font-size: 13px;
   color: var(--vp-c-text-2);
 }
-.vp-doc .loom-events li { margin: 2px 0 }
-.loom-events code { font-size: 12px; color: var(--vp-c-brand-1); background: none !important; padding: 0 !important }
+.vp-doc .sayshape-events li { margin: 2px 0 }
+.sayshape-events code { font-size: 12px; color: var(--vp-c-brand-1); background: none !important; padding: 0 !important }
 
 /* ------------------------------------------------------------ spec view (highlighted SayShape source) */
 

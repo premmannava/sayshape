@@ -8,7 +8,7 @@
 import { computed, nextTick, onBeforeUnmount, reactive, ref } from "vue";
 import { withBase } from "vitepress";
 import ChatTurn, { type Turn } from "./ChatTurn.vue";
-import { generate, generationAvailable, humanCheck, MAX_REQUEST_CHARS, MODEL_LABEL, needsHumanCheck, type GenerateEvent, type Refinement } from "../loom/generate";
+import { generate, generationAvailable, humanCheck, MAX_REQUEST_CHARS, MODEL_LABEL, needsHumanCheck, type GenerateEvent, type Refinement } from "../sayshape/generate";
 
 const suggestions = [
   "A tip calculator that splits the bill between friends",
@@ -160,7 +160,7 @@ const docsLanguage = withBase("/docs/language/elements.html");
       <form class="chat-compose" @submit.prevent="send()">
         <div v-if="context" class="chat-context">
           <span>Changing: <strong>{{ context.task }}</strong><template v-if="context.changes.length"> (+{{ context.changes.length }} change{{ context.changes.length === 1 ? "" : "s" }})</template></span>
-          <button class="loom-btn-text" type="button" :disabled="busy" @click="newInterface">Start a new interface</button>
+          <button class="sayshape-btn-text" type="button" :disabled="busy" @click="newInterface">Start a new interface</button>
         </div>
         <div class="chat-box">
           <textarea
@@ -175,8 +175,8 @@ const docsLanguage = withBase("/docs/language/elements.html");
             @input="grow"
             @focus="startCheck"
           ></textarea>
-          <button v-if="!busy" class="loom-btn primary" type="submit" :disabled="!draft.trim()">Send</button>
-          <button v-else class="loom-btn quiet" type="button" @click="controller?.abort()">Stop</button>
+          <button v-if="!busy" class="sayshape-btn primary" type="submit" :disabled="!draft.trim()">Send</button>
+          <button v-else class="sayshape-btn quiet" type="button" @click="controller?.abort()">Stop</button>
         </div>
         <div ref="checkEl" class="chat-check"></div>
         <p class="chat-foot">
@@ -191,7 +191,7 @@ const docsLanguage = withBase("/docs/language/elements.html");
 
 <style scoped>
 .chat { max-width: 920px; margin: 0 auto; padding: 32px 24px 0; min-height: calc(100vh - var(--vp-nav-height, 64px)); display: flex; flex-direction: column }
-.chat-head h1 { font-family: var(--loom-display); font-weight: 800; font-size: clamp(32px, 4.5vw, 48px); letter-spacing: -0.03em; line-height: 1.05; margin: 0 0 10px }
+.chat-head h1 { font-family: var(--sayshape-display); font-weight: 800; font-size: clamp(32px, 4.5vw, 48px); letter-spacing: -0.03em; line-height: 1.05; margin: 0 0 10px }
 .chat-head p { margin: 0; max-width: 68ch; color: var(--vp-c-text-2); line-height: 1.6 }
 .chat-head a, .chat-empty-note a { color: var(--vp-c-brand-1); font-weight: 600 }
 
@@ -211,7 +211,7 @@ const docsLanguage = withBase("/docs/language/elements.html");
   font: 15px/1.45 var(--vp-font-family-base);
   cursor: pointer;
 }
-.chat-suggest button:hover:not(:disabled) { border-color: var(--vp-c-brand-1); background: var(--loom-panel) }
+.chat-suggest button:hover:not(:disabled) { border-color: var(--vp-c-brand-1); background: var(--sayshape-panel) }
 .chat-empty-note { margin: 4px 0 0; font-size: 14px; color: var(--vp-c-text-2); line-height: 1.6; max-width: 70ch }
 
 .chat-compose {
@@ -225,7 +225,7 @@ const docsLanguage = withBase("/docs/language/elements.html");
 }
 .chat-context { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; font-size: 13px; color: var(--vp-c-text-2) }
 .chat-context strong { color: var(--vp-c-text-1); font-weight: 600 }
-.chat-box { display: flex; gap: 10px; align-items: flex-end; padding: 10px; border: 1.5px solid var(--vp-c-border); border-radius: 16px; background: var(--vp-c-bg); box-shadow: var(--loom-shadow) }
+.chat-box { display: flex; gap: 10px; align-items: flex-end; padding: 10px; border: 1.5px solid var(--vp-c-border); border-radius: 16px; background: var(--vp-c-bg); box-shadow: var(--sayshape-shadow) }
 .chat-box:focus-within { border-color: var(--vp-c-brand-1) }
 .chat-box textarea {
   flex: 1;
@@ -242,7 +242,7 @@ const docsLanguage = withBase("/docs/language/elements.html");
 .chat-check:empty { display: none }
 .chat-foot { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--vp-c-text-2) }
 .chat-foot span { font-variant-numeric: tabular-nums; margin-right: 8px; font-weight: 600 }
-.chat-foot span.low { color: var(--loom-warn) }
+.chat-foot span.low { color: var(--sayshape-warn) }
 
 @media (max-width: 640px) {
   .chat { padding: 22px 16px 0 }

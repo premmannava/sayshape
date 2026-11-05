@@ -7,7 +7,7 @@
  *
  *   npx vite-node scripts/drill.ts -- --model anthropic/claude-sonnet-5.5
  *
- * Settings come from .env.local (LOOM_MODEL_URL, LOOM_API_KEY).
+ * Settings come from .env.local (SAYSHAPE_MODEL_URL, SAYSHAPE_API_KEY).
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -62,8 +62,7 @@ const LEVELS: Level[] = [
 
 const registry = new Registry(coreComponents);
 // The MCP server's chat notes (mcp/src/server.ts), copied so this runs without the MCP package.
-const CHAT_NOTES = `This guide calls the language Loom, its earlier name: it is the same language as SayShape.
-You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
+const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
 Keep it to one focused screen: a card or column with a title, then the content. Prefer row and grid for side-by-side numbers; avoid more than three columns.
 Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption.
 When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.
@@ -132,7 +131,7 @@ async function steps(): Promise<void> {
   for (let i = 0; i < LEVELS.length; i++) {
     const level = LEVELS[i]!;
     const r = await generateSpec({ config, registry, guide, request: msg, history });
-    writeFileSync(resolve(out, `step${i + 1}.loom`), r.spec);
+    writeFileSync(resolve(out, `step${i + 1}.sayshape`), r.spec);
     const problems = check(r.spec, level);
     rows.push(`Level ${i + 1}: ${problems.length ? "PROBLEMS " + problems.join("; ") : "ok"}${r.repair ? " (repaired)" : ""} — ${fmt(r)}, ${r.spec.length} chars`);
     console.log(rows.at(-1));
@@ -149,7 +148,7 @@ async function steps(): Promise<void> {
 async function one(): Promise<void> {
   const request = `Sales explorer for October, all in one interface. Start with revenue by region; picking a region shows its customers, picking a customer shows their orders, picking an order shows its items, with a way back at each level. Orders (id | region | customer | date | status | items | total):\n${DATA}`;
   const r = await generateSpec({ config, registry, guide: guideText() + "\n\nReply with only the spec.", request });
-  writeFileSync(resolve(out, "one.loom"), r.spec);
+  writeFileSync(resolve(out, "one.sayshape"), r.spec);
   console.log(`One spec: ${fmt(r)}, ${r.spec.length} chars${r.repair ? " (repaired)" : ""}`);
   // Press through without the model: each pick must show the next level.
   const t0 = performance.now();

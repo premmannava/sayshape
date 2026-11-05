@@ -78,10 +78,10 @@ map kind=choropleth items=regions region=country value=revenue bind=selected leg
     expect(ui.text()).toContain("Revenue");
     const countryColor = ui.drawOps.filter((op) => op.op === "fill").map((op) => op.fillStyle);
     expect(countryColor.some((c) => c.startsWith("rgb("))).toBe(true);
-    ui.loom.hover = { node: box.node, box, detail: "Japan" };
-    ui.loom.pointer = { x: box.x + 200, y: box.y + 100 };
-    ui.loom.invalidate("paint");
-    ui.loom.renderNow();
+    ui.sayshape.hover = { node: box.node, box, detail: "Japan" };
+    ui.sayshape.pointer = { x: box.x + 200, y: box.y + 100 };
+    ui.sayshape.invalidate("paint");
+    ui.sayshape.renderNow();
     expect(ui.text()).toContain("Japan");
     expect(ui.text()).toContain("Revenue: 75");
     ui.destroy();

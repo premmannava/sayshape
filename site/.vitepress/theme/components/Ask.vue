@@ -7,9 +7,9 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { withBase } from "vitepress";
 import { match, suggestions, type Answer } from "../../../ask/answers";
-import { highlightSpec } from "../loom/highlight";
+import { highlightSpec } from "../sayshape/highlight";
 import elements from "../../../.generated/elements.json";
-import { createLoom, loomModules, toBase64Url, watchSiteTheme, type SayShape } from "../loom/runtime";
+import { createSayShape, sayShapeModules, toBase64Url, watchSiteTheme, type SayShape } from "../sayshape/runtime";
 
 const dialog = ref<HTMLDialogElement | null>(null);
 const input = ref<HTMLInputElement | null>(null);
@@ -26,7 +26,7 @@ const specHtml = computed(() => (answer.value ? highlightSpec(answer.value.spec)
 const playgroundHref = computed(() => (answer.value ? withBase("/playground.html") + "#spec=" + toBase64Url(answer.value.spec) : ""));
 const linkHref = (href: string) => withBase(href.endsWith("/") ? href : href + ".html");
 
-let loom: SayShape | null = null;
+let sayshape: SayShape | null = null;
 let stopTheme: (() => void) | null = null;
 
 async function open() {
@@ -40,7 +40,7 @@ function close() { dialog.value?.close(); }
 function onClose() {
   drawing++;
   stopTheme?.(); stopTheme = null;
-  loom?.destroy(); loom = null;
+  sayshape?.destroy(); sayshape = null;
 }
 
 function ask(q = question.value) {
@@ -62,15 +62,15 @@ async function draw(a: Answer) {
   const el = canvas.value;
   if (!el || mine !== drawing) return;
   try {
-    if (!loom || loom.canvas !== el) {
-      loom?.destroy(); loom = null;
+    if (!sayshape || sayshape.canvas !== el) {
+      sayshape?.destroy(); sayshape = null;
       stopTheme?.(); stopTheme = null;
-      const [instance, mods] = await Promise.all([createLoom(el, { today: "2026-10-21" }), loomModules()]);
+      const [instance, mods] = await Promise.all([createSayShape(el, { today: "2026-10-21" }), sayShapeModules()]);
       if (mine !== drawing || !dialog.value?.open) { instance.destroy(); return; }
-      loom = instance;
-      stopTheme = watchSiteTheme(loom, { light: mods.lightTheme, dark: mods.darkTheme });
+      sayshape = instance;
+      stopTheme = watchSiteTheme(sayshape, { light: mods.lightTheme, dark: mods.darkTheme });
     }
-    loom.setSpec(a.spec, { resetState: true });
+    sayshape.setSpec(a.spec, { resetState: true });
     failed.value = "";
   } catch (e) {
     failed.value = e instanceof Error ? e.message : String(e);
@@ -91,7 +91,7 @@ onBeforeUnmount(onClose);
         <label id="ask-title" class="ss-eyebrow" for="ask-q">Ask the docs</label>
         <div class="ask-row">
           <input id="ask-q" ref="input" v-model="question" type="text" autocomplete="off" placeholder="how do I let people pick a quantity?" maxlength="160">
-          <button type="submit" class="loom-btn primary small">Show me</button>
+          <button type="submit" class="sayshape-btn primary small">Show me</button>
           <button type="button" class="ask-close" aria-label="Close" @click="close">×</button>
         </div>
       </form>
@@ -111,9 +111,9 @@ onBeforeUnmount(onClose);
         <h2>{{ answer.title }}</h2>
         <div class="ask-split">
           <pre class="spec-view ask-spec" tabindex="0" aria-label="Spec"><code v-html="specHtml"></code></pre>
-          <div class="loom-stage ask-stage">
-            <div class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`Live example: ${answer.title}`"></canvas></div>
-            <p v-if="failed" class="loom-live__failed">The preview couldn't start: {{ failed }}</p>
+          <div class="sayshape-stage ask-stage">
+            <div class="sayshape-canvas-wrap"><canvas ref="canvas" :aria-label="`Live example: ${answer.title}`"></canvas></div>
+            <p v-if="failed" class="sayshape-live__failed">The preview couldn't start: {{ failed }}</p>
           </div>
         </div>
         <p class="ask-note">{{ answer.note }}</p>
@@ -152,7 +152,7 @@ onBeforeUnmount(onClose);
 .ask-chips button:hover, .ask-others button:hover { border-color: var(--ss-rule) }
 .ask-alt a { font-weight: 600 }
 .ask-answer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0 }
-.ask-answer h2 { margin: 0; font: 800 28px/1.1 var(--loom-display); letter-spacing: -0.03em }
+.ask-answer h2 { margin: 0; font: 800 28px/1.1 var(--sayshape-display); letter-spacing: -0.03em }
 .ask-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start }
 .ask-spec { margin: 0; padding: 12px 14px; background: var(--vp-c-bg); border-radius: 12px; overflow-x: auto; font-size: 12.5px }
 .ask-spec :deep(.line) { white-space: pre-wrap; word-break: break-word }
@@ -163,6 +163,6 @@ onBeforeUnmount(onClose);
 @media (max-width: 680px) {
   .ask-split { grid-template-columns: minmax(0, 1fr) }
   .ask-panel { padding: 18px 16px 20px }
-  .ask-row .loom-btn { padding: 0 12px }
+  .ask-row .sayshape-btn { padding: 0 12px }
 }
 </style>

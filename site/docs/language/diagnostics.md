@@ -12,7 +12,7 @@ SayShape never stops on a mistake. Every problem becomes a **diagnostic** with a
 | **Error** | An unknown element, an element in the wrong place, nesting more than 100 levels | That line and everything indented under it are skipped |
 | **Warning** | An unknown prop, a value outside a prop's list, a broken expression, a name nothing defines, a loop variable outside its `each`, writing to a derived value | The element renders; the bad part is ignored |
 
-```loom invalid live
+```sayshape invalid live
 state qty=2
 card
   text "Order" style=title
@@ -38,7 +38,7 @@ L6  "pricee" isn't state or a loop variable, so it shows as nothing. To show it 
 
 ## Problems found while running
 
-Some problems only appear once a spec runs: a blocked image, a chart given something that isn't a list, a table too wide for its space, a derived value that can't be worked out. These go to the `onWarning` option (by default `console.warn`), once per spec rather than every frame. In `loom-ui/testing` they're collected in `ui.warnings`.
+Some problems only appear once a spec runs: a blocked image, a chart given something that isn't a list, a table too wide for its space, a derived value that can't be worked out. These go to the `onWarning` option (by default `console.warn`), once per spec rather than every frame. In `sayshape/testing` they're collected in `ui.warnings`.
 
 ## Validating examples
 

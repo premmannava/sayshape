@@ -170,7 +170,7 @@ describe("compact guide", () => {
     expect(compact).toMatch(/No colors, sizes or fonts/);
     expect(compact).toMatch(/Images only load from these hosts: images\.unsplash\.com/);
     expect(compact).toMatch(/No JSX, HTML or JavaScript/);
-    expect(compact).toMatch(/Output only Loom/);
+    expect(compact).toMatch(/Output only SayShape/);
   });
 
   it("puts the app's own context after everything that's the same for every app", () => {

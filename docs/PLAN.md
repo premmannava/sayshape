@@ -11,7 +11,7 @@ It covers:
 - [Phase 3: Components and engine capabilities](#phase-3-components-and-engine-capabilities)
 - [Phase 4: The model loop (UI on the fly)](#phase-4-the-model-loop-ui-on-the-fly)
 - [Phase 5: Docs site](#phase-5-docs-site)
-- [Phase 6: SayShape Shop, the reference app](#phase-6-loom-shop-the-reference-app)
+- [Phase 6: SayShape Shop, the reference app](#phase-6-sayshape-shop-the-reference-app)
 - [Phase 7: Hardening and 1.0](#phase-7-hardening-and-10)
 - [How components get made](#how-components-get-made)
 - [Testing strategy](#testing-strategy)
@@ -70,7 +70,7 @@ Phases 4 and 5 can overlap with the end of Phase 3. The order follows the origin
 2. **Component contract tests** that run automatically over every registered component (details in [Testing strategy](#component-contract-tests)).
 3. **Streaming and fuzz tests**: every prefix of every sample spec renders without errors; random and mutated specs never make the parser or engine throw.
 4. **Visual regression**: Playwright renders every component example in light and dark at phone and desktop widths and compares against stored images.
-5. **Test helpers** (`loom-ui/testing`), so interaction tests read like this:
+5. **Test helpers** (`sayshape/testing`), so interaction tests read like this:
 
    ```ts
    const ui = render(`state n=0\nbutton "Add" on=inc:n`);
@@ -83,7 +83,7 @@ Phases 4 and 5 can overlap with the end of Phase 3. The order follows the origin
 
 **Exit criteria:** CI is green and required for merging; adding a component automatically gets it contract-tested and screenshotted.
 
-**Status:** built. `loom-ui/testing`, contract, streaming and fuzz tests, visual regression, benchmarks with base comparison, `docs:check`, `new:component` and CI are in place. Two things remain outside the code: making CI required for merging (a branch protection setting on GitHub), and keeping visual baselines current. They can only be made on Linux, so CI regenerates and commits them when a pull request gets the `update-visual-baselines` label.
+**Status:** built. `sayshape/testing`, contract, streaming and fuzz tests, visual regression, benchmarks with base comparison, `docs:check`, `new:component` and CI are in place. Two things remain outside the code: making CI required for merging (a branch protection setting on GitHub), and keeping visual baselines current. They can only be made on Linux, so CI regenerates and commits them when a pull request gets the `update-visual-baselines` label.
 
 What the new tests found on their first runs:
 
@@ -135,7 +135,7 @@ Built as planned in [`plans/lists-and-data.md`](plans/lists-and-data.md), with t
 - Copies are made inside layout (`shownChildren`), where containers ask for their children, rather than in a separate expand step. Same result, fewer moving parts.
 - Besides the 500-item limit per `each`, a screen copies at most 10,000 elements, because nested lists multiply.
 - Inputs write items through `bind=t.done` and path actions; `$value` and `money`, `lower`, `upper` aren't built yet.
-- From testing with Qwen3 14B: a line holding only `if=` is now a condition block (models write it naturally), multi-line state lists from a model are joined back into one line by `loom-ui/model`, a spec written inside unclosed thinking is recovered, and names nothing defines are warnings that go to the repair pass.
+- From testing with Qwen3 14B: a line holding only `if=` is now a condition block (models write it naturally), multi-line state lists from a model are joined back into one line by `sayshape/model`, a spec written inside unclosed thinking is recovered, and names nothing defines are warnings that go to the repair pass.
 - `npm run eval` gained "data" and "hard" categories and behavior checks that use the rendered screen.
 
 ### 2.3 Grid layout
@@ -186,7 +186,7 @@ screen name=product title="{product.data.name}"
 - Actions `go:product` and `back` switch screens, with history. The current screen is available as `{screen}`.
 - Only the active screen is laid out and painted. The first screen is shown by default.
 
-**Status: built.** `screen name= title=`, `go:`, `back` and `{screen}` work, and the host can call `loom.go()` / `loom.back()` and listen to `navigate`. Two decisions made while building it: `go:` to an unknown screen does nothing rather than being a diagnostic (a parse-time check would break streaming, because the target screen may arrive later), and while streaming, the first screen to arrive is shown, so models should write the starting screen first.
+**Status: built.** `screen name= title=`, `go:`, `back` and `{screen}` work, and the host can call `sayshape.go()` / `sayshape.back()` and listen to `navigate`. Two decisions made while building it: `go:` to an unknown screen does nothing rather than being a diagnostic (a parse-time check would break streaming, because the target screen may arrive later), and while streaming, the first screen to arrive is shown, so models should write the starting screen first.
 
 ### 2.7 Notifications
 
@@ -251,7 +251,7 @@ Still waiting on engine capabilities: a scrolling or virtualized table for long 
 │                   │      │  sources & commands  │  3    │           │
 │                   │      │  conversation        │ ◄──── │ tool calls│
 │                   │      │ run tools (search…)  │ ────► │           │
-│ loom.push(chunk)  │ ◄─── │ stream SayShape text     │ ◄──── │ SayShape text │
+│ sayshape.push(chunk)  │ ◄─── │ stream SayShape text     │ ◄──── │ SayShape text │
 │                   │  4   │ validate; repair     │   5   │           │
 │ emit → message    │ ───► │ next turn            │       │           │
 │ call → command    │ ───► │ run command directly │       └───────────┘
@@ -261,7 +261,7 @@ Still waiting on engine capabilities: a scrolling or virtualized table for long 
 1. The user asks for something ("trail shoes for wet weather under $120").
 2. The server sends the model a system prompt built from `languageGuide()` plus the registered sources and commands, and the conversation so far.
 3. The model may call tools first (search the catalog) to decide what to show. Tool results never go into the spec as text. The spec reads them through sources, so prices and stock always come from the store's systems.
-4. The model streams SayShape. The server forwards each chunk to the browser (server-sent events), and `loom.push()` renders line by line.
+4. The model streams SayShape. The server forwards each chunk to the browser (server-sent events), and `sayshape.push()` renders line by line.
 5. When the stream ends, the server parses the spec with the same parser. If there are errors, it sends the diagnostics back to the model once and asks for a corrected spec, then swaps it in.
 
 User actions take two different paths:
@@ -271,8 +271,8 @@ User actions take two different paths:
 
 ### 4.2 Deliverables
 
-1. A small server package (`loom-ui/server`) with: building the prompt from registries, streaming to the browser, validation and one repair attempt, and per-session rate limits.
-2. A client helper (`loom-ui/client`) that connects a `SayShape` instance to the stream and turns `emit` events into messages.
+1. A small server package (`sayshape/server`) with: building the prompt from registries, streaming to the browser, validation and one repair attempt, and per-session rate limits.
+2. A client helper (`sayshape/client`) that connects a `SayShape` instance to the stream and turns `emit` events into messages.
 3. **Commerce rules for the parser** (`rules: ["commerce"]`): no currency amounts written as text (prices must come from `{…}` reading a source), no arithmetic on prices, and no calls to `fixedScreensOnly` commands from generated screens. The full list is in [the ecommerce example](examples/ecommerce.md#safety-rules-for-commerce).
 4. **Patches**: give elements an `id=`, so the model can update part of a screen ("replace `#results`") instead of regenerating all of it.
 5. **Templates**: reviewed specs for common screens that the model fills in with parameters, which is faster and safer than writing from scratch.
@@ -289,7 +289,7 @@ User actions take two different paths:
 
 **Status: started.** Built so far, and tested end to end against a fake OpenAI-compatible server (the real runs happen on a developer's machine):
 
-- `loom-ui/model`: streaming from any OpenAI-compatible endpoint (LM Studio, Ollama, vLLM, DeepSeek, OpenRouter…), removing reasoning (`<think>` blocks, or a separate reasoning field) and code fences, checking with the parser and one repair that lists the problems by line.
+- `sayshape/model`: streaming from any OpenAI-compatible endpoint (LM Studio, Ollama, vLLM, DeepSeek, OpenRouter…), removing reasoning (`<think>` blocks, or a separate reasoning field) and code fences, checking with the parser and one repair that lists the problems by line.
 - The playground's Ask a model box, through the dev server, which adds any key so the browser never sees it. Refining sends the clean conversation, not the repair turns.
 - `languageGuide(registry, options)`: a one-line index first, then each element with its example; image hosts, the app's own `emit:` actions and notes about the app.
 - `npm run eval` with 30 requests (`eval/cases.ts`), reporting validity before and after repair, expected elements, invented props and elements, tokens and timings.
@@ -343,7 +343,7 @@ Still to do from the list above: the production server package (rate limits, ses
   - Done: nesting depth. The engine overflowed the call stack on specs nested between 500 and 2,000 levels deep, because layout and paint are recursive. The parser now stops at 100 levels (`MAX_DEPTH`) and reports deeper lines as errors. Still to decide: limits on total spec size and element count.
 - **Internationalization:** right-to-left layout, number and currency formatting by locale, and font fallback for other scripts.
 - **Native renderer experiment:** run the same engine in Rust with WebAssembly for heavy screens, and as a native app outside the browser (see the speed discussion in the README).
-- **Release:** publish `loom-ui` to npm with semantic versioning and a changelog, and a migration guide for language changes.
+- **Release:** publish `sayshape` to npm with semantic versioning and a changelog, and a migration guide for language changes.
 
 ---
 
@@ -386,7 +386,7 @@ SayShape is tested in layers, from fast and exact to slow and statistical.
 | Unit | Vitest | Every save | Parser, expressions, actions, layout math |
 | Component contract | Vitest over the registry | Every push | A component breaking a project rule |
 | Streaming and fuzz | Vitest + fast-check | Every push | Crashes on partial or odd input |
-| Interaction | Vitest + `loom-ui/testing` | Every push | Presses and state changes |
+| Interaction | Vitest + `sayshape/testing` | Every push | Presses and state changes |
 | Visual regression | Playwright + pixelmatch | Every push | Anything that looks different |
 | Accessibility | axe-core on the mirror, plus manual screen reader passes | Every push, manual per release | Missing roles, labels, focus problems |
 | Performance | Benchmark specs | Every push | Slowdowns over 20% |

@@ -5,11 +5,11 @@ description: The SayShape class. Options, methods and events for rendering specs
 
 # Embedding SayShape
 
-> SayShape isn't published to npm yet. Build it and install the repository folder as a local dependency ([Local setup](../getting-started/setup#using-it-from-another-project)). The package name is `loom-ui`.
+> SayShape isn't published to npm yet. Build it and install the repository folder as a local dependency ([Local setup](../getting-started/setup#using-it-from-another-project)). The package name is `sayshape`.
 
 ```ts
-import { SayShape, coreComponents } from "loom-ui";
-import { mapComponents } from "loom-ui/map";
+import { SayShape, coreComponents } from "sayshape";
+import { mapComponents } from "sayshape/map";
 
 const canvas = document.querySelector("canvas")!;
 const ui = new SayShape(canvas, {
@@ -29,7 +29,7 @@ The canvas fills its parent's width, follows it when the parent resizes, and gro
 | Option | Default | Description |
 |---|---|---|
 | `components` | required | The components this instance understands |
-| `theme` | `"auto"` | A `Theme`, or `"auto"` to follow light and dark mode and `--loom-*` CSS variables ([Themes](./themes)) |
+| `theme` | `"auto"` | A `Theme`, or `"auto"` to follow light and dark mode and `--sayshape-*` CSS variables ([Themes](./themes)) |
 | `width` | parent width | A fixed width in CSS pixels |
 | `minHeight` | `0` | Minimum canvas height |
 | `padding` | `20` | Space around the whole screen |
@@ -37,7 +37,7 @@ The canvas fills its parent's width, follows it when the parent resizes, and gro
 | `imageHosts` | `[]` | Hosts images may load from besides your own site ([Images](./images)) |
 | `loadImage` | an `<img>` with CORS | Custom image loading, for tests, server rendering or signed URLs |
 | `onWarning` | `console.warn` | Problems found while running, like a blocked image |
-| `editor` | an `<input>` over the field | How text fields are typed into; `loom-ui/testing` passes a fake one |
+| `editor` | an `<input>` over the field | How text fields are typed into; `sayshape/testing` passes a fake one |
 | `today` | the device's local day | Today's date as `() => "YYYY-MM-DD"`, for date pickers |
 | `viewport` | from the window | The visible part of the canvas, for placing popups |
 

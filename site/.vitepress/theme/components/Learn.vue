@@ -8,10 +8,10 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { withBase } from "vitepress";
 import { chapters, newLines } from "../../../learn/chapters";
-import { highlightLine } from "../loom/highlight";
-import { useLoom } from "../loom/useLoom";
-import { onHostEvents, type HostEvent } from "../loom/events";
-import { toBase64Url } from "../loom/runtime";
+import { highlightLine } from "../sayshape/highlight";
+import { useSayShape } from "../sayshape/useSayShape";
+import { onHostEvents, type HostEvent } from "../sayshape/events";
+import { toBase64Url } from "../sayshape/runtime";
 import elements from "../../../.generated/elements.json";
 
 const current = ref(0);
@@ -29,11 +29,11 @@ const lines = computed(() => {
 const playgroundHref = computed(() => withBase("/playground.html") + "#spec=" + toBase64Url(chapter.value.spec));
 
 function readState() {
-  const s = loom.value?.state.snapshot() ?? {};
+  const s = sayshape.value?.state.snapshot() ?? {};
   stateView.value = Object.entries(s).map(([k, v]) => [k, JSON.stringify(v).replace(/"(\w+)":/g, "$1: ").slice(0, 80)]);
 }
 
-const { loom, failed } = useLoom(canvas, (l) => {
+const { sayshape, failed } = useSayShape(canvas, (l) => {
   const offEvents = onHostEvents(l, (e) => { events.value = [e, ...events.value].slice(0, 2); });
   const offChange = l.on("change", readState);
   l.setSpec(chapter.value.spec);
@@ -44,7 +44,7 @@ const { loom, failed } = useLoom(canvas, (l) => {
 function show(i: number) {
   if (i === current.value) return;
   current.value = i;
-  loom.value?.setSpec(chapters[i]!.spec);
+  sayshape.value?.setSpec(chapters[i]!.spec);
   events.value = [];
   readState();
 }
@@ -53,7 +53,7 @@ function go(i: number) {
   show(i);
 }
 function restart() {
-  loom.value?.setSpec(chapter.value.spec, { resetState: true });
+  sayshape.value?.setSpec(chapter.value.spec, { resetState: true });
   events.value = [];
   readState();
 }
@@ -96,8 +96,8 @@ onBeforeUnmount(() => observer?.disconnect());
           <h2>That's a store in {{ chapters[chapters.length - 1]!.spec.split("\n").length }} lines.</h2>
           <p>A model writes lines like these from a plain request, and SayShape draws each one as it arrives.</p>
           <div class="ln-end-links">
-            <a class="loom-btn primary" :href="withBase('/docs/elements/')">Browse all {{ elements.elements.length }} elements</a>
-            <a class="loom-btn quiet" :href="withBase('/examples/')">See bigger examples</a>
+            <a class="sayshape-btn primary" :href="withBase('/docs/elements/')">Browse all {{ elements.elements.length }} elements</a>
+            <a class="sayshape-btn quiet" :href="withBase('/examples/')">See bigger examples</a>
           </div>
         </section>
       </div>
@@ -114,18 +114,18 @@ onBeforeUnmount(() => observer?.disconnect());
           <div class="ln-bar">
             <span class="ss-eyebrow">Result · chapter {{ current + 1 }}</span>
             <span class="ln-actions">
-              <button type="button" class="loom-btn-text" :disabled="!loom" @click="restart">Start over</button>
-              <a class="loom-btn-text" :href="playgroundHref">Open in playground</a>
+              <button type="button" class="sayshape-btn-text" :disabled="!sayshape" @click="restart">Start over</button>
+              <a class="sayshape-btn-text" :href="playgroundHref">Open in playground</a>
             </span>
           </div>
-          <div class="loom-stage ln-stage">
-            <div class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`The store after chapter ${current + 1}, drawn on a canvas`"></canvas></div>
-            <p v-if="failed" class="loom-live__failed">The preview couldn't start: {{ failed }}</p>
+          <div class="sayshape-stage ln-stage">
+            <div class="sayshape-canvas-wrap"><canvas ref="canvas" :aria-label="`The store after chapter ${current + 1}, drawn on a canvas`"></canvas></div>
+            <p v-if="failed" class="sayshape-live__failed">The preview couldn't start: {{ failed }}</p>
           </div>
           <dl class="ln-state" aria-label="State right now">
             <div v-for="[k, v] in stateView" :key="k"><dt>{{ k }}</dt><dd>{{ v }}</dd></div>
           </dl>
-          <ol v-if="events.length" class="loom-events" aria-live="polite" aria-label="Events">
+          <ol v-if="events.length" class="sayshape-events" aria-live="polite" aria-label="Events">
             <li v-for="e in events" :key="e.id"><code>{{ e.text }}</code></li>
           </ol>
         </div>
@@ -137,7 +137,7 @@ onBeforeUnmount(() => observer?.disconnect());
 <style scoped>
 .learn { max-width: 1360px; margin: 0 auto; padding: 48px 24px 120px }
 .ln-head { display: grid; gap: 14px; max-width: 900px; padding-bottom: 28px; border-bottom: 2px solid var(--ss-rule) }
-.ln-head h1 { margin: 0; font: 800 clamp(40px, 6vw, 76px)/0.98 var(--loom-display); letter-spacing: -0.045em; text-wrap: balance }
+.ln-head h1 { margin: 0; font: 800 clamp(40px, 6vw, 76px)/0.98 var(--sayshape-display); letter-spacing: -0.045em; text-wrap: balance }
 .ln-lede { margin: 0; max-width: 58ch; font-size: 18px; line-height: 1.55; color: var(--vp-c-text-2) }
 
 .ln-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 48px; align-items: start }
@@ -150,7 +150,7 @@ onBeforeUnmount(() => observer?.disconnect());
 .ln-ch { min-height: 78vh; padding: 52px 0 24px; display: grid; gap: 14px; align-content: start; opacity: 0.38; transition: opacity 0.3s }
 .ln-ch.on { opacity: 1 }
 .ln-num { margin: 0; font: 500 13px var(--vp-font-family-mono); color: var(--vp-c-text-3) }
-.ln-ch h2 { margin: 0; font: 800 clamp(30px, 3.4vw, 44px)/1.04 var(--loom-display); letter-spacing: -0.035em; text-wrap: balance }
+.ln-ch h2 { margin: 0; font: 800 clamp(30px, 3.4vw, 44px)/1.04 var(--sayshape-display); letter-spacing: -0.035em; text-wrap: balance }
 .ln-body { margin: 0; font-size: 18px; line-height: 1.6; color: var(--vp-c-text-2); max-width: 46ch }
 .ln-adds { list-style: none; margin: 0; padding: 4px 0 4px 14px; border-left: 3px solid var(--ss-mark); display: grid; gap: 4px }
 .ln-adds code { background: none; padding: 0; font-size: 14px; color: var(--vp-c-brand-1) }
@@ -158,7 +158,7 @@ onBeforeUnmount(() => observer?.disconnect());
 .ln-more { margin: 0; font-size: 14px; color: var(--vp-c-text-3) }
 .ln-more a { font-weight: 600 }
 .ln-end { padding: 60px 0 0; display: grid; gap: 14px }
-.ln-end h2 { margin: 0; font: 800 36px/1.05 var(--loom-display); letter-spacing: -0.03em }
+.ln-end h2 { margin: 0; font: 800 36px/1.05 var(--sayshape-display); letter-spacing: -0.03em }
 .ln-end p { margin: 0; font-size: 17px; color: var(--vp-c-text-2); max-width: 46ch }
 .ln-end-links { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 8px }
 
@@ -183,7 +183,7 @@ onBeforeUnmount(() => observer?.disconnect());
   .ln-grid { grid-template-columns: 1fr; gap: 0 }
   /* On a phone the result is pinned to the bottom of the screen, under the chapter being read. */
   .ln-panel { top: auto; bottom: 0; z-index: 5; padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px)); background: var(--vp-c-bg); max-height: 46vh; border-top: 2px solid var(--ss-rule) }
-  .ln-live .ln-state, .ln-live .loom-events { display: none }
+  .ln-live .ln-state, .ln-live .sayshape-events { display: none }
   .ln-spec { display: none }
   .ln-chapters { padding-left: 0 }
   .ln-rail { display: none }

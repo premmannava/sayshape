@@ -20,11 +20,11 @@ function short(value: unknown): string {
 }
 
 /** Subscribe to the events a host would handle. Returns a cleanup function. */
-export function onHostEvents(loom: SayShape, push: (e: HostEvent) => void): () => void {
+export function onHostEvents(sayshape: SayShape, push: (e: HostEvent) => void): () => void {
   const offs = [
-    loom.on("action", ({ name, value }) => push({ id: ++next, kind: "emit", text: `emit:${name}${value === undefined ? "" : " → " + short(value)}` })),
-    loom.on("navigate", ({ screen, from }) => push({ id: ++next, kind: "screen", text: `screen ${from ?? "—"} → ${screen}` })),
-    loom.on("notify", ({ text }) => push({ id: ++next, kind: "notify", text: `notify "${text}"` })),
+    sayshape.on("action", ({ name, value }) => push({ id: ++next, kind: "emit", text: `emit:${name}${value === undefined ? "" : " → " + short(value)}` })),
+    sayshape.on("navigate", ({ screen, from }) => push({ id: ++next, kind: "screen", text: `screen ${from ?? "—"} → ${screen}` })),
+    sayshape.on("notify", ({ text }) => push({ id: ++next, kind: "notify", text: `notify "${text}"` })),
   ];
   return () => offs.forEach((off) => off());
 }

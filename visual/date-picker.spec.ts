@@ -9,15 +9,15 @@ import { THEMES, WIDTHS } from "./cases";
 async function open(page: Page, theme: string, width: number, spec?: string): Promise<void> {
   await page.setViewportSize({ width: width + 40, height: 900 });
   await page.goto(`/visual/index.html?case=sample-request&theme=${theme}&width=${width}`);
-  await page.waitForFunction(() => window.__loomReady || window.__loomError);
-  if (spec) await page.evaluate((s) => { window.__loom!.setSpec(s, { resetState: true }); window.__loom!.renderNow(); }, spec);
+  await page.waitForFunction(() => window.__sayShapeReady || window.__sayShapeError);
+  if (spec) await page.evaluate((s) => { window.__sayshape!.setSpec(s, { resetState: true }); window.__sayshape!.renderNow(); }, spec);
 }
 
 async function field(page: Page): Promise<{ x: number; y: number }> {
   return page.evaluate(() => {
-    const loom = window.__loom!;
-    loom.renderNow();
-    const b = loom.hitRegions.find((h) => h.box.node.type === "date-picker")!.box;
+    const sayshape = window.__sayshape!;
+    sayshape.renderNow();
+    const b = sayshape.hitRegions.find((h) => h.box.node.type === "date-picker")!.box;
     const r = (document.getElementById("canvas") as HTMLCanvasElement).getBoundingClientRect();
     return { x: r.left + b.x + b.w / 2, y: r.top + b.y + b.h / 2 };
   });
@@ -26,16 +26,16 @@ async function field(page: Page): Promise<{ x: number; y: number }> {
 /** The page position of one of the open calendar's regions, like "day:2026-11-12". */
 async function part(page: Page, detail: string): Promise<{ x: number; y: number }> {
   return page.evaluate((d) => {
-    const loom = window.__loom!;
-    loom.renderNow();
-    const b = loom.openPopupInfo!.regions.find((h) => h.detail === d)!.box;
+    const sayshape = window.__sayshape!;
+    sayshape.renderNow();
+    const b = sayshape.openPopupInfo!.regions.find((h) => h.detail === d)!.box;
     const r = (document.getElementById("canvas") as HTMLCanvasElement).getBoundingClientRect();
     return { x: r.left + b.x + b.w / 2, y: r.top + b.y + b.h / 2 };
   }, detail);
 }
 
-const state = (page: Page, key: string) => page.evaluate((k) => window.__loom!.state.get(k), key);
-const isOpen = (page: Page) => page.evaluate(() => { window.__loom!.renderNow(); return !!window.__loom!.openPopupInfo; });
+const state = (page: Page, key: string) => page.evaluate((k) => window.__sayshape!.state.get(k), key);
+const isOpen = (page: Page) => page.evaluate(() => { window.__sayshape!.renderNow(); return !!window.__sayshape!.openPopupInfo; });
 
 for (const theme of THEMES) {
   for (const width of WIDTHS) {

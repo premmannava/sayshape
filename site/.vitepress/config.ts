@@ -2,10 +2,10 @@ import { defineConfig, type DefaultTheme } from "vitepress";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import { CATEGORIES } from "../../src/component";
-import { loomLivePlugin } from "./markdown";
+import { sayShapeLivePlugin } from "./markdown";
 
 const here = (p: string) => fileURLToPath(new URL(p, import.meta.url));
-const loomGrammar = JSON.parse(readFileSync(here("./loom.tmLanguage.json"), "utf8"));
+const sayShapeGrammar = JSON.parse(readFileSync(here("./sayshape.tmLanguage.json"), "utf8"));
 
 const REPO = "https://github.com/premmannava/sayshape";
 // The site's path on GitHub Pages: the repository's name. Change SITE_BASE if the repository is renamed.
@@ -131,17 +131,17 @@ export default defineConfig({
     },
   },
   markdown: {
-    languages: [loomGrammar],
+    languages: [sayShapeGrammar],
     theme: { light: "github-light", dark: "github-dark" },
     config(md) {
-      md.use(loomLivePlugin);
+      md.use(sayShapeLivePlugin);
     },
   },
   // A2UI's renderer is made of custom elements (a2ui-surface and the basic catalog's), drawn by the compare page.
   vue: { template: { compilerOptions: { isCustomElement: (tag) => tag.startsWith("a2ui-") } } },
   vite: {
     resolve: {
-      alias: { "@loom": here("../../src") },
+      alias: { "@sayshape": here("../../src") },
     },
     server: { fs: { allow: [here("../.."), here("..")] } },
     // The playground's appearance helpers live next to the development playground and are reused here.

@@ -1,7 +1,7 @@
 import { render } from "../src/testing";
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
-import { generateSpec, loomLineTest, ModelError, SpecFilter, streamChat, tidySpec, type ChatMessage } from "../src/model";
+import { generateSpec, sayShapeLineTest, ModelError, SpecFilter, streamChat, tidySpec, type ChatMessage } from "../src/model";
 import { Registry } from "../src/registry";
 import { fakeModel, type Reply } from "./fake-model";
 
@@ -11,9 +11,9 @@ const config = { url: "http://model.test/v1", model: "test-model" };
 const good = `card\n  text "Cabin" style=title\n  button "Book" on=emit:book\n`;
 
 describe("SpecFilter", () => {
-  const isLoom = loomLineTest((n) => registry.has(n));
+  const isSayShape = sayShapeLineTest((n) => registry.has(n));
   const run = (chunks: string[]) => {
-    const f = new SpecFilter(isLoom);
+    const f = new SpecFilter(isSayShape);
     let text = "", resets = 0;
     for (const c of chunks) { const o = f.push(c); if (o.reset) { resets++; text = ""; } text += o.text; }
     const o = f.end();
@@ -43,7 +43,7 @@ describe("SpecFilter", () => {
   });
 
   it("drops code fences and chatter before the spec", () => {
-    expect(run([`Here's your interface:\n\n\`\`\`loom\n${good}\`\`\`\n`]).text).toBe(good);
+    expect(run([`Here's your interface:\n\n\`\`\`sayshape\n${good}\`\`\`\n`]).text).toBe(good);
   });
 
   it("keeps the last line without a newline", () => {
@@ -81,8 +81,8 @@ card
   });
 
   it("recognises how a spec can start", () => {
-    expect(["state n=0", "derive total={2 * 3}", "# comment", "card", 'text "Hi"', "screen name=a"].every(isLoom)).toBe(true);
-    expect(["Here is", "Card for you:", "stated plainly", "texts", ""].some(isLoom)).toBe(false);
+    expect(["state n=0", "derive total={2 * 3}", "# comment", "card", 'text "Hi"', "screen name=a"].every(isSayShape)).toBe(true);
+    expect(["Here is", "Card for you:", "stated plainly", "texts", ""].some(isSayShape)).toBe(false);
   });
 });
 
@@ -197,7 +197,7 @@ describe("generateSpec", () => {
     await generateSpec({ config, registry, request: "a card", userSuffix: "/no_think", guide: { notes: "A cabin rental site." }, fetch: m.fetch });
     const [system, user] = m.requests[0]!.body.messages;
     expect(system!.role).toBe("system");
-    expect(system!.content).toMatch(/^You write user interfaces in Loom/);
+    expect(system!.content).toMatch(/^You write user interfaces in SayShape/);
     expect(system!.content).toContain("A cabin rental site.");
     expect(user).toEqual({ role: "user", content: "a card\n\n/no_think" });
   });

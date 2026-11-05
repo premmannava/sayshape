@@ -9,27 +9,27 @@ import { THEMES, WIDTHS } from "./cases";
 async function open(page: Page, theme: string, width: number, spec?: string): Promise<void> {
   await page.setViewportSize({ width: width + 40, height: 760 });
   await page.goto(`/visual/index.html?case=sample-directory&theme=${theme}&width=${width}`);
-  await page.waitForFunction(() => window.__loomReady || window.__loomError);
-  if (spec) await page.evaluate((s) => { window.__loom!.setSpec(s, { resetState: true }); window.__loom!.renderNow(); }, spec);
+  await page.waitForFunction(() => window.__sayShapeReady || window.__sayShapeError);
+  if (spec) await page.evaluate((s) => { window.__sayshape!.setSpec(s, { resetState: true }); window.__sayshape!.renderNow(); }, spec);
 }
 
 /** The page position of the select's field. */
 async function field(page: Page): Promise<{ x: number; y: number }> {
   return page.evaluate(() => {
-    const loom = window.__loom!;
-    loom.renderNow();
-    const b = loom.hitRegions.find((h) => h.box.node.type === "select")!.box;
+    const sayshape = window.__sayshape!;
+    sayshape.renderNow();
+    const b = sayshape.hitRegions.find((h) => h.box.node.type === "select")!.box;
     const r = (document.getElementById("canvas") as HTMLCanvasElement).getBoundingClientRect();
     return { x: r.left + b.x + b.w / 2, y: r.top + b.y + b.h / 2 };
   });
 }
 
 const popup = (page: Page) => page.evaluate(() => {
-  window.__loom!.renderNow();
-  const p = window.__loom!.openPopupInfo;
+  window.__sayshape!.renderNow();
+  const p = window.__sayshape!.openPopupInfo;
   return p && { area: p.area, state: { ...p.state } };
 });
-const state = (page: Page, key: string) => page.evaluate((k) => window.__loom!.state.get(k), key);
+const state = (page: Page, key: string) => page.evaluate((k) => window.__sayshape!.state.get(k), key);
 
 for (const theme of THEMES) {
   for (const width of WIDTHS) {

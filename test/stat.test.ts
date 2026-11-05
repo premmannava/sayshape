@@ -168,25 +168,25 @@ describe("stat while loading", () => {
 
   it("draws placeholders for the value, the change and the sparkline", () => {
     const plain = render(`stat label="Revenue" value={money(sum(sales, 'revenue'))}\n`);
-    plain.loom.setLoading(["sales"]);
-    plain.loom.renderNow();
+    plain.sayshape.setLoading(["sales"]);
+    plain.sayshape.renderNow();
     const plainFills = plain.drawOps.filter((o) => o.op === "fill").length;
     plain.destroy();
 
     const ui = render(SPEC);
-    ui.loom.setLoading(["sales", "growth", "weekly"]);
-    ui.loom.renderNow();
+    ui.sayshape.setLoading(["sales", "growth", "weekly"]);
+    ui.sayshape.renderNow();
     expect(texts(ui)).toEqual(["Revenue"]);
     // One placeholder path, holding the value, the change and the line's area.
     expect(ui.drawOps.filter((o) => o.op === "fill").length).toBe(plainFills);
     expect(ui.drawOps.filter((o) => o.op === "stroke")).toHaveLength(0);
     expect(ui.warnings).toEqual([]);
     const loadingH = ui.find("stat").box!.h;
-    ui.loom.state.set("sales", [{ revenue: 10 }]);
-    ui.loom.state.set("growth", 4);
-    ui.loom.state.set("weekly", [1, 3, 2]);
-    ui.loom.setLoading([]);
-    ui.loom.renderNow();
+    ui.sayshape.state.set("sales", [{ revenue: 10 }]);
+    ui.sayshape.state.set("growth", 4);
+    ui.sayshape.state.set("weekly", [1, 3, 2]);
+    ui.sayshape.setLoading([]);
+    ui.sayshape.renderNow();
     expect(texts(ui)).toEqual(expect.arrayContaining(["$10.00", "▲ 4%"]));
     expect(ui.find("stat").box!.h).toBe(loadingH);
     ui.destroy();
@@ -204,7 +204,7 @@ describe("stat while loading", () => {
       },
       set(target, prop, value) { return Reflect.set(target, prop, value); },
     });
-    const engine = ui.loom as unknown as { paintContext(g: CanvasRenderingContext2D): PaintContext };
+    const engine = ui.sayshape as unknown as { paintContext(g: CanvasRenderingContext2D): PaintContext };
     const ctx = { ...engine.paintContext(g), reveal: () => 0.3 };
     stat.paint!(box as Box, ctx);
     const clip = calls.find((k) => k.name === "rect");

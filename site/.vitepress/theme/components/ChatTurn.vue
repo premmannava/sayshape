@@ -8,10 +8,10 @@
  */
 import { computed, ref, watch } from "vue";
 import { withBase } from "vitepress";
-import { highlightSpec } from "../loom/highlight";
-import { useLoom } from "../loom/useLoom";
-import { toBase64Url } from "../loom/runtime";
-import { onHostEvents, type HostEvent } from "../loom/events";
+import { highlightSpec } from "../sayshape/highlight";
+import { useSayShape } from "../sayshape/useSayShape";
+import { toBase64Url } from "../sayshape/runtime";
+import { onHostEvents, type HostEvent } from "../sayshape/events";
 
 export interface Turn {
   id: number;
@@ -40,7 +40,7 @@ const html = computed(() => highlightSpec(props.turn.text.replace(/\n$/, "")));
 const hasInterface = computed(() => props.turn.text.trim().length > 0);
 const playgroundHref = computed(() => withBase("/playground.html") + "#spec=" + toBase64Url(props.turn.text));
 
-const { loom } = useLoom(canvas, (l) => {
+const { sayshape } = useSayShape(canvas, (l) => {
   const off = onHostEvents(l, (e) => { events.value = [e, ...events.value].slice(0, 3); });
   l.beginStream();
   sync();
@@ -49,7 +49,7 @@ const { loom } = useLoom(canvas, (l) => {
 
 /** Bring the engine up to date with the turn: new text, a restart, or the end. */
 function sync() {
-  const l = loom.value;
+  const l = sayshape.value;
   if (!l) return;
   const t = props.turn;
   if (t.resets !== resetsSeen) { resetsSeen = t.resets; pushed = 0; l.beginStream(); }
@@ -79,17 +79,17 @@ async function copy() {
       <p class="ct-status" :class="turn.state" role="status" aria-live="polite">
         <span v-if="turn.state === 'streaming'" class="ct-dot" aria-hidden="true"></span>{{ turn.status }}
       </p>
-      <div v-show="hasInterface" class="loom-stage ct-stage">
-        <div class="loom-canvas-wrap"><canvas ref="canvas" :aria-label="`Interface for: ${turn.request}. Drawn on a canvas; the spec below is its readable source.`"></canvas></div>
+      <div v-show="hasInterface" class="sayshape-stage ct-stage">
+        <div class="sayshape-canvas-wrap"><canvas ref="canvas" :aria-label="`Interface for: ${turn.request}. Drawn on a canvas; the spec below is its readable source.`"></canvas></div>
       </div>
-      <ol v-if="events.length" class="loom-events" aria-label="Events sent to this page">
+      <ol v-if="events.length" class="sayshape-events" aria-label="Events sent to this page">
         <li v-for="e in events" :key="e.id"><code>{{ e.text }}</code><span v-if="e.kind === 'emit'">, received by this page and not sent anywhere</span></li>
       </ol>
       <div v-if="hasInterface && turn.state !== 'streaming'" class="ct-actions">
-        <button class="loom-btn-text" type="button" :aria-expanded="showSpec" @click="showSpec = !showSpec">{{ showSpec ? "Hide spec" : "View spec" }}</button>
-        <button class="loom-btn-text" type="button" @click="copy">{{ copied || "Copy spec" }}</button>
-        <a class="loom-btn-text" :href="playgroundHref">Open in playground</a>
-        <button class="loom-btn-text" type="button" :disabled="!loom" @click="loom?.setSpec(turn.text, { resetState: true })">Reset</button>
+        <button class="sayshape-btn-text" type="button" :aria-expanded="showSpec" @click="showSpec = !showSpec">{{ showSpec ? "Hide spec" : "View spec" }}</button>
+        <button class="sayshape-btn-text" type="button" @click="copy">{{ copied || "Copy spec" }}</button>
+        <a class="sayshape-btn-text" :href="playgroundHref">Open in playground</a>
+        <button class="sayshape-btn-text" type="button" :disabled="!sayshape" @click="sayshape?.setSpec(turn.text, { resetState: true })">Reset</button>
       </div>
       <pre v-if="hasInterface && (showSpec || turn.state === 'streaming')" class="spec-view numbered ct-spec" tabindex="0" aria-label="The spec the model wrote"><code v-html="html"></code></pre>
     </div>
@@ -98,16 +98,16 @@ async function copy() {
 
 <style scoped>
 .ct { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0 }
-.ct-ask { justify-self: end; max-width: min(560px, 86%); background: var(--loom-panel); border: 1px solid var(--vp-c-divider); border-radius: 14px 14px 4px 14px; padding: 10px 14px 12px }
+.ct-ask { justify-self: end; max-width: min(560px, 86%); background: var(--sayshape-panel); border: 1px solid var(--vp-c-divider); border-radius: 14px 14px 4px 14px; padding: 10px 14px 12px }
 .ct-ask p { margin: 2px 0 0; font-size: 15.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere }
 .ct-kind { font-size: 12px; font-weight: 600; color: var(--vp-c-text-2) }
 .ct-reply { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0 }
 .ct-status { margin: 0; font-size: 13.5px; color: var(--vp-c-text-2); display: flex; align-items: center; gap: 8px }
-.ct-status.failed { color: var(--loom-bad); font-weight: 600 }
+.ct-status.failed { color: var(--sayshape-bad); font-weight: 600 }
 .ct-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--vp-c-brand-1); animation: ct-pulse 1s ease-in-out infinite }
 @keyframes ct-pulse { 50% { opacity: 0.25 } }
 .ct-stage { border: 1px solid var(--vp-c-divider); border-radius: 14px }
 .ct-actions { display: flex; flex-wrap: wrap; gap: 6px 18px }
-.ct-spec { margin: 0; padding: 10px 0 12px; max-height: 320px; overflow: auto; background: var(--loom-code-bg); border: 1px solid var(--vp-c-divider); border-radius: 10px; font-size: 12.5px }
-.loom-events { border: 0; padding: 0 !important; list-style: none; margin: 0; font-size: 13px; color: var(--vp-c-text-2) }
+.ct-spec { margin: 0; padding: 10px 0 12px; max-height: 320px; overflow: auto; background: var(--sayshape-code-bg); border: 1px solid var(--vp-c-divider); border-radius: 10px; font-size: 12.5px }
+.sayshape-events { border: 0; padding: 0 !important; list-style: none; margin: 0; font-size: 13px; color: var(--vp-c-text-2) }
 </style>

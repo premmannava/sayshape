@@ -51,7 +51,7 @@ export function sayshapeScreen(spec: string): Screen {
       const tx = Number(o.args[1]), ty = Number(o.args[2]);
       if (tx < b.x - 1 || tx > b.x + b.w + 1 || ty < b.y - 1 || ty > b.y + b.h + 1) continue;
       for (let dx = 0; dx <= 40; dx += 2) for (let dy = -8; dy <= 8; dy += 2) {
-        const t = ui.loom.targetAt(tx - dx, ty + dy);
+        const t = ui.sayshape.targetAt(tx - dx, ty + dy);
         if (t && typeof t.detail === "string" && label.test(t.detail)) return [tx - dx, ty + dy];
       }
     }
@@ -79,14 +79,14 @@ export function sayshapeScreen(spec: string): Screen {
     for (const f of ui.findAll("select").filter((x) => x.box)) {
       const b = f.box!;
       ui.click(b.x + b.w / 2, b.y + b.h - 18);
-      ui.loom.renderNow();
+      ui.sayshape.renderNow();
       const option = ui.popup?.regions.find((r) => piecesIn(r.box).some((t) => label.test(t)));
       if (option) {
         ui.click(option.box.x + option.box.w / 2, option.box.y + option.box.h / 2);
-        ui.loom.renderNow();
+        ui.sayshape.renderNow();
         return true;
       }
-      if (ui.popup) { ui.key("Escape"); ui.loom.renderNow(); }
+      if (ui.popup) { ui.key("Escape"); ui.sayshape.renderNow(); }
     }
     return false;
   };
@@ -117,7 +117,7 @@ export function sayshapeScreen(spec: string): Screen {
         // A part drawn inside a bigger element (a map's pin): click where the engine reports that part, not the element's centre.
         const at = partAt(hit.box, label) ?? [hit.box.x + hit.box.w / 2, hit.box.y + hit.box.h / 2];
         ui.click(at[0], at[1]);
-        ui.loom.renderNow();
+        ui.sayshape.renderNow();
         return true;
       }
       return chooseOption(label);

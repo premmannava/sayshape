@@ -1,6 +1,6 @@
 ---
 title: Connecting a model
-description: Generating SayShape specs with a model. The development playground's local setup, loom-ui/model in your own app, and the evaluation script.
+description: Generating SayShape specs with a model. The development playground's local setup, sayshape/model in your own app, and the evaluation script.
 ---
 
 # Connecting a model
@@ -19,10 +19,10 @@ GitHub Pages serves static files only, so it can't keep an API key secret. On th
 
 ```bash
 # .env.local
-LOOM_MODEL_URL=http://localhost:1234/v1   # LM Studio (default); Ollama: http://localhost:11434/v1
-LOOM_MODEL=                               # optional: the model to preselect
-LOOM_API_KEY=                             # only for servers that need one
-LOOM_USER_SUFFIX=                         # optional: added to every request, e.g. /no_think for Qwen3
+SAYSHAPE_MODEL_URL=http://localhost:1234/v1   # LM Studio (default); Ollama: http://localhost:11434/v1
+SAYSHAPE_MODEL=                               # optional: the model to preselect
+SAYSHAPE_API_KEY=                             # only for servers that need one
+SAYSHAPE_USER_SUFFIX=                         # optional: added to every request, e.g. /no_think for Qwen3
 ```
 
 The dev server forwards the playground's requests from `/api/model` to the model server and adds the key there, so the browser never sees it and the model server needs no CORS settings. While it runs, the status line says what the model is doing (waiting, thinking, writing, fixing problems) and, when it's done, how long it took and whether a repair was needed. **Refine this screen** asks for changes to the current screen instead of a new one.
@@ -33,10 +33,10 @@ The repository also has a general-purpose demo at `/playground/connected-order/i
 
 ## In your own app
 
-`loom-ui/model` does what the playground does: it streams a spec from an OpenAI-compatible endpoint, removes thinking and code fences, checks the result with SayShape's parser, and asks once for a fix if there are problems.
+`sayshape/model` does what the playground does: it streams a spec from an OpenAI-compatible endpoint, removes thinking and code fences, checks the result with SayShape's parser, and asks once for a fix if there are problems.
 
 ```ts
-import { generateSpec } from "loom-ui/model";
+import { generateSpec } from "sayshape/model";
 
 ui.beginStream();
 const result = await generateSpec({

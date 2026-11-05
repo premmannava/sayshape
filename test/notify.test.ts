@@ -11,14 +11,14 @@ describe("notify:", () => {
   it("shows a message filled in from state after the earlier actions ran", () => {
     const ui = render(spec);
     ui.press("button");
-    expect(ui.loom.notification).toBe("Added 1; thanks");
+    expect(ui.sayshape.notification).toBe("Added 1; thanks");
     expect(ui.text()).toContain("Added 1; thanks");
   });
 
   it("tells the host", () => {
     const ui = render(spec);
     const seen: string[] = [];
-    ui.loom.on("notify", (e) => seen.push(e.text));
+    ui.sayshape.on("notify", (e) => seen.push(e.text));
     ui.press("button");
     expect(seen).toEqual(["Added 1; thanks"]);
   });
@@ -27,11 +27,11 @@ describe("notify:", () => {
     const ui = render(spec);
     ui.press("button");
     vi.advanceTimersByTime(2900);
-    ui.loom.renderNow();
+    ui.sayshape.renderNow();
     expect(ui.text()).toContain("Added 1; thanks");
     vi.advanceTimersByTime(200);
-    ui.loom.renderNow();
-    expect(ui.loom.notification).toBeNull();
+    ui.sayshape.renderNow();
+    expect(ui.sayshape.notification).toBeNull();
     expect(ui.text()).not.toContain("Added 1; thanks");
   });
 
@@ -41,8 +41,8 @@ describe("notify:", () => {
     vi.advanceTimersByTime(2000);
     ui.press("button");
     vi.advanceTimersByTime(2000);
-    ui.loom.renderNow();
-    expect(ui.loom.notification).toBe("Added 2; thanks");
+    ui.sayshape.renderNow();
+    expect(ui.sayshape.notification).toBe("Added 2; thanks");
     expect(ui.text().filter((t) => t.startsWith("Added"))).toEqual(["Added 2; thanks"]);
   });
 
@@ -58,8 +58,8 @@ describe("notify:", () => {
 
   it("can be shown by the host", () => {
     const ui = render(`text "Hi"\n`);
-    ui.loom.notify("Saved");
-    ui.loom.renderNow();
+    ui.sayshape.notify("Saved");
+    ui.sayshape.renderNow();
     expect(ui.text()).toContain("Saved");
   });
 });
