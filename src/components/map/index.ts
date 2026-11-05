@@ -76,7 +76,7 @@ interface MapData {
 const runtimes = new WeakMap<SayShapeNode, MapRuntime>();
 const CONTROLS = ["@map:in", "@map:out", "@map:reset"] as const;
 const controlRect = (b: Box, i: number) => ({ x: b.x + b.w - 34, y: b.y + 8 + 32 * i, w: 26, h: 26 });
-const details = (b: Box) => b.data as MapData;
+const details = (b: Box) => b.data as unknown as MapData;
 const isControl = (name: unknown): name is (typeof CONTROLS)[number] =>
   typeof name === "string" && (CONTROLS as readonly string[]).includes(name);
 
