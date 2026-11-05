@@ -5,7 +5,6 @@ import { overlappingGroups, spiderfy } from "../src/components/map/overlap";
 import { layoutBubbleLabels } from "../src/components/map/labels";
 import { MAX_ZOOM, worldView, zoomAt } from "../src/components/map/viewport";
 import stateLines from "../src/components/map/states.json";
-import { mixedColor } from "../src/components/map/analytics";
 import { lightTheme } from "../src/theme";
 import { render } from "../src/testing";
 
@@ -79,7 +78,7 @@ describe("regional basemap boundaries", () => {
     expect(stateLines.states.some((state) => state[0] === "Arizona")).toBe(true);
     const zoomed = render(sameCoords, { components });
     expect((zoomed.find("map").box!.data as { view: { zoom: number } }).view.zoom).toBeGreaterThan(4);
-    const outline = mixedColor(lightTheme.colors.muted, lightTheme.colors.surface, 0.2);
+    const outline = lightTheme.colors.muted;
     expect(zoomed.drawOps.filter((op) => op.op === "stroke" && op.strokeStyle === outline)).toHaveLength(51);
     zoomed.destroy();
 
