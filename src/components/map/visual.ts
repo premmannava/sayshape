@@ -65,6 +65,11 @@ export function choroplethStops(theme: Theme): readonly [string, string, string]
 export function choroplethColor(theme: Theme, t: number): string {
   const [low, middle, high] = choroplethStops(theme);
   const v = Number.isFinite(t) ? Math.max(0, Math.min(1, t)) : 0;
+  // Keep endpoint tokens verbatim so host accents remain exact and tests can
+  // verify theme adherence without normalizing equivalent RGB encodings.
+  if (v === 0) return low;
+  if (v === 0.5) return middle;
+  if (v === 1) return high;
   return v <= 0.5
     ? mixedColor(low, middle, 2 * v)
     : mixedColor(middle, high, 2 * (v - 0.5));
