@@ -138,13 +138,19 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
 
   if (url.pathname !== "/answer") return json(404, { error: "Not found" });
   // Only the site may call. (Origin can be forged outside a browser; Turnstile and rate limits cover that.)
-  if (!allowed.includes(origin)) return json(403, { error: "This origin isn't allowed" });
+  if (!allowed.includes(origin)) {
+    console.error(`refused origin "${origin}": add it to ALLOWED_ORIGINS (now "${env.ALLOWED_ORIGINS ?? ""}")`);
+    return json(403, { error: "This origin isn't allowed" });
+  }
   const cors = corsHeaders(origin);
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (req.method !== "POST") return json(405, { error: "Use POST" }, cors);
 
   if (env.GENERATION_ENABLED === "false") return json(503, { error: "Live answers are turned off right now. The sample spreadsheets still work." }, cors);
-  if (!env.MODEL_API_KEY || !env.MODEL) return json(503, { error: "Live answers aren't configured." }, cors);
+  if (!env.MODEL_API_KEY || !env.MODEL) {
+    console.error(`answers aren't configured: ${!env.MODEL_API_KEY ? "MODEL_API_KEY is missing (worker/.dev.vars locally, wrangler secret put when deployed)" : "MODEL is empty"}`);
+    return json(503, { error: "Live answers aren't configured." }, cors);
+  }
 
   const raw = await req.text();
   if (new TextEncoder().encode(raw).length > MAX_BODY_BYTES) return json(413, { error: "That's more than a question: only the columns and three sample rows are sent." }, cors);
@@ -215,6 +221,9 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
         ...(promptTokens !== undefined && completionTokens !== undefined ? { tokens: { in: promptTokens, out: completionTokens } } : {}),
       });
     } catch (e) {
+      // The real reason goes to the worker's own log (the wrangler dev terminal, or Workers logs), never to the page.
+      const detail = e instanceof Error ? e.message : String(e);
+      console.error(`answer failed (model ${env.MODEL} at ${env.MODEL_URL ?? DEFAULT_URL}): ${env.MODEL_API_KEY ? detail.split(env.MODEL_API_KEY).join("[key]") : detail}`);
       if (!req.signal?.aborted) await send({ t: "error", message: friendlyError(e) });
     } finally {
       await writer.close().catch(() => {});
