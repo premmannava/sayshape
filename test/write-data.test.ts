@@ -266,6 +266,51 @@ each items=todos as=t
   });
 });
 
+describe("writing through a list worked out from state", () => {
+  const TASKS = `state owner="All" tasks=[{text: "Mockups", project: "Web", owner: "Ana", done: true}, {text: "Pages", project: "Web", owner: "Ben", done: false}, {text: "CI", project: "App", owner: "Chen", done: false}]
+derive shown={owner == 'All' ? tasks : filter(tasks, 'owner', owner)}
+derive webDone={count(filter(tasks, 'project', 'Web'), 'done')}
+text "Web {webDone} of 2"
+each items=shown as=t key={t.text}
+  check "{t.text}" bind=t.done
+`;
+
+  it("ticks the task in state through a derived filter, and what reads it follows", () => {
+    const ui = render(TASKS);
+    ui.press({ type: "check", text: "Pages" });
+    expect(ui.warnings).toEqual([]);
+    expect((json(ui.state.tasks) as unknown[]).map((t) => (t as { done: boolean }).done)).toEqual([true, true, false]);
+    expect(ui.text()).toContain("Web 2 of 2");
+  });
+
+  it("finds the right item when the filter has dropped some", () => {
+    const ui = render(TASKS);
+    ui.set("owner", "Chen");
+    ui.press({ type: "check", text: "CI" });
+    expect((json(ui.state.tasks) as unknown[]).map((t) => (t as { done: boolean }).done)).toEqual([true, false, true]);
+  });
+
+  it("works through sort, take and an inline filter, and nested lists", () => {
+    const ui = render(`state orders=[{id: "A", lines: [{name: "Tent", ok: false}, {name: "Stove", ok: false}]}]
+each items={take(sort(orders, 'id', 'desc'), 1)} as=o
+  each items={filter(o.lines, 'name', 'Stove')} as=l
+    check "{l.name}" bind=l.ok
+`);
+    ui.press({ type: "check", text: "Stove" });
+    expect(ui.warnings).toEqual([]);
+    expect(json(ui.state.orders)).toEqual([{ id: "A", lines: [{ name: "Tent", ok: false }, { name: "Stove", ok: true }] }]);
+  });
+
+  it("removes the item from the list in state", () => {
+    const ui = render(`state xs=[{n: "a", on: true}, {n: "b", on: false}, {n: "c", on: true}]
+each items={filter(xs, 'on')} as=x
+  button "drop {x.n}" on=remove:x
+`);
+    ui.press({ type: "button", text: "drop c" });
+    expect((json(ui.state.xs) as unknown[]).map((x) => (x as { n: string }).n)).toEqual(["a", "b"]);
+  });
+});
+
 describe("writes that can't happen", () => {
   it("explains writing to an item of a computed list", () => {
     const ui = render(`state xs=[{on: false}]
@@ -273,7 +318,7 @@ each items={[{on: false}]} as=x
   check "x" bind=x.on
 `);
     ui.press("check");
-    expect(ui.warnings[0]).toMatch(/Can't change x.on: it isn't in state. Inside each, items= must name a list in state/);
+    expect(ui.warnings[0]).toMatch(/Can't change x.on: it isn't in state. Inside each, items= must be a list in state \(like items=todos\) or worked out from one/);
   });
 
   it("won't write to an index, or remove something that isn't an item", () => {

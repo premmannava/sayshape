@@ -321,7 +321,7 @@ function dataSection(ctx: GuideContext): string {
     `- Read fields: {t.text}, {cart[0].price}, {todos.length}`,
     `- Compute numbers from the list instead of writing them yourself: len(list), count(list, 'done') counts items whose field is true, count(list, 'cat', 'Gas') counts items whose field equals a value, sum(list, 'price'), sum(list, 'price', 'qty') multiplies two fields per item, avg(list, 'field'), min(list, 'field'), max(list, 'field'), join(list, 'name'), includes(list, value). These count only numbers: write prices and quantities as numbers (24, not "24")`,
     `- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), first(list) and last(list) for one item. Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate`,
-    `- Use filter() for counts and totals. To show only some items that people can still change (bind=t.done), keep each items=todos and put if= on the each, read per item: each items=todos as=t if={!t.done}`,
+    `- Use filter() for counts and totals. Items of a filtered or sorted list still write back: bind=t.done inside each items=shown as=t changes that task in tasks, and totals worked out from tasks follow. if= on an each picks items per item: each items=todos as=t if={!t.done}`,
     `- Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}`,
     `- A filter with an All choice: derive shown={region == 'All' ? orders : filter(orders, 'region', region)}`,
     `- Totals per category: derive byCat={[{name: 'Food', total: sum(filter(spend, 'cat', 'Food'), 'amt')}, {name: 'Fun', total: sum(filter(spend, 'cat', 'Fun'), 'amt')}]}, then items=byCat`,
@@ -454,7 +454,7 @@ ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty
     add("data", `DATA AND LISTS
 - Keep data in state and repeat with each; never copy an element by hand per item: each items=todos as=t (t exists only inside; index=i is the 0-based position; key={t.id} keeps focus on items)
 - A list inside each item: an each inside the each, items=o.lines
-- bind=t.done and actions on t write back only when items= names a list in state. A computed list (items={filter(…)}) is read-only: to hide items that stay editable, keep items=todos and put if= on the repeated element${has("radio") ? `
+- bind=t.done and actions on t write back to the list in state the item came from, also through filter, sort, search and take (each items=shown). Items an expression builds (items={[{…}]}) can't be written to${has("radio") ? `
 - To compare two fields of an item, set one when choosing: radio "{o}" bind=q.pick value={o} on="set:q.ok:{o == q.answer}", then count(qs, 'ok')` : ""}${has("input") ? `
 - To add what people type: input bind=task on="add:todos:{text: task, done: false};set:task:''"` : ""}
 - No JSX, HTML or JavaScript: {…} computes values, never elements`);

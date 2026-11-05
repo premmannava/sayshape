@@ -51,6 +51,11 @@ export class Store {
     return this.derived.has(key) ? this.derivedValue(key) : this.values.get(key);
   }
 
+  /** Every state value (not derived ones), for finding where an item lives. */
+  entries(): IterableIterator<[string, Value]> {
+    return this.values.entries();
+  }
+
   /** Whether a state value is set (derived values aren't state). */
   has(key: string): boolean {
     return this.values.has(key);

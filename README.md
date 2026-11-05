@@ -271,7 +271,7 @@ List functions, for computing instead of typing numbers:
 | `take(list, 3)` | The first items |
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
 
-They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. Use them for counts and totals. To show only some items people can still change (`bind=t.done`), keep `each items=todos` and put `if=` on the `each` or on the repeated element, because a filtered list is a copy and can't be written to. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
+They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. Use them for counts and totals, and for the lists people work with: items of a filtered, sorted or searched list keep their place in state, so `bind=t.done` inside `each items=shown` (with `derive shown={filter(tasks, 'owner', owner)}`) ticks the task in `tasks`, and totals worked out from `tasks` follow. To hide items without a derived list, put `if=` on the `each` or on the repeated element. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
 
 Formatting, for text people read:
 
@@ -1544,7 +1544,7 @@ guide: {
 }
 ```
 
-- **Compact mode** describes each element in one line, generated from the same component definitions: its props with their types and allowed values (`!` marks a required prop), what it holds or where it must go, and what it's for. It keeps the rules that change what a spec does (one line per element, indentation, quoting, local actions versus `emit` events, that a computed list can't be written to, roles instead of colors, image hosts), and shows one worked example instead of four plus one per element. The app's own context (image hosts, actions, notes) comes last, so the part that's the same for every app stays a shared prefix.
+- **Compact mode** describes each element in one line, generated from the same component definitions: its props with their types and allowed values (`!` marks a required prop), what it holds or where it must go, and what it's for. It keeps the rules that change what a spec does (one line per element, indentation, quoting, local actions versus `emit` events, that an item of a list worked out from state writes back to state, roles instead of colors, image hosts), and shows one worked example instead of four plus one per element. The app's own context (image hosts, actions, notes) comes last, so the part that's the same for every app stays a shared prefix.
 - **Profiles** choose the elements the model is told about. A profile's elements bring what they need (`tab` brings `tabs`, `list` brings `list-item`), and `column` and `text` are always included. Examples and instructions that would use an element outside the profile are left out. A profile is chosen by your app; SayShape doesn't guess one from the request.
 
 | Guide (with one image host) | Characters | Tokens (estimated) |
