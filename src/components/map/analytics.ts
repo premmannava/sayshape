@@ -111,8 +111,10 @@ export function fraction(value: number, min: number, max: number): number {
 
 /** Radius scales with sqrt(value), so visual circle area tracks the numeric measure. */
 export function bubbleRadius(value: number, min: number, max: number): number {
-  const t = max <= 0 ? 0 : Math.sqrt(Math.max(0, value) / max);
-  return 5 + 17 * t;
+  // Keep area tied to the actual numeric zero, not to the smallest listed value.
+  const baseline = Math.min(0, min);
+  const t = max <= baseline ? 0 : Math.sqrt(Math.max(0, (value - baseline) / (max - baseline)));
+  return 5 + 17 * Math.min(1, t);
 }
 
 type RGB = readonly [number, number, number];
