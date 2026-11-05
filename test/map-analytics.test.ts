@@ -3,8 +3,8 @@ import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { bubbleRadius, bubbleValues, mixedColor, regionKey, regionValues } from "../src/components/map/analytics";
 import { render } from "../src/testing";
+import { toData } from "../src/data";
 import { lightTheme } from "../src/theme";
-import type { Value } from "../src/types";
 
 const components = [...coreComponents, ...mapComponents];
 
@@ -17,13 +17,13 @@ describe("choropleth aggregation and country matching", () => {
   });
 
   it("sums duplicate countries and ignores unknown and invalid rows", () => {
-    const summary = regionValues([
+    const summary = regionValues(toData([
       { country: "US", revenue: 10 },
       { country: "United States", revenue: 12 },
       { country: "Brazil", revenue: 0 },
       { country: "Atlantis", revenue: 100 },
       { country: "Japan", revenue: "missing" },
-    ] as Value, "country", "revenue", ["United States of America", "Brazil", "Japan"]);
+    ]), "country", "revenue", ["United States of America", "Brazil", "Japan"]);
     expect(summary.values.get("United States of America")).toBe(22);
     expect(summary.values.get("Brazil")).toBe(0);
     expect(summary.values.size).toBe(2);
@@ -48,12 +48,12 @@ describe("proportional bubble sizing", () => {
   });
 
   it("rejects invalid coordinates and values while preserving zero", () => {
-    const result = bubbleValues([
+    const result = bubbleValues(toData([
       { city: "A", lat: 33, lon: -112, revenue: 10 },
       { city: "B", lat: 34, lon: -111, revenue: 0 },
       { city: "bad", lat: 120, lon: -111, revenue: 100 },
       { city: "negative", lat: 32, lon: -111, revenue: -1 },
-    ] as Value, "lat", "lon", "revenue", "city");
+    ]), "lat", "lon", "revenue", "city");
     expect(result.points.map((p) => p.label)).toEqual(["A", "B"]);
     expect(result.min).toBe(0);
     expect(result.max).toBe(10);
