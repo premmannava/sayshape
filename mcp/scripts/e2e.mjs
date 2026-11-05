@@ -113,6 +113,30 @@ try {
   await page.screenshot({ path: out + "4-dark.png" });
   check(await frame.evaluate(() => document.documentElement.dataset.theme === "dark"), "the view follows the host's dark theme");
 
+  
+  // VS Code can cap an MCP App's iframe height. A tall canvas then extends
+  // past the iframe viewport. If the app document uses overflow:hidden, VS
+  // Code's wheel-boundary logic sees the extra scrollHeight but the iframe
+  // itself cannot move, trapping trackpad/mouse-wheel scrolling over the UI.
+  // Keep this as a browser regression using the real, built MCP App view.
+  await page.addStyleTag({ content: "iframe { max-height: 260px !important; }" });
+  const constrained = await frame.evaluate(() => ({
+    scrollable: document.documentElement.scrollHeight - document.documentElement.clientHeight,
+    overflow: getComputedStyle(document.body).overflowY,
+  }));
+  check(constrained.scrollable > 100, `a constrained MCP App has overflowing content (${constrained.scrollable}px)`);
+  check(constrained.overflow === "auto", "the MCP view allows vertical scrolling inside a constrained host");
+  await page.mouse.move(150, 120); // inside the canvas and the constrained iframe
+  await page.mouse.wheel(0, 350);
+  await page.waitForTimeout(120);
+  const scrolled = await frame.evaluate(() => window.scrollY);
+  check(scrolled > 50, `wheel scrolling over the canvas moves the iframe document (${scrolled}px)`);
+  await page.mouse.wheel(0, -350);
+  await page.waitForTimeout(120);
+  check((await frame.evaluate(() => window.scrollY)) < scrolled, "wheel scrolling over the canvas works in reverse");
+  await page.addStyleTag({ content: "iframe { max-height: none !important; }" });
+
+
   // A host that sends its own design tokens, as Claude and ChatGPT do, with light-dark() values.
   const styled = await browser.newPage({ viewport: { width: 680, height: 900 }, deviceScaleFactor: 2 });
   styled.on("pageerror", (e) => errors.push(e.message));
