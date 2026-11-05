@@ -314,12 +314,86 @@ map bind=selected fit=pins cluster=true controls=true
     const c = theme.colors;
     const data = details(box);
     const selected = ctx.props(box.node).raw("bind") ? ctx.props(box.node).bound() : null;
+    const hover = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
+    const hoverId = typeof hover === "string" && /^@map:(bubble|spider):\\d+$/.test(hover)
+      ? Number(hover.split(":")[2]) : -1;
+    const expanded = new Set(data.spiderPoints.map((p) => p.index));
+
+    // Only data-driven bubbles get automatic label deconfliction.
+    // Traditional pin specs keep the labels they have always displayed.
+    const bubbleLabels = new Map<number, { x: number; y: number; text: string }>();
+    if (data.kind === "bubble") {
+      const candidates: LabelCircle[] = [];
+      const addCandidate = (pin: MapPinPoint, x: number, y: number, spider: boolean) => {
+        candidates.push({
+          id: pin.id, x, y, radius: pin.size, text: pin.label,
+          priority: selected === pin.label ? 1000 : hoverId === pin.id ? 900 : spider ? 600 : pin.size,
+        });
+      };
+      for (const group of data.groups) {
+        if (group.items.length === 1) {
+          const pin = group.items[0]!;
+          if (!expanded.has(pin.id)) addCandidate(pin, group.x, group.y, false);
+        }
+      }
+      for (const point of data.spiderPoints) {
+        const pin = data.pins[point.index];
+        if (pin) addCandidate(pin, point.x, point.y, true);
+      }
+      const avoid = [];
+      if (data.controls) avoid.push({ x: box.w - 40, y: 4, w: 36, h: 105 });
+      if (data.legend && data.bubbles?.points.length && box.w >= 180) {
+        avoid.push({ x: 4, y: box.h - 105, w: Math.min(212, box.w - 12), h: 101 });
+      }
+      g.save();
+      g.font = ctx.font(600, 12);
+      const placements = layoutBubbleLabels(candidates, box.w, box.h, (text) => g.measureText(text).width, avoid);
+      g.restore();
+      for (const [id, placed] of placements) bubbleLabels.set(id, placed);
+    }
+
+    const drawPin = (pin: MapPinPoint, x: number, y: number) => {
+      const active = selected === pin.label;
+      const over = hoverId === pin.id;
+      const alpha = ctx.appear(pin.node);
+      if (active || over) {
+        g.beginPath();
+        g.arc(x, y, pin.size + 5, 0, Math.PI * 2);
+        g.globalAlpha = 0.9 * alpha;
+        g.lineWidth = active ? 2.5 : 2;
+        g.strokeStyle = active ? c.focus : c.accent;
+        g.stroke();
+      }
+      g.beginPath();
+      g.arc(x, y, pin.size, 0, Math.PI * 2);
+      g.globalAlpha = (data.kind === "bubble" ? 0.8 : 1) * alpha;
+      g.fillStyle = c[pin.tone];
+      g.fill();
+      g.globalAlpha = alpha;
+      g.lineWidth = data.kind === "bubble" ? 1.7 : 2;
+      g.strokeStyle = c.surface;
+      g.stroke();
+      g.globalAlpha = 1;
+      const position = data.kind === "bubble" ? bubbleLabels.get(pin.id) : undefined;
+      if (data.kind === "bubble" && !position) return;
+      const lx = data.kind === "bubble" ? box.x + position!.x : x + pin.size + 4;
+      const ly = data.kind === "bubble" ? box.y + position!.y : y;
+      const label = position?.text ?? pin.label;
+      g.font = ctx.font(600, 12);
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      g.lineWidth = 3.5;
+      g.strokeStyle = c.surface;
+      g.strokeText(label, lx, ly);
+      g.fillStyle = c.ink;
+      g.fillText(label, lx, ly);
+    };
+
     g.save();
     g.beginPath();
     g.rect(box.x, box.y, box.w, box.h);
     g.clip();
-    for (let i = 0; i < data.groups.length; i++) {
-      const group = data.groups[i]!;
+    for (const group of data.groups) {
       const x = box.x + group.x, y = box.y + group.y;
       if (group.items.length > 1) {
         const radius = 14 + Math.min(8, String(group.items.length).length * 2);
@@ -338,31 +412,28 @@ map bind=selected fit=pins cluster=true controls=true
         continue;
       }
       const pin = group.items[0]!;
-      g.globalAlpha = ctx.appear(pin.node);
-      if (selected === pin.label) {
+      if (expanded.has(pin.id)) continue;
+      drawPin(pin, x, y);
+    }
+    // Leaders show geographic origins; the exploded positions are only a view aid.
+    if (data.spiderPoints.length) {
+      g.save();
+      g.strokeStyle = c.muted;
+      g.globalAlpha = 0.65;
+      g.lineWidth = 1.25;
+      g.setLineDash([4, 3]);
+      for (const point of data.spiderPoints) {
         g.beginPath();
-        g.arc(x, y, pin.size + 4, 0, Math.PI * 2);
-        g.lineWidth = 2;
-        g.strokeStyle = c.focus;
+        g.moveTo(box.x + point.sourceX, box.y + point.sourceY);
+        g.lineTo(box.x + point.x, box.y + point.y);
         g.stroke();
       }
-      g.beginPath();
-      g.arc(x, y, pin.size, 0, Math.PI * 2);
-      g.fillStyle = c[pin.tone];
-      g.fill();
-      g.lineWidth = 2;
-      g.strokeStyle = c.surface;
-      g.stroke();
-      g.font = ctx.font(600, 12);
-      g.textAlign = "left";
-      g.textBaseline = "middle";
-      g.lineWidth = 3;
-      g.strokeStyle = c.surface;
-      g.strokeText(pin.label, x + pin.size + 4, y);
-      g.fillStyle = c.ink;
-      g.fillText(pin.label, x + pin.size + 4, y);
+      g.restore();
+      for (const point of data.spiderPoints) {
+        const pin = data.pins[point.index];
+        if (pin) drawPin(pin, box.x + point.x, box.y + point.y);
+      }
     }
-    g.globalAlpha = 1;
     if (data.controls) {
       for (let i = 0; i < CONTROLS.length; i++) {
         const rect = controlRect(box, i);
@@ -388,21 +459,26 @@ map bind=selected fit=pins cluster=true controls=true
         drawBubbleLegend(g, box, theme, data.legendTitle, data.bubbles.min, data.bubbles.max);
       }
     }
-    const hover = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
     const pointer = ctx.pointer;
     if (typeof hover === "string" && pointer && !isControl(hover)) {
       let lines: string[];
       if (hover.startsWith("@map:cluster:")) {
         const group = data.groups[Number(hover.slice("@map:cluster:".length))];
         if (!group || group.items.length < 2) return;
-        lines = [group.items.length + " locations", "Click to zoom in"];
+        lines = [group.items.length + " locations",
+          data.kind === "bubble" && data.view.zoom >= 128 ? "Click to separate" : "Click to zoom in"];
       } else {
-        const pin = data.pins.find((item) => item.label === hover);
+        const pin = hoverId >= 0 ? data.pins[hoverId] : data.pins.find((item) => item.label === hover);
         const value = data.regions?.values.get(hover);
-        lines = pin ? [pin.label, ...pin.detail.split("|").map((s) => s.trim()).filter(Boolean)] :
+        lines = pin ? [pin.label, ...pin.detail.split("|").map((v) => v.trim()).filter(Boolean)] :
           value !== undefined ? [hover, data.legendTitle + ": " + formatMapValue(value)] : [hover];
+        if (pin && data.kind === "bubble" && hover.startsWith("@map:bubble:")) {
+          const overlapping = data.overlaps.find((group) => group.includes(pin.id));
+          if (overlapping) lines.push("Click to separate " + overlapping.length + " bubbles");
+        }
       }
-      tooltip(g, lines.slice(0, 5), pointer.x, pointer.y, box, ctx.font(600, 12), ctx.font(400, 11), c.raised, c.ink, c.line);
+      tooltip(g, lines.slice(0, 5), pointer.x, pointer.y, box, ctx.font(600, 12),
+        ctx.font(400, 11), c.raised, c.ink, c.line);
     }
   },
   hitTest(box, x, y) {
