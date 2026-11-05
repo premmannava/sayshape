@@ -218,6 +218,8 @@ describe("working derived values out", () => {
   });
 });
 
+const json = (v: unknown) => JSON.parse(JSON.stringify(v));
+
 describe("writing to derived names", () => {
   const spec = `state todos=[{text: "a", done: false}, {text: "b", done: true}] a=1
 derive open={filter(todos, 'done', false)}
@@ -230,13 +232,11 @@ each items=open as=t
   button "Remove {t.text}" on=remove:t
 `;
 
-  it("refuses bind=, actions and list actions, saying why", () => {
+  it("refuses bind=, actions and list actions on derived names, saying why", () => {
     const ui = render(spec);
     const todos = ui.state.todos;
     ui.press({ type: "button", text: "Inc" });
     ui.press({ type: "button", text: "Clear" });
-    ui.press({ type: "check", text: "a" });
-    ui.press({ type: "button", text: "Remove a" });
     const plus = ui.hits.filter((h) => h.box.node.type === "stepper" && h.detail === "inc")[0]!.box;
     ui.click(plus.x + plus.w / 2, plus.y + plus.h / 2);
     expect(ui.state.todos).toBe(todos);
@@ -245,9 +245,30 @@ each items=open as=t
     expect(ui.warnings).toEqual([
       "Can't change b: b is derived (derive b on line 3), so it changes only when what it's computed from changes.",
       "Can't change open: open is derived (derive open on line 2), so it changes only when what it's computed from changes.",
-      "Can't change t.done: open is derived (derive open on line 2), so it changes only when what it's computed from changes. To change items, loop over the list in state (each items=todos) and hide items with if=",
-      "Can't change remove:t: open is derived (derive open on line 2), so it changes only when what it's computed from changes. To change items, loop over the list in state (each items=todos) and hide items with if=",
       "Can't change b: b is derived (derive b on line 3), so it changes only when what it's computed from changes.",
+    ]);
+  });
+
+  it("changes items of a derived list in the list in state they came from", () => {
+    const ticked = render(spec);
+    ticked.press({ type: "check", text: "a" });
+    expect(json(ticked.state.todos)).toEqual([{ text: "a", done: true }, { text: "b", done: true }]);
+    expect(derived(ticked).open).toEqual([]);
+    const removed = render(spec);
+    removed.press({ type: "button", text: "Remove a" });
+    expect(json(removed.state.todos)).toEqual([{ text: "b", done: true }]);
+    expect(removed.warnings).toEqual([]);
+  });
+
+  it("explains items a derive built itself, which aren't in state", () => {
+    const ui = render(`state n=1
+derive made={[{on: n > 5}]}
+each items=made as=x
+  check "x" bind=x.on
+`);
+    ui.press("check");
+    expect(ui.warnings).toEqual([
+      "Can't change x.on: made is derived (derive made on line 2), so it changes only when what it's computed from changes. Its items were built by the expression, not taken from a list in state: filter, sort, search and take keep items that can be changed",
     ]);
   });
 

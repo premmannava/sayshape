@@ -42,7 +42,7 @@ card
   chart kind=bar items=shown x=name y=amount format=money
 ```
 
-To let people *change* items while some are hidden, keep the list in state and hide items with `if=` instead ([Lists](./lists#hide-items-instead-of-filtering)), because a derived list is a copy.
+People can still *change* items of a derived list: `bind=t.done` inside `each items=shown` writes to the task in the list it came from ([Lists](./lists#change-items-of-a-filtered-list)).
 
 ## Problems the parser reports
 

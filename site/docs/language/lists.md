@@ -68,9 +68,25 @@ each items=orders as=o
     text "Total {money(sum(o.lines, 'price'))}" align=right
 ```
 
-## Hide items instead of filtering
+## Change items of a filtered list
 
-A filtered list is a copy, so its items can't be written to. To let people tick items off while hiding some, loop over the list in state and put `if=` on the repeated element:
+Filtering, sorting, searching and taking keep the items themselves, so an item of a list worked out from state still writes back to the list it came from. Tick a task in the filtered list and the task in `tasks` changes, along with every total worked out from `tasks`:
+
+```loom live
+state owner="All" tasks=[{text: "Mockups", owner: "Ana", done: true}, {text: "Pages", owner: "Ben", done: false}, {text: "Copy", owner: "Ana", done: false}]
+derive shown={owner == 'All' ? tasks : filter(tasks, 'owner', owner)}
+card
+  segmented bind=owner options="All,Ana,Ben"
+  text "{count(tasks, 'done')} of {len(tasks)} done"
+  each items=shown as=t key={t.text}
+    check "{t.text}" bind=t.done
+```
+
+Items an expression builds, like `each items={[{on: false}]}`, aren't in state, so they can't be changed.
+
+## Hide items without a derived list
+
+`if=` on the repeated element hides items in place:
 
 ```loom live
 state hide=false gear=[{id: 1, name: "Tent", done: true}, {id: 2, name: "Stove", done: false}, {id: 3, name: "Headlamp", done: false}]

@@ -68,5 +68,5 @@ Writes never change data in place: the whole list or record is replaced with an 
 ## What can't be bound
 
 - **Derived values.** They're read-only ([Derived values](./derived)). Binding to one is reported by the parser.
-- **Items of a computed list.** `each items={filter(todos, 'done')}` repeats a copy, so `bind=t.done` inside it has nowhere to write. Loop over the list in state and hide items with `if=` instead ([Lists](./lists#hide-items-instead-of-filtering)).
+- **Items an expression builds.** `each items={[{on: false}]}` makes new records that aren't in state, so `bind=x.on` inside it has nowhere to write. Items of a list worked out from state (`filter`, `sort`, `search`, `take`) are fine: they write back to the list they came from ([Lists](./lists#change-items-of-a-filtered-list)).
 - **Expressions.** `bind=` takes a name or a path, never `{…}`.

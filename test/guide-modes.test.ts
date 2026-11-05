@@ -166,7 +166,7 @@ describe("compact guide", () => {
     expect(compact).toMatch(/quote text/);
     expect(compact).toMatch(/Change the screen \(runs here\)/);
     expect(compact).toMatch(/Tell the app \(host event\): emit:name/);
-    expect(compact).toMatch(/computed list \(items=\{filter\(…\)\}\) is read-only/);
+    expect(compact).toMatch(/write back to the list in state the item came from, also through filter, sort, search and take/);
     expect(compact).toMatch(/No colors, sizes or fonts/);
     expect(compact).toMatch(/Images only load from these hosts: images\.unsplash\.com/);
     expect(compact).toMatch(/No JSX, HTML or JavaScript/);

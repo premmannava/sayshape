@@ -24,6 +24,36 @@ export type Locate = (name: string) => Place | null;
 /** State names: every name is its own key. */
 export const stateLocate: Locate = (name) => ({ key: name, steps: [] });
 
+/** How deep findItem looks: a list in state, records in it, and lists in those (orders[2].lines[0]). */
+const FIND_DEPTH = 4;
+
+/**
+ * Where a list item or record lives in state, found by identity: filter, sort,
+ * search and take keep the items themselves, so an item of a list worked out
+ * from state (each items=shown, derive shown={filter(tasks, …)}) is still the
+ * same object as the one in state. Null when it isn't there, like a record an
+ * expression built (each items={[{on: false}]}).
+ */
+export function findItem(item: Value | undefined, state: Iterable<readonly [string, Value]>): Place | null {
+  if (!isList(item) && !isRecord(item)) return null;
+  const look = (v: Value, steps: Array<string | number>, depth: number): Array<string | number> | null => {
+    if (v === item) return steps;
+    if (depth >= FIND_DEPTH) return null;
+    if (isList(v)) {
+      for (let i = 0; i < v.length; i++) { const r = look(v[i]!, [...steps, i], depth + 1); if (r) return r; }
+    } else if (isRecord(v)) {
+      for (const k of Object.keys(v)) { const r = look(v[k]!, [...steps, k], depth + 1); if (r) return r; }
+    }
+    return null;
+  };
+  for (const [key, v] of state) {
+    if (v === item) continue; // the whole state value is written by its name, not through a loop variable
+    const steps = look(v, [], 0);
+    if (steps) return { key, steps };
+  }
+  return null;
+}
+
 /** A writable path: names joined by dots, like t.done. */
 export const PATH = /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$/;
 

@@ -15,7 +15,7 @@ import { locateOf, scopeOf } from "./each";
 import { domEditorHost } from "./dom-editor";
 import { noEditor, type EditorHost, type EditorSpec } from "./editor";
 import { isList, makeList } from "./data";
-import { getIn, placeOf, setIn } from "./paths";
+import { findItem, getIn, PATH, placeOf, setIn, type Place } from "./paths";
 import { createLayoutContext, isVisible } from "./layout";
 import { Loading, type LoadingView } from "./loading";
 import { MotionValues } from "./motion";
@@ -361,7 +361,7 @@ export class SayShape {
     const d = this.state.derivation(key);
     if (!d) return false;
     const item = path.replace(/^remove:/, "") !== key;
-    this.warn(`Can't change ${path}: ${key} is derived (derive ${key} on line ${d.line}), so it changes only when what it's computed from changes.${item ? " To change items, loop over the list in state (each items=todos) and hide items with if=" : ""}`);
+    this.warn(`Can't change ${path}: ${key} is derived (derive ${key} on line ${d.line}), so it changes only when what it's computed from changes.${item ? " Its items were built by the expression, not taken from a list in state: filter, sort, search and take keep items that can be changed" : ""}`);
     return true;
   }
 
@@ -829,9 +829,9 @@ export class SayShape {
    * a path through the item (t.done), which rebuilds the list it lives in.
    */
   private writePath(node: SayShapeNode, path: string, value: Value): void {
-    const place = placeOf(path, locateOf(node));
+    const place = this.placeFor(node, path);
     if (!place) {
-      this.warn(`Can't change ${path}: it isn't in state. Inside each, items= must name a list in state (like items=todos) for its items to change`);
+      this.warn(`Can't change ${path}: it isn't in state. Inside each, items= must be a list in state (like items=todos) or worked out from one (filter, sort, search, take) for its items to change`);
       return;
     }
     if (this.derivedWrite(path, place.key)) return;
@@ -841,9 +841,23 @@ export class SayShape {
     else this.state.set(place.key, r.value);
   }
 
+  /**
+   * Where a path as seen from a node lives in state. An item of a list worked
+   * out from state (each items=shown with derive shown={filter(tasks, …)}) is
+   * found in state by identity, so ticking a filtered task changes tasks.
+   */
+  private placeFor(node: SayShapeNode, path: string): Place | null {
+    const place = placeOf(path, locateOf(node));
+    // Through a loop variable only (t.done): a derived name written directly still gets derivedWrite's message.
+    if ((place && !(place.steps.length && this.state.isDerived(place.key))) || !PATH.test(path)) return place;
+    const [first, ...rest] = path.split(".");
+    const found = findItem(scopeOf(node, this.state.scope)(first!), this.state.entries());
+    return found ? { key: found.key, steps: [...found.steps, ...rest] } : place;
+  }
+
   /** Remove the list item a path points at, like remove:t inside each as=t. */
   private removeAt(node: SayShapeNode, path: string): void {
-    const place = placeOf(path, locateOf(node));
+    const place = this.placeFor(node, path);
     const at = place?.steps.at(-1);
     if (!place || typeof at !== "number") {
       this.warn(`remove:${path} needs ${path} to be an item of a list in state, like remove:t inside each items=todos as=t. To remove by position, write remove:list:index`);
