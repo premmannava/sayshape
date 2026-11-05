@@ -11,6 +11,7 @@ import { bubbleRadius, bubbleValues, formatMapValue, fraction, mixedColor, regio
 import { drawBubbleLegend, drawChoroplethLegend } from "./legend";
 import { overlappingGroups, spiderfy, type SpiderPoint } from "./overlap";
 import { layoutBubbleLabels, type LabelCircle } from "./labels";
+import { stateBoundaryPaths } from "./states";
 import { isList } from "../../data";
 import { constrain, fitPins, panBy, worldView, zoomAt, type Viewport } from "./viewport";
 
@@ -308,6 +309,13 @@ map bind=selected fit=pins cluster=true controls=true
         highlighted.has(name) ? c.landHighlight : shade;
       g.fill(path);
       g.stroke(path);
+    }
+    // World-level maps remain uncluttered. At regional zoom, local US
+    // geography is visible without street tiles or changing map behavior.
+    if (view.zoom >= 4) {
+      g.strokeStyle = mixedColor(c.muted, c.surface, 0.2);
+      g.lineWidth = 1 / (scale * view.zoom);
+      for (const statePath of stateBoundaryPaths()) g.stroke(statePath);
     }
     g.restore();
     // The full map is hit-testable, including ocean, so drags start everywhere.
