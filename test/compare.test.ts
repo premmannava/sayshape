@@ -3,7 +3,7 @@ import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { Registry } from "../src/registry";
 import { broken, reference } from "../eval/compare/reference";
-import { cleanHtml, codeStats, costOf, report, runCompare, score, summarize, type Format } from "../eval/compare/run";
+import { cleanHtml, codeStats, costOf, report, runCheck, runCompare, score, summarize, type Format } from "../eval/compare/run";
 import { parseCache } from "../scripts/model-env";
 import { tasks } from "../eval/compare/tasks";
 
@@ -77,6 +77,16 @@ card
   stat label="Per person" value="{money(bill * (1 + tip / 100) / people)}"`;
     const s = await score("sayshape", task("x2"), spec);
     expect(s.checks.filter((c) => !c.passed)).toEqual([]);
+  });
+
+  it("ticks the checkbox in a row when the row's text is pressed", async () => {
+    const html = `<p id="w"></p><table><tbody id="b"></tbody></table>
+<script>const T=[['Design mockups','Website','Ana',true],['Build pages','Website','Ben',false],['Write copy','Website','Ana',true],['Set up CI','App','Chen',true],['Login screen','App','Ben',false],['Push alerts','App','Chen',false]];
+function draw(){const w=T.filter(t=>t[1]==='Website');document.getElementById('w').textContent='Website '+w.filter(t=>t[3]).length+' of 3, App '+T.filter(t=>t[1]==='App'&&t[3]).length+' of 3';}
+for(const t of T){const tr=document.createElement('tr');const c=document.createElement('input');c.type='checkbox';c.checked=t[3];c.onchange=()=>{t[3]=c.checked;draw();};
+const a=document.createElement('td');a.appendChild(c);const n=document.createElement('td');n.textContent=t[0];tr.append(a,n);document.getElementById('b').appendChild(tr);}draw();</script>`;
+    const r = await runCheck("html", html, tasks.find((t) => t.id === "d3")!.checks[1]!);
+    expect(r).toEqual({ label: r.label, passed: true });
   });
 
   it("presses the button inside a header cell, not the cell", async () => {
