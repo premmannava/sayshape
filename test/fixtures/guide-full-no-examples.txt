@@ -200,13 +200,13 @@ ELEMENTS
 
   badge "<text>"  — A small rounded label for a status or a short tag, like Shipped or New.
     "<text>" (required)  The label, one or two words.
-    tone=<ink|accent|good|warn|bad|muted>  Color role: accent, good, warn, bad or muted.
+    tone=<accent|good|warn|bad|muted>  Color role: accent, good, warn, bad or muted.
 
   avatar "<text>"  — A person's initials in a circle, with their name and an optional detail line beside it.
     "<text>" (required)  The person's name. The initials come from it.
     detail=<string>  A second line under the name, like a role.
     size=<sm|md|lg>  sm, md or lg.
-    tone=<ink|accent|good|warn|bad|muted>  Circle color role: accent, good, warn, bad or muted.
+    tone=<accent|good|warn|bad|muted>  Circle color role: accent, good, warn, bad or muted.
     name=<boolean>  Show the name beside the circle (default true).
 
   callout "<text>"  — The one thing to notice in an answer: a key finding, a warning or a next step.
