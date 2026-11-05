@@ -225,9 +225,9 @@ export interface ComponentDef {
   /**
    * Follow the pointer while it's held down on this element (a slider's
    * thumb). An element with drag isn't pressed on release: drag gets an end
-   * phase instead.
+   * phase instead. Return true to request layout recalculation (e.g. map panning).
    */
-  drag?(ctx: DragContext): void;
+  drag?(ctx: DragContext): void | boolean;
   /** Wheel handler for Canvas-native views such as interactive maps. Return true to prevent page scrolling. */
   wheel?(ctx: WheelContext): boolean;
   /**
