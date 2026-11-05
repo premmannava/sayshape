@@ -1,30 +1,44 @@
 <script setup lang="ts">
 /**
- * The landing page. Show, don't explain: the live hero, three reasons in one
- * line each, six examples running live, and one way to start. Anything
- * longer lives in the build-along and the docs.
+ * The landing page. Show, don't explain: ask a sample spreadsheet a question
+ * and see the answer, with and without SayShape. Three reasons in one line
+ * each, a pointer to the three-way comparison, and one way to start.
+ * Anything longer lives in the build-along and the docs.
  */
 import { withBase } from "vitepress";
-import { exampleById, type Example } from "../../../examples/catalog";
-import Hero from "./Hero.vue";
-import ExampleLive from "./ExampleLive.vue";
+import DataDemo from "./DataDemo.vue";
 
 const reasons = [
+  { title: "Private", text: "Your AI sees column names and a few rows. The rest never leaves the browser." },
   { title: "Safe", text: "Nothing in it can run code." },
-  { title: "Private", text: "It draws in the browser. Your data stays with your AI." },
-  { title: "Instant", text: "The screen appears while the AI is still writing." },
+  { title: "Instant", text: "The answer appears while the AI is still writing." },
 ];
 
-const picks = ["sales-this-week", "book-a-cabin", "trip-planner", "pick-a-laptop", "coffee-order", "order-tracking"]
-  .map((id) => exampleById(id))
-  .filter((e): e is Example => !!e);
+const formats = [
+  { name: "SayShape", text: "Lines of text, drawn as each one arrives.", ours: true },
+  { name: "HTML", text: "Code in a sandbox, shown as markup arrives.", ours: false },
+  { name: "A2UI", text: "JSON messages, drawn once each is complete.", ours: false },
+];
 
 const href = (p: string) => withBase(p);
 </script>
 
 <template>
   <div class="landing">
-    <Hero />
+    <section class="hero" aria-labelledby="hero-title">
+      <h1 id="hero-title" class="hero-title">Ask your data.<br><span class="ss-mark">See the answer.</span></h1>
+      <div class="hero-side">
+        <p class="hero-lede">Your AI writes a few lines. SayShape draws the answer in the browser. Your rows stay with you.</p>
+        <div class="hero-cta">
+          <a class="sayshape-btn primary" href="#demo">Try it below ↓</a>
+          <a class="sayshape-btn quiet" :href="href('/learn/')">Start the build-along</a>
+        </div>
+        <a class="hero-status" :href="href('/docs/architecture/limitations.html')">v0.1 · not screen-reader ready yet · Status</a>
+      </div>
+    </section>
+
+    <DataDemo />
+    <p class="made-up">The sample spreadsheets are made up. Each answer is a saved one, drawn live by the engine.</p>
 
     <section class="why" aria-label="Why SayShape">
       <div v-for="r in reasons" :key="r.title" class="why-item">
@@ -33,15 +47,15 @@ const href = (p: string) => withBase(p);
       </div>
     </section>
 
-    <section class="build" aria-labelledby="build">
-      <div class="build-head">
-        <h2 id="build">What you can build</h2>
-        <a :href="href('/examples/')">All examples →</a>
+    <section class="formats" aria-labelledby="formats">
+      <div class="formats-head">
+        <h2 id="formats">Same request. Three formats.</h2>
+        <a :href="href('/compare')">Watch the comparison →</a>
       </div>
-      <div class="build-grid">
-        <a v-for="e in picks" :key="e.id" class="build-card" :class="{ dark: e.look.scheme === 'dark' }" :href="href(`/examples/#${e.id}`)" :aria-label="`${e.title}: open the example`">
-          <div class="build-live" inert><ExampleLive :example="e" /></div>
-          <span class="build-title">{{ e.title }}</span>
+      <div class="formats-grid">
+        <a v-for="f in formats" :key="f.name" class="format" :class="{ ours: f.ours }" :href="href('/compare')">
+          <span class="format-name">{{ f.name }}</span>
+          <span class="format-text">{{ f.text }}</span>
         </a>
       </div>
     </section>
@@ -59,29 +73,38 @@ const href = (p: string) => withBase(p);
 <style scoped>
 .landing { max-width: 1320px; margin: 0 auto; padding: 40px 32px 72px }
 
-.why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 40px; padding: 32px 0; border-top: 2px solid var(--ss-rule) }
-.why h2 { margin: 0; font: 800 clamp(28px, 3.2vw, 40px)/1 var(--sayshape-display); letter-spacing: -0.035em }
+.hero { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 24px 48px; align-items: end; margin-bottom: 40px }
+.hero-title { margin: 0; font: 800 clamp(56px, 8.4vw, 120px)/0.9 var(--sayshape-display); letter-spacing: -0.055em; color: var(--vp-c-text-1) }
+.hero-side { display: grid; gap: 18px; padding-bottom: 8px }
+.hero-lede { margin: 0; font-size: 19px; line-height: 1.5; color: var(--vp-c-text-2); text-wrap: pretty }
+.hero-cta { display: flex; flex-wrap: wrap; gap: 10px }
+.hero-status { justify-self: start; font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2); text-decoration: none; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; padding: 6px 12px }
+.hero-status:hover { border-color: var(--ss-rule); color: var(--vp-c-text-1) }
+
+.made-up { margin: 18px 0 0; font-size: 13px; color: var(--vp-c-text-2) }
+
+.why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 40px; margin-top: 48px; padding: 32px 0; border-top: 2px solid var(--ss-rule) }
+.why h2 { margin: 0; padding: 0; border: 0; font: 800 clamp(28px, 3.2vw, 40px)/1 var(--sayshape-display); letter-spacing: -0.035em }
 .why p { margin: 10px 0 0; font-size: 18px; line-height: 1.45; color: var(--vp-c-text-2) }
 
-.build { padding: 40px 0 8px; border-top: 2px solid var(--ss-rule) }
-.build-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px }
-.build-head h2 { margin: 0; font: 800 clamp(32px, 4vw, 52px)/1 var(--sayshape-display); letter-spacing: -0.04em }
-.build-head a { flex: none; white-space: nowrap; font-weight: 600; color: var(--vp-c-brand-1); text-decoration: none }
-.build-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px }
-.build-card { color: var(--vp-c-text-1); display: flex; flex-direction: column; border: 1.5px solid var(--vp-c-divider); border-radius: 18px; overflow: hidden; background: var(--ss-card); text-decoration: none; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s }
-.build-card:hover, .build-card:focus-visible { border-color: var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow); transform: translate(-2px, -2px) }
-/* A preview, not a control: the card itself is the link, so the canvas inside ignores the pointer. */
-.build-live { height: 300px; overflow: hidden; pointer-events: none; -webkit-mask-image: linear-gradient(#000 78%, transparent); mask-image: linear-gradient(#000 78%, transparent) }
-.build-title { padding: 12px 16px 14px; font: 800 20px/1.2 var(--sayshape-display); letter-spacing: -0.02em; border-top: 1px solid var(--vp-c-divider) }
+.formats { display: flex; flex-direction: column; gap: 20px; padding-top: 36px; border-top: 2px solid var(--ss-rule) }
+.formats-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 16px }
+.formats-head h2 { margin: 0; padding: 0; border: 0; font: 800 clamp(32px, 4vw, 52px)/1 var(--sayshape-display); letter-spacing: -0.04em }
+.formats-head a { flex: none; font-weight: 600; color: var(--vp-c-brand-1); text-decoration: none }
+.formats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px }
+.format { display: flex; flex-direction: column; gap: 6px; padding: 20px; border: 1.5px solid var(--vp-c-divider); border-radius: 16px; background: var(--ss-card); color: var(--vp-c-text-1); text-decoration: none; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s }
+.format.ours { border: 2px solid var(--ss-rule); background: var(--ss-mark-soft) }
+.format:hover, .format:focus-visible { border-color: var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow); transform: translate(-2px, -2px) }
+.format-name { font: 800 26px/1.1 var(--sayshape-display); letter-spacing: -0.02em }
+.format-text { color: var(--vp-c-text-2) }
 
 .start { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px 40px; margin-top: 56px; padding-top: 36px; border-top: 2px solid var(--ss-rule) }
-.start h2 { margin: 0; font: 800 clamp(34px, 4.6vw, 60px)/1 var(--sayshape-display); letter-spacing: -0.045em }
+.start h2 { margin: 0; padding: 0; border: 0; font: 800 clamp(34px, 4.6vw, 60px)/1 var(--sayshape-display); letter-spacing: -0.045em }
 .start-links { display: flex; flex-wrap: wrap; gap: 10px }
 
 @media (max-width: 960px) {
   .landing { padding: 28px 20px 56px }
-  .why, .build-grid { grid-template-columns: minmax(0, 1fr) }
-  .build-live { height: 240px }
+  .hero, .why, .formats-grid { grid-template-columns: minmax(0, 1fr) }
 }
-@media (prefers-reduced-motion: reduce) { .build-card { transition: none } .build-card:hover { transform: none } }
+@media (prefers-reduced-motion: reduce) { .format { transition: none } .format:hover { transform: none } }
 </style>

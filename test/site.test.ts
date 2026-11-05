@@ -17,7 +17,7 @@ import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
-import { examples, exampleById, heroExamples } from "../site/examples/catalog";
+import { examples, exampleById } from "../site/examples/catalog";
 
 const TODAY = "2026-10-21";
 type UI = ReturnType<typeof render>;
@@ -37,11 +37,9 @@ const ex = (id: string) => {
 };
 
 describe("gallery examples", () => {
-  it("has at least six examples with unique ids, and the hero offers three of them", () => {
+  it("has at least six examples with unique ids", () => {
     expect(examples.length).toBeGreaterThanOrEqual(6);
     expect(new Set(examples.map((e) => e.id)).size).toBe(examples.length);
-    expect(heroExamples).toHaveLength(3);
-    for (const h of heroExamples) expect(examples).toContain(h.example);
   });
 
   for (const e of examples) {
