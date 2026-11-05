@@ -44,6 +44,19 @@ export function sayshapeScreen(spec: string): Screen {
         return x >= b.x - 1 && x <= b.x + b.w + 1 && y >= b.y - 1 && y <= b.y + b.h + 1;
       })
       .map((o) => String(o.args[0]));
+  // A point near text matching the label, drawn inside b, where the engine's hit test names that part.
+  const partAt = (b: { x: number; y: number; w: number; h: number }, label: RegExp): [number, number] | null => {
+    const texts = ui.drawOps.filter((o) => o.op === "fillText" && label.test(String(o.args[0])));
+    for (const o of texts) {
+      const tx = Number(o.args[1]), ty = Number(o.args[2]);
+      if (tx < b.x - 1 || tx > b.x + b.w + 1 || ty < b.y - 1 || ty > b.y + b.h + 1) continue;
+      for (let dx = 0; dx <= 40; dx += 2) for (let dy = -8; dy <= 8; dy += 2) {
+        const t = ui.loom.targetAt(tx - dx, ty + dy);
+        if (t && typeof t.detail === "string" && label.test(t.detail)) return [tx - dx, ty + dy];
+      }
+    }
+    return null;
+  };
   // Each piece on its own and all together: a popup's option sits over other text, and a label can span pieces.
   const labelsIn = (b: { x: number; y: number; w: number; h: number }): string[] => { const p = piecesIn(b); return [...p, p.join(" ")]; };
 
@@ -101,7 +114,9 @@ export function sayshapeScreen(spec: string): Screen {
         .sort((a, b) => a.h.box.w * a.h.box.h - b.h.box.w * b.h.box.h);
       const hit = matches[0]?.h ?? checkUnder(label);
       if (hit) {
-        ui.click(hit.box.x + hit.box.w / 2, hit.box.y + hit.box.h / 2);
+        // A part drawn inside a bigger element (a map's pin): click where the engine reports that part, not the element's centre.
+        const at = partAt(hit.box, label) ?? [hit.box.x + hit.box.w / 2, hit.box.y + hit.box.h / 2];
+        ui.click(at[0], at[1]);
         ui.loom.renderNow();
         return true;
       }
@@ -180,7 +195,7 @@ export async function htmlScreen(html: string): Promise<Screen> {
     return [...out, ...(w as unknown as { __drawn: string[] }).__drawn, ...charts];
   };
 
-  const pressable = "button, [role=button], [role=tab], [role=radio], [role=option], [role=switch], [onclick], a, label, summary, th, tr, li, input[type=checkbox], input[type=radio], input[type=submit], input[type=button], [tabindex]";
+  const pressable = "button, [role=button], [role=tab], [role=radio], [role=option], [role=switch], [onclick], a, label, summary, th, tr, li, input[type=checkbox], input[type=radio], input[type=submit], input[type=button], [tabindex], svg g, svg text, svg circle, svg path, svg rect";
 
   return {
     errors,
@@ -214,7 +229,9 @@ export async function htmlScreen(html: string): Promise<Screen> {
         if (boxes?.length === 1) el = boxes[0]!;
       }
       if (el) {
-        el.click();
+        // SVG shapes (a map's pins, a chart's marks) have no click(): send the event a person's click would.
+        if (typeof el.click === "function") el.click();
+        else el.dispatchEvent(new w.MouseEvent("click", { bubbles: true }));
         await pause();
         return true;
       }

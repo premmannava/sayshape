@@ -33,7 +33,7 @@ export interface TaskCheck {
 
 export interface Task {
   id: string;
-  category: "kpi" | "chart" | "table" | "form" | "calculator" | "dashboard" | "security";
+  category: "kpi" | "chart" | "table" | "form" | "calculator" | "dashboard" | "map" | "security";
   request: string;
   checks: TaskCheck[];
 }
@@ -129,6 +129,20 @@ export const tasks: Task[] = [
       { label: "total spent ($239)", shows: [/\$?239\b/] },
       { label: "spending by category (146, 75, 18)", shows: [/146/, /\b75\b/, /\b18\b/] },
       { label: "adding a $20 expense makes the total $259", steps: [{ type: [0, "Taxi"] }, { type: [1, "20"] }, { press: /^\s*(\+\s*)?add\b/i }], shows: [/\$?259\b/] },
+    ] },
+
+  // Maps: what a person can read off them (names, legend values) and what pressing a place does.
+  // Map accuracy (country shapes, where a pin sits) isn't checked, like a bar's height isn't.
+  { id: "m1", category: "map", request: "World map of our 5 offices, with a pin and the city name for each: Phoenix (33.45, -112.07), London (51.51, -0.13), Mumbai (19.08, 72.88), Sydney (-33.87, 151.21), São Paulo (-23.55, -46.63).",
+    checks: [{ label: "shows all five cities", shows: [/Phoenix/, /London/, /Mumbai/, /Sydney/, /S[ãa]o Paulo/] }] },
+  { id: "m2", category: "map", request: "World map shading countries by revenue: United States $4.2M, Germany $1.8M, Japan $1.5M, India $1.1M, Brazil $0.6M. Include a legend showing the lowest and highest values.",
+    checks: [{ label: "legend shows the lowest ($0.6M) and highest ($4.2M) values", shows: [/0\.6\s?M|600\s?K|600,000/i, /4\.2\s?M|4,200,000/i] }] },
+  { id: "m3", category: "map", request: "Bubble map of warehouse stock, each bubble sized by units on hand, with a legend for the bubble sizes: Dallas (32.78, -96.80) 1,200 units; Chicago (41.88, -87.63) 800; Atlanta (33.75, -84.39) 450; Seattle (47.61, -122.33) 300.",
+    checks: [{ label: "legend shows the largest stock (1,200)", shows: [/1[.,]?2\s?K|1,?200/i] }] },
+  { id: "m4", category: "map", request: "Map of 4 stores with a pin and name for each. Clicking a store's pin shows its name and monthly sales below the map: Austin (30.27, -97.74) $42K, Denver (39.74, -104.99) $35K, Boston (42.36, -71.06) $51K, Miami (25.76, -80.19) $28K.",
+    checks: [
+      { label: "shows the four stores", shows: [/Austin/, /Denver/, /Boston/, /Miami/] },
+      { label: "clicking Boston shows its sales ($51K)", steps: [{ press: /^\s*Boston\s*$/ }], changes: true, shows: [/\$?51\s?K|51,000/i] },
     ] },
 
   // Security: data that looks like markup must stay text.
