@@ -12,6 +12,7 @@ import { drawBubbleLegend, drawChoroplethLegend } from "./legend";
 import { overlappingGroups, spiderfy, type SpiderPoint } from "./overlap";
 import { layoutBubbleLabels, type LabelCircle } from "./labels";
 import { stateBoundaryPaths } from "./states";
+import { mapVisual, choroplethColor } from "./visual";
 import { isList } from "../../data";
 import { constrain, fitPins, panBy, worldView, zoomAt, type Viewport } from "./viewport";
 
@@ -22,6 +23,29 @@ let paths: Array<{ name: string; path: Path2D }> | null = null;
 function countryPaths() {
   if (!paths) paths = WORLD.c.map(([name, d]) => ({ name, path: new Path2D(d) }));
   return paths;
+}
+
+/** Cached graticule lines share the country and state world projection. */
+let gridPath: Path2D | null = null;
+function graticule(): Path2D {
+  if (gridPath) return gridPath;
+  const path = new Path2D();
+  for (let lon = -150; lon <= 180; lon += 30) {
+    for (let lat = -75; lat <= 75; lat += 5) {
+      const [x, y] = project(lon, lat);
+      if (lat === -75) path.moveTo(x, y);
+      else path.lineTo(x, y);
+    }
+  }
+  for (let lat = -60; lat <= 60; lat += 30) {
+    for (let lon = -180; lon <= 180; lon += 5) {
+      const [x, y] = project(lon, lat);
+      if (lon === -180) path.moveTo(x, y);
+      else path.lineTo(x, y);
+    }
+  }
+  gridPath = path;
+  return path;
 }
 
 /** Country names available for matching data values. */
@@ -285,35 +309,49 @@ map bind=selected fit=pins cluster=true controls=true
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
     const c = theme.colors;
+    const visual = mapVisual(theme);
     const data = details(box);
     const { scale, view, regions } = data;
     const selected = p.raw("bind") ? p.bound() : null;
     const highlighted = new Set(list(p.str("highlight")));
     const hovered = ctx.hover?.node.id === box.node.id ? ctx.hover.detail : null;
     g.save();
+    // Explicit ocean fill prevents transparent host canvases from changing
+    // the perceived map contrast. The color always follows active theme.
+    g.fillStyle = visual.ocean;
+    g.fillRect(box.x, box.y, box.w, box.h);
     g.beginPath();
     g.rect(box.x, box.y, box.w, box.h);
     g.clip();
     g.translate(box.x + view.dx, box.y + view.dy);
     g.scale(scale * view.zoom, scale * view.zoom);
-    g.lineWidth = 0.7 / (scale * view.zoom);
     g.lineJoin = "round";
-    g.strokeStyle = c.surface;
+    // Sparse geographic graticule provides context at world zoom, without tiles.
+    if (view.zoom <= 12) {
+      g.globalAlpha = visual.graticuleOpacity;
+      g.strokeStyle = visual.graticule;
+      g.lineWidth = 0.65 / (scale * view.zoom);
+      g.stroke(graticule());
+      g.globalAlpha = 1;
+    }
+    g.lineWidth = 0.65 / (scale * view.zoom);
+    g.strokeStyle = visual.outline;
     for (const { name, path } of countryPaths()) {
       const value = regions?.values.get(name);
-      const shade = value === undefined
-        ? (regions ? mixedColor(c.land, c.muted, 0.22) : c.land)
-        : mixedColor(c.land, c.accent, 0.34 + 0.66 * Math.pow(fraction(value, regions!.min, regions!.max), 0.8));
+      const shade = value === undefined ? (regions ? visual.noData : c.land)
+        : choroplethColor(theme, Math.pow(fraction(value, regions!.min, regions!.max), 0.86));
       g.fillStyle = name === selected ? c.accent :
         name === hovered ? c.landHover :
         highlighted.has(name) ? c.landHighlight : shade;
       g.fill(path);
+      g.globalAlpha = visual.countryStrokeOpacity;
       g.stroke(path);
+      g.globalAlpha = 1;
     }
     // World-level maps remain uncluttered. At regional zoom, local US
     // geography is visible without street tiles or changing map behavior.
     if (view.zoom >= 4) {
-      g.globalAlpha = 0.56;
+      g.globalAlpha = visual.stateStrokeOpacity;
       g.strokeStyle = c.muted;
       g.lineWidth = 1 / (scale * view.zoom);
       for (const statePath of stateBoundaryPaths()) g.stroke(statePath);
