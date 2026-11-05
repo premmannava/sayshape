@@ -40,7 +40,7 @@ function countryAt(mx: number, my: number): string | null {
 }
 
 const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
-const PIN_TONES = ["accent", "good", "warn", "bad", "muted"] as const;
+const PIN_TONES = ["ink", "accent", "good", "warn", "bad", "muted"] as const;
 type PinTone = (typeof PIN_TONES)[number];
 interface MapPinPoint {
   node: SayShapeNode;
@@ -82,7 +82,7 @@ map highlight="Japan,Kenya" bind=picked
       const [x, y] = project(lon, lat);
       pins.push({
         node, label: p.text(), x, y,
-        tone: p.oneOf("tone", PIN_TONES, "accent"),
+        tone: p.oneOf("tone", PIN_TONES, "ink"),
         size: Math.max(2, Math.min(18, p.num("size", 5))),
       });
     }
@@ -173,7 +173,7 @@ export const pin: ComponentDef = {
   props: {
     lat: { type: "number", required: true, description: "Latitude in degrees (-90 to 90)." },
     lon: { type: "number", required: true, description: "Longitude in degrees (-180 to 180)." },
-    tone: { type: "enum", values: PIN_TONES, default: "accent", description: "Theme color for a marker: accent, good, warn, bad or muted. Supports state expressions for data-driven status colors." },
+    tone: { type: "enum", values: PIN_TONES, default: "ink", description: "Theme color for a marker: ink, accent, good, warn, bad or muted. Supports state expressions for data-driven status colors." },
     size: { type: "number", default: 5, description: "Marker radius in screen pixels, clamped to 2..18. Supports expressions for bubble-like visualizations." },
   },
   parents: ["map"],
