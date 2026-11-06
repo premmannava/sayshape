@@ -46,6 +46,20 @@ describe("changeDirection", () => {
 });
 
 describe("stat layout", () => {
+  it("places a row of KPI cards' changes the same way, whatever their values' widths", () => {
+    const ui = render(`grid min=150 gap=12
+  card pad=18
+    stat label="Orders" value="8" change="+12%"
+  card pad=18
+    stat label="Avg order" value="$15,213.00" change="+4%"
+  card pad=18
+    stat label="Pending" value="3" change="-2"
+`, { width: 760 });
+    const hs = ui.findAll({ type: "stat" }).map((s) => s.box!.h);
+    expect(new Set(hs).size).toBe(1);
+    ui.destroy();
+  });
+
   const heights = (spec: string) => [240, 360, 600].map((width) => {
     const ui = render(spec, { width });
     const h = ui.find("stat").box!.h;
@@ -58,8 +72,11 @@ describe("stat layout", () => {
     expect(heights(`stat label="Revenue" value="$12,400"\n`)).toEqual([54, 54, 54]);
   });
 
-  it("puts a short change beside the value, so it's no taller", () => {
-    expect(heights(`stat label="Revenue" value="$12,400" change="+12%"\n`)).toEqual([54, 54, 54]);
+  it("puts a short change beside the value in a wide stat, so it's no taller", () => {
+    // At 240 the stat is 200 wide, under STAT_INLINE_MIN: the change goes underneath.
+    const [narrow, ...wide] = heights(`stat label="Revenue" value="$12,400" change="+12%"\n`);
+    expect(wide).toEqual([54, 54]);
+    expect(narrow).toBeGreaterThan(54);
     const ui = render(`stat label="Revenue" value="$12,400" change="+12%"\n`);
     expect(texts(ui)).toContain("▲ +12%");
     const value = textOp(ui, "$12,400")!, change = textOp(ui, "▲ +12%")!;

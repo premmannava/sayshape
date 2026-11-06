@@ -56,8 +56,9 @@ button "Back" variant=secondary on=dec:step`,
     const hoverProgress = ctx.tween(box.node, "button:hover", hot ? 1 : 0, MOTION.hover);
     const pressProgress = ctx.tween(box.node, "button:press", down ? 1 : 0, MOTION.press);
     const color = variant === "danger" ? c.bad : c.accent;
-    const secondary = variant === "secondary";
-    if (disabled) g.globalAlpha *= 0.45;
+    // A disabled button is drawn flat and neutral, with its label in muted ink: still readable,
+    // clearly not ready. (Fading the filled button left a pale label on a pale fill.)
+    const secondary = variant === "secondary" || disabled;
     // Micro-scale the painted button only, never its layout or hit region.
     g.save();
     const scale = 1 - pressProgress * 0.018;
@@ -72,7 +73,12 @@ button "Back" variant=secondary on=dec:step`,
       g.shadowBlur = (2 + 4 * hoverProgress) * (1 - pressProgress);
       g.shadowOffsetY = (1 + hoverProgress) * (1 - pressProgress);
     }
-    if (secondary) {
+    if (disabled) {
+      g.fillStyle = c.raised;
+      g.fill();
+      g.fillStyle = c.ink;
+      g.globalAlpha *= 0.06;
+    } else if (secondary) {
       g.fillStyle = c.raised;
     } else if (variant === "primary" && c.accent2 !== c.accent) {
       // A theme with an accent gradient runs it across its primary buttons.
@@ -112,7 +118,7 @@ button "Back" variant=secondary on=dec:step`,
     g.font = ctx.font(600, 14);
     g.textAlign = "center";
     g.textBaseline = "middle";
-    g.fillStyle = secondary ? c.ink : c.onAccent;
+    g.fillStyle = disabled ? c.muted : secondary ? c.ink : c.onAccent;
     g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
     g.restore();
     if (!disabled) ctx.addHit(box);
