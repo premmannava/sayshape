@@ -2,7 +2,7 @@ import type { ComponentDef } from "../component";
 import type { Box } from "../types";
 import { wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
-import { mixColors } from "../theme";
+import { isDarkTheme, mixColors, parseColor } from "../theme";
 import { MOTION } from "../design";
 import { chevron, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, partBox, row as rowLayout, ROW_ALIGN, rowMinWidth, runOn, stack, themeFont } from "./util";
 
@@ -79,13 +79,34 @@ column gap=6
   },
 };
 
+const CARD_VARIANTS = ["raised", "hero", "tinted", "outline"] as const;
+type CardVariant = (typeof CARD_VARIANTS)[number];
+
+/** How strongly a card's variant tints it toward the accent, light and dark: its wash, and for a hero the glow in its top corner. */
+function cardTint(variant: CardVariant, dark: boolean): { wash: number; glow: number } | null {
+  if (variant === "hero") return dark ? { wash: 0.13, glow: 0.2 } : { wash: 0.075, glow: 0.12 };
+  if (variant === "tinted") return dark ? { wash: 0.09, glow: 0 } : { wash: 0.055, glow: 0 };
+  return null;
+}
+
+/** A color at no opacity, for a gradient that fades it out (the same color at 0 avoids fading through gray). */
+function clearOf(color: string): string {
+  const c = parseColor(color);
+  return c ? `rgba(${c[0]}, ${c[1]}, ${c[2]}, 0)` : "rgba(0, 0, 0, 0)";
+}
+
 export const card: ComponentDef = {
   type: "card",
   category: "layout",
   description: "A surface that groups related content, stacked vertically. Give it on= to make the whole card pressable.",
-  props: { gap: gapProp(14), pad: padProp(22), on: onProp("when the card is pressed") },
+  props: {
+    gap: gapProp(14),
+    pad: padProp(22),
+    variant: { type: "enum", values: CARD_VARIANTS, default: "raised", description: "raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only)." },
+    on: onProp("when the card is pressed"),
+  },
   children: "any",
-  example: `card
+  example: `card variant=hero
   text "Order summary" style=title
   text "2 items" tone=muted
 card on=emit:open_order
@@ -100,49 +121,91 @@ card on=emit:open_order
     stack(box, ctx, p.num("pad", ctx.theme.space.lg), p.num("gap", ctx.theme.space.md));
     markTablesInsideCard(box);
   },
+  surface(box, ctx) {
+    const c = ctx.theme.colors;
+    const tint = cardTint(ctx.props(box.node).oneOf("variant", CARD_VARIANTS, "raised"), isDarkTheme(ctx.theme));
+    if (!tint) return undefined;
+    // Children sit on the middle of the wash.
+    return mixColors(c.raised, mixColors(c.accent, c.accent2, 0.5) ?? c.accent, tint.wash) ?? undefined;
+  },
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const pressable = ctx.props(box.node).has("on");
+    const p = ctx.props(box.node);
+    const variant = p.oneOf("variant", CARD_VARIANTS, "raised");
+    const pressable = p.has("on");
     const hovered = pressable && ctx.isHovered(box.node);
     const lift = ctx.tween(box.node, "card:hover", hovered ? 1 : 0, MOTION.hover);
     const press = ctx.tween(box.node, "card:press", pressable && ctx.isPressed(box.node) ? 1 : 0, MOTION.press);
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
-    // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
-    // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
-    g.save();
-    const finish = g.createLinearGradient(box.x, box.y, box.x, box.y + box.h);
-    finish.addColorStop(0, c.raised);
-    finish.addColorStop(1, mixColors(c.raised, c.ink, 0.018) ?? c.raised);
-    g.fillStyle = finish;
-    g.shadowColor = c.shadow;
-    g.shadowBlur = 10 + 8 * lift - 3 * press;
-    g.shadowOffsetY = 2 + 2 * lift - press;
-    g.fill();
-    g.shadowBlur = 1;
-    g.shadowOffsetY = 1;
-    g.fill();
-    g.restore();
+    const tint = cardTint(variant, isDarkTheme(theme));
+    if (variant === "raised" || variant === "hero") {
+      // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
+      // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
+      g.save();
+      const finish = g.createLinearGradient(box.x, box.y, box.x, box.y + box.h);
+      finish.addColorStop(0, c.raised);
+      finish.addColorStop(1, mixColors(c.raised, c.ink, 0.018) ?? c.raised);
+      g.fillStyle = finish;
+      g.shadowColor = c.shadow;
+      g.shadowBlur = 10 + 8 * lift - 3 * press;
+      g.shadowOffsetY = 2 + 2 * lift - press;
+      g.fill();
+      g.shadowBlur = 1;
+      g.shadowOffsetY = 1;
+      g.fill();
+      g.restore();
+    } else if (variant === "tinted") {
+      g.fillStyle = c.raised;
+      g.fill();
+    }
+    if (tint) {
+      // The wash runs corner to corner, from the accent toward accent2 (flat when they're the same).
+      g.save();
+      const wash = g.createLinearGradient(box.x, box.y, box.x + box.w, box.y + box.h);
+      wash.addColorStop(0, c.accent);
+      wash.addColorStop(1, c.accent2);
+      g.fillStyle = wash;
+      g.globalAlpha *= tint.wash;
+      g.fill();
+      g.restore();
+    }
+    if (tint && tint.glow > 0) {
+      // A soft light from the top corner, the way a lit panel reads.
+      g.save();
+      const r = Math.max(box.w, box.h) * 0.9;
+      const glow = g.createRadialGradient(box.x, box.y, 0, box.x, box.y, r);
+      glow.addColorStop(0, c.accent);
+      glow.addColorStop(1, clearOf(c.accent));
+      g.fillStyle = glow;
+      g.globalAlpha *= tint.glow;
+      g.fill();
+      g.restore();
+    }
     if (press > 0) fillTint(g, c.ink, 0.035 * press);
     // A fine upper highlight adds depth without a second container or extra layout.
-    if (box.w > 36 && box.h > 10) {
+    if ((variant === "raised" || variant === "hero") && box.w > 36 && box.h > 10) {
       g.save();
       g.beginPath();
       g.moveTo(box.x + 16, box.y + 1.5);
       g.lineTo(box.x + box.w - 16, box.y + 1.5);
-      g.strokeStyle = c.ink;
-      g.globalAlpha *= 0.055 + 0.045 * lift;
+      g.strokeStyle = variant === "hero" ? c.accent : c.ink;
+      g.globalAlpha *= (variant === "hero" ? 0.22 : 0.055) + 0.045 * lift;
       g.lineWidth = 1;
       g.stroke();
       g.restore();
+      // The highlight replaced the path; a hero's border goes round the card.
+      if (variant === "hero") ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
     }
-    g.strokeStyle = c.line;
-    g.lineWidth = 1;
-    // Softer perimeter; elevation and spacing separate cards from the canvas.
-    g.save();
-    g.globalAlpha *= 0.72;
-    g.stroke();
-    g.restore();
+    if (variant !== "tinted") {
+      g.strokeStyle = variant === "hero" ? c.accent : c.line;
+      g.lineWidth = 1;
+      // Softer perimeter; elevation and spacing separate cards from the canvas.
+      g.save();
+      g.globalAlpha *= variant === "hero" ? 0.28 : variant === "outline" ? 1 : 0.72;
+      g.stroke();
+      g.restore();
+    }
     if (lift > 0) {
       // Emphasize elevation and contrast, not content movement.
       g.save();

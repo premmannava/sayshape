@@ -11,7 +11,7 @@ import { mapComponents } from "../src/components/map";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render } from "../src/testing";
-import { darkTheme, lightTheme, type Theme } from "../src/theme";
+import { darkTheme, lightTheme, studioDarkTheme, studioLightTheme, type Theme } from "../src/theme";
 import { walkBoxes } from "../src/layout";
 import type { Box } from "../src/types";
 import { exampleSpec as exampleOf } from "./examples";
@@ -22,7 +22,7 @@ const registry = new Registry(ALL);
 const WIDTHS = [320, 600, 1024];
 /** Phone and chat widths, where text is most likely not to fit. */
 const FIT_WIDTHS = [240, 360, 600];
-const THEMES: Theme[] = [lightTheme, darkTheme];
+const THEMES: Theme[] = [lightTheme, darkTheme, studioLightTheme, studioDarkTheme];
 
 /**
  * Interactive components that can't be reached with Tab yet, and why. The

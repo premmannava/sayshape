@@ -548,7 +548,14 @@ progress value={done} max=5 label="{done} of 5 steps"`,
     if (f > 0) {
       ctx.roundRect(box.x, y, Math.max(PROGRESS_H, box.w * f), PROGRESS_H, PROGRESS_H / 2);
       const tone = p.oneOf("tone", TONES, "accent");
-      g.fillStyle = tone === "default" ? ctx.theme.colors.accent : toneColor(ctx.theme, tone);
+      const c = ctx.theme.colors;
+      if (tone === "accent" && c.accent2 !== c.accent) {
+        // The accent gradient spans the whole track, so a fuller bar reaches further into it.
+        const fill = g.createLinearGradient(box.x, 0, box.x + box.w, 0);
+        fill.addColorStop(0, c.accent);
+        fill.addColorStop(1, c.accent2);
+        g.fillStyle = fill;
+      } else g.fillStyle = tone === "default" ? c.accent : toneColor(ctx.theme, tone);
       g.fill();
     }
   },

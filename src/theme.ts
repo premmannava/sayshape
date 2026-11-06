@@ -24,6 +24,12 @@ export interface Theme {
      */
     control: string;
     accent: string;
+    /**
+     * Where accent gradients end: the hero card's wash, a primary button, a
+     * progress fill. The same as accent for a flat theme, which then paints
+     * those in the accent alone.
+     */
+    accent2: string;
     onAccent: string;
     good: string;
     warn: string;
@@ -77,6 +83,7 @@ export const lightTheme: Theme = {
     line: "#E1E7E8",
     control: "#86939A",
     accent: "#176F69",
+    accent2: "#176F69",
     onAccent: "#FFFFFF",
     good: "#277253",
     warn: "#9A641D",
@@ -107,6 +114,7 @@ export const darkTheme: Theme = {
     line: "#344348",
     control: "#677A80",
     accent: "#72C6BB",
+    accent2: "#72C6BB",
     onAccent: "#112825",
     good: "#88CEAA",
     warn: "#E5B77A",
@@ -123,6 +131,86 @@ export const darkTheme: Theme = {
     series4: "#CDBC9F",
     series5: "#91B1C2",
     series6: "#ADB8A0",
+  },
+};
+
+/**
+ * Studio: a brighter, more contemporary look, offered alongside the default.
+ * A cool near-white page with white cards on it, Inter, rounder corners,
+ * an indigo-to-violet accent that runs as a gradient through hero cards,
+ * primary buttons and progress fills, and clear, distinct chart colors.
+ * The dark version is near-black with charcoal cards and lighter accents.
+ */
+const studioBase = {
+  space: { xs: 4, sm: 8, md: 14, lg: 24, xl: 32 },
+  radius: { sm: 8, md: 10, lg: 16 },
+  font: {
+    family: '"Inter", "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif',
+    mono: '"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace',
+  },
+  text: { caption: 12, body: 14, lead: 16, title: 20, display: 32 },
+  control: { height: 40 },
+};
+
+export const studioLightTheme: Theme = {
+  name: "studio-light",
+  ...studioBase,
+  colors: {
+    surface: "#F5F6FA",
+    raised: "#FFFFFF",
+    ink: "#0F1222",
+    muted: "#565E76",
+    line: "#E3E6EE",
+    control: "#7F879C",
+    accent: "#4F46E5",
+    accent2: "#7C3AED",
+    onAccent: "#FFFFFF",
+    good: "#15803D",
+    warn: "#B45309",
+    bad: "#D42020",
+    focus: "#5B54E8",
+    land: "#E4E7F0",
+    landHighlight: "#C8C6F7",
+    landHover: "#D2D6E2",
+    debug: "#B45309",
+    shadow: "rgba(22, 27, 61, 0.075)",
+    series1: "#4F46E5",
+    series2: "#0E87A8",
+    series3: "#D63A7A",
+    series4: "#C2690A",
+    series5: "#0F8C63",
+    series6: "#8B5CF6",
+  },
+};
+
+export const studioDarkTheme: Theme = {
+  name: "studio-dark",
+  ...studioBase,
+  colors: {
+    surface: "#0B0D14",
+    raised: "#161925",
+    ink: "#F1F3F9",
+    muted: "#A2A8BC",
+    line: "#2A2F40",
+    control: "#737A93",
+    accent: "#8F8CFF",
+    accent2: "#C38BFF",
+    onAccent: "#0B0D14",
+    good: "#5ED394",
+    warn: "#F5BE4F",
+    bad: "#FB8282",
+    focus: "#A5A3FF",
+    land: "#1D2131",
+    landHighlight: "#3B3A80",
+    landHover: "#282D40",
+    debug: "#F5BE4F",
+    shadow: "rgba(0, 0, 0, 0.5)",
+    series1: "#8F8CFF",
+    series2: "#3CC8E6",
+    series3: "#F27AB4",
+    series4: "#F5BE4F",
+    series5: "#4FD1A0",
+    series6: "#C38BFF",
   },
 };
 
@@ -168,6 +256,8 @@ export function sliceColors(theme: Theme): string[] {
  */
 function followAccent(from: Theme["colors"], to: Theme["colors"], patch: Partial<Theme["colors"]>): void {
   if (patch.accent !== undefined && patch.series1 === undefined && from.series1 === from.accent) to.series1 = to.accent;
+  // A rebrand that names only the accent gets a flat accent, not half of the old gradient.
+  if (patch.accent !== undefined && patch.accent2 === undefined) to.accent2 = to.accent;
 }
 
 /**
@@ -273,7 +363,7 @@ export function forcedColorsTheme(base: Theme, resolve: (systemColor: string) =>
       ...base.colors,
       surface: canvas, raised: canvas,
       ink: text, muted: text, line: text, control: text,
-      accent: highlight, onAccent: resolve("HighlightText"), focus: highlight,
+      accent: highlight, accent2: highlight, onAccent: resolve("HighlightText"), focus: highlight,
       good: text, warn: text, bad: text,
       land: canvas, landHighlight: highlight, landHover: resolve("GrayText"),
       debug: text, shadow: "transparent",

@@ -248,6 +248,12 @@ export interface ComponentDef {
   /** Paint after children (overlays, pins on a map...). */
   paintOver?(box: Box, ctx: PaintContext): void;
   /**
+   * The color this element paints under its children, when it isn't the theme's raised (a
+   * tinted card). Children are then painted with it as their raised, so what they fill in
+   * raised to blend in (a table's background, a donut's gaps) matches what they sit on.
+   */
+  surface?(box: Box, ctx: PaintContext): string | undefined;
+  /**
    * Paint a placeholder shaped like this element while the data it reads is
    * loading (ctx.isLoading), instead of paint. Use paintGhost from src/ghost.ts.
    * Elements without it are drawn as a plain shimmering block when they have

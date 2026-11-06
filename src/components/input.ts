@@ -71,6 +71,12 @@ button "Back" variant=secondary on=dec:step`,
     }
     if (secondary) {
       g.fillStyle = c.raised;
+    } else if (variant === "primary" && c.accent2 !== c.accent) {
+      // A theme with an accent gradient runs it across its primary buttons.
+      const finish = g.createLinearGradient(box.x, 0, box.x + box.w, 0);
+      finish.addColorStop(0, c.accent);
+      finish.addColorStop(1, c.accent2);
+      g.fillStyle = finish;
     } else {
       const finish = g.createLinearGradient(0, box.y, 0, box.y + box.h);
       finish.addColorStop(0, color);
