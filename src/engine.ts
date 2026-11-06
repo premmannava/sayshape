@@ -289,6 +289,7 @@ export class SayShape {
       scope: this.state.scope,
       label: this.canvas.getAttribute("aria-label") || "Generated interface",
       popupOwner: this.popup?.owner.node.id,
+      popupState: this.popup?.state,
       today: this.today,
     });
   }
@@ -468,7 +469,10 @@ export class SayShape {
   /** The hit region a mirror node stands for, from the latest frame. */
   private targetByKey(key: string): HitTarget | null {
     const h = this.hits.find((r) => accessibleKey(r.box.node, r.detail) === key);
-    return h ? { node: h.box.node, box: h.box, detail: h.detail } : null;
+    if (h) return { node: h.box.node, box: h.box, detail: h.detail };
+    // An option in an open popup (a screen reader activating it directly).
+    const p = this.popupHits.find((r) => accessibleKey(r.box.node, r.detail) === key);
+    return p ? { node: p.box.node, box: p.box, detail: p.detail, layer: "popup" } : null;
   }
 
   /** What the engine does when a screen reader or the keyboard acts on the mirror. */
@@ -486,7 +490,8 @@ export class SayShape {
         const t = this.targetByKey(key);
         if (!t) return;
         this.keyboardMode = true;
-        this.focus = t;
+        // Focus stays on a popup's owner while one of its options is chosen.
+        if (t.layer !== "popup") this.focus = t;
         this.activate(t);
         this.invalidate("paint");
       },

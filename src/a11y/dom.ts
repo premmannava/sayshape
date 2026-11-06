@@ -42,6 +42,9 @@ const LABELLED = new Set<Role>([
   "radiogroup", "group", "region", "navigation", "main", "dialog",
 ]);
 
+/** Distinguishes several interfaces' mirrors on one page, for element ids. */
+let hosts = 0;
+
 interface Entry {
   el: HTMLElement;
   role: Role;
@@ -83,6 +86,8 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
   else document.body.append(container);
 
   const entries = new Map<string, Entry>();
+  const hostId = ++hosts;
+  let ids = 0;
   let events: MirrorEvents | null = null;
   // Keys pressed while the root holds focus (its element went away) still go
   // to the engine, so Tab carries on through the interface instead of leaving it.
@@ -108,6 +113,8 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
     // Plain text needs no role; native elements carry their own, except a switch.
     if ((!native && node.role !== "text") || node.role === "switch") el.setAttribute("role", node.role);
 
+    // An id, so other nodes can point at this one (aria-controls, aria-activedescendant).
+    el.id = `sayshape-a11y-${hostId}-${++ids}`;
     const entry: Entry = { el, role: node.role, node, attrs: new Set() };
     el.addEventListener("focus", () => { if (!moving) events?.focus(entry.node.key); });
     // Clicks and keys bubble up through the nodes a node sits in: each
@@ -167,7 +174,7 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
       } else attrs.set("aria-checked", String(node.checked));
     }
     const v = node.value;
-    const field = node.role === "textbox" || node.role === "searchbox";
+    const field = node.role === "textbox" || node.role === "searchbox" || node.role === "combobox";
     if (node.placeholder) attrs.set("aria-placeholder", node.placeholder);
     if (field) {
       // A text field's content is what's typed in it.
@@ -241,6 +248,16 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
         if (seen.has(key)) continue;
         entry.el.remove();
         entries.delete(key);
+      }
+      // Pointers between nodes, now every node has its element.
+      for (const entry of entries.values()) {
+        const point = (attr: string, key: string | undefined) => {
+          const id = key === undefined ? undefined : entries.get(key)?.el.id;
+          if (id) entry.el.setAttribute(attr, id);
+          else entry.el.removeAttribute(attr);
+        };
+        point("aria-controls", entry.node.controls);
+        point("aria-activedescendant", entry.node.activeDescendant);
       }
       // Moving a focused element to a new parent drops its focus, and one that
       // went away takes focus with it: put focus back on it, or keep it in the

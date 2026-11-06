@@ -35,6 +35,7 @@ import {
   type CivilDate,
 } from "../dates";
 import type { PopupState } from "../popup";
+import type { PartSemantics } from "../a11y/semantics";
 import { fieldOf, isRecord, makeRecord } from "../data";
 import type { Box, Rect, Value } from "../types";
 import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE, paintField } from "./input";
@@ -373,6 +374,46 @@ export const datePicker: ComponentDef = {
   example: `state due=""
 date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
   minWidth: () => 120,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const v = valueOf(p);
+    const r = p.bool("range") ? rangeOf(p.bound()) : null;
+    const shownAs = r ?? v;
+    const text = r?.kind === "range" ? displayRange(r.from, r.to)
+      : !r && v.kind === "date" ? displayDate(v.date)
+      : shownAs.kind === "invalid" ? (r ? "Invalid dates" : "Invalid date")
+      : p.str("placeholder", r ? "Choose dates" : "Choose a date");
+    const name = p.text() || ctx.textBefore() || (r ? "Dates" : "Date");
+    const cal = ctx.popup ? shown(ctx.popup as PopupState) : null;
+    const parts: PartSemantics[] = [{
+      detail: undefined,
+      role: "combobox",
+      name,
+      value: { text },
+      expanded: ctx.popupOpen,
+      disabled: p.cond("disabled") || undefined,
+      controls: cal ? "days" : undefined,
+      active: cal ? `day:${formatDate(cal.focus)}` : undefined,
+    }];
+    if (cal) {
+      // The open month as a list of its days, the one the arrows are on active.
+      const { month } = cal;
+      const b = readBounds(p);
+      const from = r?.kind === "range" ? formatDate(r.from) : null, to = r?.kind === "range" ? formatDate(r.to) : null;
+      parts.push({ detail: "days", role: "listbox", name: `${name}: ${MONTHS[month.m - 1]} ${month.y}` });
+      for (let d = 1; d <= daysInMonth(month.y, month.m); d++) {
+        const day = { y: month.y, m: month.m, d };
+        const iso = formatDate(day);
+        const inRange = from !== null && to !== null && iso >= from && iso <= to;
+        const out = (b.min && iso < formatDate(b.min)) || (b.max && iso > formatDate(b.max));
+        parts.push({
+          detail: `day:${iso}`, within: "days", role: "option", name: displayDate(day),
+          selected: (!r && v.kind === "date" && v.iso === iso) || inRange, disabled: out || undefined,
+        });
+      }
+    }
+    return { role: "group", detail: "date-picker", parts };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     box.h = fieldBox(box, p, ctx.theme.control.height).y - box.y + ctx.theme.control.height;

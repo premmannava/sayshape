@@ -30,6 +30,7 @@ import { MOTION } from "../design";
 import type { ComponentDef, LayoutContext, PaintContext, PopupContext, PressContext, PropReader } from "../component";
 import { fieldOf, isList, isRecord, makeList } from "../data";
 import type { PopupState } from "../popup";
+import type { PartSemantics } from "../a11y/semantics";
 import type { Box, Rect, Value } from "../types";
 import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE, paintField } from "./input";
 import { chevron, fillTint, onProp, partBox, runOn } from "./util";
@@ -312,6 +313,35 @@ export const select: ComponentDef = {
   example: `state teams=[{id: "eng", name: "Engineering"}, {id: "sales", name: "Sales"}] team=""
 select "Team" items=teams value=id label=name bind=team placeholder="Choose a team"`,
   minWidth: () => 120,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const o = readOptions(p);
+    const shown = fieldText(p, o);
+    const name = p.text() || ctx.textBefore() || p.str("placeholder", "Choose…");
+    const open = ctx.popup !== null;
+    // While the list is open, focus stays on the field and the arrows move a
+    // highlight: the field points at the highlighted option (aria-activedescendant).
+    const hi = open ? o.options[highlightOf(ctx.popup as PopupState, o)] : undefined;
+    const chosen = chosenValues(p);
+    const parts: PartSemantics[] = [{
+      detail: undefined,
+      role: "combobox",
+      name,
+      value: { text: shown.text },
+      expanded: ctx.popupOpen,
+      disabled: p.cond("disabled") || undefined,
+      controls: open ? "list" : undefined,
+      active: hi ? `opt:${hi.key}` : undefined,
+    }];
+    if (open) {
+      parts.push({ detail: "list", role: "listbox", name, multiselectable: p.bool("multiple") || undefined });
+      for (const opt of o.options) {
+        // The same detail its row is painted with, so a screen reader can choose it directly.
+        parts.push({ detail: `opt:${opt.key}`, within: "list", role: "option", name: opt.label, selected: isChosen(chosen, opt), disabled: !opt.available || undefined });
+      }
+    }
+    return { role: "group", detail: "select", parts };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     box.h = fieldBox(box, p, ctx.theme.control.height).y - box.y + ctx.theme.control.height;

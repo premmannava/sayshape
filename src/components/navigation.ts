@@ -38,6 +38,15 @@ tabs bind=view
     text "Light, quick-drying trail runners."
   tab "Specs" value=specs
     text "280 g, 6 mm drop."`,
+  semantics(box) {
+    const { cells, selected } = (box.data as { cells: TabCell[]; selected?: string } | undefined) ?? { cells: [] };
+    // A tablist holds only its tabs; the selected tab's panel follows it.
+    return {
+      role: "tablist",
+      contentAfter: true,
+      parts: cells.map((cell) => ({ detail: cell.value, role: "tab" as const, name: cell.label, selected: cell.node.id === selected })),
+    };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const kids = ctx.visibleChildren(box.node);
@@ -126,6 +135,10 @@ export const tab: ComponentDef = {
   parents: ["tabs"],
   example: `tab "Reviews" value=reviews
   text "4.8 out of 5 from 212 hikers."`,
+  semantics(box, ctx) {
+    // Only the selected tab is laid out with content; the others are empty boxes.
+    return box.h > 0 ? { role: "tabpanel", name: ctx.props(box.node).text() } : false;
+  },
   layout(box, ctx) {
     stack(box, ctx, 0, ctx.props(box.node).num("gap", 12));
   },
@@ -162,6 +175,18 @@ export const breadcrumb: ComponentDef = {
   },
   example: `state at="Trail runners"
 breadcrumb "Shop / Shoes / Trail runners" bind=at`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const { crumbs } = (box.data as { crumbs: Crumb[] } | undefined) ?? { crumbs: [] };
+    const pressable = p.has("bind") || p.has("on");
+    return {
+      role: "navigation",
+      name: "Breadcrumb",
+      parts: crumbs.map((cr) => cr.last
+        ? { detail: `current:${cr.text}`, role: "text" as const, name: cr.text, current: "page" as const }
+        : { detail: cr.text, role: pressable ? "link" as const : "text" as const, name: cr.text }),
+    };
+  },
   layout(box, ctx) {
     const items = ctx.props(box.node).text().split("/").map((s) => s.trim()).filter(Boolean);
     const font = themeFont(ctx.theme, 400, 14);
@@ -237,6 +262,19 @@ export const pagination: ComponentDef = {
   },
   example: `state page=3
 pagination bind=page pages=12`,
+  semantics(box, ctx) {
+    const { pages, current } = pageState(ctx.props(box.node));
+    const numbers = pageSlots(current, pages).filter((s): s is number => s !== "…");
+    return {
+      role: "navigation",
+      name: ctx.textBefore() ?? "Pages",
+      parts: [
+        { detail: "prev", role: "button", name: "Previous page", disabled: current <= 1 || undefined },
+        ...numbers.map((n) => ({ detail: n, role: "button" as const, name: `Page ${n}`, current: n === current ? "page" as const : undefined })),
+        { detail: "next", role: "button", name: "Next page", disabled: current >= pages || undefined },
+      ],
+    };
+  },
   layout(box) {
     box.h = PAGE;
   },
@@ -321,6 +359,16 @@ screen name=checkout title="Checkout"
   button "Back to cart" variant=secondary on=back`,
   visible(node, scope) {
     return scope(SCREEN_STATE) === node.props.name;
+  },
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const title = p.str("title");
+    // A region named by its title, which it draws as its heading.
+    return {
+      role: "region",
+      name: title || p.str("name"),
+      parts: title ? [{ detail: "title", role: "heading", level: 1, name: title }] : undefined,
+    };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
