@@ -167,7 +167,13 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
       } else attrs.set("aria-checked", String(node.checked));
     }
     const v = node.value;
-    if (v) {
+    const field = node.role === "textbox" || node.role === "searchbox";
+    if (node.placeholder) attrs.set("aria-placeholder", node.placeholder);
+    if (field) {
+      // A text field's content is what's typed in it.
+      const typed = v?.text ?? "";
+      if (leaf && el.textContent !== typed) el.textContent = typed;
+    } else if (v) {
       if (el instanceof HTMLInputElement && el.type === "range") {
         if (v.min !== undefined) el.min = String(v.min);
         if (v.max !== undefined) el.max = String(v.max);

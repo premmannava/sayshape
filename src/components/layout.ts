@@ -87,6 +87,10 @@ export const card: ComponentDef = {
 card on=emit:open_order
   text "Trail runner socks" weight=semibold
   text "Arrives Thursday" tone=muted`,
+  semantics(box, ctx) {
+    // A pressable card is a button named by everything in it; otherwise it's only a surface.
+    return box.node.props.on ? { role: "button", name: ctx.textWithin(box) } : null;
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     stack(box, ctx, p.num("pad", ctx.theme.space.lg), p.num("gap", ctx.theme.space.md));

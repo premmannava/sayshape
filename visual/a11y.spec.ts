@@ -118,3 +118,36 @@ test("a notify: message reaches the polite live region", async ({ page }) => {
   await page.evaluate((sel) => ([...document.querySelectorAll(`${sel} button`)].at(-1) as HTMLButtonElement).click(), MIRROR);
   await expect(page.locator(`${MIRROR} [aria-live="polite"]`)).toHaveText("Placed");
 });
+
+// Every control's own example, as the gallery shows it, audited.
+for (const type of ["button", "link", "check", "switch", "radio", "segmented", "stepper", "slider", "rating", "input", "card", "list-item"]) {
+  test(`axe finds nothing wrong with ${type}`, async ({ page }) => {
+    await page.goto(`/visual/index.html?case=component-${type}&theme=light&width=600`);
+    await page.waitForFunction(() => window.__sayShapeReady || window.__sayShapeError);
+    await audit(page);
+  });
+}
+
+test("Space on a checkbox's node toggles it once", async ({ page }) => {
+  await open(page, `state agreed=false\ncheck "I agree" bind=agreed`);
+  await page.evaluate(() => (document.getElementById("canvas") as HTMLCanvasElement).focus());
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  expect(await focused(page)).toEqual({ inMirror: true, role: "input", name: "I agree" });
+  await page.keyboard.press("Space");
+  expect(await state(page, "agreed")).toBe(true);
+  await page.keyboard.press("Space");
+  expect(await state(page, "agreed")).toBe(false);
+});
+
+test("a stepper's buttons keep focus as they're pressed to the limit", async ({ page }) => {
+  await open(page, `state qty=1\nstepper "Quantity" bind=qty min=1 max=3`);
+  await page.evaluate(() => (document.getElementById("canvas") as HTMLCanvasElement).focus());
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  expect(await focused(page)).toMatchObject({ inMirror: true, name: "Increase Quantity" });
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+  expect(await state(page, "qty")).toBe(3);
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  expect(await focused(page)).toMatchObject({ inMirror: true });
+  await expect(page.locator(`${MIRROR} [role="group"] [role="status"]`)).toHaveText("3");
+});

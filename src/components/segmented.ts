@@ -57,6 +57,14 @@ text "Showing the {lower(view)}" tone=muted`,
     const n = Math.max(1, optionsOf(ctx.props(node).str("options")).length);
     return n * 56 + INSET * 2;
   },
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const options = optionsOf(p.str("options"));
+    const bound = p.bound();
+    // Painted as chosen: the bound option, or the first when it's none of them.
+    const chosen = options.some((o) => o === bound) ? bound : options[0];
+    return { role: "radiogroup", name: ctx.textBefore(), parts: options.map((o) => ({ detail: o, role: "radio" as const, name: o, checked: o === chosen })) };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const options = optionsOf(p.str("options"));

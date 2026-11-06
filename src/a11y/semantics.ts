@@ -52,6 +52,8 @@ export interface Semantics {
   invalid?: boolean;
   multiselectable?: boolean;
   sort?: "ascending" | "descending";
+  /** A field's hint while it's empty. */
+  placeholder?: string;
   /** Replaces the role's spoken name, e.g. "carousel" for a region. Use sparingly. */
   roleDescription?: string;
 }
@@ -75,6 +77,12 @@ export interface ElementSemantics extends Semantics {
   detail?: unknown;
   /** Its pressable parts, each its own node inside this one. */
   parts?: PartSemantics[];
+  /**
+   * Wrap this element and its neighbours with the same group key in one
+   * node (radios sharing a bind= become a radiogroup). The name defaults to
+   * the text just above the first of them.
+   */
+  group?: { key: string; role: Role; name?: string };
 }
 
 /**
@@ -93,6 +101,11 @@ export interface SemanticsContext {
   text(node: SayShapeNode): string | undefined;
   /** All the words shown inside a box, in reading order (for a pressable card's name). */
   textWithin(box: Box): string;
+  /**
+   * The text element just before this one in the same container, as shown:
+   * the label a model wrote above a control that has none of its own.
+   */
+  textBefore(): string | undefined;
   /** The hit regions this element painted in the latest frame. */
   regions: readonly HitRegion[];
   /** Whether this element's popup is open. */
