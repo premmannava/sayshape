@@ -1,6 +1,6 @@
 # Plan: accessibility
 
-**Status:** in progress (started 2026-11-06). Step 1 is done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
+**Status:** in progress (started 2026-11-06). Steps 1 and 2 are done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
 **Rough size:** 6 to 9 weeks for one person, in nine pull requests that each leave `main` working.
 
 ## The problem
@@ -55,13 +55,17 @@ The engine talks only to an `AccessibilityHost` (`src/a11y/host.ts`), like the `
 4. A click on a node runs the engine's existing `activate`; keys go to the existing `key` handlers. No second behavior path.
 5. Focusing a field's node opens the existing editor, whose `<input>` carries the field's label.
 6. The root carries `aria-busy` while a spec streams or data loads, then "Ready" is announced once.
+7. Shift+Tab before the first element leaves the interface: the canvas drops out of the Tab order for that one move, or the browser would land on it and send focus straight back in.
+8. Focus that arrives on the canvas from the keyboard (not a press) turns on keyboard mode, so the focus ring shows and DOM focus moves on to the mirror.
+
+An element whose one region is painted with a detail (a slider's `"track"`) names that `detail` in its semantics, so its own node is the one focus and presses go to.
 
 ## Steps
 
 Each is one pull request into `main`, merged only when CI is green.
 
 1. **Foundations** (done). `src/a11y/` types, the `semantics` hook, the tree builder, the host interface with live regions, the `accessibility` option, `notify:` messages and new screens announced, `ui.accessibility()` and `ui.announcements` in `sayshape/testing`.
-2. **Mirror sync.** The DOM mirror from the tree each frame, keyed diffing, placement, focus both ways, clicks and keys routed to the engine, `aria-busy`. axe on one sample.
+2. **Mirror sync** (done). The DOM mirror from the tree each frame, keyed diffing, placement, focus both ways, clicks and keys routed to the engine, `aria-busy`. axe on one sample.
 3. **Controls.** button, link, check, switch, radio, segmented, stepper, slider, rating, input, pressable card and list-item.
 4. **Content and structure.** text and headings, image, icon, code, badge, avatar, callout, stat, list, timeline, details, accordion, carousel, progress, meter, skeleton, empty, layout containers.
 5. **Navigation and popups.** screen, tabs, breadcrumb, pagination, select (single and multiple), date-picker.

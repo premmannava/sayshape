@@ -67,6 +67,12 @@ export interface PartSemantics extends Semantics {
 
 /** What ComponentDef.semantics returns for an element that is something. */
 export interface ElementSemantics extends Semantics {
+  /**
+   * When the element's one pressable region is painted with a detail (a
+   * slider's "track"), that detail, so the element's own node is the one
+   * focus and presses go to.
+   */
+  detail?: unknown;
   /** Its pressable parts, each its own node inside this one. */
   parts?: PartSemantics[];
 }

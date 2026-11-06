@@ -154,6 +154,7 @@ button "Save" on=set:saved:true
     ui.key("Escape");
     expect(ui.editor).toBeNull();
     expect(ui.focused?.type).toBe("input");
-    expect(ui.canvas.focused).toBe(true);
+    // DOM focus stays on the field: its node in the accessibility mirror.
+    expect(ui.mirror.focused).toBe(ui.mirror.keyOf("input"));
   });
 });
