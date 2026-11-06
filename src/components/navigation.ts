@@ -254,10 +254,10 @@ function pageState(p: PropReader) {
 export const pagination: ComponentDef = {
   type: "pagination",
   category: "navigation",
-  description: "Previous, next and page-number buttons for moving through pages of results.",
+  description: "Previous, next and page-number buttons for moving through pages of results. Show the current page's items with slice(rows, (page - 1) * 10, page * 10).",
   props: {
     bind: { type: "state", required: true, description: "The number state holding the current page, starting at 1." },
-    pages: { type: "number", required: true, description: "How many pages there are." },
+    pages: { type: "number", required: true, description: "How many pages there are, e.g. pages={ceil(len(rows) / 10)}." },
     on: onProp("after the page changes"),
   },
   example: `state page=3

@@ -6,6 +6,8 @@
  *   npm run compare -- --runs 3                      each task three times per model and format
  *   npm run compare -- --only kpi,d1                 some categories or task ids
  *   npm run compare -- --set stress                  the harder requests in eval/compare/stress.ts
+ *   npm run compare -- --formats sayshape,mcp        mcp: SayShape through the MCP server's tools
+ *                                                    (needs npm ci --prefix mcp)
  *   npm run compare -- --guide compact               SayShape's compact guide instead of the full one
  *   npm run compare -- --repair                      one repair when the first answer has problems
  *   npm run compare -- --cache 1h                    mark the guide for prompt caching (1h, 5m or off;
@@ -68,7 +70,7 @@ async function main(): Promise<void> {
   if (!chosen.length) throw new Error(`No tasks match --only ${only?.join(",")}`);
   const runs = Math.max(1, Number(arg("runs") ?? 1) || 1);
   const formats = (list("formats") ?? ["sayshape", "html"]) as Format[];
-  for (const f of formats) if (!["sayshape", "html", "a2ui"].includes(f)) throw new Error(`--formats takes sayshape, html and a2ui, not "${f}"`);
+  for (const f of formats) if (!["sayshape", "html", "a2ui", "mcp"].includes(f)) throw new Error(`--formats takes sayshape, html, a2ui and mcp, not "${f}"`);
   const mode = (arg("guide") ?? "full") as GuideMode;
   if (mode !== "full" && mode !== "compact") throw new Error(`--guide takes full or compact, not "${mode}"`);
 
@@ -111,7 +113,7 @@ async function main(): Promise<void> {
   writeFileSync(resolve(dir, "results.json"), JSON.stringify({ url: env.url, models, runs, guide, cache: cache ?? null, prices, summary: summarize(results), results }, null, 2));
   for (const r of results) {
     if (!r.output) continue;
-    writeFileSync(resolve(dir, "answers", `${r.model.replace(/[^\w.-]+/g, "_")}.${r.task}.${r.run}.${r.format === "a2ui" ? "a2ui.jsonl" : r.format}`), r.output);
+    writeFileSync(resolve(dir, "answers", `${r.model.replace(/[^\w.-]+/g, "_")}.${r.task}.${r.run}.${r.format === "a2ui" ? "a2ui.jsonl" : r.format === "mcp" ? "mcp.sayshape" : r.format}`), r.output);
   }
   console.log("\n" + md.split("\n## Code")[0]);
   console.log(`Full report: ${dir}/report.md`);

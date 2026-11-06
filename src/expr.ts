@@ -204,6 +204,16 @@ const BUILTINS: Record<string, Fn> = {
   pluck: (v, field) => (isList(v) ? makeList(v.map((item) => fieldOf(item, field) ?? null)) : NaN),
   /** The first n items: take(sort(players, 'score', 'desc'), 3). */
   take: (v, n) => (isList(v) ? makeList(v.slice(0, Math.max(0, Math.floor(toNumber(n ?? 0)) || 0))) : NaN),
+  /**
+   * Items from start up to, not including, end, counting from 0: one page is
+   * slice(rows, (page - 1) * 10, page * 10). Text too: slice(name, 0, 1).
+   */
+  slice: (v, start, end) => {
+    if (!isList(v) && typeof v !== "string") return NaN;
+    const at = (x: Value | undefined, d: number) => { const n = Math.floor(toNumber(x ?? d)); return isFinite(n) ? n : d; };
+    const from = at(start, 0), to = end === undefined ? v.length : at(end, v.length);
+    return typeof v === "string" ? v.slice(from, to) : makeList(v.slice(from, to));
+  },
   sum: (v, a, b) => amounts(v, a, b)?.reduce((t, x) => t + x, 0) ?? NaN,
   avg: (v, a, b) => {
     const xs = amounts(v, a, b);
@@ -284,12 +294,45 @@ const BUILTINS: Record<string, Fn> = {
 // like `constructor` or `__defineGetter__` can't reach Object.prototype.
 const FUNCTIONS: Readonly<Record<string, Fn>> = Object.freeze(Object.assign(Object.create(null) as Record<string, Fn>, BUILTINS));
 const isFunctionName = (name: string) => Object.hasOwn(FUNCTIONS, name);
+
+/**
+ * The most arguments each function takes. Extra ones used to be ignored, which hid the mistake:
+ * filter(l, 'cat', ['Housing'], false) kept only Housing. min and max take any number; round,
+ * fixed and money have a default for their last one, which Function.length doesn't count.
+ */
+const MAX_ARGS: Readonly<Record<string, number>> = Object.freeze(Object.assign(
+  Object.create(null) as Record<string, number>,
+  Object.fromEntries(Object.entries(BUILTINS).map(([k, f]) => [k, f.length])),
+  { min: Infinity, max: Infinity, round: 2, fixed: 2, money: 2 },
+));
+
+/** How to call the functions models most often give too many arguments. */
+const SIGNATURES: Record<string, string> = {
+  take: "take(list, n) keeps the first n; for a page or an offset use slice(list, start, end)",
+  filter: "filter(list, 'field', value) keeps the items whose field is value (or any value in a list of them)",
+  find: "find(list, 'field', value)", search: "search(list, 'field', text)", sort: "sort(list, 'field', 'desc')",
+  count: "count(list, 'field', value)", sum: "sum(list, 'field', 'qty')", avg: "avg(list, 'field')",
+  group: "group(list, 'field', 'amount', 'avg')", first: "first(list)", last: "last(list)", pluck: "pluck(list, 'field')",
+};
+
+function tooManyArgs(name: string, got: number): string {
+  const most = MAX_ARGS[name]!;
+  return `${name}() takes at most ${most} argument${most === 1 ? "" : "s"}, not ${got}.${SIGNATURES[name] ? ` Write ${SIGNATURES[name]}` : ""}`;
+}
+
+/** A JavaScript-style method call, like rows.slice(0, 5): what to write instead. */
+function noMethods(name: string): string {
+  const key = name.toLowerCase();
+  if (isFunctionName(name)) return `SayShape has no methods like .${name}(): pass the list or text first, as ${name}(list, …)`;
+  const hint = Object.hasOwn(FUNCTION_HINTS, key) ? FUNCTION_HINTS[key] : undefined;
+  return `SayShape has no methods like .${name}(): ${hint ? `use ${hint}` : `use its functions, such as ${["filter", "sort", "take", "slice", "pluck", "sum"].join(", ")}`}`;
+}
 export const EXPRESSION_FUNCTIONS = Object.keys(FUNCTIONS);
 
 /** Names models reach for from other languages, and what to write instead. */
 const FUNCTION_HINTS: Record<string, string> = {
   length: "len(list)", size: "len(list)", length_of: "len(list)",
-  head: "first(list)", tail: "last(list)", top: "take(list, n)", limit: "take(list, n)", slice: "take(list, n)",
+  head: "first(list)", tail: "last(list)", top: "take(list, n)", limit: "take(list, n)", skip: "slice(list, start)", offset: "slice(list, start, end)",
   argmax: "first(sort(list, 'field', 'desc'))", argmin: "first(sort(list, 'field'))",
   maxby: "first(sort(list, 'field', 'desc'))", minby: "first(sort(list, 'field'))",
   max_by: "first(sort(list, 'field', 'desc'))", min_by: "first(sort(list, 'field'))",
@@ -391,6 +434,7 @@ function parseExpr(src: string): Node {
         next();
         const name = next();
         if (name.t !== "id") throw new ExprError(`Expected a field name after "." but found "${name.v || "end"}"`);
+        if (peek().v === "(") throw new ExprError(noMethods(name.v));
         n = { k: "get", obj: n, key: { k: "lit", v: name.v } };
       } else if (peek().v === "[") {
         next();
@@ -418,6 +462,7 @@ function parseExpr(src: string): Node {
           while (peek().v === ",") { next(); args.push(ternary()); }
         }
         expect(")");
+        if (args.length > MAX_ARGS[t.v]!) throw new ExprError(tooManyArgs(t.v, args.length));
         return { k: "call", fn: t.v, args };
       }
       return { k: "id", name: t.v };
@@ -519,10 +564,18 @@ function run(n: Node, scope: Scope): Value {
 
 const cache = new Map<string, Node | ExprError>();
 
+/**
+ * An arrow function (x => x.done), outside quoted text: models write them from JavaScript, and the
+ * plain parse error ("Unexpected =") didn't say what to write instead.
+ */
+const hasArrow = (src: string) => /=>/.test(src.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, ""));
+const NO_ARROWS = "SayShape has no arrow functions (x => …): list functions take a field name and a value instead, like filter(list, 'priority', 'High'), count(list, 'done') or sort(list, 'price', 'desc')";
+
 function compile(src: string): Node {
   let c = cache.get(src);
   if (!c) {
     try { c = parseExpr(src); } catch (e) { c = e instanceof ExprError ? e : new ExprError(String(e)); }
+    if (c instanceof ExprError && hasArrow(src)) c = new ExprError(NO_ARROWS);
     if (cache.size > 2000) cache.clear();
     cache.set(src, c);
   }

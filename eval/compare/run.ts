@@ -16,10 +16,12 @@ import { languageGuide, type GuideOptions } from "../../src/prompt";
 import type { Registry } from "../../src/registry";
 import { a2uiPrompt } from "./a2ui";
 import { a2uiScreen, cleanA2ui } from "./a2ui-screen";
+import { askMcp } from "./mcp-route";
 import { htmlScreen, sayshapeScreen, type Screen } from "./screens";
 import type { Task, TaskCheck } from "./tasks";
 
-export type Format = "sayshape" | "html" | "a2ui";
+/** "mcp" is SayShape through the MCP server's tools (mcp-route.ts), scored like "sayshape". */
+export type Format = "sayshape" | "html" | "a2ui" | "mcp";
 
 /**
  * What the HTML answer is told. Kept short and fair: the same constraints a
@@ -208,6 +210,12 @@ export async function askHtml(task: Task, config: ModelConfig, fetchImpl?: typeo
   return { output: firstOutput, raw: first.raw, usage: first.usage, firstTokenMs, totalMs: clock() - start, inputChars };
 }
 
+/** A SayShape answer through the MCP server's tools; the turns it took go in raw. */
+async function askThroughMcp(task: Task, config: ModelConfig, fetchImpl?: typeof fetch): Promise<Answer> {
+  const a = await askMcp(task.request, config, fetchImpl);
+  return { output: a.output, raw: JSON.stringify({ turns: a.turns, docsCalls: a.docsCalls, showCalls: a.showCalls, messages: JSON.parse(a.raw) as unknown }), usage: a.usage, totalMs: a.totalMs, inputChars: a.inputChars };
+}
+
 let a2uiSystem: string | undefined;
 
 /**
@@ -238,7 +246,7 @@ function addUsage(a: Usage, b: Usage): Usage {
 }
 
 async function open(format: Format, code: string): Promise<Screen> {
-  return format === "sayshape" ? sayshapeScreen(code) : format === "a2ui" ? a2uiScreen(code) : htmlScreen(code);
+  return format === "sayshape" || format === "mcp" ? sayshapeScreen(code) : format === "a2ui" ? a2uiScreen(code) : htmlScreen(code);
 }
 
 /** Run one check on a fresh screen. */
@@ -341,6 +349,7 @@ async function answerOne(task: Task, format: Format, model: string, run: number,
   try {
     a = format === "sayshape" ? await askSayShape(task, config, o.registry, guide, o.fetch, o.repair)
       : format === "a2ui" ? await askA2ui(task, config, o.fetch)
+      : format === "mcp" ? await askThroughMcp(task, config, o.fetch)
       : await askHtml(task, config, o.fetch, o.repair);
   } catch (e) {
     return {
@@ -377,6 +386,7 @@ async function firstTry(format: Format, task: Task, a: Answer): Promise<Pick<Ans
 /** The system prompt each format is sent, for the report. */
 export function systemPrompt(format: Format, registry: Registry, guide: GuideOptions = { imageHosts: [] }): string {
   if (format === "a2ui") return (a2uiSystem ??= a2uiPrompt());
+  if (format === "mcp") return "(the MCP server's instructions and tools: show_interface with its quick start, and sayshape_docs)";
   return format === "sayshape" ? languageGuide(registry, guide) : HTML_PROMPT;
 }
 

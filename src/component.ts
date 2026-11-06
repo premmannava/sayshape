@@ -340,6 +340,13 @@ export class PropReader {
   }
 
   num(name: string, fallback: number): number {
+    const raw = this.node.props[name];
+    // A bare name (pages=pages) reads that value, like an expression prop does.
+    if (raw !== undefined && !this.node.quoted?.includes(name) && /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$/.test(raw) && raw !== "true" && raw !== "false" && raw !== "null") {
+      const r = evaluate(raw, this.scope);
+      const n = r.ok ? toNumber(r.value) : NaN;
+      return isFinite(n) ? n : fallback;
+    }
     const v = this.value(name);
     const n = typeof v === "number" || typeof v === "string" ? toNumber(v) : NaN;
     return isFinite(n) ? n : fallback;

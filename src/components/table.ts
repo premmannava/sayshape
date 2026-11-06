@@ -47,7 +47,7 @@ import { chevron, fillTint, onProp, partBox, runOn, themeFont } from "./util";
 import { paintGhost, staggered } from "../ghost";
 import { MOTION } from "../design";
 
-/** The most rows one table shows. Larger lists show a message: page them with take() or pagination. */
+/** The most rows one table shows. Larger lists show a message: page them with slice() and pagination. */
 export const MAX_TABLE_ROWS = 200;
 /**
  * The most columns one table shows. Wide tables scroll sideways, so this is
@@ -309,7 +309,7 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
   if (!loading && p.has("items") && !isList(raw)) warn(`items is not a list. Use a list of records, like items=equipment`);
   const items: readonly Value[] = isList(raw) ? raw : [];
   if (items.length > MAX_TABLE_ROWS) {
-    warn(`${items.length} rows is more than the ${MAX_TABLE_ROWS} a table shows. Show a page with take() or pagination`);
+    warn(`${items.length} rows is more than the ${MAX_TABLE_ROWS} a table shows. Show a page with slice() and pagination`);
     return say(`Too many rows to show: ${items.length}, at most ${MAX_TABLE_ROWS}`);
   }
 
@@ -768,7 +768,7 @@ export const table: ComponentDef = {
     "Rows of a list of records, one table-column per field, for things like inventory, orders or expenses. With sort= and direction=, pressing a header sorts by it; with bind= and key=, pressing a row selects it; columns too wide for the space scroll sideways, the first one staying in view.",
   text: { description: "A title above the table." },
   props: {
-    items: { type: "expression", required: true, description: `The list of records, e.g. items=equipment. At most ${MAX_TABLE_ROWS} rows; show a page of a longer list with take() or pagination.` },
+    items: { type: "expression", required: true, description: `The list of records, e.g. items=equipment. At most ${MAX_TABLE_ROWS} rows; show a page of a longer list with slice() and pagination.` },
     key: { type: "name", description: "The field that identifies each row, e.g. key=id. Needed for bind=." },
     bind: { type: "state", description: "State that holds the selected row's key. Pressing a row sets it." },
     sort: { type: "state", description: "State that holds the field to sort by. Pressing a header sets it; missing values sort last." },

@@ -165,7 +165,7 @@ describe("empty, invalid and oversized data", () => {
     expect(geo(ui).message).toBe(`Too many rows to show: ${MAX_TABLE_ROWS + 1}, at most ${MAX_TABLE_ROWS}`);
     expect(geo(ui).rows).toEqual([]);
     expect(ui.hits).toEqual([]);
-    expect(ui.warnings[0]).toMatch(/Show a page with take\(\) or pagination/);
+    expect(ui.warnings[0]).toMatch(/Show a page with slice\(\) and pagination/);
     // A page of a longer list works.
     expect(geo(render(`state rows=${rows(500)}\ntable items={take(rows, 50)}\n  table-column field=v\n`)).rows).toHaveLength(50);
   });

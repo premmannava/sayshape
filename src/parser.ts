@@ -308,6 +308,9 @@ function findCycles(defs: readonly DerivedDef[], diags: Diagnostic[]): Set<strin
   return cyclic;
 }
 
+/** A state name or path written without braces, like pages or t.qty. */
+const BARE_NAME = /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$/;
+
 /** Every expression a line reads, for checking which names it uses. */
 function expressionsOf(text: string | undefined, props: Record<string, string>, defs: Record<string, PropDef>): string[] {
   const out: string[] = [];
@@ -324,6 +327,7 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
       if (PATH.test(raw)) out.push(raw);
     } else if (whole !== null) out.push(whole);
     else if (def.type === "condition" || def.type === "expression") out.push(raw);
+    else if (def.type === "number" && BARE_NAME.test(raw)) out.push(raw);
     else if (raw.includes("{")) template(raw);
   }
   return out;
@@ -396,7 +400,8 @@ function checkProp(name: string, raw: string, def: PropDef, line: number, diags:
   }
   switch (def.type) {
     case "number":
-      if (isNaN(Number(raw))) warn(`${name} should be a number or {expression}, got "${raw}"`);
+      // A bare name (pages=pages) reads that value, like items=sales does; expressionsOf checks it exists.
+      if (isNaN(Number(raw)) && !BARE_NAME.test(raw)) warn(`${name} should be a number or {expression}, got "${raw}"`);
       break;
     case "boolean":
       if (raw !== "true" && raw !== "false") warn(`${name} should be true or false, got "${raw}"`);
@@ -680,7 +685,18 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       const pdef = def.props[name] ?? COMMON_PROPS[name];
       const wrote = (n: string) => { written.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
       if (pdef?.type === "state" && PATH.test(raw)) wrote(raw.split(".")[0]!);
-      if (pdef?.type === "action") { const r = parseActions(raw); if ("actions" in r) actionTargets(r.actions).forEach(wrote); }
+      if (pdef?.type === "action") {
+        const r = parseActions(raw);
+        if ("actions" in r) {
+          actionTargets(r.actions).forEach(wrote);
+          // set:order:o stores the text "o", never the item o: a silent mistake models make.
+          for (const a of r.actions) {
+            if ((a.op === "set" || a.op === "add") && inScope.has(a.value)) {
+              diagnostics.push({ line: lineNo, severity: "warning", message: `${a.op}:${a.key}:${a.value} stores the text "${a.value}". To store the item, write ${a.op}:${a.key}:{${a.value}}` });
+            }
+          }
+        }
+      }
     }
 
     const node: SayShapeNode = {
