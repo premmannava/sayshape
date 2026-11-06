@@ -84,7 +84,7 @@ describe("chart y with several fields", () => {
 
   it("keeps an unknown kind a warning, as before", () => {
     expect(parse(`${sales}\nchart kind=radar items=sales x=month y=revenue\n`, registry).diagnostics.map((d) => d.message))
-      .toEqual([`kind should be one of bar, hbar, line, area, stacked, pie, donut, funnel, waterfall; got "radar"`]);
+      .toEqual([`kind should be one of bar, hbar, line, area, stacked, pie, donut, funnel, waterfall, bullet; got "radar"`]);
   });
 });
 
