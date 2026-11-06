@@ -24,9 +24,9 @@ function fakeModel(byRequest: (request: string, attempt: number) => string) {
 const config = { url: "http://model.test/v1", model: "fake" };
 
 describe("evaluation set", () => {
-  it("has 52 requests with unique ids, expecting only elements that exist", () => {
-    expect(cases).toHaveLength(52);
-    expect(new Set(cases.map((c) => c.id)).size).toBe(52);
+  it("has 60 requests with unique ids, expecting only elements that exist", () => {
+    expect(cases).toHaveLength(60);
+    expect(new Set(cases.map((c) => c.id)).size).toBe(60);
     for (const c of cases) for (const e of (c.expect ?? []).flat()) expect(registry.has(e), `${c.id}: ${e}`).toBe(true);
   });
 });
@@ -239,6 +239,44 @@ chart "Signup" kind=funnel items=steps x=s y=n
 `,
     `state steps=[{s: "Visited", n: 12400}, {s: "Started", n: 3100}, {s: "Paid", n: 640}]
 chart "Signup" items=steps x=s y=n
+`,
+  ];
+
+  answers["choose-trend"] = [
+    `state days=[{d: "Oct 1", n: 40}, {d: "Oct 2", n: 52}]
+card
+  stat label="Signups" value={sum(days, 'n')} spark={pluck(days, 'n')}
+  table items=days
+    table-column "Day" field=d
+    table-column "Signups" field=n format=number
+`,
+    `state days=[{d: "Oct 1", n: 40}, {d: "Oct 2", n: 52}]
+card
+  stat label="Signups" value={sum(days, 'n')} spark={[40, 52]}
+  table items=days
+    table-column "Day" field=d
+    table-column "Signups" field=n format=number
+`,
+  ];
+  answers["choose-regions"] = [
+    `state regions=["West", "East"] shown=["West"] sales=[{r: "West", amt: 820}, {r: "East", amt: 610}]
+derive picked={len(shown) ? filter(sales, 'r', shown) : sales}
+select "Regions" items=regions bind=shown multiple=true
+chart kind=hbar items=picked x=r y=amt
+`,
+    `state regions=["West", "East"] shown="West" sales=[{r: "West", amt: 820}, {r: "East", amt: 610}]
+select "Regions" items=regions bind=shown
+chart kind=hbar items={filter(sales, 'r', shown)} x=r y=amt
+`,
+  ];
+  answers["choose-period"] = [
+    `state period={from: "", to: ""} orders=[{d: "2026-10-02", amt: 120}, {d: "2026-10-12", amt: 340}]
+date-picker "Period" bind=period range=true
+stat label="Revenue" value={money(sum(filter(orders, 'd', period), 'amt'))}
+`,
+    `state day="" orders=[{d: "2026-10-02", amt: 120}, {d: "2026-10-12", amt: 340}]
+date-picker "Day" bind=day
+stat label="Revenue" value={money(sum(filter(orders, 'd', day), 'amt'))}
 `,
   ];
 
