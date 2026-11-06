@@ -6,6 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FakeCanvas, render, type DrawOp } from "../src/testing";
 import { darkTheme, lightTheme } from "../src/theme";
+import { MAX_PICTURE_WIDTH } from "../src/engine";
 
 let made: FakeCanvas[] = [];
 const g = globalThis as { document?: unknown };
@@ -94,5 +95,56 @@ describe("destroy", () => {
     } finally {
       g2.requestAnimationFrame = had;
     }
+  });
+});
+
+describe("picture of a table that scrolls sideways", () => {
+  const WIDE = `state rows=[{id: "A-1042", customer: "Ada Lovelace", city: "London", total: 1290, status: "Shipped", carrier: "Royal Mail", note: "Leave at the front desk"}, {id: "A-1043", customer: "Grace Hopper", city: "Arlington", total: 540, status: "Pending", carrier: "UPS", note: "Call on arrival"}]
+table "Orders" items=rows key=id
+  table-column "Order" field=id
+  table-column "Customer" field=customer
+  table-column "City" field=city
+  table-column "Total" field=total format=money
+  table-column "Status" field=status
+  table-column "Carrier" field=carrier
+  table-column "Delivery note" field=note
+`;
+
+  it("draws the screen wider, so every column is in the image", async () => {
+    const ui = render(WIDE, { width: 360 });
+    const scroll = (ui.find("table").box!.data as { scroll?: { max: number } }).scroll;
+    expect(scroll?.max).toBeGreaterThan(0);
+    expect(ui.sayshape.hiddenWidth()).toBeCloseTo(scroll!.max);
+    const out = (await ui.sayshape.picture({ pixelRatio: 1 })) as unknown as FakeCanvas;
+    expect(out.width).toBeGreaterThanOrEqual(360 + scroll!.max - 1);
+    const texts = textsIn(out.takeDrawOps());
+    expect(texts).toEqual(expect.arrayContaining(["Delivery note", "Leave at the front desk", "Call on arrival"]));
+    // The screen itself still scrolls, at its own width.
+    expect(ui.sayshape.hiddenWidth()).toBeGreaterThan(0);
+    ui.destroy();
+  });
+
+  it("keeps the screen's width with widen: false", async () => {
+    const ui = render(WIDE, { width: 360 });
+    const out = await ui.sayshape.picture({ pixelRatio: 1, widen: false });
+    expect(out.width).toBe(360);
+    ui.destroy();
+  });
+
+  it("leaves a screen that doesn't scroll at its own width", async () => {
+    const ui = render(`text "Hi"\n`, { width: 360 });
+    expect(ui.sayshape.hiddenWidth()).toBe(0);
+    expect((await ui.sayshape.picture({ pixelRatio: 1 })).width).toBe(360);
+    ui.destroy();
+  });
+
+  it("never draws wider than MAX_PICTURE_WIDTH", async () => {
+    const cols = Array.from({ length: 8 }, (_v, i) => `  table-column "Column ${i}" field=f${i}`).join("\n");
+    const long = "x".repeat(200);
+    const row = `{${Array.from({ length: 8 }, (_v, i) => `f${i}: "${long}"`).join(", ")}}`;
+    const ui = render(`state rows=[${row}]\ntable items=rows\n${cols}\n`, { width: 360 });
+    const out = await ui.sayshape.picture({ pixelRatio: 1 });
+    expect(out.width).toBeLessThanOrEqual(MAX_PICTURE_WIDTH);
+    ui.destroy();
   });
 });

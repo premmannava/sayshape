@@ -265,6 +265,13 @@ export interface ComponentDef {
    * (see src/editor.ts), and each change is written to its bind=.
    */
   editor?(box: Box, props: PropReader, theme: Theme): EditorSpec;
+  /**
+   * For elements that scroll sideways (a wide table): the width, in pixels,
+   * this element would need to show everything without scrolling. picture()
+   * widens the screen it saves until no element needs more, so a saved image
+   * shows every column. Leave it out when the element never scrolls.
+   */
+  fullWidth?(box: Box): number;
   /** A panel this element opens over the screen, like a select's options. Open it with ctx.openPopup in press or key. */
   popup?: PopupDef;
 }
