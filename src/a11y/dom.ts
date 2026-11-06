@@ -84,6 +84,9 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
 
   const entries = new Map<string, Entry>();
   let events: MirrorEvents | null = null;
+  // Keys pressed while the root holds focus (its element went away) still go
+  // to the engine, so Tab carries on through the interface instead of leaving it.
+  treeRoot.addEventListener("keydown", (e) => { if (e.target === treeRoot) events?.key(e); });
   /** Set while the engine moves focus, so the focus event isn't reported back as a screen reader's move. */
   let moving = false;
 
@@ -230,10 +233,12 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
         entry.el.remove();
         entries.delete(key);
       }
-      // The focused element went away: keep focus in the interface rather than losing it to the page.
-      if (hadFocus && !owns(active)) {
+      // Moving a focused element to a new parent drops its focus, and one that
+      // went away takes focus with it: put focus back on it, or keep it in the
+      // interface (on the root) rather than losing it to the page.
+      if (hadFocus && document.activeElement !== active) {
         moving = true;
-        try { treeRoot.focus({ preventScroll: true }); } finally { moving = false; }
+        try { (owns(active) ? (active as HTMLElement) : treeRoot).focus({ preventScroll: true }); } finally { moving = false; }
       }
     },
     focus(key, force = false) {

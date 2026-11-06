@@ -239,6 +239,24 @@ describe("the browser accessibility host", () => {
       expect(events.log).toEqual([]);
     });
 
+    it("keeps focus on an element that moved to a new parent", () => {
+      canvas.focus();
+      host.focus!("next");
+      const was = document.activeElement;
+      host.update!(root([n("box", { role: "group", name: "Box" }, [n("next", { role: "button", name: "Next", focusable: true })])]), false);
+      expect(document.activeElement).toBe(was);
+      expect(mirror().children[0]!.contains(was)).toBe(true);
+      expect(events.log).toEqual([]);
+    });
+
+    it("still sends keys to the engine while the root holds focus", () => {
+      canvas.focus();
+      host.focus!("next");
+      host.update!(root([n("go", { role: "button", name: "Go", focusable: true })]), false);
+      mirror().dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+      expect(events.log).toEqual(["key Tab"]);
+    });
+
     it("says whether an element is its own", () => {
       expect(host.owns!(el(0))).toBe(true);
       expect(host.owns!(canvas)).toBe(false);
