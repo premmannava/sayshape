@@ -17,7 +17,7 @@ import { SayShape, type SayShapeEvents, type SayShapeOptions } from "../engine";
 import { interpolate } from "../expr";
 import { eachInstances, scopeOf } from "../each";
 import type { EditorEvents, EditorHost, EditorSpec } from "../editor";
-import type { AccessibilityHost, Politeness } from "../a11y/host";
+import type { AccessibilityHost, MirrorEvents, Politeness } from "../a11y/host";
 import type { AccessibleNode } from "../a11y/semantics";
 import { isVisible, walkBoxes } from "../layout";
 import { lightTheme, type Theme } from "../theme";
@@ -95,6 +95,12 @@ export interface Rendered {
   readonly popup: SayShape["openPopupInfo"];
   /** What screen readers have been told (notify: messages, new screens), oldest first. */
   readonly announcements: Announcement[];
+  /**
+   * The mirror as the engine drives it: which node it last asked to hold DOM
+   * focus, whether the screen is busy, and the events a screen reader would
+   * send (activate a node, move to one, press a key on one), by node key.
+   */
+  readonly mirror: Mirror;
 
   /**
    * The screen as a screen reader gets it: each shown element's role, name
@@ -157,8 +163,12 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
   ensurePath2D();
   const canvas = new FakeCanvas();
   const announcements: Announcement[] = [];
+  const mirrorState = { focused: null as string | null, busy: false, updates: 0, events: null as MirrorEvents | null };
   const accessibility: AccessibilityHost = {
     announce: (text, politeness = "polite") => { announcements.push({ text, politeness }); },
+    connect: (events) => { mirrorState.events = events; },
+    update: (_tree, busy) => { mirrorState.busy = busy; mirrorState.updates++; },
+    focus: (key) => { mirrorState.focused = key; return true; },
     destroy() {},
   };
   let editingNode = (): string | null => null;
@@ -264,6 +274,28 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     get focused() { return sayshape.focus?.node ?? null; },
     get popup() { return sayshape.openPopupInfo; },
     get announcements() { return announcements; },
+    mirror: {
+      get focused() { return mirrorState.focused; },
+      get busy() { return mirrorState.busy; },
+      get updates() { return mirrorState.updates; },
+      keyOf(query) {
+        const found = find(query);
+        // An element's own node comes before its parts, in reading order.
+        const node = findNode(sayshape.accessibilityTree(), (n) => n.node.id === found.node.id);
+        if (!node) throw new Error(`"${found.node.type}" on line ${found.node.line} has no node of its own in the accessibility tree`);
+        return node.key;
+      },
+      activate(key) { mirrorState.events?.activate(key); flush(); },
+      focus(key) { mirrorState.events?.focus(key); flush(); },
+      key(key, o = {}) {
+        let prevented = false;
+        mirrorState.events?.key({ key, shiftKey: !!o.shift, preventDefault: () => { prevented = true; } });
+        flush();
+        return prevented;
+      },
+      step(key, direction) { mirrorState.events?.step(key, direction); flush(); },
+      blur() { mirrorState.events?.blur(); flush(); },
+    },
     accessibility: ((o?: { full: true }) => {
       const tree = sayshape.accessibilityTree();
       if (!tree) throw new Error("Nothing has been rendered yet");
@@ -363,6 +395,38 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     },
   };
   return ui;
+}
+
+/** The mirror, as sayshape/testing records it, with the events a screen reader would send. */
+export interface Mirror {
+  /** The node key the engine last asked to hold DOM focus. */
+  readonly focused: string | null;
+  /** Whether the last update said the screen was busy (streaming or loading). */
+  readonly busy: boolean;
+  /** How many times the mirror was rebuilt. */
+  readonly updates: number;
+  /** The key of an element's own node, for the methods below. */
+  keyOf(query: Query): string;
+  /** Activate a node, as a screen reader's double tap does. */
+  activate(key: string): void;
+  /** Move to a node, as a screen reader's focus does. */
+  focus(key: string): void;
+  /** Press a key while a mirror node has focus. Returns whether the engine stopped the browser's own handling. */
+  key(key: string, opts?: { shift?: boolean }): boolean;
+  /** Nudge a slider one step, as phones' screen readers do. */
+  step(key: string, direction: 1 | -1): void;
+  /** DOM focus left the mirror for the rest of the page. */
+  blur(): void;
+}
+
+function findNode(n: AccessibleNode | null, test: (n: AccessibleNode) => boolean): AccessibleNode | null {
+  if (!n) return null;
+  if (test(n)) return n;
+  for (const c of n.children) {
+    const f = findNode(c, test);
+    if (f) return f;
+  }
+  return null;
 }
 
 /** Something a screen reader was told. */

@@ -30,8 +30,8 @@ import { darkTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
 import { domAccessibilityHost } from "./a11y/dom";
-import { noAccessibility, type AccessibilityHost } from "./a11y/host";
-import type { AccessibleNode } from "./a11y/semantics";
+import { noAccessibility, type AccessibilityHost, type MirrorEvents, type MirrorKey } from "./a11y/host";
+import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
 
@@ -166,6 +166,10 @@ export class SayShape {
   private warn: (message: string) => void;
   private editorHost: EditorHost;
   private a11y: AccessibilityHost;
+  /** Set when layout ran, so the mirror is rebuilt after the next paint (not on every hover). */
+  private a11yDirty = true;
+  /** Whether the last mirror update was busy (streaming or loading), to say "Ready" when it ends. */
+  private wasBusy = false;
   /** The field being typed into, if any. */
   editing: HitTarget | null = null;
   /** What was last typed and the value it wrote, so writing "1." (stored as 1) doesn't rewrite the field to "1". */
@@ -213,6 +217,7 @@ export class SayShape {
     });
     this.bindInput();
     this.bindEnvironment();
+    this.a11y.connect?.(this.mirrorEvents());
   }
 
   // ---------------------------------------------------------------- spec
@@ -394,6 +399,7 @@ export class SayShape {
     this.canvas.style.height = height + "px";
     Object.assign(this.metrics, { width, height, pixelWidth: pw, pixelHeight: ph, layoutMs: now() - t });
     this.dirty.layout = false;
+    this.a11yDirty = true;
     this.refreshTargets();
   }
 
@@ -431,7 +437,71 @@ export class SayShape {
     this.inspector.paintOverlay(g, this.rootBox, this.hits);
     this.inspector.endCapture();
     this.metrics.paintMs = now() - t;
+    this.syncAccessibility();
     this.events.emit("render", { ...this.metrics });
+  }
+
+  /**
+   * After a frame: rebuild the mirror when layout ran, say "Ready" when a
+   * stream or a load has finished, and keep the mirror's DOM focus on the
+   * element the keyboard is on.
+   */
+  private syncAccessibility(): void {
+    const busy = this.streaming || this.loading.loadingNames.length > 0 || this.loading.isAwaiting;
+    if (this.a11yDirty && this.a11y.update) {
+      const tree = this.accessibilityTree();
+      if (tree) this.a11y.update(tree, busy);
+    }
+    this.a11yDirty = false;
+    if (this.wasBusy && !busy) this.a11y.announce("Ready");
+    this.wasBusy = busy;
+    if (this.keyboardMode && this.focus && !this.editing) this.a11y.focus?.(accessibleKey(this.focus.node, this.focus.detail));
+  }
+
+  /** Move DOM focus to the focused element's mirror node, or to the canvas when there's no mirror for it. */
+  private focusDom(): void {
+    const f = this.focus;
+    if (f && this.a11y.focus?.(accessibleKey(f.node, f.detail), true)) return;
+    this.canvas.focus();
+  }
+
+  /** The hit region a mirror node stands for, from the latest frame. */
+  private targetByKey(key: string): HitTarget | null {
+    const h = this.hits.find((r) => accessibleKey(r.box.node, r.detail) === key);
+    return h ? { node: h.box.node, box: h.box, detail: h.detail } : null;
+  }
+
+  /** What the engine does when a screen reader or the keyboard acts on the mirror. */
+  private mirrorEvents(): MirrorEvents {
+    return {
+      focus: (key) => {
+        const t = this.targetByKey(key);
+        if (!t) return;
+        this.keyboardMode = true;
+        if (this.registry.get(t.node.type)?.editor) this.beginEdit(t);
+        else this.focus = t;
+        this.invalidate("paint");
+      },
+      activate: (key) => {
+        const t = this.targetByKey(key);
+        if (!t) return;
+        this.keyboardMode = true;
+        this.focus = t;
+        this.activate(t);
+        this.invalidate("paint");
+      },
+      key: (e) => this.onKeyDown(e),
+      step: (key, direction) => {
+        const t = this.targetByKey(key);
+        if (!t) return;
+        this.keyboardMode = true;
+        this.focus = t;
+        this.keyToFocus(direction > 0 ? "ArrowUp" : "ArrowDown");
+        this.invalidate("paint");
+      },
+      // Opening a field's text box moves DOM focus out of the mirror on purpose.
+      blur: () => { if (!this.editing) this.lostFocus(); },
+    };
   }
 
   /**
@@ -764,7 +834,7 @@ export class SayShape {
     this.hover = null;
     if (restoreFocus) {
       const box = this.boxOf(p.owner.node);
-      if (box) { this.focus = { node: box.node, box }; this.canvas.focus(); }
+      if (box) { this.focus = { node: box.node, box }; this.focusDom(); }
     }
     this.invalidate("layout");
   }
@@ -1119,7 +1189,7 @@ export class SayShape {
       // Focusing the canvas invokes its focus handler synchronously. Without
       // this guard, it immediately calls beginEdit() for the same field.
       this.returningFromEditor = true;
-      try { this.canvas.focus(); }
+      try { this.focusDom(); }
       finally { this.returningFromEditor = false; }
       return true;
     }
@@ -1149,7 +1219,7 @@ export class SayShape {
     else {
       this.endEdit();
       this.focus = target;
-      this.canvas.focus();
+      this.focusDom();
     }
     this.invalidate("paint");
     return true;
@@ -1157,6 +1227,64 @@ export class SayShape {
 
   private isShown(node: SayShapeNode): boolean {
     return isVisible(node, this.state.scope, this.registry);
+  }
+
+  /**
+   * Keys on the canvas or on a mirror node. Tab moves through the
+   * interface's elements; an open popup takes every key; the focused
+   * element gets the rest, and Enter or Space presses it.
+   */
+  private onKeyDown(e: MirrorKey): void {
+    if (e.key === "Escape" && this.inspector.inspecting) { this.inspector.setInspecting(false); return; }
+    // An open popup takes every key. Escape closes it; Tab closes it and moves on as usual.
+    if (this.popup) {
+      this.keyboardMode = true;
+      if (e.key === "Tab") this.closePopup(true);
+      else {
+        e.preventDefault();
+        if (e.key === "Escape") this.closePopup(true);
+        else this.registry.get(this.popup.owner.node.type)?.popup?.key(this.popupContext(this.popup.owner), e.key);
+        this.invalidate("paint");
+        return;
+      }
+    }
+    if (e.key === "Tab") {
+      // Past the last element, let the browser move focus out of the canvas.
+      if (this.tabFrom(e.shiftKey)) e.preventDefault();
+      else if (e.shiftKey) this.leaveBackwards();
+      return;
+    }
+    if (this.focus && this.keyToFocus(e.key)) {
+      e.preventDefault();
+      this.keyboardMode = true;
+      return;
+    }
+    if ((e.key === "Enter" || e.key === " ") && this.focus) {
+      e.preventDefault();
+      this.keyboardMode = true;
+      this.activate(this.focus);
+    }
+  }
+
+  /**
+   * Shift+Tab past the first element: let the browser move focus to what's
+   * before the canvas. From a mirror node the previous stop would be the
+   * canvas itself, which would send focus straight back in, so the canvas
+   * leaves the Tab order until the browser has moved on.
+   */
+  private leaveBackwards(): void {
+    if (typeof document === "undefined" || !this.a11y.owns?.(document.activeElement)) return;
+    const c = this.canvas;
+    const was = c.tabIndex;
+    c.tabIndex = -1;
+    setTimeout(() => { c.tabIndex = was; }, 0);
+  }
+
+  /** Focus went elsewhere on the page (or another window): keyboard mode ends and an open list goes with it. */
+  private lostFocus(): void {
+    this.keyboardMode = false;
+    this.closePopup(false);
+    this.invalidate("paint");
   }
 
   private bindInput(): void {
@@ -1229,37 +1357,10 @@ export class SayShape {
       if (t && sameTarget(t, was)) this.activate(t);
       this.invalidate("paint");
     };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && this.inspector.inspecting) { this.inspector.setInspecting(false); return; }
-      // An open popup takes every key. Escape closes it; Tab closes it and moves on as usual.
-      if (this.popup) {
-        this.keyboardMode = true;
-        if (e.key === "Tab") this.closePopup(true);
-        else {
-          e.preventDefault();
-          if (e.key === "Escape") this.closePopup(true);
-          else this.registry.get(this.popup.owner.node.type)?.popup?.key(this.popupContext(this.popup.owner), e.key);
-          this.invalidate("paint");
-          return;
-        }
-      }
-      if (e.key === "Tab") {
-        // Past the last element, let the browser move focus out of the canvas.
-        if (this.tabFrom(e.shiftKey)) e.preventDefault();
-        return;
-      }
-      if (this.focus && this.keyToFocus(e.key)) {
-        e.preventDefault();
-        this.keyboardMode = true;
-        return;
-      }
-      if ((e.key === "Enter" || e.key === " ") && this.focus) {
-        e.preventDefault();
-        this.keyboardMode = true;
-        this.activate(this.focus);
-      }
-    };
+    const onKey = (e: KeyboardEvent) => this.onKeyDown(e);
     const onFocus = () => {
+      // Focus that didn't come from a press came from the keyboard (Tab into the canvas).
+      if (!pressing && !this.returningFromEditor) this.keyboardMode = true;
       if (!this.focus) {
         const first = this.focusables()[0];
         if (first) this.focus = { node: first.box.node, box: first.box, detail: first.detail };
@@ -1271,11 +1372,10 @@ export class SayShape {
       }
       this.invalidate("paint");
     };
-    const onBlur = () => {
-      this.keyboardMode = false;
-      // Focus went elsewhere on the page (or another window): an open list goes with it.
-      this.closePopup(false);
-      this.invalidate("paint");
+    const onBlur = (e: FocusEvent) => {
+      // Moving into the mirror (Tab, a screen reader) keeps the interface focused.
+      if (this.a11y.owns?.(e.relatedTarget)) return;
+      this.lostFocus();
     };
     // The browser took over the gesture (a scroll, say): finish the drag where it was.
     const onCancel = () => {
@@ -1322,7 +1422,7 @@ export class SayShape {
     c.addEventListener("pointercancel", onCancel);
     c.addEventListener("keydown", onKey);
     c.addEventListener("focus", onFocus);
-    c.addEventListener("blur", onBlur);
+    c.addEventListener("blur", onBlur as EventListener);
     this.cleanup.push(() => {
       c.removeEventListener("wheel", onWheel as EventListener);
       c.removeEventListener("pointermove", onMove);
@@ -1332,7 +1432,7 @@ export class SayShape {
       c.removeEventListener("pointercancel", onCancel);
       c.removeEventListener("keydown", onKey);
       c.removeEventListener("focus", onFocus);
-      c.removeEventListener("blur", onBlur);
+      c.removeEventListener("blur", onBlur as EventListener);
     });
   }
 

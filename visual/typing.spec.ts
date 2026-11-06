@@ -64,7 +64,8 @@ test("Tab moves through fields and buttons, and Enter presses the button", async
   await page.keyboard.type("Lovelace");
   await page.keyboard.press("Tab");
   await expect(editor(page)).toHaveCount(0);
-  await expect(page.locator("#canvas")).toBeFocused();
+  // DOM focus moves with the keyboard, onto the button's node in the accessibility mirror.
+  await expect(page.locator("[data-sayshape-a11y] button", { hasText: "Save" })).toBeFocused();
   await page.keyboard.press("Enter");
   expect(await page.evaluate(() => window.__sayshape!.state.snapshot())).toMatchObject({ first: "Ada", last: "Lovelace", saved: true });
   await page.keyboard.press("Shift+Tab");
@@ -139,9 +140,10 @@ test("Escape stops typing and keeps focus on the canvas; a hidden field closes i
   await page.mouse.click(p.x, p.y);
   await page.keyboard.press("Escape");
   await expect(editor(page)).toHaveCount(0);
-  await expect(page.locator("#canvas")).toBeFocused();
-  // Escape returns focus to the canvas, but the focus handler must not
-  // reopen the editor on the same field (including after the next paint).
+  // Focus stays in the interface, on the field's node in the accessibility mirror.
+  await expect(page.locator("[data-sayshape-a11y] :focus")).toHaveCount(1);
+  // Escape keeps focus on the field, but must not reopen its editor
+  // (including after the next paint).
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   await expect(editor(page)).toHaveCount(0);
   await page.mouse.click(p.x, p.y);

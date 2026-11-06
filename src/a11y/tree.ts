@@ -90,16 +90,17 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
 }
 
 function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: readonly HitRegion[]): AccessibleNode {
-  const { parts, ...own } = s;
-  const whole = regions.find((r) => r.detail === undefined);
+  const { parts, detail, ...own } = s;
+  const whole = regions.find((r) => sameDetail(r.detail, detail));
   const out: AccessibleNode = {
     ...clean(own),
-    key: accessibleKey(node),
+    key: accessibleKey(node, detail),
     rect: { x: box.x, y: box.y, w: box.w, h: box.h },
     focusable: !!whole?.focusable,
     node,
     children: [],
   };
+  if (detail !== undefined) out.detail = detail;
   for (const part of parts ?? []) {
     const { detail, ...sem } = part;
     const region = regions.find((r) => sameDetail(r.detail, detail));
@@ -121,8 +122,8 @@ function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: read
 function fallback(box: Box, ctx: SemanticsContext): SemanticsResult {
   const name = ctx.text(box.node) || undefined;
   if (ctx.regions.length) {
-    const whole = ctx.regions.length === 1 && ctx.regions[0]!.detail === undefined;
-    if (whole) return { role: "button", name: name ?? (ctx.textWithin(box) || box.node.type) };
+    // One region, with or without a detail, is the element itself.
+    if (ctx.regions.length === 1) return { role: "button", name: name ?? (ctx.textWithin(box) || box.node.type), detail: ctx.regions[0]!.detail };
     return {
       role: "group",
       name,

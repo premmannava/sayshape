@@ -1,0 +1,120 @@
+/**
+ * The accessibility mirror in a real browser (src/a11y/dom.ts): an axe
+ * audit of what screen readers get, and the keyboard and screen reader
+ * paths that go through it. No baselines.
+ */
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test, type Page } from "@playwright/test";
+
+const MIRROR = "[data-sayshape-a11y]";
+
+async function open(page: Page, spec: string): Promise<void> {
+  await page.goto(`/visual/index.html?case=component-button&theme=light&width=600`);
+  await page.waitForFunction(() => window.__sayShapeReady || window.__sayShapeError);
+  await page.evaluate((s) => { window.__sayshape!.setSpec(s, { resetState: true }); window.__sayshape!.renderNow(); }, spec);
+}
+
+const state = (page: Page, key: string) => page.evaluate((k) => window.__sayshape!.state.get(k), key);
+
+/** What has DOM focus: its role (or tag) and its name. */
+const focused = (page: Page) =>
+  page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null;
+    if (!el) return null;
+    return { inMirror: !!el.closest("[data-sayshape-a11y]"), role: el.getAttribute("role") ?? el.tagName.toLowerCase(), name: el.getAttribute("aria-label") ?? el.textContent };
+  });
+
+async function audit(page: Page): Promise<void> {
+  const result = await new AxeBuilder({ page }).include(MIRROR).analyze();
+  const problems = result.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(" ")).join(", ")})`);
+  expect(problems).toEqual([]);
+}
+
+const form = `state n=0 agreed=false price=120
+text "Checkout" style=title
+button "Add one" on=inc:n
+check "I agree to the terms" bind=agreed
+slider "Up to {price}" bind=price min=20 max=300 step=10
+button "Place order" on=notify:Placed`;
+
+test("the mirror sits over the canvas, invisible, with a node per element", async ({ page }) => {
+  await open(page, form);
+  const info = await page.evaluate((sel) => {
+    const m = document.querySelector(sel) as HTMLElement;
+    const c = document.getElementById("canvas") as HTMLCanvasElement;
+    const mr = m.getBoundingClientRect(), cr = c.getBoundingClientRect();
+    const buttons = [...m.querySelectorAll("button")].map((b) => b.textContent);
+    return { sameBox: [mr.left, mr.top, mr.width, mr.height].join() === [cr.left, cr.top, cr.width, cr.height].join(), pointer: getComputedStyle(m).pointerEvents, buttons };
+  }, MIRROR);
+  expect(info.sameBox).toBe(true);
+  expect(info.pointer).toBe("none");
+  expect(info.buttons).toEqual(expect.arrayContaining(["Add one", "Place order"]));
+});
+
+test("axe finds nothing wrong in the mirror", async ({ page }) => {
+  await open(page, form);
+  await audit(page);
+});
+
+test("the mouse still reaches the canvas through the mirror", async ({ page }) => {
+  await open(page, form);
+  const at = await page.evaluate(() => {
+    const s = window.__sayshape!;
+    s.renderNow();
+    const b = s.hitRegions.find((h) => h.box.node.text === "Add one")!.box;
+    const r = (document.getElementById("canvas") as HTMLCanvasElement).getBoundingClientRect();
+    return { x: r.left + b.x + b.w / 2, y: r.top + b.y + b.h / 2 };
+  });
+  await page.mouse.click(at.x, at.y);
+  expect(await state(page, "n")).toBe(1);
+});
+
+test("Tab moves DOM focus through the mirror, and keys act on what's focused", async ({ page }) => {
+  await open(page, form);
+  await page.evaluate(() => (document.getElementById("canvas") as HTMLCanvasElement).focus());
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  expect(await focused(page)).toEqual({ inMirror: true, role: "button", name: "Add one" });
+  await page.keyboard.press("Enter");
+  expect(await state(page, "n")).toBe(1);
+  await page.keyboard.press("Tab");
+  expect(await focused(page)).toMatchObject({ inMirror: true, name: "I agree to the terms" });
+  await page.keyboard.press("Space");
+  expect(await state(page, "agreed")).toBe(true);
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("ArrowRight");
+  expect(await state(page, "price")).toBe(130);
+});
+
+test("Tab past the last element leaves the interface, and Shift+Tab before the first", async ({ page }) => {
+  await open(page, `button "Only" on=inc:n`);
+  await page.evaluate(() => {
+    for (const where of ["beforebegin", "afterend"] as const) {
+      const b = document.createElement("button");
+      b.textContent = where === "beforebegin" ? "Before" : "After";
+      document.getElementById("frame")!.insertAdjacentElement(where, b);
+    }
+  });
+  await page.getByRole("button", { name: "Before" }).focus();
+  await page.keyboard.press("Tab");
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  expect(await focused(page)).toMatchObject({ inMirror: true, name: "Only" });
+  await page.keyboard.press("Tab");
+  expect(await focused(page)).toMatchObject({ inMirror: false, name: "After" });
+  await page.keyboard.press("Shift+Tab");
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  expect(await focused(page)).toMatchObject({ inMirror: true, name: "Only" });
+  await page.keyboard.press("Shift+Tab");
+  expect(await focused(page)).toMatchObject({ inMirror: false, name: "Before" });
+});
+
+test("a screen reader's activation presses the element", async ({ page }) => {
+  await open(page, form);
+  await page.evaluate((sel) => (document.querySelector(`${sel} button`) as HTMLButtonElement).click(), MIRROR);
+  expect(await state(page, "n")).toBe(1);
+});
+
+test("a notify: message reaches the polite live region", async ({ page }) => {
+  await open(page, form);
+  await page.evaluate((sel) => ([...document.querySelectorAll(`${sel} button`)].at(-1) as HTMLButtonElement).click(), MIRROR);
+  await expect(page.locator(`${MIRROR} [aria-live="polite"]`)).toHaveText("Placed");
+});
