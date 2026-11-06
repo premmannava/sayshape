@@ -151,6 +151,8 @@ export class SayShape {
   pressed: HitTarget | null = null;
   pointer: { x: number; y: number } | null = null;
   private keyboardMode = false;
+  /** Returning focus to the canvas after Escape must not restart the editor. */
+  private returningFromEditor = false;
   private warn: (message: string) => void;
   private editorHost: EditorHost;
   /** The field being typed into, if any. */
@@ -1074,7 +1076,11 @@ export class SayShape {
     if (key === "Escape") {
       this.endEdit();
       this.keyboardMode = true;
-      this.canvas.focus();
+      // Focusing the canvas invokes its focus handler synchronously. Without
+      // this guard, it immediately calls beginEdit() for the same field.
+      this.returningFromEditor = true;
+      try { this.canvas.focus(); }
+      finally { this.returningFromEditor = false; }
       return true;
     }
     if (key === "Tab") return this.tabFrom(shift);
@@ -1219,7 +1225,7 @@ export class SayShape {
         if (first) this.focus = { node: first.box.node, box: first.box, detail: first.detail };
       }
       // Tabbing onto the canvas when its first element is a field: start typing there.
-      if (!pressing && !this.editing && this.focus && this.registry.get(this.focus.node.type)?.editor) {
+      if (!pressing && !this.returningFromEditor && !this.editing && this.focus && this.registry.get(this.focus.node.type)?.editor) {
         this.keyboardMode = true;
         this.beginEdit(this.focus);
       }
