@@ -14,11 +14,12 @@ import { step, timeline } from "./timeline";
 import { segmented } from "./segmented";
 import { carousel } from "./carousel";
 import { compare, compareRow } from "./compare";
+import { meter } from "./meter";
 
 export {
   column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
   text, image, code, badge, avatar, callout, icon,
-  stat, rating, chart, table, tableColumn, compare, compareRow,
+  stat, rating, chart, meter, table, tableColumn, compare, compareRow,
   button, link, check, switchToggle, radio, select, datePicker, stepper, slider, input, segmented,
   screen, tabs, tab, breadcrumb, pagination,
   progress, skeleton, empty,
@@ -28,7 +29,7 @@ export {
 export const coreComponents: ComponentDef[] = [
   column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
   text, image, code, badge, avatar, callout, icon,
-  stat, rating, chart, table, tableColumn, compare, compareRow,
+  stat, rating, chart, meter, table, tableColumn, compare, compareRow,
   button, link, check, switchToggle, radio, select, datePicker, stepper, slider, input, segmented,
   screen, tabs, tab, breadcrumb, pagination,
   progress, skeleton, empty,

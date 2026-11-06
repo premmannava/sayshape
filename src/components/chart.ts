@@ -34,16 +34,24 @@
  *   little width for them, shows a message instead of a chart: nothing is
  *   dropped silently.
  */
-import type { ComponentDef, LayoutContext } from "../component";
+import type { ComponentDef } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
-import { ellipsize, fitLines, wrapText, type TextMeasurer } from "../text";
-import { mixColors, SERIES_COUNT, seriesColors, sliceColors, type Theme } from "../theme";
+import { ellipsize } from "../text";
+import { SERIES_COUNT, seriesColors, sliceColors, type Theme } from "../theme";
 import type { Box, Value } from "../types";
 import { easeOut, paintGhost, staggered } from "../ghost";
-import { fillTint, themeFont } from "./util";
+import { themeFont } from "./util";
+import { CHART_KINDS } from "./chart-kinds";
+import {
+  barPath, chartData, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
+  plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
+  type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
+} from "./chart-kit";
 
-/** The most items one chart draws. Larger lists show a message instead. */
-export const MAX_CHART_ITEMS = 200;
+// Kept importable from here, where they have always been.
+export { chartData, chartSeries, chartScale, MAX_CHART_ITEMS, niceStep, shareText, tickLabels, valueText } from "./chart-kit";
+export type { ChartData, ChartGeometry, SeriesData, ChartSlot, LegendItem, PieSlice, Rect } from "./chart-kit";
+
 /** The most fields one bar or line chart draws, one color each. */
 export const MAX_SERIES = SERIES_COUNT;
 /** The most slices a pie or donut draws; past it, the smallest are summed into "Other". */
@@ -60,12 +68,7 @@ const MIN_HBAR_AREA = 40;
 const MIN_GROUP_BAR = 3;
 const BAR_GAP = 2;
 
-const KINDS = ["bar", "hbar", "line", "pie", "donut"] as const;
-const FORMATS = ["number", "money"] as const;
-type Kind = (typeof KINDS)[number];
 type AxisKind = "bar" | "line";
-type Format = (typeof FORMATS)[number];
-const LOCALE = "en-US";
 const isRound = (k: Kind): k is "pie" | "donut" => k === "pie" || k === "donut";
 
 /** The fields named in y=, in order: "revenue,last_year" → ["revenue", "last_year"]. */
@@ -78,64 +81,6 @@ function labelsOf(raw: string): string[] {
   return raw ? raw.split(",").map((l) => l.trim()) : [];
 }
 
-export interface Rect { x: number; y: number; w: number; h: number }
-
-export interface ChartSlot {
-  /** The label as written in the data ("—" when missing). */
-  label: string;
-  /** The label as drawn, cut to fit, or null when thinned out to make room. */
-  shownLabel: string | null;
-  /** Where the label's centre is drawn: the slot's centre, moved in if it would stick out of the box. */
-  labelX: number;
-  /** Centre of the slot along x. */
-  cx: number;
-  /** The first series' value, or null for a gap. */
-  value: number | null;
-  /** Every series' value, in y's order. */
-  values: Array<number | null>;
-  /** Bar charts: the first series' bar, from the zero line to the value. */
-  bar?: Rect;
-  /** Bar charts: each series' bar, side by side in the slot; null for a gap. */
-  bars?: Array<Rect | null>;
-  /** Line charts: where the first series' value is. */
-  point?: { x: number; y: number };
-  /** Line charts: each series' point; null for a gap. */
-  points?: Array<{ x: number; y: number } | null>;
-  /** Horizontal bars: the centre of the item's row along y. */
-  cy?: number;
-  /** Horizontal bars: each series' value as drawn at the end of its bar; null for a gap. */
-  valueLabels?: Array<{ text: string; x: number; y: number; align: "left" | "right" } | null>;
-}
-
-/** One entry of the legend below a chart, relative to the box. */
-export interface LegendItem {
-  /** Index into the theme's series colors. */
-  color: number;
-  /** Where the swatch is. */
-  swatch: Rect;
-  /** The name, as written and as drawn (cut to fit). */
-  label: string;
-  shownLabel: string;
-  labelX: number;
-  /** Pie and donut: the value and share ("$12K · 34%"), as drawn, right-aligned at detailX. */
-  detail?: string;
-  detailX?: number;
-  /** Centre line of the entry's text. */
-  y: number;
-}
-
-export interface PieSlice {
-  label: string;
-  value: number;
-  /** Share of the total, 0 to 1. */
-  share: number;
-  /** Angles in radians, clockwise from the top. */
-  start: number;
-  end: number;
-  color: number;
-  /** True for the slice that sums the smallest items. */
-  other?: boolean;
-}
 
 /**
  * Interpolate a slice's weight rather than its start/end independently.
@@ -215,54 +160,6 @@ export function traceSmoothLine(
   }
 }
 
-/** Everything paint needs, relative to the chart's box. */
-export type ChartGeometry = {
-  kind: Kind;
-  title: string[];
-  titleFont: string;
-  titleLH: number;
-  labelFont: string;
-  /** Shown instead of a plot: no data, too many items, too narrow. */
-  message?: string;
-  /** The message as drawn: wrapped to the box, at most three lines. */
-  messageLines?: string[];
-  plot: Rect;
-  /** Value axis ticks, top to bottom is not guaranteed; y is where each is drawn. */
-  ticks: Array<{ value: number; y: number; label: string }>;
-  /** Where 0 is, when it's on the scale. */
-  zeroY: number | null;
-  /** Horizontal bars: where 0 is across the plot. */
-  zeroX?: number;
-  /** Horizontal bars: each row's height. */
-  rowH?: number;
-  min: number;
-  max: number;
-  slots: ChartSlot[];
-  /** Line charts: runs of neighbouring values of the first series, broken at gaps. */
-  segments: Array<Array<{ x: number; y: number }>>;
-  /** Line charts: the runs of every series, in y's order (the first is `segments`). */
-  seriesSegments: Array<Array<Array<{ x: number; y: number }>>>;
-  /** The series drawn, in y's order: their names and colors. */
-  series: Array<{ field: string; label: string; color: number }>;
-  labelY: number;
-  /** Below the plot: series names (2 or more series), or slices with value and share. */
-  legend: LegendItem[];
-  legendFont: string;
-  /** Data still loading: draw a placeholder of this shape (series: how many, for the legend). */
-  loading?: { series: number };
-  /** Pie and donut. */
-  pie?: {
-    cx: number;
-    cy: number;
-    r: number;
-    /** 0 for a pie; the hole's radius for a donut. */
-    inner: number;
-    slices: PieSlice[];
-    total: number;
-    /** Donut: the total in the middle, as drawn, and its font. */
-    center?: { text: string; font: string; caption: string; captionFont: string; lh: number };
-  };
-};
 
 
 /** The datum beneath the pointer, with geometry relative to the chart box. */
@@ -290,7 +187,7 @@ export function chartHoverAt(d: ChartGeometry, x: number, y: number): ChartHover
     const index = Math.min(d.slots.length - 1, Math.floor((x - p.x) / (p.w / d.slots.length)));
     return d.slots[index]?.values.some((v) => v !== null) ? { kind: "slot", index } : null;
   }
-  if (d.kind === "bar" || d.kind === "hbar") {
+  if (d.kind === "bar" || d.kind === "hbar" || d.custom !== undefined) {
     for (let i = 0; i < d.slots.length; i++) {
       for (const b of d.slots[i]!.bars ?? []) {
         if (b && b.w > 0 && b.h > 0 && x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
@@ -300,61 +197,6 @@ export function chartHoverAt(d: ChartGeometry, x: number, y: number): ChartHover
     }
   }
   return null;
-}
-
-// ---------------------------------------------------------------- data
-
-export interface ChartData {
-  slots: Array<{ label: string; value: number | null }>;
-  /** Why nothing can be drawn, when that's the case. */
-  problem?: "not-list" | "empty" | "no-values" | "too-many";
-  /** Items whose y wasn't a finite number. */
-  gaps: number;
-}
-
-export interface SeriesData {
-  slots: Array<{ label: string; values: Array<number | null> }>;
-  problem?: ChartData["problem"];
-  /** For each field, the items whose value wasn't a finite number. */
-  gaps: number[];
-}
-
-function labelOf(v: Value | undefined): string {
-  if (typeof v === "string") return v;
-  if (typeof v === "number" && isFinite(v)) return new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 }).format(v);
-  if (typeof v === "boolean") return String(v);
-  return "—";
-}
-
-const numberAt = (item: Value, field: string): number | null => {
-  const raw = isRecord(item) ? fieldOf(item, field) : undefined;
-  return typeof raw === "number" && isFinite(raw) ? raw : null;
-};
-
-/** Read a list of records into slots with one value per field, without changing it. */
-export function chartSeries(items: Value | undefined, x: string, ys: readonly string[]): SeriesData {
-  const none = ys.map(() => 0);
-  if (!isList(items)) return { slots: [], problem: "not-list", gaps: none };
-  if (!items.length) return { slots: [], problem: "empty", gaps: none };
-  if (items.length > MAX_CHART_ITEMS) return { slots: [], problem: "too-many", gaps: none };
-  const gaps = ys.map(() => 0);
-  const slots = items.map((item) => {
-    const values = ys.map((y, k) => {
-      const v = numberAt(item, y);
-      if (v === null) gaps[k]!++;
-      return v;
-    });
-    return { label: isRecord(item) ? labelOf(fieldOf(item, x)) : "—", values };
-  });
-  const empty = slots.every((s) => s.values.every((v) => v === null));
-  return { slots, gaps, problem: empty ? "no-values" : undefined };
-}
-
-/** Read a list of records into slots for one field, without changing it. */
-export function chartData(items: Value | undefined, x: string, y: string): ChartData {
-  const d = chartSeries(items, x, [y]);
-  const slots = d.slots.map((s) => ({ label: s.label, value: s.values[0] ?? null }));
-  return { slots, gaps: d.gaps[0] ?? 0, ...(d.problem ? { problem: d.problem } : {}) };
 }
 
 export interface PieData {
@@ -398,189 +240,11 @@ export function pieData(items: Value | undefined, x: string, y: string): PieData
   return { slices: [...kept, { label: "Other", value: other, other: true }], total, gaps, folded: rest.length };
 }
 
-// ---------------------------------------------------------------- scale
 
-/**
- * A step of 1, 2 or 5 times a power of ten, nearest to raw. Rounding to the
- * nearest (not up) keeps the top of the scale close to the biggest value, at
- * the cost of up to half as many ticks again as asked for.
- */
-export function niceStep(raw: number): number {
-  if (!(raw > 0) || !isFinite(raw)) return 1;
-  const p = 10 ** Math.floor(Math.log10(raw));
-  const f = raw / p;
-  return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
-}
-
-/** Clean float noise (0.1 + 0.2) from a tick without toFixed, which fails past 100 digits. */
-function cleanTick(v: number, step: number): number {
-  if (Math.abs(v) < step * 1e-9) return 0;
-  return Number(v.toPrecision(15));
-}
-
-/** The value range and ticks: bars include 0; a constant line gets room around it. */
-export function chartScale(values: readonly number[], kind: Kind, target: number): { min: number; max: number; step: number; ticks: number[] } {
-  let lo = Math.min(...values), hi = Math.max(...values);
-  if (kind === "bar") { lo = Math.min(0, lo); hi = Math.max(0, hi); }
-  if (lo === hi) {
-    // Constant values: never divide by zero; keep 0 as a bound when it is one.
-    if (lo === 0) hi = 1;
-    else if (kind === "bar") lo < 0 ? (hi = 0) : (lo = 0);
-    else {
-      // At least the smallest number, so even 5e-324 gets room; never past the largest.
-      const pad = Math.max(Math.abs(lo) * 0.1, Number.MIN_VALUE);
-      lo = Math.max(lo - pad, -Number.MAX_VALUE);
-      hi = Math.min(hi + pad, Number.MAX_VALUE);
-    }
-  }
-  // Halves, so a range like -1e308..1e308 doesn't overflow to Infinity.
-  const step = niceStep((hi / 2 - lo / 2) / Math.max(1, target) * 2);
-  const first = Math.floor(lo / step + 1e-9), last = Math.ceil(hi / step - 1e-9);
-  const ticks: number[] = [];
-  // Count steps with k, not first + k: past 2^53, adding 1 to first changes nothing.
-  const count = last - first;
-  for (let k = 0; k <= count && k <= 50; k++) {
-    const v = cleanTick((first + k) * step, step);
-    if (isFinite(v) && v !== ticks[ticks.length - 1]) ticks.push(v);
-  }
-  // Ticks that don't cover the values or can't be told apart (numbers past
-  // what a double can step through, like 1e15 + 0.1): use the values' own bounds.
-  if (ticks.length < 2 || ticks[0]! > lo || ticks[ticks.length - 1]! < hi) return { min: lo, max: hi, step: hi / 2 - lo / 2, ticks: [lo, hi] };
-  return { min: ticks[0]!, max: ticks[ticks.length - 1]!, step, ticks };
-}
-
-/** The fewest decimals that show x exactly (2.5 → 1), or 21 when none up to 20 do. */
-function decimalsOf(x: number): number {
-  for (let d = 0; d <= 20; d++) {
-    const s = x * 10 ** d;
-    if (Math.abs(s - Math.round(s)) <= 1e-6 * Math.max(1, Math.abs(s))) return d;
-  }
-  return 21;
-}
-
-/**
- * Labels for a whole axis, in one format, chosen so every tick reads exactly
- * and no two read the same: compact ($12K) when the step allows it, then
- * plain numbers, then scientific notation for very large or small values.
- */
-export function tickLabels(ticks: readonly number[], step: number, format: Format): string[] {
-  const money = format === "money";
-  const biggest = Math.max(...ticks.map(Math.abs));
-  const tries: Intl.NumberFormatOptions[] = [];
-  if (biggest >= 10_000 && biggest < 1e15) {
-    const unit = 10 ** (3 * Math.floor(Math.log10(biggest) / 3));
-    const f = decimalsOf(step / unit);
-    if (f <= 2) tries.push({ notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: f });
-  }
-  const d = decimalsOf(step);
-  if (biggest < 1e15 && d <= 6) {
-    const digits = money && d > 0 ? Math.max(2, d) : d;
-    tries.push({ minimumFractionDigits: digits, maximumFractionDigits: digits });
-  }
-  for (let f = 0; f <= 15; f++) tries.push({ notation: "scientific", minimumFractionDigits: 0, maximumFractionDigits: f });
-  for (const opts of tries) {
-    try {
-      const nf = new Intl.NumberFormat(LOCALE, money ? { ...opts, style: "currency", currency: "USD" } : opts);
-      // Zero reads as 0 in every format, not 0E0.
-      const out = ticks.map((v) => (v === 0 && opts.notation === "scientific" ? (money ? "$0" : "0") : nf.format(Object.is(v, -0) ? 0 : v)));
-      if (new Set(out).size === out.length) return out;
-    } catch {
-      // An option this runtime doesn't support: try the next.
-    }
-  }
-  // JavaScript's own shortest form always tells two different numbers apart.
-  return ticks.map((v) => (money ? "$" : "") + String(v));
-}
-
-// ---------------------------------------------------------------- layout
-
-/** Cut text to fit a width, ending with an ellipsis. */
-function fit(text: string, width: number, font: string, m: TextMeasurer): string {
-  if (m.width(text, font) <= width) return text;
-  let lo = 0, hi = text.length;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (m.width(text.slice(0, mid) + "…", font) <= width) lo = mid;
-    else hi = mid - 1;
-  }
-  return lo ? text.slice(0, lo) + "…" : "";
-}
-
-/** One value as it reads in a legend or a donut's middle: $12,000, 37.5, $1.2M. */
-export function valueText(v: number, format: Format): string {
-  const money = format === "money";
-  const a = Math.abs(v);
-  const whole = Number.isInteger(v);
-  const opts: Intl.NumberFormatOptions =
-    a >= 1e15 ? { notation: "scientific", minimumFractionDigits: 0, maximumFractionDigits: 2 }
-    : a >= 100_000 ? { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 }
-    : { minimumFractionDigits: money && !whole ? 2 : 0, maximumFractionDigits: whole ? 0 : 2 };
-  try {
-    return new Intl.NumberFormat(LOCALE, money ? { ...opts, style: "currency", currency: "USD" } : opts).format(v);
-  } catch {
-    return (money ? "$" : "") + String(v);
-  }
-}
-
-/** A share of a total as a whole percentage, with "<1%" for a sliver rather than "0%". */
-export function shareText(share: number): string {
-  const pct = share * 100;
-  return pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`;
-}
-
-/** Plot height for a width: wide enough to read, not taller than a phone screen wants. */
-const plotHeight = (w: number) => Math.round(Math.max(144, Math.min(238, w * 0.42)));
 /** A pie's diameter for a width: a little smaller than a plot, and never wider than the box. */
 const pieSize = (w: number) => Math.min(w, Math.round(Math.max(140, Math.min(220, w * 0.45))));
-/** Room inside the plot so dots at the top and bottom stay within it. */
-const INSET = 5;
 /** A donut's hole as a share of its radius: a slim ring reads as more refined than a thick one. */
 const DONUT_INNER = 0.68;
-/** Legend swatches: size, and the space between a swatch and its name. */
-const SWATCH = 10;
-const SWATCH_GAP = 6;
-
-type Ctx = Pick<LayoutContext, "theme" | "measure" | "warn">;
-
-/** The title and the parts every kind of chart shares. */
-function header(box: { w: number }, kind: Kind, title: string, ctx: Ctx) {
-  const t = ctx.theme, m = ctx.measure;
-  const titleFont = themeFont(t, 600, t.text.body), labelFont = themeFont(t, 400, t.text.caption);
-  const titleLH = Math.round(t.text.body * 1.4);
-  const titleLines = title ? wrapText(title, box.w, titleFont, m) : [];
-  const top = titleLines.length ? titleLines.length * titleLH + t.space.sm : 0;
-  const base: ChartGeometry = {
-    kind, title: titleLines, titleFont, titleLH, labelFont,
-    plot: { x: 0, y: top, w: box.w, h: 0 }, ticks: [], zeroY: null, min: 0, max: 0, slots: [], segments: [], seriesSegments: [],
-    series: [], labelY: 0, legend: [], legendFont: themeFont(t, 400, t.text.caption + 1),
-  };
-  const say = (message: string): ChartGeometry => ({
-    ...base, message, messageLines: fitLines(message, Math.max(0, box.w - 2 * t.space.sm), labelFont, m, 3), plot: { x: 0, y: top, w: box.w, h: 72 },
-  });
-  return { base, say, top };
-}
-
-/**
- * Series names side by side below the plot, starting a new line when the
- * next one doesn't fit; a name wider than the whole box is cut to fit.
- */
-function flowLegend(entries: Array<{ label: string; color: number }>, width: number, top: number, ctx: Ctx): { items: LegendItem[]; bottom: number } {
-  const t = ctx.theme, m = ctx.measure;
-  const font = themeFont(t, 400, t.text.caption + 1);
-  const lh = Math.round(t.text.caption * 1.4);
-  const lead = SWATCH + SWATCH_GAP;
-  const items: LegendItem[] = [];
-  let x = 0, y = top;
-  for (const e of entries) {
-    const shownLabel = fit(e.label, Math.max(0, width - lead), font, m);
-    const w = lead + m.width(shownLabel, font);
-    if (x > 0 && x + w > width) { x = 0; y += lh; }
-    items.push({ color: e.color, swatch: { x, y: y + (lh - SWATCH) / 2, w: SWATCH, h: SWATCH }, label: e.label, shownLabel, labelX: x + lead, y: y + lh / 2 });
-    x += w + t.space.md;
-  }
-  return { items, bottom: y + lh };
-}
-
 /**
  * Slices in columns below a pie: name on the left, value and share on the
  * right. As many equal columns as the widest entry allows, at least one;
@@ -647,24 +311,13 @@ function axisGeometry(
   const y = (v: number) => plot.y + INSET + (plot.h - 2 * INSET) * (1 - (v / 2 - scale.min / 2) / (scale.max / 2 - scale.min / 2));
   const zeroY = scale.min <= 0 && scale.max >= 0 ? y(0) : null;
 
-  // Prefer showing every category, shortened to its slot if necessary. Only thin labels
-  // when slots are too small to show a useful name; a single long label should not
-  // hide its neighbours (e.g. North America should not hide EMEA in a five-bar chart).
-  const widths = d.slots.map((s) => m.width(s.label, labelFont));
-  const widest = Math.min(Math.max(...widths), 120);
-  const every = slotW >= Math.max(52, t.text.caption * 4)
-    ? 1
-    : Math.max(1, Math.ceil((widest + t.space.sm) / slotW));
-  const room = Math.max(0, slotW * every - t.space.sm);
+  const placed = slotLabels(d.slots.map((s) => s.label), plot, box.w, labelFont, ctx);
   const barW = Math.min(slotW * 0.6, 44);
   const group = grouped ? Math.min(slotW * 0.74, ns * 34 + (ns - 1) * BAR_GAP) : barW;
   const each = grouped ? (group - (ns - 1) * BAR_GAP) / ns : barW;
 
   const slots: ChartSlot[] = d.slots.map((s, i) => {
-    const cx = plot.x + slotW * (i + 0.5);
-    const shownLabel = i % every === 0 ? fit(s.label, room, labelFont, m) : null;
-    const half = shownLabel ? m.width(shownLabel, labelFont) / 2 : 0;
-    const labelX = Math.min(Math.max(cx, half), box.w - half);
+    const { cx, shownLabel, labelX } = placed[i]!;
     const slot: ChartSlot = { label: s.label, shownLabel, labelX, cx, value: s.values[0] ?? null, values: s.values };
     if (kind === "bar") {
       const z = zeroY ?? y(scale.min);
@@ -912,11 +565,7 @@ function paintChartLoading(box: Box, ctx: PaintCtx): void {
   if (!d?.loading) return;
   const ox = box.x, oy = box.y;
   const c = theme.colors;
-  g.textBaseline = "middle";
-  g.textAlign = "left";
-  g.font = d.titleFont;
-  g.fillStyle = c.ink;
-  d.title.forEach((l, i) => g.fillText(l, ox, oy + i * d.titleLH + d.titleLH / 2));
+  paintTitle(ctx, d, ox, oy);
   const pillH = 8;
   const rowH = Math.round(theme.text.caption * 1.4) + theme.space.xs;
   const bounds = { x: ox, y: oy + d.plot.y, w: box.w, h: box.h - d.plot.y };
@@ -1100,15 +749,20 @@ function check(props: Readonly<Record<string, string>>): string[] {
   // Expressions are worked out later; only what's written can be checked here.
   if (y === undefined || y.startsWith("{")) return out;
   const fields = fieldsOf(y);
-  if (isRound(kind as Kind) && fields.length > 1) {
+  const own = kind in CHART_KINDS;
+  if ((isRound(kind as Kind) || own) && fields.length > 1) {
     out.push(`chart kind=${kind} shows one field, so only y=${fields[0]} is used. Write y=${fields[0]}, or use kind=bar, kind=hbar or kind=line to compare ${fields.join(", ")}`);
   }
-  if (!isRound(kind as Kind) && fields.length > MAX_SERIES) {
+  if (props.total !== undefined && kind !== "waterfall") {
+    out.push(`total= adds a final bar to kind=waterfall only, so it was ignored here; remove it, or use kind=waterfall`);
+  }
+  if (!isRound(kind as Kind) && !own && fields.length > MAX_SERIES) {
     out.push(`chart draws at most ${MAX_SERIES} series, and y lists ${fields.length}. Keep ${MAX_SERIES} fields or fewer, or make two charts`);
   }
   const labels = props.labels;
   if (labels !== undefined && !labels.includes("{")) {
     if (isRound(kind as Kind)) out.push(`labels= names the y fields of a bar or line chart; a ${kind}'s slices are named by x=, so labels= was ignored`);
+    else if (own) out.push(`labels= names the y fields of a bar or line chart; a ${kind}'s items are named by x=, so labels= was ignored`);
     else if (labelsOf(labels).length !== fields.length) {
       out.push(`labels has ${labelsOf(labels).length} names for ${fields.length} y field${fields.length === 1 ? "" : "s"}; give one per field, in the same order, like labels="This year,Last year"`);
     }
@@ -1120,12 +774,12 @@ export const chart: ComponentDef = {
   type: "chart",
   category: "data",
   description:
-    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, hbar for a ranking with long names, such as top customers, or pie or donut for how one number splits across items, such as sales by region. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
+    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, or waterfall for how changes add up to a total, such as revenue minus costs. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
   text: { description: "A title above the chart." },
   props: {
     kind: {
       type: "enum", values: KINDS, default: "bar",
-      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; pie and donut show each item's share of the total, and donut puts the total in the middle. pie and donut take one y field and no negative values.",
+      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar. pie, donut, funnel and waterfall take one y field; pie, donut and funnel take no negative values.",
     },
     items: { type: "expression", required: true, description: "The list of records to chart, e.g. items=sales or items={filter(sales, 'open')}." },
     x: { type: "name", required: true, description: "The field holding each item's label (each slice's name in a pie), e.g. x=month." },
@@ -1137,6 +791,7 @@ export const chart: ComponentDef = {
       type: "string",
       description: "Bar, hbar and line with several y fields: the legend's names, in the same order, separated by commas, e.g. labels=\"This year,Last year\". Without it the legend shows the field names.",
     },
+    total: { type: "string", description: "Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total=\"Net income\"." },
     format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K) or money ($37K)." },
   },
   example: `state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
@@ -1149,8 +804,10 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const format = p.oneOf("format", FORMATS, "number");
     const x = p.str("x");
     const fields = fieldsOf(p.str("y"));
+    const own = CHART_KINDS[kind];
     if (ctx.isLoading?.(box.node)) {
-      const out = loadingGeometry(box, kind, isRound(kind) ? 1 : Math.min(MAX_SERIES, Math.max(1, fields.length)), p.text(), ctx);
+      const shape = own?.loadingAs ?? kind;
+      const out = loadingGeometry(box, shape, isRound(shape) || own ? 1 : Math.min(MAX_SERIES, Math.max(1, fields.length)), p.text(), ctx);
       box.data = out.g;
       box.h = out.h;
       return;
@@ -1159,7 +816,11 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const line = box.node.line;
     if (p.has("items") && !isList(items)) ctx.warn?.(`chart on line ${line}: items is not a list, so there's nothing to chart. Use a list of records, like items=sales`);
     let out: { g: ChartGeometry; h: number };
-    if (isRound(kind)) {
+    if (own) {
+      const extra: Record<string, string> = {};
+      if (p.has("total")) extra.total = p.str("total");
+      out = own.layout(box, { items, x, y: fields[0] ?? "", format, title: p.text(), line, extra }, ctx);
+    } else if (isRound(kind)) {
       out = roundGeometry(box, pieData(items, x, fields[0] ?? ""), kind, format, p.text(), line, ctx);
     } else if (fields.length > MAX_SERIES) {
       ctx.warn?.(`chart on line ${line}: y lists ${fields.length} fields; a chart draws at most ${MAX_SERIES}`);
@@ -1171,7 +832,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       const labels = labelsOf(p.str("labels"));
       const series = ys.map((field, k) => ({ field, label: labels[k] || field, color: k }));
       const data = chartSeries(items, x, ys);
-      out = kind === "hbar" ? hbarGeometry(box, data, series, format, p.text(), line, ctx) : axisGeometry(box, data, series, kind, format, p.text(), line, ctx);
+      out = kind === "hbar" ? hbarGeometry(box, data, series, format, p.text(), line, ctx) : axisGeometry(box, data, series, kind as AxisKind, format, p.text(), line, ctx);
     }
     box.data = out.g;
     box.h = out.h;
@@ -1198,24 +859,8 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const colorOf = (k: number) => (d.series.length > 1 ? palette[k % palette.length]! : c.accent);
     g.textBaseline = "middle";
 
-    g.font = d.titleFont;
-    g.fillStyle = c.ink;
-    g.textAlign = "left";
-    d.title.forEach((l, i) => g.fillText(l, ox, oy + i * d.titleLH + d.titleLH / 2));
-
-    if (d.message) {
-      ctx.roundRect(ox + 0.5, oy + d.plot.y + 0.5, d.plot.w - 1, d.plot.h - 1, theme.radius.md);
-      g.strokeStyle = c.line;
-      g.lineWidth = 1;
-      g.stroke();
-      g.font = d.labelFont;
-      g.fillStyle = c.muted;
-      g.textAlign = "center";
-      const lines = d.messageLines ?? [d.message];
-      const lh = Math.round(theme.text.caption * 1.4);
-      lines.forEach((l, i) => g.fillText(l, ox + d.plot.w / 2, oy + d.plot.y + d.plot.h / 2 + (i - (lines.length - 1) / 2) * lh));
-      return;
-    }
+    paintTitle(ctx, d, ox, oy);
+    if (d.message) return paintMessage(ctx, d, ox, oy);
 
     // The engine already tracks chart pointer hover and repaints when the datum changes.
     // This region is mouse-only: charts do not introduce meaningless keyboard tab stops.
@@ -1225,6 +870,14 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const reveal = ctx.reveal(box.node);
     const fade = easeOut(reveal * 2.5);
     const base = g.globalAlpha;
+
+    const own = d.custom !== undefined ? CHART_KINDS[d.kind] : undefined;
+    if (own) {
+      own.paint(box, ctx, d, reveal);
+      g.globalAlpha = base;
+      if (reveal >= 1) paintChartHover(box, ctx, d);
+      return;
+    }
 
     if (d.pie) {
       // Only paint geometry is interpolated. The model's data and legend
@@ -1253,36 +906,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
 
     const px = ox + d.plot.x, pw = d.plot.w;
     g.globalAlpha = base * fade;
-    // Grid lines and value labels.
-    g.lineWidth = 1;
-    g.font = d.labelFont;
-    g.textAlign = "right";
-    for (const tk of d.ticks) {
-      const ty = Math.round(oy + tk.y) + 0.5;
-      g.beginPath();
-      g.moveTo(px, ty);
-      g.lineTo(px + pw, ty);
-      g.strokeStyle = c.line;
-      // Lighter than other lines: the grid is a guide, not part of the data.
-      g.save();
-      g.globalAlpha *= 0.55;
-      g.stroke();
-      g.restore();
-      g.fillStyle = c.muted;
-      g.fillText(tk.label, px - theme.space.sm, oy + tk.y);
-    }
-    if (d.zeroY !== null) {
-      const zy = Math.round(oy + d.zeroY) + 0.5;
-      g.beginPath();
-      g.moveTo(px, zy);
-      g.lineTo(px + pw, zy);
-      // The zero line anchors the bars: firmer than the grid, quieter than the data.
-      g.strokeStyle = c.muted;
-      g.save();
-      g.globalAlpha *= 0.45;
-      g.stroke();
-      g.restore();
-    }
+    paintAxisGrid(ctx, d, ox, oy);
 
     g.globalAlpha = base;
     g.fillStyle = c.accent;
@@ -1406,76 +1030,12 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     }
 
     g.globalAlpha = base * fade;
-    g.font = d.labelFont;
-    g.fillStyle = c.muted;
-    g.textAlign = "center";
-    g.textBaseline = "top";
-    for (const s of d.slots) if (s.shownLabel) g.fillText(s.shownLabel, ox + s.labelX, oy + d.labelY);
-    g.textBaseline = "middle";
+    paintSlotLabels(ctx, d, ox, oy);
     if (d.legend.length) paintLegend(ctx, d, ox, oy, colorOf);
     if (reveal >= 1) paintChartHover(box, ctx, d);
   },
 };
 
-type PaintCtx = Parameters<NonNullable<ComponentDef["paint"]>>[1];
-
-/**
- * Paint a refined color surface in the existing bar path.
- * The strong color is at the free edge and softens gently toward the baseline;
- * the origin and the rounded free end still match the real data geometry.
- * We use the original series color as the first gradient stop so custom themes
- * and accessible category colors stay authoritative.
- */
-function paintPremiumBar(
-  ctx: PaintCtx, rect: Rect, color: string,
-  direction: "up" | "down" | "left" | "right", hover = 0,
-): void {
-  const { g, theme } = ctx;
-  const endColor = mixColors(color, theme.colors.raised, 0.27) ?? color;
-  const gradient = direction === "up"
-    ? g.createLinearGradient(0, rect.y, 0, rect.y + rect.h)
-    : direction === "down"
-      ? g.createLinearGradient(0, rect.y + rect.h, 0, rect.y)
-      : direction === "right"
-        ? g.createLinearGradient(rect.x + rect.w, 0, rect.x, 0)
-        : g.createLinearGradient(rect.x, 0, rect.x + rect.w, 0);
-  gradient.addColorStop(0, color);
-  gradient.addColorStop(1, endColor);
-  g.fillStyle = gradient;
-  g.fill();
-  // Subtle edge definition and hover emphasis, without changing hit geometry.
-  if (hover > 0) {
-    fillTint(g, theme.colors.raised, 0.13 * hover);
-    g.save();
-    g.strokeStyle = color;
-    g.lineWidth = 1.5;
-    g.globalAlpha *= 0.26 * hover;
-    g.stroke();
-    g.restore();
-  }
-}
-
-/** A bar rounded only at its free end (the top of a rising bar, the bottom of a falling one), square on the axis. */
-function barPath(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, up: boolean): void {
-  const rr = Math.max(0, Math.min(r, w / 2, h));
-  g.beginPath();
-  if (up) {
-    g.moveTo(x, y + h);
-    g.lineTo(x, y + rr);
-    g.arcTo(x, y, x + rr, y, rr);
-    g.lineTo(x + w - rr, y);
-    g.arcTo(x + w, y, x + w, y + rr, rr);
-    g.lineTo(x + w, y + h);
-  } else {
-    g.moveTo(x, y);
-    g.lineTo(x + w, y);
-    g.lineTo(x + w, y + h - rr);
-    g.arcTo(x + w, y + h, x + w - rr, y + h, rr);
-    g.lineTo(x + rr, y + h);
-    g.arcTo(x, y + h, x, y + h - rr, rr);
-  }
-  g.closePath();
-}
 
 function paintRound(box: Box, ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, palette: readonly string[], reveal = 1): void {
   const { g, theme } = ctx;
@@ -1539,25 +1099,6 @@ function paintRound(box: Box, ctx: PaintCtx, d: ChartGeometry, ox: number, oy: n
   }
 }
 
-function paintLegend(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, colorOf: (k: number) => string): void {
-  const { g, theme } = ctx;
-  const c = theme.colors;
-  g.font = d.legendFont;
-  g.textBaseline = "middle";
-  for (const it of d.legend) {
-    ctx.roundRect(ox + it.swatch.x, oy + it.swatch.y, it.swatch.w, it.swatch.h, 3);
-    g.fillStyle = colorOf(it.color);
-    g.fill();
-    g.textAlign = "left";
-    g.fillStyle = d.pie ? c.ink : c.muted;
-    if (it.shownLabel) g.fillText(it.shownLabel, ox + it.labelX, oy + it.y);
-    if (it.detail && it.detailX !== undefined) {
-      g.textAlign = "right";
-      g.fillStyle = c.muted;
-      g.fillText(it.detail, ox + it.detailX, oy + it.y);
-    }
-  }
-}
 
 
 /** Draw the active mark and an in-canvas tooltip. This works in sandboxed MCP Apps
@@ -1602,7 +1143,8 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
   } else if (hover.kind === "slot") {
     const s = d.slots[hover.index]!;
     heading = s.label;
-    s.values.forEach((v, k) => {
+    if (s.notes) for (const text of s.notes) rows.push({ text, color: c.accent });
+    else s.values.forEach((v, k) => {
       if (v !== null) {
         rows.push({
           text: (d.series.length > 1 ? d.series[k]!.label : "Value") + ": " + precise(v),
@@ -1641,7 +1183,7 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
         g.strokeStyle = d.series.length > 1 ? palette[k % palette.length]! : c.accent;
         g.stroke();
       });
-    } else {
+    } else if (!d.noHoverOutline) {
       for (const b of s.bars ?? []) {
         if (!b || b.w <= 0 || b.h <= 0) continue;
         ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, Math.min(4, b.w / 2, b.h / 2));
