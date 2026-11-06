@@ -12,11 +12,12 @@
  * through sayshape/testing.
  */
 import type { PropReader } from "../component";
+import type { PopupState } from "../popup";
 import type { Box, HitRegion, Rect, SayShapeNode } from "../types";
 
 /** The ARIA roles SayShape elements use. */
 export const ROLES = [
-  "alert", "button", "cell", "checkbox", "code", "columnheader", "combobox", "dialog", "figure", "grid",
+  "alert", "button", "cell", "checkbox", "code", "columnheader", "combobox", "dialog", "figure", "grid", "gridcell",
   "group", "heading", "img", "link", "list", "listbox", "listitem", "main", "meter", "navigation",
   "note", "option", "progressbar", "radio", "radiogroup", "region", "row", "rowheader", "searchbox",
   "separator", "slider", "spinbutton", "status", "switch", "tab", "table", "tablist", "tabpanel", "text", "textbox",
@@ -65,6 +66,12 @@ export interface Semantics {
  */
 export interface PartSemantics extends Semantics {
   detail: unknown;
+  /** The detail of another part of the same element this one sits inside (an option in its listbox). */
+  within?: unknown;
+  /** The detail of a part of the same element this one controls (a combobox's listbox). */
+  controls?: unknown;
+  /** The detail of the part of the same element that's active while this one has focus (a combobox's highlighted option). */
+  active?: unknown;
 }
 
 /** What ComponentDef.semantics returns for an element that is something. */
@@ -83,6 +90,11 @@ export interface ElementSemantics extends Semantics {
    * the text just above the first of them.
    */
   group?: { key: string; role: Role; name?: string };
+  /**
+   * Its children read after it, not inside it: a tablist holds only its
+   * tabs, and the selected tab's panel follows it.
+   */
+  contentAfter?: boolean;
 }
 
 /**
@@ -110,12 +122,18 @@ export interface SemanticsContext {
   regions: readonly HitRegion[];
   /** Whether this element's popup is open. */
   popupOpen: boolean;
+  /** The open popup's state (its highlight), when it's this element's. */
+  popup: Readonly<PopupState> | null;
   /** Today's date as YYYY-MM-DD. */
   today(): string;
 }
 
 /** One node of the accessibility tree. */
 export interface AccessibleNode extends Semantics {
+  /** The key of the node this one controls (aria-controls). */
+  controls?: string;
+  /** The key of the node that's active inside this one while it has focus (aria-activedescendant). */
+  activeDescendant?: string;
   /** Stable across frames: the element's id, plus the part's detail for parts. Hosts diff by it. */
   key: string;
   /** Where it is, in canvas CSS pixels. */

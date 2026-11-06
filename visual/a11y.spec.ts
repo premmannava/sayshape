@@ -152,3 +152,48 @@ test("a stepper's buttons keep focus as they're pressed to the limit", async ({ 
   expect(await focused(page)).toMatchObject({ inMirror: true });
   await expect(page.locator(`${MIRROR} [role="group"] [role="status"]`)).toHaveText("3");
 });
+
+test("an open select stays accessible: focus on the combobox, the highlighted option active", async ({ page }) => {
+  await open(page, `state dept="eng"\nselect "Department" bind=dept items={["sales", "eng", "ops"]}`);
+  await page.evaluate(() => (document.getElementById("canvas") as HTMLCanvasElement).focus());
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  expect(await focused(page)).toMatchObject({ inMirror: true, role: "combobox", name: "Department" });
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await expect(page.locator(`${MIRROR} [role="combobox"]`)).toHaveAttribute("aria-expanded", "true");
+  // The field points at the highlighted option, which screen readers read.
+  const active = await page.evaluate((sel) => {
+    const box = document.querySelector(`${sel} [role="combobox"]`)!;
+    const id = box.getAttribute("aria-activedescendant");
+    const opt = id ? document.getElementById(id) : null;
+    return { role: opt?.getAttribute("role"), name: opt?.textContent, controls: !!document.getElementById(box.getAttribute("aria-controls") ?? "") };
+  }, MIRROR);
+  expect(active).toEqual({ role: "option", name: "ops", controls: true });
+  await audit(page);
+  await page.keyboard.press("Enter");
+  expect(await state(page, "dept")).toBe("ops");
+  expect(await focused(page)).toMatchObject({ inMirror: true, role: "combobox" });
+});
+
+test("tabs, pagination and a date picker pass axe", async ({ page }) => {
+  await open(page, `state t=a page=2 due="2026-10-21"
+tabs bind=t
+  tab "A" value=a
+    text "First"
+  tab "B" value=b
+    text "Second"
+pagination bind=page pages=5
+breadcrumb "Home / Shoes" bind=t
+date-picker "Due" bind=due`);
+  await audit(page);
+  // And with the calendar open.
+  await page.evaluate(() => {
+    const s = window.__sayshape!;
+    s.renderNow();
+    const h = s.hitRegions.find((r) => r.box.node.type === "date-picker")!;
+    s.activate({ node: h.box.node, box: h.box });
+    s.renderNow();
+  });
+  await audit(page);
+});

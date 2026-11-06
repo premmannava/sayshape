@@ -11,6 +11,7 @@ import type { Registry } from "../registry";
 import type { Box, HitRegion, SayShapeNode } from "../types";
 import { accessibleKey, type AccessibleNode, type ElementSemantics, type Role, type SemanticsContext, type SemanticsResult } from "./semantics";
 import type { Rect } from "../types";
+import type { PopupState } from "../popup";
 
 export interface TreeInput {
   root: Box;
@@ -20,8 +21,9 @@ export interface TreeInput {
   scope: Scope;
   /** What the whole interface is called (the canvas's label). */
   label: string;
-  /** The element whose popup is open, if any. */
+  /** The element whose popup is open, if any, and the popup's state. */
   popupOwner?: string;
+  popupState?: Readonly<PopupState>;
   today(): string;
 }
 
@@ -71,7 +73,8 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
     const regions = regionsOf.get(node.id) ?? [];
     const def = registry.get(node.type);
     const textBefore = () => (prev?.node.type === "text" ? text(prev.node) || undefined : undefined);
-    const ctx: SemanticsContext = { props, text, textWithin, textBefore, regions, popupOpen: input.popupOwner === node.id, today: input.today };
+    const popupOpen = input.popupOwner === node.id;
+    const ctx: SemanticsContext = { props, text, textWithin, textBefore, regions, popupOpen, popup: popupOpen ? input.popupState ?? null : null, today: input.today };
     const result: SemanticsResult = def?.semantics ? def.semantics(box, ctx) : fallback(box, ctx);
     if (result === false) return [];
     const inner = buildAll(box.children);
@@ -80,6 +83,7 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
     const own = toNode(node, box, result, regions);
     if (result.group) groups.set(own, { ...result.group, name: result.group.name ?? textBefore() });
     if (NAMED_FROM_CONTENT.has(result.role)) return [own, ...inner.flatMap(focusableWithin)];
+    if (result.contentAfter) return [own, ...inner];
     own.children.push(...inner);
     return [own];
   };
@@ -119,7 +123,7 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
 }
 
 function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: readonly HitRegion[]): AccessibleNode {
-  const { parts, detail, group: _group, ...own } = s;
+  const { parts, detail, group: _group, contentAfter: _after, ...own } = s;
   const whole = regions.find((r) => sameDetail(r.detail, detail));
   const out: AccessibleNode = {
     ...clean(own),
@@ -130,11 +134,13 @@ function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: read
     children: [],
   };
   if (detail !== undefined) out.detail = detail;
+  // Parts go inside the element, or inside another part they name with within.
+  const made: Array<{ detail: unknown; node: AccessibleNode; within: unknown }> = [];
   for (const part of parts ?? []) {
-    const { detail, ...sem } = part;
+    const { detail, within, controls, active, ...sem } = part;
     const region = regions.find((r) => sameDetail(r.detail, detail));
     const b = region?.box ?? box;
-    out.children.push({
+    const n: AccessibleNode = {
       ...clean(sem),
       key: accessibleKey(node, detail),
       rect: { x: b.x, y: b.y, w: b.w, h: b.h },
@@ -142,7 +148,14 @@ function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: read
       node,
       detail,
       children: [],
-    });
+    };
+    if (controls !== undefined) n.controls = accessibleKey(node, controls);
+    if (active !== undefined) n.activeDescendant = accessibleKey(node, active);
+    made.push({ detail, node: n, within });
+  }
+  for (const m of made) {
+    const parent = m.within === undefined ? undefined : made.find((o) => sameDetail(o.detail, m.within))?.node;
+    (parent ?? out).children.push(m.node);
   }
   return out;
 }
