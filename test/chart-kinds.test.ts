@@ -1,11 +1,11 @@
 /**
  * Chart kinds in their own modules (src/components/chart-kinds/): funnel and
- * waterfall, and the seam chart.ts hands them through.
+ * waterfall, stacked, area and bullet, and the seam chart.ts hands them through.
  */
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
 import { chartHoverAt, type ChartGeometry } from "../src/components/chart";
-import { barText, changeText, CHART_KINDS, MAX_FUNNEL_STAGES, type AreaGeometry, type FunnelGeometry, type StackedGeometry, type WaterfallGeometry } from "../src/components/chart-kinds";
+import { barText, bulletTone, changeText, CHART_KINDS, MAX_BULLET_ROWS, MAX_FUNNEL_STAGES, pairText, type AreaGeometry, type BulletGeometry, type FunnelGeometry, type StackedGeometry, type WaterfallGeometry } from "../src/components/chart-kinds";
 import { KINDS } from "../src/components/chart-kit";
 import { parse } from "../src/parser";
 import { languageGuide } from "../src/prompt";
@@ -29,7 +29,7 @@ describe("the kind seam", () => {
 
   it("teaches the new kinds in the model guide", () => {
     const guide = languageGuide(registry);
-    expect(guide).toContain("kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall>");
+    expect(guide).toContain("kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet>");
     expect(guide).toContain("funnel shows stages top to bottom");
     expect(guide).toContain("waterfall shows each item as a change");
     expect(guide).toContain("total=");
@@ -258,6 +258,115 @@ describe("area", () => {
     ui.sayshape.renderNow();
     expect(geo(ui).loading).toBeDefined();
     expect(geo(ui).kind).toBe("line");
+    ui.destroy();
+  });
+});
+
+describe("bullet", () => {
+  const KPIS = `[{name: "Revenue", actual: 1240000, goal: 1150000}, {name: "New customers", actual: 182, goal: 200}, {name: "Expansion", actual: 310000, goal: 400000}]`;
+  const bullet = (rows: string, extra = "", width = 600) =>
+    render(`state rows=${rows}\nchart "Q3 targets" kind=bullet items=rows x=name y=actual target=goal ${extra}\n`, { width });
+
+  it("parses with target= and good=, and warns about them elsewhere", () => {
+    expect(msgs(`state rows=${KPIS}\nchart kind=bullet items=rows x=name y=actual target=goal`)).toEqual([]);
+    expect(msgs(`state rows=${KPIS}\nchart kind=bullet items=rows x=name y=actual target=goal good=down format=money`)).toEqual([]);
+    expect(msgs(`state rows=${KPIS}\nchart kind=bullet items=rows x=name y=actual`)[0]).toMatch(/kind=bullet .* has no target=\. Add target=/);
+    expect(msgs(`state rows=${KPIS}\nchart kind=bar items=rows x=name y=actual target=goal`)[0]).toMatch(/target= marks each item's goal on kind=bullet only/);
+    expect(msgs(`state rows=${KPIS}\nchart kind=bar items=rows x=name y=actual good=down`)[0]).toMatch(/good= says which side .* kind=bullet only/);
+    expect(msgs(`state rows=${KPIS}\nchart kind=bullet items=rows x=name y=actual,goal target=goal`)[0]).toMatch(/kind=bullet shows one field/);
+  });
+
+  it("teaches target= and good= in the model guide", () => {
+    const guide = languageGuide(registry);
+    expect(guide).toContain("bullet gives each item a row with its bar against the goal");
+    expect(guide).toContain("target=");
+    expect(guide).toContain("good=");
+  });
+
+  it("draws a row per item, in list order, with the bar and the target on the row's own scale", () => {
+    const ui = bullet(KPIS);
+    const b = geo(ui).custom as BulletGeometry;
+    expect(b.rows.map((r) => r.name)).toEqual(["Revenue", "New customers", "Expansion"]);
+    for (let i = 1; i < b.rows.length; i++) expect(b.rows[i]!.track.y).toBeGreaterThan(b.rows[i - 1]!.track.y);
+    // The larger of actual and target sits at the same place on every row.
+    expect(b.rows[0]!.actual).toBeCloseTo(1 / 1.15);
+    expect(b.rows[1]!.target).toBeCloseTo(1 / 1.15);
+    expect(b.rows[1]!.actual! / b.rows[1]!.target!).toBeCloseTo(182 / 200);
+    expect(ui.warnings).toEqual([]);
+  });
+
+  it("colors each row by how it's doing against its target", () => {
+    const b = geo(bullet(KPIS)).custom as BulletGeometry;
+    expect(b.rows.map((r) => r.tone)).toEqual(["good", "warn", "bad"]);
+    expect(bulletTone(100, 100, false)).toBe("good");
+    expect(bulletTone(85, 100, false)).toBe("warn");
+    expect(bulletTone(84, 100, false)).toBe("bad");
+    expect(bulletTone(5, null, false)).toBe("accent");
+  });
+
+  it("turns good round with good=down, for costs where under the target is good", () => {
+    const costs = `[{name: "Cloud", actual: 84, goal: 90}, {name: "Hours", actual: 110, goal: 100}, {name: "Churn", actual: 4, goal: 3}]`;
+    const b = geo(bullet(costs, "good=down")).custom as BulletGeometry;
+    expect(b.rows.map((r) => r.tone)).toEqual(["good", "warn", "bad"]);
+  });
+
+  it("reads each row as actual of target, telling close numbers apart", () => {
+    const ui = bullet(KPIS, "format=money");
+    expect(texts(ui)).toEqual(expect.arrayContaining(["Revenue", "$1.24M of $1.15M", "$182 of $200", "$310K of $400K"]));
+    expect(pairText(310000, 400000, "number")).toBe("310K of 400K");
+    expect(pairText(1000, 1000, "number")).toBe("1,000 of 1,000");
+    expect(pairText(1000001, 1000002, "number")).toBe("1,000,001 of 1,000,002");
+  });
+
+  it("puts actual, target and the share of it in the tooltip, for the whole row", () => {
+    const d = geo(bullet(KPIS, "format=money"));
+    expect(d.slots[1]!.notes).toEqual(["Actual: $182.00", "Target: $200.00", "91% of target"]);
+    const row = d.slots[2]!.bars![0]!;
+    expect(chartHoverAt(d, row.x + 4, row.y + row.h / 2)).toEqual({ kind: "slot", index: 2 });
+    expect(d.noHoverOutline).toBe(true);
+  });
+
+  it("shows a missing actual as a gap and a missing target as unjudged", () => {
+    const ui = bullet(`[{name: "A", actual: 10, goal: 12}, {name: "B", goal: 5}, {name: "C", actual: 7}]`);
+    const b = geo(ui).custom as BulletGeometry;
+    expect(b.rows[1]!.actual).toBeNull();
+    expect(b.rows[1]!.detail).toBe("—");
+    expect(b.rows[2]!.target).toBeNull();
+    expect(b.rows[2]!.tone).toBe("accent");
+    expect(b.rows[2]!.detail).toBe("7");
+    expect(ui.warnings.join()).toMatch(/1 of 3 items have no number/);
+  });
+
+  it("says so for negative values, too many rows, or a target field nothing has", () => {
+    expect(geo(bullet(`[{name: "A", actual: -1, goal: 5}]`)).message).toBe("A bullet chart can't show negative values");
+    const many = `[${Array.from({ length: MAX_BULLET_ROWS + 1 }, (_v, i) => `{name: "K${i}", actual: ${i + 1}, goal: 10}`).join(", ")}]`;
+    const tooMany = bullet(many);
+    expect(geo(tooMany).message).toMatch(/at most 20/);
+    expect(tooMany.warnings.join()).toMatch(/take\(\)/);
+    expect(bullet(`[{name: "A", actual: 3}]`).warnings.join()).toMatch(/no item has a number in its goal field/);
+    expect(geo(bullet(`[]`)).message).toBe("No data to chart");
+  });
+
+  it("stacks names above the bars at narrow widths and keeps everything inside the box", () => {
+    for (const width of [240, 360, 600]) {
+      const ui = bullet(`[{name: "Net revenue retention across every region", actual: 96, goal: 110}, {name: "NPS", actual: 41, goal: 40}]`, "", width);
+      const b = geo(ui).custom as BulletGeometry;
+      const w = ui.find("chart").box!.w;
+      for (const r of b.rows) {
+        expect(r.track.x + r.track.w).toBeLessThanOrEqual(w + 0.5);
+        expect(r.track.w).toBeGreaterThan(0);
+        if (w < 360) expect(r.track.y).toBeGreaterThan(r.detailY);
+        else expect(r.track.x).toBeGreaterThan(0);
+      }
+      ui.destroy();
+    }
+  });
+
+  it("draws a placeholder like hbar while the data loads", () => {
+    const ui = render(`chart "K" kind=bullet items=rows x=name y=actual target=goal\n`);
+    ui.sayshape.setLoading(["rows"]);
+    ui.sayshape.renderNow();
+    expect(geo(ui).kind).toBe("hbar");
     ui.destroy();
   });
 });
