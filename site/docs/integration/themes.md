@@ -43,7 +43,8 @@ ui.setTheme(brand);
 | `surface` | The background the screen is drawn on, and inset fields such as inputs |
 | `raised` | Cards, lists, tables and popups. Equal to `surface` in light; a step lighter in dark, so surfaces layer. Change `surface` without `raised` and it follows |
 | `ink`, `muted` | Text, and quieter text |
-| `line` | Field borders, dividers and table rules |
+| `line` | Dividers and table rules |
+| `control` | Outlines that show where a control is: field borders, unchecked boxes and radios, a switch that's off. Keep it at 3:1 against `surface` and `raised` |
 | `accent`, `onAccent` | Primary buttons, selections and focus of attention; the label color on the accent |
 | `good`, `warn`, `bad` | Status roles (`tone=good`, …) |
 | `focus` | The keyboard focus ring |
@@ -57,4 +58,4 @@ The [playground](/playground) can preview a spec in four color styles and in lig
 
 ## Contrast
 
-SayShape's default text and accent colors meet 4.5:1 against their surfaces. Its default field and divider lines are lighter than the 3:1 that WCAG asks of control boundaries; the playground's Neutral style meets it. Check contrast for any custom accent you choose, in both light and dark.
+SayShape's default text and accent colors meet 4.5:1 against their surfaces, and its control outlines, focus ring and chart colors meet the 3:1 that WCAG asks of control boundaries. Check contrast for any custom accent or `control` color you choose, in both light and dark. In Windows Contrast Themes SayShape uses the person's colors instead ([Accessibility](../architecture/accessibility)).

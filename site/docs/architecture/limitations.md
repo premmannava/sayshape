@@ -13,11 +13,11 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 - 51 elements ([reference](../components/)): layout, content (including callout), data (stat with a change and sparkline, rating, details for one record, charts: multi-series bar, horizontal bar and line, stacked bars, area, pie, donut, funnel, waterfall, bullet and heatmap, meters as a ring or a gauge, tables with sorting and selection, the world map), input (buttons, checks, switches, radios, select, date picker, stepper, slider, text input), navigation (screens, tabs, breadcrumb, pagination) and feedback (progress, skeleton, empty).
 - State with lists and records, host data, `each` with keys and nesting, `bind=` and actions on paths, `add`, `remove` and `clear`, `if` blocks, `derive` lines, list and formatting functions, screens with `go:` and `back`, `notify:` messages, and images from allowed hosts.
 - The model guide (full and compact, with profiles), `sayshape/model` (streaming, cleaning, checking, one repair, bounded refinement), an evaluation script, and `sayshape/testing`.
+- Accessibility: a hidden mirror of the canvas for screen readers, keyboard focus that follows it, chart and map text alternatives, contrast, high-contrast mode and reduced motion ([Accessibility](./accessibility)).
 - Unit, contract, streaming, fuzz and visual tests, benchmarks, a component scaffold and CI.
 
 ## Not built yet
 
-- **Accessibility layer.** Canvas content isn't exposed to screen readers ([Accessibility](./accessibility)).
 - **Data sources and host commands.** Your app fetches data and sets state; a spec can't declare where data comes from.
 - **Multi-line text and form validation** (required fields, email format). A spec can show a hint with `if=` for now.
 - **Scrolling regions and overlays.** No scrolling areas inside a screen, and no dialogs, menus or tooltips. The popup layer only serves a component's own popup.
@@ -49,4 +49,4 @@ SayShape hasn't been benchmarked against other UI approaches, so nothing here sa
 
 ## Roadmap
 
-The phase plan is in [`docs/PLAN.md`](https://github.com/premmannava/sayshape/blob/main/docs/PLAN.md) in the repository: scrolling and dialogs plus the accessibility layer next, then the model server and an app built on top.
+The phase plan is in [`docs/PLAN.md`](https://github.com/premmannava/sayshape/blob/main/docs/PLAN.md) in the repository: scrolling and dialogs next, then the model server and an app built on top.
