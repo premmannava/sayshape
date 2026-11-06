@@ -413,6 +413,7 @@ ${comps.map((c) => componentBlock(c, examples && ctx.valid(componentExampleSpec(
     ...(has("grid") || has("stat") ? [`- Screens may be narrow (a phone, a chat).${has("grid") ? " For side-by-side figures use grid min=140 rather than row." : ""}${has("stat") ? " Keep stat values short: compact() for large numbers." : ""}`] : []),
   ];
   if (has("screen")) rules.push("- For several screens, write the starting screen first: it shows as soon as it arrives.");
+  rules.push("- Screen readers read your labels aloud: give every control a label and every chart a title, or a text just above it.");
   if (has("image")) rules.push(imageRules(opts.imageHosts ?? []));
   add("rules", `RULES\n${rules.join("\n")}`);
   if (opts.notes?.trim()) add("notes", `ABOUT THIS APP\n${opts.notes.trim()}`);
@@ -490,6 +491,7 @@ ${comps.map((c) => `- ${compactLine(c)}${showExample(c) ? `\n    example:\n${ind
     ...(has("card") && has("grid") ? ["- Dashboards: grid min=170 gap=12 for peer KPI/chart cards (equal heights per row); card pad=18 gap=10 for tighter panels; avoid nested framed tables and giant outer wrapper cards."] : []),
     ...(has("grid") || has("stat") ? [`- Screens may be narrow.${has("grid") ? " Side-by-side figures: grid min=140, not row." : ""}${has("stat") ? " Short stat values: compact() for large numbers." : ""}`] : []),
     ...(has("screen") ? ["- For several screens, write the starting screen first."] : []),
+    "- Label every control and title every chart (or put a text just above it): screen readers read them.",
   ];
   add("rules", `RULES\n${rules.join("\n")}`);
   for (const n of workedExamples(ctx)) add(`example-${n}`, `EXAMPLE (${n})\n${WORKED_EXAMPLES[n]}`);

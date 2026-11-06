@@ -850,6 +850,7 @@ A small symbol on its own, like a status mark or a weather sign. To start a line
 | `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, bell, search, filter, download, share, link, sliders. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `size` | `sm` / `md` / `lg` | sm, md or lg. |
+| `label` | string | What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration. |
 
 ```
 icon name=sun tone=warn size=lg
@@ -885,6 +886,7 @@ A star rating. Shows value= as stars, or with bind= lets the user pick a rating.
 | `value` | number | The rating to show, e.g. 4.5. Ignored when bind= is set. |
 | `max` | number | How many stars (default 5). |
 | `bind` | state | A number state the user sets by pressing a star. |
+| `label` | string | What's being rated, read by screen readers, e.g. label="Your rating". Default: the text just above it. |
 | `on` | action | Actions to run after the user picks a rating, e.g. emit:changed. Separate several with ; |
 
 ```
@@ -1231,6 +1233,7 @@ Two to six short options in one track, one chosen, like Week, Month and Year, or
 | Prop | Type | Description |
 |---|---|---|
 | `bind` | state, required | The state name holding the chosen option's text. |
+| `label` | string | What the choice is about, read by screen readers, e.g. label="Period". Default: the text just above it. |
 | `options` | string, required | The options, comma-separated, e.g. options="Week,Month,Year". At most 6, one or two words each. |
 | `on` | action | Actions to run after the choice changes, e.g. emit:changed. Separate several with ; |
 
