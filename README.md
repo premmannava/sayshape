@@ -387,7 +387,7 @@ Everything beyond showing rows is opt-in through state, so it can be read, shown
 - **Cells.** Text columns show text as written, numbers like `1,200.5` and true/false as Yes/No. `number` and `money` columns (US dollars, as `money()`) show only numbers, right-aligned; text like `"12"` is never read as a number. Missing fields, `null`, lists, records and values a column can't show appear as `—`. `0` and `false` are values, not missing. Very large or small numbers use scientific form (`1E300`) instead of being cut short.
 - **Sorting.** The list itself is never reordered: the table shows a sorted copy. Ascending puts numbers by value, then text alphabetically (ignoring case, with numbers in text compared as numbers, so "Item 2" comes before "Item 10"), then false and true; descending reverses that. Missing values always go last, and equal values keep their list order. A sort state naming no column leaves the list in order.
 - **Selection.** `bind=` holds the selected row's `key=` value, text or a number (0 included), so the selection stays with its record when the table is sorted or the list changes. Rows with no key, or a key an earlier row already has, can't be selected. A selected key no row has selects nothing; the state keeps its value until something changes it.
-- **Space.** Columns get their natural width, and spare room goes to text columns. When space is short, text columns are narrowed with an ellipsis, but never below a minimum, and numbers are never cut. If the columns still don't fit, or there are more than 200 rows or 8 columns, the table shows a message saying so instead of a cut-down table. Show a page of a long list with `take()` or `pagination`.
+- **Space.** Columns get their natural width, and spare room goes to text columns. When space is short, text columns are narrowed with an ellipsis, but never below a minimum, and numbers are never cut. If the columns still don't fit, the table scrolls sideways: every column keeps a readable width, the first column stays pinned at the left, and a scrollbar shows under the rows. It scrolls with a sideways swipe or Shift and the wheel, by dragging the rows or the scrollbar, and with the arrow keys, Home and End once the scrollbar has focus. More than 200 rows (or 64 columns) shows a message saying so instead of a cut-down table. Show a page of a long list with `take()` or `pagination`.
 - **Keyboard.** Pressable headers and rows are each a Tab stop and work with Enter and Space. A table with no `sort=` or `bind=` adds no Tab stops.
 - Problems a model can fix (items that aren't a list, missing or repeated keys, cells their column can't show, too many rows or columns, too little room) are reported once through `onWarning`. While a spec streams in, a table whose columns haven't arrived shows "No columns yet".
 
@@ -901,7 +901,7 @@ meter "Health score" kind=gauge value=score max=100 bands="60,85"
 
 ### `table`
 
-Rows of a list of records, one table-column per field, for things like inventory, orders or expenses. With sort= and direction=, pressing a header sorts by it; with bind= and key=, pressing a row selects it.
+Rows of a list of records, one table-column per field, for things like inventory, orders or expenses. With sort= and direction=, pressing a header sorts by it; with bind= and key=, pressing a row selects it; columns too wide for the space scroll sideways, the first one staying in view.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -1913,7 +1913,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 - **Scrolling regions, dialogs, menus or tooltips.** The one popup so far is a select's list of options (one open at a time); there's no general overlay element yet.
 - **Dates beyond one day.** `date-picker` picks a single calendar day: no ranges, times, recurring dates or time zones, and names are in US English with weeks starting on Sunday.
 - **Selects beyond the basics.** One choice from at most 200 options, with no multi-select, typing to search, option groups, or options showing anything but text.
-- **Tables beyond the basics.** `table` shows at most 200 rows and 8 columns, without scrolling, sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns. A table too wide for its space shows a message instead of scrolling.
+- **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.
 - **Charts beyond the basics.** `chart` draws bars (up or across, `kind=hbar`) or lines of up to 6 series on one shared scale (with a legend), or a pie or donut of one field (at most 6 slices; smaller ones are summed into Other), from at most 200 items with labels evenly spaced in list order. Horizontal bars stop at 1200 px of rows and ask for `take()`. A stat's sparkline takes a list of numbers only. No stacked bars, area charts, series from different lists, tooltips, zoom, time or numeric x-axes, or pressing a bar.
 - **Right-to-left or complex-script text shaping** beyond what the canvas does on its own.
 

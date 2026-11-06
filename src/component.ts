@@ -61,6 +61,15 @@ export interface LayoutContext {
   isLoading?(node: SayShapeNode): boolean;
 }
 
+/**
+ * View state the engine keeps for one element between frames, such as how far
+ * a wide table is scrolled. It is never app state: specs can't read or write
+ * it, and it isn't sent to the host. It is kept by the element's id, so it
+ * survives relayouts, each copies and a spec streaming in, and it is cleared
+ * when state is reset.
+ */
+export type ElementView = Record<string, number>;
+
 export interface PaintContext {
   g: CanvasRenderingContext2D;
   theme: Theme;
@@ -116,6 +125,8 @@ export interface PaintContext {
    * blocked by the image policy. The engine repaints when a load settles.
    */
   image(src: string): ImageState;
+  /** This element's view state (a scroll offset). Paint may correct it, e.g. to keep the focused part in view. */
+  view(node: SayShapeNode): ElementView;
 }
 
 export interface PressContext {
@@ -135,6 +146,8 @@ export interface PressContext {
   popupOpen: boolean;
   /** Today's date as YYYY-MM-DD. */
   today(): string;
+  /** An element's view state (a scroll offset); see ElementView. */
+  view(node: SayShapeNode): ElementView;
 }
 
 /** Pressing or typing in an open popup. ctx.target.node is the popup's owner. */
@@ -174,7 +187,11 @@ export interface WheelContext extends PressContext {
   x: number;
   y: number;
   deltaY: number;
+  /** Sideways movement: a trackpad swipe or a tilting wheel. */
+  deltaX: number;
   ctrlKey: boolean;
+  /** Shift held: many mice scroll sideways with Shift and the wheel. */
+  shiftKey: boolean;
 }
 
 export interface ComponentDef {

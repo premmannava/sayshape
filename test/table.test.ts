@@ -426,13 +426,18 @@ table items=rows key=sku bind=pick
     expect(fitColumns([200, 200], [150, 160], 300)).toBeNull();
   });
 
-  it("says when the columns can't fit, rather than dropping or squashing them", () => {
+  it("scrolls sideways when the columns can't fit, rather than dropping or squashing them", () => {
     const cols = Array.from({ length: 6 }, (_, i) => `  table-column "Column ${i}" field=v format=money`).join("\n");
     const ui = simple(`[{v: 1234567}]`, "key=v bind=pick", cols, 320);
-    expect(geo(ui).message).toBe("Too narrow to show 6 columns");
-    expect(ui.hits).toEqual([]);
-    expect(ui.warnings[0]).toMatch(/6 columns need about \d+ pixels and there are \d+\. Use fewer columns, or a list/);
-    expect(geo(simple(`[{v: 1234567}]`, "key=v bind=pick", cols, 1400)).message).toBeUndefined();
+    const g = geo(ui);
+    expect(g.message).toBeUndefined();
+    expect(ui.warnings).toEqual([]);
+    expect(g.columns).toHaveLength(6);
+    // Numbers are never cut short.
+    expect(g.rows[0]!.cells.every((c) => c.text === c.full)).toBe(true);
+    expect(g.scroll).toBeDefined();
+    expect(g.scroll!.max).toBeGreaterThan(0);
+    expect(geo(simple(`[{v: 1234567}]`, "key=v bind=pick", cols, 1400)).scroll).toBeUndefined();
   });
 
   it("works inside a card and a row, and its hits move with it", () => {
@@ -471,5 +476,169 @@ describe("the Inventory playground sample", () => {
     expect(ui.emitted.at(-1)).toEqual({ name: "selected", value: "dock" });
     expect(ui.text()).toContain("USB-C dock");
     expect(ui.find({ type: "button", text: "Request one" }).node).toBeDefined();
+  });
+});
+
+describe("sideways scrolling", () => {
+  // A league table: the team name, then nine numbers.
+  const stats = ["p", "w", "d", "l", "gf", "ga", "gd", "pts", "form"];
+  const teams = Array.from({ length: 6 }, (_, i) => `{id: ${i + 1}, team: "Team number ${i + 1}", ${stats.map((k, j) => `${k}: ${i * 10 + j}`).join(", ")}}`);
+  const wide = (width: number, props = "key=id bind=pick sort=by direction=dir") =>
+    render(`state rows=[${teams.join(", ")}] pick=0 by="" dir="asc"\ntable items=rows ${props}\n  table-column "Team" field=team\n${stats.map((k) => `  table-column "${k.toUpperCase()} long" field=${k} format=number`).join("\n")}\n`, { width });
+  const offset = (ui: Rendered) => ui.sayshape.viewState(ui.find("table").node.id)?.x ?? 0;
+  const bar = (ui: Rendered) => ui.hits.find((h) => h.detail === "scroll:bar")!;
+  const headers = (ui: Rendered) => regions(ui, "sort:").map((h) => String(h.detail).slice(5));
+
+  it("lays out with the first column pinned and a scrollbar under the rows", () => {
+    const ui = wide(360);
+    const g = geo(ui);
+    const s = g.scroll!;
+    expect(ui.warnings).toEqual([]);
+    expect(s.pinned).toBeCloseTo(g.columns[0]!.w, 6);
+    expect(s.pinned).toBeLessThanOrEqual(360 * 0.5);
+    expect(s.view + s.pinned).toBeCloseTo(g.frame.w, 6);
+    expect(s.content).toBeCloseTo(g.columns.slice(1).reduce((a, c) => a + c.w, 0), 6);
+    expect(s.bar.y + s.bar.h).toBeCloseTo(g.frame.y + g.frame.h, 6);
+    expect(bar(ui)).toBeDefined();
+    // Only the headers in view can be pressed; the first is always there.
+    expect(headers(ui)[0]).toBe("team");
+    expect(headers(ui)).not.toContain("form");
+  });
+
+  it("fits a ten-column league table at chat width without scrolling", () => {
+    const short = render(`state rows=[${teams.join(", ")}]\ntable items=rows\n  table-column "Team" field=team\n${stats.map((k) => `  table-column "${k.toUpperCase()}" field=${k} format=number`).join("\n")}\n`, { width: 600 });
+    expect(geo(short).columns).toHaveLength(10);
+    expect(geo(short).scroll).toBeUndefined();
+    expect(geo(short).message).toBeUndefined();
+  });
+
+  it("scrolls with a sideways swipe or Shift and the wheel, and leaves up and down to the page", () => {
+    const ui = wide(360);
+    const { box } = ui.find("table");
+    const cx = box!.x + box!.w / 2, cy = box!.y + geo(ui).frame.y + 50;
+    ui.wheel(cx, cy, 120);
+    expect(offset(ui)).toBe(0);
+    ui.wheel(cx, cy, 0, { deltaX: 40 });
+    expect(offset(ui)).toBe(40);
+    ui.wheel(cx, cy, 30, { shift: true });
+    expect(offset(ui)).toBe(70);
+    ui.wheel(cx, cy, 0, { deltaX: 99999 });
+    expect(offset(ui)).toBeCloseTo(geo(ui).scroll!.max, 6);
+    ui.wheel(cx, cy, 0, { deltaX: -99999 });
+    expect(offset(ui)).toBe(0);
+    // Past the end, the event isn't taken, so the page can have it.
+    expect(ui.canvas.dispatch("wheel", { clientX: cx, clientY: cy, deltaY: 0, deltaX: -10 })).toBe(false);
+    expect(ui.canvas.dispatch("wheel", { clientX: cx, clientY: cy, deltaY: 0, deltaX: 10 })).toBe(true);
+  });
+
+  it("works without sort or bind, so a plain wide table still scrolls", () => {
+    const ui = wide(360, "");
+    const { box } = ui.find("table");
+    ui.wheel(box!.x + box!.w / 2, box!.y + 40, 0, { deltaX: 50 });
+    expect(offset(ui)).toBe(50);
+    // The scrollbar is a Tab stop, so the keyboard reaches it.
+    ui.tab();
+    expect(ui.sayshape.focus?.detail).toBe("scroll:bar");
+    ui.key("End");
+    expect(offset(ui)).toBeCloseTo(geo(ui).scroll!.max, 6);
+    ui.key("Home");
+    expect(offset(ui)).toBe(0);
+    ui.key("ArrowRight");
+    expect(offset(ui)).toBe(48);
+    ui.key("ArrowLeft");
+    expect(offset(ui)).toBe(0);
+  });
+
+  it("drags the rows to scroll without selecting, and a still press still selects", () => {
+    const ui = wide(360);
+    const row = regions(ui, "row:")[1]!;
+    const y = row.box.y + row.box.h / 2;
+    const x0 = row.box.x + row.box.w * 0.8;
+    const at = (x: number) => ui.canvas.dispatch("pointermove", { clientX: x, clientY: y, pointerId: 1 });
+    at(x0);
+    ui.canvas.dispatch("pointerdown", { clientX: x0, clientY: y, pointerId: 1 });
+    for (const x of [x0 - 20, x0 - 60, x0 - 100]) { at(x); ui.sayshape.renderNow(); }
+    ui.canvas.dispatch("pointerup", { clientX: x0 - 100, clientY: y, pointerId: 1 });
+    ui.sayshape.renderNow();
+    expect(offset(ui)).toBe(100);
+    expect(ui.state.pick).toBe(0);
+    clickDetail(ui, "row:n:3");
+    expect(ui.state.pick).toBe(3);
+  });
+
+  it("drags the scrollbar thumb, and a click on the track jumps there", () => {
+    const ui = wide(360);
+    const s = geo(ui).scroll!;
+    const b = bar(ui).box;
+    const y = b.y + b.h / 2;
+    ui.click(b.x + b.w - 2, y);
+    expect(offset(ui)).toBeCloseTo(s.max, 6);
+    ui.click(b.x + 2, y);
+    expect(offset(ui)).toBe(0);
+    // Dragging the thumb right scrolls right, further than the pointer moved.
+    const at = (type: string, x: number) => ui.canvas.dispatch(type, { clientX: x, clientY: y, pointerId: 1 });
+    const x0 = b.x + 12;
+    at("pointermove", x0);
+    at("pointerdown", x0);
+    for (const x of [x0 + 10, x0 + 30]) { at("pointermove", x); ui.sayshape.renderNow(); }
+    at("pointerup", x0 + 30);
+    ui.sayshape.renderNow();
+    expect(offset(ui)).toBeGreaterThan(30);
+    expect(ui.state.pick).toBe(0);
+  });
+
+  it("sorts by a column once it's scrolled into view", () => {
+    const ui = wide(360);
+    ui.key("End");
+    ui.wheel(ui.find("table").box!.x + 100, ui.find("table").box!.y + 60, 0, { deltaX: 99999 });
+    expect(headers(ui)).toContain("form");
+    clickDetail(ui, "sort:form");
+    expect(ui.state.by).toBe("form");
+    // Sorting relays out; the offset stays where it was.
+    expect(offset(ui)).toBeCloseTo(geo(ui).scroll!.max, 6);
+  });
+
+  it("brings a partly hidden header fully into view when the keyboard focuses it", () => {
+    const ui = wide(360);
+    const visible = headers(ui);
+    // Tab to the last header that shows (likely cut off at the right edge).
+    for (let i = 0; i < visible.length; i++) ui.tab();
+    expect(ui.sayshape.focus?.detail).toBe(`sort:${visible[visible.length - 1]}`);
+    ui.sayshape.renderNow();
+    const field = String(ui.sayshape.focus!.detail).slice(5);
+    const g = geo(ui), s = g.scroll!;
+    const col = g.columns.find((c) => c.field === field)!;
+    const left = col.x - s.pinned - offset(ui);
+    expect(left).toBeGreaterThanOrEqual(-1e-6);
+    expect(left + col.w).toBeLessThanOrEqual(s.view + 1e-6);
+  });
+
+  it("keeps the offset in range when the table gets narrower content, and resets with state", () => {
+    const ui = wide(360);
+    ui.wheel(ui.find("table").box!.x + 100, ui.find("table").box!.y + 60, 0, { deltaX: 99999 });
+    const before = offset(ui);
+    ui.set("rows", toData([{ id: 1, team: "A", p: 1, w: 1, d: 0, l: 0, gf: 1, ga: 0, gd: 1, pts: 3, form: 1 }]));
+    expect(offset(ui)).toBeLessThanOrEqual(geo(ui).scroll!.max + 1e-6);
+    expect(offset(ui)).toBeLessThanOrEqual(before);
+    ui.setSpec(ui.sayshape.spec ?? "", { resetState: true });
+    expect(ui.sayshape.viewState(ui.find("table").node.id)?.x ?? 0).toBe(0);
+  });
+
+  it("draws nothing of a scrolled column outside the table", () => {
+    const ui = wide(360);
+    ui.wheel(ui.find("table").box!.x + 100, ui.find("table").box!.y + 60, 0, { deltaX: 60 });
+    const { box } = ui.find("table");
+    for (const h of ui.hits) {
+      expect(h.box.x).toBeGreaterThanOrEqual(box!.x - 1e-6);
+      expect(h.box.x + h.box.w).toBeLessThanOrEqual(box!.x + box!.w + 1e-6);
+    }
+  });
+
+  it("streams in and paints in light and dark with no warnings", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const ui = render(`state rows=[${teams.join(", ")}]\ntable items=rows\n  table-column "Team" field=team\n${stats.map((k) => `  table-column "${k.toUpperCase()} long" field=${k} format=number`).join("\n")}\n`, { width: 360, theme });
+      expect(ui.warnings).toEqual([]);
+      expect(geo(ui).scroll).toBeDefined();
+    }
   });
 });

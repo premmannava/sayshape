@@ -22,7 +22,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 - **Multi-line text and form validation** (required fields, email format). A spec can show a hint with `if=` for now.
 - **Scrolling regions and overlays.** No scrolling areas inside a screen, and no dialogs, menus or tooltips. The popup layer only serves a component's own popup.
 - **Multi-select**, typing to search in a select, option groups.
-- **Larger tables**: more than 200 rows, scrolling, sticky headers, editable cells, multi-row selection.
+- **Larger tables**: more than 200 rows, vertical scrolling, sticky headers, editable cells, multi-row selection. (Wide tables already scroll sideways.)
 - **More charts**: stacked bars, area charts, tooltips, series from different lists, time or numeric axes.
 - **Dates beyond one day**: ranges, times, time zones, other locales.
 - **Packaging**: an npm release and a production model server.
@@ -38,7 +38,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 | Data literals | 20 levels deep, 10,000 values |
 | Data from the app (`state.set`) | 20 levels deep, 1,000,000 values (each row and field counts) |
 | `select` options | 200, eight shown at once |
-| `table` | 200 rows and 8 columns; a message instead of more |
+| `table` | 200 rows and 64 columns; a message instead of more. Columns that don't fit scroll sideways |
 | `chart` | 200 items, 6 series, 6 pie or donut slices (the rest summed into Other) |
 
 Numbers, money and dates are formatted in US English. Weeks start on Sunday.

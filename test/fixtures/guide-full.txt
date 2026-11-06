@@ -354,7 +354,7 @@ ELEMENTS
       state score=72
       meter "Health score" kind=gauge value=score max=100 bands="60,85"
 
-  table "<text>"  — Rows of a list of records, one table-column per field, for things like inventory, orders or expenses. With sort= and direction=, pressing a header sorts by it; with bind= and key=, pressing a row selects it.
+  table "<text>"  — Rows of a list of records, one table-column per field, for things like inventory, orders or expenses. With sort= and direction=, pressing a header sorts by it; with bind= and key=, pressing a row selects it; columns too wide for the space scroll sideways, the first one staying in view.
     "<text>"  A title above the table.
     items=<expression, required>  The list of records, e.g. items=equipment. At most 200 rows; show a page of a longer list with take() or pagination.
     key=<name>  The field that identifies each row, e.g. key=id. Needed for bind=.
