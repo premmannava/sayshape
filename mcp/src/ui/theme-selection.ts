@@ -18,15 +18,17 @@ export interface Tools {
 }
 
 /** Padding around the toolbar, in pixels: it's a slim strip, not a card. */
-export const TOOLBAR_PADDING = 6;
+export const TOOLBAR_PADDING = 4;
+/** The download button's side (tool-button's toolSize of a 40px control). */
+const TOOL = 30;
 
 /**
  * The toolbar's width: just what its tools need, so it sits at the right
  * above the interface instead of taking a full row. The selector gets its
- * minimum (120) and the download button its square (40).
+ * minimum (120) and the download button its square (30).
  */
 export function toolbarWidth(t: Tools): number {
-  const inner = t.picker && t.save ? 120 + 8 + 40 : t.picker ? 140 : t.save ? 40 : 0;
+  const inner = t.picker && t.save ? 120 + 8 + TOOL : t.picker ? 140 : t.save ? TOOL : 0;
   return inner + 2 * TOOLBAR_PADDING;
 }
 
@@ -42,7 +44,7 @@ export function toolbarSpec(t: Tools): string {
   const state = `state preset="${t.theme}" presets=[${PRESETS.map(
     ({ id, label }) => `{id:${JSON.stringify(id)},label:${JSON.stringify(label)}}`,
   ).join(",")}]\n`;
-  if (t.picker && t.save) return `${state}row gap=8 align=bottom wrap=false\n  ${select}\n  ${save}\n`;
+  if (t.picker && t.save) return `${state}row gap=8 align=center wrap=false\n  ${select}\n  ${save}\n`;
   return t.picker ? `${state}${select}\n` : `${save}\n`;
 }
 

@@ -114,8 +114,8 @@ try {
     const r = document.querySelector("#view-tools").getBoundingClientRect();
     return { x: r.x, w: r.width, h: r.height, page: document.documentElement.clientWidth };
   });
-  check(bar.h <= 56 && Math.round(bar.page - (bar.x + bar.w)) === 14, `the toolbar is a slim strip at the right, lined up with the interface (${Math.round(bar.w)}×${Math.round(bar.h)})`);
-  await frame.locator("#view-tools").click({ position: { x: 60, y: 26 } });
+  check(bar.h <= 48 && Math.round(bar.page - (bar.x + bar.w)) === 16, `the toolbar is a slim strip at the right, lined up with the interface (${Math.round(bar.w)}×${Math.round(bar.h)})`);
+  await frame.locator("#view-tools").click({ position: { x: 60, y: 24 } });
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await page.waitForTimeout(350);
@@ -141,7 +141,7 @@ try {
 
   // "Save image" hands the host a PNG of the interface as it looks now, and tells the model nothing.
   const before = (await page.evaluate(() => window.host.messages)).length;
-  await frame.locator("#view-tools").click({ position: { x: Math.round(bar.w - 26), y: 26 } });
+  await frame.locator("#view-tools").click({ position: { x: Math.round(bar.w - 19), y: Math.round(bar.h / 2) } });
   await page.waitForTimeout(400);
   const files = await page.evaluate(() => window.host.downloads);
   const png = files[0]?.blob ? Buffer.from(files[0].blob, "base64") : Buffer.alloc(0);
