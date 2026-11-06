@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
-import { MAX_SELECT_OPTIONS, optionKey, selectOptions, VISIBLE_OPTIONS } from "../src/components/select";
+import { chosenText, MAX_SELECT_OPTIONS, optionKey, selectOptions, VISIBLE_OPTIONS } from "../src/components/select";
 import { toData } from "../src/data";
 import { parse } from "../src/parser";
 import { placePopup, POPUP_GAP } from "../src/popup";
@@ -67,7 +67,7 @@ describe("select specs and options", () => {
     expect(msgs(`select items=departments value=id`)).toEqual([`"select" needs bind=`]);
     expect(msgs(`select bind=department`)).toEqual([`"select" needs items=`]);
     expect(msgs(`select items=departments bind=department value="the id"`)[0]).toMatch(/value should be a plain name/);
-    expect(msgs(`select items=departments bind=department multiple=true`)[0]).toMatch(/"select" has no prop "multiple"/);
+    expect(msgs(`select items=departments bind=department searchable=true`)[0]).toMatch(/"select" has no prop "searchable"/);
   });
 
   it("reads records, text and numbers, keeping 0 and telling 0 from \"0\"", () => {
@@ -445,5 +445,78 @@ describe("the Directory playground sample", () => {
     const rows = (ui.find("table").box!.data as { rows: Array<{ key: Value }> }).rows.map((r) => r.key);
     expect(rows).toEqual(["Ada Park", "Dev Rao"]);
     expect(ui.emitted).toEqual([{ name: "filter", value: "eng" }]);
+  });
+});
+
+describe("multiple=true", () => {
+  const regions = `state regions=["West", "East", "Central", "South"] shown=["West"] sales=[{r: "West", amt: 5}, {r: "East", amt: 3}, {r: "South", amt: 2}]`;
+  const spec = `${regions}\nselect "Regions" items=regions bind=shown multiple=true on="emit:regions:{len(shown)}"\ntext "Total {sum(filter(sales, 'r', shown), 'amt')}"\n`;
+  const json = (v: unknown) => JSON.parse(JSON.stringify(v));
+
+  it("parses with a list in state and teaches the pick", () => {
+    expect(parse(spec, registry).diagnostics).toEqual([]);
+    const def = registry.get("select")!;
+    expect(def.props.multiple?.description).toMatch(/filter\(sales, 'region', regions\)/);
+    expect(def.picks?.map((p) => p.write)).toContain("select items=regions bind=shown multiple=true");
+  });
+
+  it("adds and removes values in the options' order, stays open, and runs on= each time", () => {
+    const ui = render(spec);
+    ui.press("select");
+    pressPopup(ui, "opt:s:South");
+    expect(json(ui.state.shown)).toEqual(["West", "South"]);
+    expect(ui.popup).not.toBeNull();
+    pressPopup(ui, "opt:s:East");
+    expect(json(ui.state.shown)).toEqual(["West", "East", "South"]);
+    pressPopup(ui, "opt:s:West");
+    expect(json(ui.state.shown)).toEqual(["East", "South"]);
+    expect(ui.emitted.map((e) => e.value)).toEqual([2, 3, 2]);
+    // The chosen list is ordinary data that expressions can filter by.
+    expect(ui.text()).toContain("Total 5");
+  });
+
+  it("toggles with Enter and Space from the keyboard, and closes with Escape keeping the choices", () => {
+    const ui = render(spec);
+    ui.tab();
+    ui.key("ArrowDown");
+    expect(ui.popup?.state.highlight).toBe("s:West");
+    ui.key("ArrowDown");
+    ui.key(" ");
+    expect(json(ui.state.shown)).toEqual(["West", "East"]);
+    ui.key("Enter");
+    expect(json(ui.state.shown)).toEqual(["West"]);
+    expect(ui.popup).not.toBeNull();
+    ui.key("Escape");
+    expect(ui.popup).toBeNull();
+    expect(json(ui.state.shown)).toEqual(["West"]);
+  });
+
+  it("shows the chosen labels in the field, the first and a count when they don't fit, or the placeholder", () => {
+    const fits = (n: number) => (t: string) => t.length <= n;
+    expect(chosenText(["West", "East"], fits(40))).toBe("West, East");
+    expect(chosenText(["West", "East", "Central", "South"], fits(16))).toBe("West, East +2");
+    expect(chosenText(["Engineering and design", "Sales"], fits(5))).toBe("Engineering and design +1");
+    expect(render(spec).text()).toContain("West");
+    expect(render(spec.replace('shown=["West"]', "shown=[]")).text()).toContain("Choose…");
+  });
+
+  it("warns when bind= isn't a list or holds values no option has", () => {
+    expect(render(spec.replace('shown=["West"]', 'shown="West"')).warnings.join()).toMatch(/multiple=true, bind= holds a list .* Start it as a list, like shown=\[\]/);
+    expect(render(spec.replace('shown=["West"]', 'shown=["North"]')).warnings.join()).toMatch(/holds "North", which none of its options has/);
+    expect(render(spec).warnings).toEqual([]);
+  });
+
+  it("writes to a list on an item inside each", () => {
+    const ui = render(`state teams=[{name: "A", tags: []}] opts=["x", "y"]\neach items=teams as=t\n  select items=opts bind=t.tags multiple=true\n`);
+    ui.press("select");
+    pressPopup(ui, "opt:s:y");
+    expect(json(ui.state.teams)).toEqual([{ name: "A", tags: ["y"] }]);
+  });
+});
+
+describe("filter() and count() with a list of values", () => {
+  it("keep the items whose field is any of them, and none for an empty list", () => {
+    const ui = render(`state rows=[{r: "W", n: 1}, {r: "E", n: 2}, {r: "S", n: 4}] pick=["W", "S"] none=[]\ntext "{sum(filter(rows, 'r', pick), 'n')} {count(rows, 'r', pick)} {len(filter(rows, 'r', none))}"\n`);
+    expect(ui.text()).toContain("5 2 0");
   });
 });

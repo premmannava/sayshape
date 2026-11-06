@@ -21,7 +21,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 - **Data sources and host commands.** Your app fetches data and sets state; a spec can't declare where data comes from.
 - **Multi-line text and form validation** (required fields, email format). A spec can show a hint with `if=` for now.
 - **Scrolling regions and overlays.** No scrolling areas inside a screen, and no dialogs, menus or tooltips. The popup layer only serves a component's own popup.
-- **Multi-select**, typing to search in a select, option groups.
+- **Typing to search** in a select, and option groups. (A select picks several with `multiple=true`.)
 - **Larger tables**: more than 200 rows, vertical scrolling, sticky headers, editable cells, multi-row selection. (Wide tables already scroll sideways.)
 - **More charts**: series from different lists, time or numeric axes.
 - **Dates beyond one day**: ranges, times, time zones, other locales.

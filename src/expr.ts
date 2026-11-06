@@ -55,7 +55,10 @@ function amounts(v: Value, a?: Value, b?: Value): number[] | null {
 function matches(item: Value, field: Value | undefined, value: Value | undefined): boolean {
   if (field === undefined) return !!item;
   const v = fieldOf(item, field);
-  return value === undefined ? !!v : v === value;
+  if (value === undefined) return !!v;
+  // A list of values, like a multi-select's: the field is any one of them (none for an empty list).
+  if (isList(value)) return v !== undefined && value.some((x) => x === v);
+  return v === value;
 }
 
 /** Order for sort(): numbers by size, text alphabetically, missing values last. */

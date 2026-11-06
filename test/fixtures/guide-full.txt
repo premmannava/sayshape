@@ -44,7 +44,7 @@ DATA AND LISTS
 - Inside each, the current item is t (from as=t; item if as= is left out). index=i gives its position from 0. t only exists inside its each.
 - Read fields: {t.text}, {cart[0].price}, {todos.length}
 - Compute numbers from the list instead of writing them yourself: len(list), count(list, 'done') counts items whose field is true, count(list, 'cat', 'Gas') counts items whose field equals a value, sum(list, 'price'), sum(list, 'price', 'qty') multiplies two fields per item, avg(list, 'field'), min(list, 'field'), max(list, 'field'), join(list, 'name'), includes(list, value). These count only numbers: write prices and quantities as numbers (24, not "24")
-- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), first(list) and last(list) for one item. Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate
+- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), filter(list, 'region', regions) for any of a list of values (a multi-select's), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), first(list) and last(list) for one item. Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate
 - Use filter() for counts and totals. Items of a filtered or sorted list still write back: bind=t.done inside each items=shown as=t changes that task in tasks, and totals worked out from tasks follow. if= on an each picks items per item: each items=todos as=t if={!t.done}
 - Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}
 - A filter with an All choice: derive shown={region == 'All' ? orders : filter(orders, 'region', region)}
@@ -462,12 +462,13 @@ ELEMENTS
       radio "Medium" bind=size value=m
       radio "Large" bind=size value=l
 
-  select "<text>"  — A field that opens a list to pick one option from, for choices like a department, status or filter; compact where radio buttons would take too much room. bind= holds the chosen option's value.
+  select "<text>"  — A field that opens a list to pick one option from, for choices like a department, status or filter; compact where radio buttons would take too much room. bind= holds the chosen option's value; with multiple=true, a list of the chosen values, for filters like regions to show.
     "<text>"  The label above the field.
     items=<expression, required>  The options: a list of records, or of text or numbers. At most 200.
     value=<name>  For records, the field holding each option's value (text or a number), e.g. value=id. Options without one, or repeating one, are left out.
     label=<name>  For records, the field shown for each option, e.g. label=name. Default: the value.
     bind=<state, required>  State that holds the chosen value, like department or t.status.
+    multiple=<boolean>  Pick several options: bind= holds a list of their values, starting from a list in state like regions=["West", "East"] (or [] for none), and the list stays open while choosing. filter(sales, 'region', regions) keeps the items whose field is any chosen value; an empty list keeps none, so show everything then: {len(regions) ? filter(sales, 'region', regions) : sales}.
     placeholder=<string>  Shown while nothing (or a value no option has) is chosen.
     unavailable=<name>  A field that, when true, greys an option out so it can't be chosen, e.g. unavailable=full.
     disabled=<condition>  Expression; when true the field is greyed out and doesn't open.
@@ -661,6 +662,7 @@ PICK BY WHAT YOU'RE SHOWING (use these rather than building the same thing from 
 - cards to page through, such as photos or featured products: carousel bind=page
 - the one takeaway or warning to notice first: callout tone=warn
 - one choice from a long list: select items=teams bind=team
+- filtering by several values at once, such as regions or statuses: select items=regions bind=shown multiple=true
 - choosing a date: date-picker bind=due
 - switching a view between 2 to 6 options: segmented bind=view options="Week,Month,Year"
 - nothing to show yet, or no results: empty "No results"

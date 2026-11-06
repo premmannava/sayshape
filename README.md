@@ -261,8 +261,8 @@ List functions, for computing instead of typing numbers:
 | `join(list)`, `join(list, 'name', ' / ')` | Text listing the items or a field |
 | `includes(list, value)` | Whether a value is in the list |
 | `min(list)`, `max(list)`, `min(list, 'price')`, `max(list, 'price')` | Smallest and largest, of the items or of a field |
-| `count(list, 'cat', 'Gas')` | Items whose field equals a value |
-| `filter(list, 'done')`, `filter(list, 'cat', 'Gas')` | The items whose field is true, or equals a value, as a list |
+| `count(list, 'cat', 'Gas')` | Items whose field equals a value, or any value in a list: `count(list, 'region', shown)` |
+| `filter(list, 'done')`, `filter(list, 'cat', 'Gas')`, `filter(list, 'region', shown)` | The items whose field is true, equals a value, or is any value in a list (a multi-select's; an empty list keeps none), as a list |
 | `find(list, 'id', picked)` | The first item whose field equals a value, or `null`: `{find(rooms, 'id', room).rate}` |
 | `search(list, 'name', query)` | Items whose field contains some text, ignoring case (all of them for empty text) |
 | `sort(list, 'price')`, `sort(list, 'price', 'desc')`, `sort(list)` | The list in order, by a field or by value |
@@ -354,6 +354,20 @@ select "Department" items=departments value=id label=name unavailable=full bind=
 - With no options, items that aren't a list, or more than 200 options, the field says so ("No options", "Too many options") and doesn't open. Narrow a long list with `filter()` or `search()`.
 - Long labels are cut with an ellipsis, in the field and in the list.
 - Problems a model can fix (no value field, repeated values, a chosen value no option has, too many options) are reported once through `onWarning`.
+
+With `multiple=true` it picks several, for filters like which regions to show. `bind=` then holds a list of the chosen values, starting from a list in state:
+
+```
+state regions=["West", "East", "Central", "South"] shown=["West", "East"] sales=[{region: "West", amt: 820}, {region: "East", amt: 610}, {region: "South", amt: 380}]
+derive picked={len(shown) ? filter(sales, 'region', shown) : sales}
+select "Regions" items=regions bind=shown multiple=true placeholder="All regions"
+chart "Sales" kind=hbar items=picked x=region y=amt
+```
+
+- Each option has a box, ticked when chosen. Choosing one adds or removes it and runs `on=`; the list stays open until Escape, Tab or a press outside. The values are kept in the options' order.
+- The field shows the chosen labels, or the first ones and how many more when they don't fit ("West, East +2"), or the placeholder when none are chosen.
+- `filter(list, 'field', chosen)` keeps the items whose field is any chosen value. An empty list keeps none, so show everything then, as above.
+- A `bind=` that isn't a list, or values no option has, are reported through `onWarning`.
 
 #### Dates
 
@@ -1095,7 +1109,7 @@ radio "Large" bind=size value=l
 
 ### `select`
 
-A field that opens a list to pick one option from, for choices like a department, status or filter; compact where radio buttons would take too much room. bind= holds the chosen option's value.
+A field that opens a list to pick one option from, for choices like a department, status or filter; compact where radio buttons would take too much room. bind= holds the chosen option's value; with multiple=true, a list of the chosen values, for filters like regions to show.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -1104,6 +1118,7 @@ A field that opens a list to pick one option from, for choices like a department
 | `value` | name | For records, the field holding each option's value (text or a number), e.g. value=id. Options without one, or repeating one, are left out. |
 | `label` | name | For records, the field shown for each option, e.g. label=name. Default: the value. |
 | `bind` | state, required | State that holds the chosen value, like department or t.status. |
+| `multiple` | boolean | Pick several options: bind= holds a list of their values, starting from a list in state like regions=["West", "East"] (or [] for none), and the list stays open while choosing. filter(sales, 'region', regions) keeps the items whose field is any chosen value; an empty list keeps none, so show everything then: {len(regions) ? filter(sales, 'region', regions) : sales}. |
 | `placeholder` | string | Shown while nothing (or a value no option has) is chosen. |
 | `unavailable` | name | A field that, when true, greys an option out so it can't be chosen, e.g. unavailable=full. |
 | `disabled` | condition | Expression; when true the field is greyed out and doesn't open. |
@@ -1953,7 +1968,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 - **Text selection, copy and browser find.**
 - **Scrolling regions, dialogs, menus or tooltips.** The one popup so far is a select's list of options (one open at a time); there's no general overlay element yet.
 - **Dates beyond one day.** `date-picker` picks a single calendar day: no ranges, times, recurring dates or time zones, and names are in US English with weeks starting on Sunday.
-- **Selects beyond the basics.** One choice from at most 200 options, with no multi-select, typing to search, option groups, or options showing anything but text.
+- **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.
 - **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.
 - **Charts beyond the basics.** `chart` draws bars (up or across, `kind=hbar`, or stacked), lines or areas of up to 6 series on one shared scale (with a legend), or a pie or donut of one field (at most 6 slices; smaller ones are summed into Other), from at most 200 items with labels evenly spaced in list order. Horizontal bars stop at 1200 px of rows and ask for `take()`. A stat's sparkline takes a list of numbers only. No series from different lists, zoom, time or numeric x-axes, or pressing a bar.
 - **Right-to-left or complex-script text shaping** beyond what the canvas does on its own.

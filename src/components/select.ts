@@ -20,10 +20,15 @@
  * - Which option is highlighted and how far the list is scrolled are the
  *   popup's own, kept by the engine, never in state. Choosing writes bind=,
  *   closes the list (focus back on the field), then runs on=.
+ * - multiple=true picks several: bind= holds a list of the chosen values, in
+ *   the options' order. Choosing one adds or removes it and runs on=; the
+ *   list stays open until Escape, Tab or a press outside. The field shows
+ *   the chosen labels, or the first and how many more when they don't fit.
+ *   filter(rows, 'field', chosen) keeps the items whose field is any of them.
  */
 import { MOTION } from "../design";
 import type { ComponentDef, LayoutContext, PaintContext, PopupContext, PressContext, PropReader } from "../component";
-import { fieldOf, isList, isRecord } from "../data";
+import { fieldOf, isList, isRecord, makeList } from "../data";
 import type { PopupState } from "../popup";
 import type { Box, Rect, Value } from "../types";
 import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE, paintField } from "./input";
@@ -87,14 +92,34 @@ function readOptions(p: PropReader): SelectOptions {
   return selectOptions(p.expr("items"), p.str("value"), p.str("label"), p.str("unavailable"));
 }
 
-/** What the field shows: the chosen option's label, the placeholder, or why it can't open. */
-function fieldText(p: PropReader, o: SelectOptions): { text: string; muted: boolean; openable: boolean } {
-  if (o.problem === "too-many") return { text: "Too many options", muted: true, openable: false };
-  if (o.problem) return { text: "No options", muted: true, openable: false };
-  const chosen = p.bound();
-  const match = o.options.find((x) => x.value === chosen);
-  if (match) return { text: match.label, muted: false, openable: true };
-  return { text: p.str("placeholder", "Choose…"), muted: true, openable: true };
+/** The chosen values: bind='s one value, or with multiple=true the values in its list. */
+export function chosenValues(p: PropReader): Value[] {
+  const bound = p.bound();
+  if (!p.bool("multiple")) return bound === undefined ? [] : [bound];
+  return isList(bound) ? [...bound] : [];
+}
+
+const isChosen = (chosen: readonly Value[], option: SelectOption) => chosen.some((v) => v === option.value);
+
+/** What the field shows: the chosen options' labels, the placeholder, or why it can't open. */
+function fieldText(p: PropReader, o: SelectOptions): { text: string; labels: string[]; muted: boolean; openable: boolean } {
+  if (o.problem === "too-many") return { text: "Too many options", labels: [], muted: true, openable: false };
+  if (o.problem) return { text: "No options", labels: [], muted: true, openable: false };
+  const chosen = chosenValues(p);
+  const labels = o.options.filter((x) => isChosen(chosen, x)).map((x) => x.label);
+  if (labels.length) return { text: labels.join(", "), labels, muted: false, openable: true };
+  return { text: p.str("placeholder", "Choose…"), labels, muted: true, openable: true };
+}
+
+/** Several chosen labels in a width: all of them, or the first and how many more ("West +2"). */
+export function chosenText(labels: readonly string[], fits: (text: string) => boolean): string {
+  const all = labels.join(", ");
+  if (labels.length < 2 || fits(all)) return all;
+  for (let k = labels.length - 1; k >= 1; k--) {
+    const text = `${labels.slice(0, k).join(", ")} +${labels.length - k}`;
+    if (fits(text)) return text;
+  }
+  return `${labels[0]} +${labels.length - 1}`;
 }
 
 // ---------------------------------------------------------------- the list
@@ -144,8 +169,19 @@ function highlight(state: PopupState, o: SelectOptions, i: number, visible: numb
 }
 
 function choose(ctx: PopupContext, option: SelectOption): void {
-  const bind = ctx.props(ctx.target.node).raw("bind");
+  const p = ctx.props(ctx.target.node);
+  const bind = p.raw("bind");
   if (!bind || !option.available) return;
+  if (p.bool("multiple")) {
+    // Add or remove this one, keeping the options' order; the list stays open for more.
+    const o = readOptions(p);
+    const chosen = chosenValues(p);
+    const now = !isChosen(chosen, option);
+    ctx.set(bind, makeList(o.options.filter((x) => (x.key === option.key ? now : isChosen(chosen, x))).map((x) => x.value)));
+    ctx.popup.highlight = option.key;
+    runOn(ctx);
+    return;
+  }
   ctx.set(bind, option.value);
   ctx.close(true);
   runOn(ctx);
@@ -157,7 +193,8 @@ function open(ctx: PressContext): void {
   if (p.cond("disabled")) return;
   const o = readOptions(p);
   if (!fieldText(p, o).openable) return;
-  const chosen = o.options.find((x) => x.value === p.bound() && x.available);
+  const values = chosenValues(p);
+  const chosen = o.options.find((x) => isChosen(values, x) && x.available);
   ctx.openPopup({ highlight: (chosen ?? o.options.find((x) => x.available))?.key ?? null, scroll: null });
 }
 
@@ -169,7 +206,8 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
   const { visible, moreH, top } = listLayout(area, o.options.length);
   const scroll = scrollOf(state, o, visible);
   const hi = highlightOf(state, o);
-  const chosen = p.bound();
+  const chosen = chosenValues(p);
+  const multiple = p.bool("multiple");
   const inset = PANEL_PAD;
 
   if (moreH) {
@@ -196,7 +234,7 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
     const row = partBox(owner, area.x + inset, top + (i - scroll) * ROW_H, area.w - 2 * inset, ROW_H);
     const detail = `opt:${opt.key}`;
     if (opt.available) ctx.addHit(row, { detail, focusable: false });
-    const isChosen = opt.value === chosen;
+    const on = isChosen(chosen, opt);
     const hover = ctx.tween(owner.node, "select:option:hover:" + opt.key,
       opt.available && ctx.isHovered(owner.node, detail) ? 1 : 0, MOTION.hover);
     if (i === hi || hover > 0) {
@@ -204,11 +242,34 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
       if (i === hi) fillTint(g, c.accent, 0.14);
       else fillTint(g, c.ink, 0.05 * hover);
     }
-    g.font = ctx.font(isChosen ? 600 : 400, FIELD_TEXT);
-    g.fillStyle = opt.available ? c.ink : c.muted;
     const markW = 22;
+    if (multiple) {
+      // A box per option, ticked when chosen, so several choices read as several.
+      const size = 16, bx = row.x + FIELD_PAD, by = row.y + (ROW_H - size) / 2;
+      ctx.roundRect(bx + 0.5, by + 0.5, size - 1, size - 1, 4);
+      if (on) { g.fillStyle = c.accent; g.fill(); }
+      else { g.strokeStyle = opt.available ? c.muted : c.line; g.lineWidth = 1.5; g.stroke(); }
+      if (on) {
+        const cx = bx + size / 2, cy = by + size / 2;
+        g.beginPath();
+        g.moveTo(cx - 4, cy);
+        g.lineTo(cx - 1, cy + 3);
+        g.lineTo(cx + 4.5, cy - 3.5);
+        g.strokeStyle = c.onAccent;
+        g.lineWidth = 2;
+        g.lineCap = "round";
+        g.lineJoin = "round";
+        g.stroke();
+      }
+      g.font = ctx.font(400, FIELD_TEXT);
+      g.fillStyle = opt.available ? c.ink : c.muted;
+      g.fillText(fitText(g, opt.label, row.w - FIELD_PAD * 2 - markW), bx + markW + 4, row.y + ROW_H / 2 + 1);
+      continue;
+    }
+    g.font = ctx.font(on ? 600 : 400, FIELD_TEXT);
+    g.fillStyle = opt.available ? c.ink : c.muted;
     g.fillText(fitText(g, opt.label, row.w - FIELD_PAD * 2 - markW), row.x + FIELD_PAD, row.y + ROW_H / 2 + 1);
-    if (isChosen) {
+    if (on) {
       // A check mark beside the chosen option.
       const cx = row.x + row.w - FIELD_PAD - 7, cy = row.y + ROW_H / 2;
       g.beginPath();
@@ -228,13 +289,17 @@ export const select: ComponentDef = {
   type: "select",
   category: "input",
   description:
-    "A field that opens a list to pick one option from, for choices like a department, status or filter; compact where radio buttons would take too much room. bind= holds the chosen option's value.",
+    "A field that opens a list to pick one option from, for choices like a department, status or filter; compact where radio buttons would take too much room. bind= holds the chosen option's value; with multiple=true, a list of the chosen values, for filters like regions to show.",
   text: { description: "The label above the field." },
   props: {
     items: { type: "expression", required: true, description: `The options: a list of records, or of text or numbers. At most ${MAX_SELECT_OPTIONS}.` },
     value: { type: "name", description: "For records, the field holding each option's value (text or a number), e.g. value=id. Options without one, or repeating one, are left out." },
     label: { type: "name", description: "For records, the field shown for each option, e.g. label=name. Default: the value." },
     bind: { type: "state", required: true, description: "State that holds the chosen value, like department or t.status." },
+    multiple: {
+      type: "boolean", default: false,
+      description: "Pick several options: bind= holds a list of their values, starting from a list in state like regions=[\"West\", \"East\"] (or [] for none), and the list stays open while choosing. filter(sales, 'region', regions) keeps the items whose field is any chosen value; an empty list keeps none, so show everything then: {len(regions) ? filter(sales, 'region', regions) : sales}.",
+    },
     placeholder: { type: "string", default: "Choose…", description: "Shown while nothing (or a value no option has) is chosen." },
     unavailable: { type: "name", description: "A field that, when true, greys an option out so it can't be chosen, e.g. unavailable=full." },
     disabled: { type: "condition", description: "Expression; when true the field is greyed out and doesn't open." },
@@ -242,6 +307,7 @@ export const select: ComponentDef = {
   },
   picks: [
     { for: "one choice from a long list", write: "select items=teams bind=team" },
+    { for: "filtering by several values at once, such as regions or statuses", write: "select items=regions bind=shown multiple=true" },
   ],
   example: `state teams=[{id: "eng", name: "Engineering"}, {id: "sales", name: "Sales"}] team=""
 select "Team" items=teams value=id label=name bind=team placeholder="Choose a team"`,
@@ -280,7 +346,9 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
     g.textBaseline = "middle";
     g.fillStyle = shown.muted ? c.muted : c.ink;
     const arrowRoom = 24;
-    g.fillText(fitText(g, shown.text, field.w - FIELD_PAD * 2 - arrowRoom), field.x + FIELD_PAD, field.y + field.h / 2 + 1);
+    const room = field.w - FIELD_PAD * 2 - arrowRoom;
+    const text = shown.labels.length > 1 ? chosenText(shown.labels, (t) => g.measureText(t).width <= room) : shown.text;
+    g.fillText(fitText(g, text, room), field.x + FIELD_PAD, field.y + field.h / 2 + 1);
     chevron(g, field.x + field.w - FIELD_PAD - 6, field.y + field.h / 2, 10, isOpen ? "up" : "down", disabled ? c.line : c.muted);
     g.restore();
     if (!disabled) ctx.addHit(field);
@@ -363,7 +431,14 @@ function warnAbout(box: Box, p: PropReader, ctx: LayoutContext): void {
   if (o.missing) warn(`${o.missing} items have no text or number ${p.has("value") ? `in "${p.str("value")}"` : "to use as a value (records need value=)"}, so they aren't offered`);
   if (o.duplicates) warn(`${o.duplicates} items repeat an earlier option's value, so only the first is offered. Values should be unique`);
   const chosen = p.bound();
-  if (!o.problem && chosen !== undefined && chosen !== null && chosen !== "" && !o.options.some((x) => x.value === chosen)) {
+  if (p.bool("multiple")) {
+    if (chosen !== undefined && chosen !== null && chosen !== "" && !isList(chosen)) {
+      warn(`with multiple=true, bind= holds a list of the chosen values, but it holds ${JSON.stringify(chosen)}. Start it as a list, like ${p.raw("bind") || "chosen"}=[] or ${p.raw("bind") || "chosen"}=["West"]`);
+    } else if (isList(chosen) && !o.problem) {
+      const unknown = chosen.filter((v) => !o.options.some((x) => x.value === v));
+      if (unknown.length) warn(`bind= holds ${unknown.map((v) => JSON.stringify(v)).join(", ")}, which none of its options has, so ${unknown.length === 1 ? "it isn't" : "they aren't"} shown as chosen`);
+    }
+  } else if (!o.problem && chosen !== undefined && chosen !== null && chosen !== "" && !o.options.some((x) => x.value === chosen)) {
     warn(`bind= holds ${JSON.stringify(chosen)}, which none of its options has, so it shows the placeholder`);
   }
 }
