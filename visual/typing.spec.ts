@@ -140,6 +140,10 @@ test("Escape stops typing and keeps focus on the canvas; a hidden field closes i
   await page.keyboard.press("Escape");
   await expect(editor(page)).toHaveCount(0);
   await expect(page.locator("#canvas")).toBeFocused();
+  // Escape returns focus to the canvas, but the focus handler must not
+  // reopen the editor on the same field (including after the next paint).
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await expect(editor(page)).toHaveCount(0);
   await page.mouse.click(p.x, p.y);
   await expect(editor(page)).toHaveCount(1);
   await page.evaluate(() => { window.__sayshape!.state.set("show", false); window.__sayshape!.renderNow(); });
