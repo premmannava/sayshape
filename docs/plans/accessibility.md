@@ -1,6 +1,6 @@
 # Plan: accessibility
 
-**Status:** in progress (started 2026-11-06). Steps 1 to 7 are done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
+**Status:** in progress (started 2026-11-06). Steps 1 to 8 are done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
 **Rough size:** 6 to 9 weeks for one person, in nine pull requests that each leave `main` working.
 
 ## The problem
@@ -79,7 +79,7 @@ Each is one pull request into `main`, merged only when CI is green.
 5. **Navigation and popups** (done). screen, tabs, breadcrumb, pagination, select (single and multiple), date-picker.
 6. **Data** (done). table, compare, chart summaries and data tables for every kind, map. The contract tests start requiring `semantics` on every component.
 7. **Beyond screen readers** (done). Reduced motion was already honored everywhere (every animation checks `ctx.motion`). A contrast test of the theme's text, focus and series tokens in light and dark: all pass AA as they are. A forced-colors theme (`forcedColorsTheme`): in Windows Contrast Themes the canvas draws in the person's system colors, whatever theme the host chose. Focusable regions at least 24 px tall (WCAG 2.2, 2.5.8: links and breadcrumb steps were 19 and 22). `notify:` messages stay longer when they're longer (3 to 10 seconds). Not done: control outlines (a field's border, an unchecked box, a switch that's off) are below 3:1 against the page (WCAG 1.4.11); fixing them changes how every control looks, so it's a separate pull request for review rather than merged unseen.
-8. **Language and guide.** `label=` on the few controls with no quoted text, warnings for unlabelled controls and untitled charts, two guide lines.
+8. **Language and guide** (done). `label=` on segmented, rating and icon (the elements with no quoted text that a model might leave unnamed; an icon with a label is an image, without one decoration). One guide line in each mode asks for a label on every control and a title on every chart (about 40 tokens). No new warnings: a control's name already falls back to the text just above it, and warning on every unlabelled one would add diagnostics to many specs that read well.
 9. **Verification and docs.** axe over every sample and site example in CI, a README section, a manual VoiceOver and NVDA script.
 
 ## Testing

@@ -454,6 +454,7 @@ export const rating: ComponentDef = {
     value: { type: "number", description: "The rating to show, e.g. 4.5. Ignored when bind= is set." },
     max: { type: "number", default: 5, description: "How many stars (default 5)." },
     bind: { type: "state", description: "A number state the user sets by pressing a star." },
+    label: { type: "string", description: "What's being rated, read by screen readers, e.g. label=\"Your rating\". Default: the text just above it." },
     on: onProp("after the user picks a rating"),
   },
   example: `state stars=4
@@ -465,10 +466,11 @@ rating bind=stars`,
     const bind = p.raw("bind");
     const value = bind ? toNumber(p.bound()) || 0 : p.num("value", 0);
     const stars = (n: number) => `${n} ${n === 1 ? "star" : "stars"}`;
-    if (!bind) return { role: "img", name: `${Math.round(value * 10) / 10} out of ${stars(max)}` };
+    const label = p.str("label");
+    if (!bind) return { role: "img", name: `${label ? `${label}: ` : ""}${Math.round(value * 10) / 10} out of ${stars(max)}` };
     return {
       role: "radiogroup",
-      name: ctx.textBefore() ?? "Rating",
+      name: label || ctx.textBefore() || "Rating",
       parts: Array.from({ length: max }, (_, i) => ({ detail: i + 1, role: "radio" as const, name: stars(i + 1), checked: value === i + 1 })),
     };
   },

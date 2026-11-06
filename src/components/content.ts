@@ -613,12 +613,16 @@ export const icon: ComponentDef = {
     name: { type: "string", required: true, description: `Which icon: ${ICON_NAMES.join(", ")}.` },
     tone: toneProp,
     size: { type: "enum", values: ICON_SIZE_NAMES, default: "md", description: "sm, md or lg." },
+    label: { type: "string", description: "What the icon means, read by screen readers, when nothing beside it says so, e.g. label=\"Sunny\". Leave it out for decoration." },
   },
   example: `icon name=sun tone=warn size=lg
 icon name=check-circle tone=good`,
   check: (props) => iconProblems(props.name, "name"),
-  // Icons decorate: what they mean is in the words beside them.
-  semantics: () => false,
+  semantics(box, ctx) {
+    // An icon decorates unless it's given a meaning of its own.
+    const label = ctx.props(box.node).str("label");
+    return label ? { role: "img", name: label } : false;
+  },
   layout(box, ctx) {
     box.h = ICON_SIZES[ctx.props(box.node).oneOf("size", ICON_SIZE_NAMES, "md")];
   },

@@ -220,6 +220,7 @@ ELEMENTS
     name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, bell, search, filter, download, share, link, sliders.
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     size=<sm|md|lg>  sm, md or lg.
+    label=<string>  What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration.
 
   stat  — A labelled number, for key figures like totals or counts. Add change= to show how it moved, and spark= for a small line of its recent values.
     label=<string, required>  Short caption above the value.
@@ -235,6 +236,7 @@ ELEMENTS
     value=<number>  The rating to show, e.g. 4.5. Ignored when bind= is set.
     max=<number>  How many stars (default 5).
     bind=<state>  A number state the user sets by pressing a star.
+    label=<string>  What's being rated, read by screen readers, e.g. label="Your rating". Default: the text just above it.
     on=<action>  Actions to run after the user picks a rating, e.g. emit:changed. Separate several with ;
 
   chart "<text>"  — A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, bullet for each KPI against its target, such as quarterly goals, or heatmap for one number across two dimensions, such as retention by cohort. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).
@@ -377,6 +379,7 @@ ELEMENTS
 
   segmented  — Two to six short options in one track, one chosen, like Week, Month and Year, or Chart and Table. Show different content for each with if=.
     bind=<state, required>  The state name holding the chosen option's text.
+    label=<string>  What the choice is about, read by screen readers, e.g. label="Period". Default: the text just above it.
     options=<string, required>  The options, comma-separated, e.g. options="Week,Month,Year". At most 6, one or two words each.
     on=<action>  Actions to run after the choice changes, e.g. emit:changed. Separate several with ;
 
@@ -484,6 +487,7 @@ RULES
 - Keep screens focused: one task per screen, short labels, real-looking values.
 - Screens may be narrow (a phone, a chat). For side-by-side figures use grid min=140 rather than row. Keep stat values short: compact() for large numbers.
 - For several screens, write the starting screen first: it shows as soon as it arrives.
+- Screen readers read your labels aloud: give every control a label and every chart a title, or a text just above it.
 - Images only load from these hosts: images.unsplash.com. Only use image URLs from them that you were given or know exist. Never make up URLs; leave images out instead.
 - Always describe what the image shows in its quoted text; it's displayed if the image can't load.
 

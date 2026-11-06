@@ -37,6 +37,7 @@ export const segmented: ComponentDef = {
   description: "Two to six short options in one track, one chosen, like Week, Month and Year, or Chart and Table. Show different content for each with if=.",
   props: {
     bind: { type: "state", required: true, description: "The state name holding the chosen option's text." },
+    label: { type: "string", description: "What the choice is about, read by screen readers, e.g. label=\"Period\". Default: the text just above it." },
     options: { type: "string", required: true, description: "The options, comma-separated, e.g. options=\"Week,Month,Year\". At most 6, one or two words each." },
     on: onProp("after the choice changes"),
   },
@@ -63,7 +64,7 @@ text "Showing the {lower(view)}" tone=muted`,
     const bound = p.bound();
     // Painted as chosen: the bound option, or the first when it's none of them.
     const chosen = options.some((o) => o === bound) ? bound : options[0];
-    return { role: "radiogroup", name: ctx.textBefore(), parts: options.map((o) => ({ detail: o, role: "radio" as const, name: o, checked: o === chosen })) };
+    return { role: "radiogroup", name: p.str("label") || ctx.textBefore(), parts: options.map((o) => ({ detail: o, role: "radio" as const, name: o, checked: o === chosen })) };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
