@@ -36,6 +36,7 @@ card
 - [Testing](#testing)
 - [Writing a component](#writing-a-component)
 - [Theming](#theming)
+- [Accessibility](#accessibility)
 - [Project structure](#project-structure)
 - [Limitations](#limitations)
 - [Roadmap](#roadmap)
@@ -1947,6 +1948,27 @@ The styles change colors only, through the same theme tokens every component rea
 
 ---
 
+## Accessibility
+
+A canvas is one picture to assistive technology, so SayShape keeps a hidden **accessibility mirror** beside it: an invisible DOM element over each element it draws, with a role, a name and a state, kept in step as the screen changes. Screen readers, keyboards and phones' touch exploration work through it. The plan and its design are in [`docs/plans/accessibility.md`](docs/plans/accessibility.md).
+
+- **Every element describes itself**: buttons, links, checkboxes, switches, radios (grouped by `bind=`), sliders and steppers with their values, text fields with what's typed, headings, images by their description, lists, tabs, breadcrumbs, pagination, tables with headers and sort order, and select and date-picker as comboboxes whose open list reads the highlighted option.
+- **Charts and maps have text alternatives**: a summary worked out from the data ("3 items. Highest: Mar, $1,600. Lowest: Feb, $900.") and the numbers as a table; a map lists its places.
+- **Keyboard**: Tab moves through everything you can press, Enter and Space press, arrows work inside sliders, selects, date pickers, tables and segmented controls, Escape closes popups. DOM focus follows, so screen readers announce where you are.
+- **Announcements**: `notify:` messages, new screens, and "Ready" once a streamed screen has arrived (the interface is marked busy while it streams or data loads).
+- **Names**: controls are named by their quoted text, or by the text just above them; `label=` names a segmented control, a rating or a meaningful icon. The model guide asks for labels and chart titles.
+- **Beyond screen readers**: text and focus colors meet WCAG AA contrast in light and dark; Windows Contrast Themes (forced colors) redraw everything in the person's own colors; reduced motion turns animation off; small targets are at least 24 px tall; longer `notify:` messages stay up longer.
+
+```js
+canvas.setAttribute("aria-label", "Trip planner");                        // what the whole interface is called
+const sayshape = new SayShape(canvas, { components: coreComponents });   // the mirror is on by default
+// new SayShape(canvas, { components: coreComponents, accessibility: "off" }) turns it off
+```
+
+In tests, `render(spec).accessibility()` shows the screen as a screen reader gets it, `ui.announcements` what it was told, and `ui.mirror` sends a screen reader's actions; the visual suite runs [axe](https://github.com/dequelabs/axe-core) on every sample. Automated checks can't prove WCAG conformance on their own: [`docs/accessibility-testing.md`](docs/accessibility-testing.md) is a short manual pass with VoiceOver and NVDA to run before claiming it. Still to do: control outlines (a field's border, an unchecked box) at 3:1 contrast, which changes how controls look, and reaching the map by keyboard.
+
+---
+
 ## Project structure
 
 ```
@@ -1986,7 +2008,6 @@ docs/images/        README images
 SayShape draws everything itself, so it gives up what the browser normally provides for free. Today it does **not** have:
 
 - **Multi-line text, and form validation** (required fields, email format). A model can show a hint with `if=` for now.
-- **Screen reader support.** A canvas is invisible to assistive technology. A hidden accessibility layer that mirrors the canvas is planned.
 - **Text selection, copy and browser find.**
 - **Scrolling regions, dialogs, menus or tooltips.** The one popup so far is a select's list of options (one open at a time); there's no general overlay element yet.
 - **Dates beyond one day.** `date-picker` picks a single calendar day: no ranges, times, recurring dates or time zones, and names are in US English with weeks starting on Sunday.
@@ -1995,7 +2016,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 - **Charts beyond the basics.** `chart` draws bars (up or across, `kind=hbar`, or stacked), lines or areas of up to 6 series on one shared scale (with a legend), or a pie or donut of one field (at most 6 slices; smaller ones are summed into Other), from at most 200 items with labels evenly spaced in list order. Horizontal bars stop at 1200 px of rows and ask for `take()`. A stat's sparkline takes a list of numbers; `pluck()` takes one from a list of records. No series from different lists, zoom, time or numeric x-axes, or pressing a bar.
 - **Right-to-left or complex-script text shaping** beyond what the canvas does on its own.
 
-Don't use SayShape where accessibility is required until the accessibility layer lands.
+Accessibility is covered by a hidden mirror of the canvas (see [Accessibility](#accessibility)); check it with assistive technology before relying on it where conformance is required.
 
 ---
 
@@ -2004,7 +2025,7 @@ Don't use SayShape where accessibility is required until the accessibility layer
 The full phase-by-phase plan, including the component pipeline, testing strategy and how a model generates UI on the fly, is in [`docs/PLAN.md`](docs/PLAN.md). [`docs/examples/ecommerce.md`](docs/examples/ecommerce.md) shows the complete store the plan builds toward.
 
 1. **Foundation** (0.1, done): engine, parser, expressions, actions, keyboard focus, inspector, first components, tests, playground.
-2. **Components and data**: done so far: grid, list, accordion, badge, avatar, code, rating, link, switch, radio, stepper, tabs, breadcrumb, pagination, skeleton, empty, pressable cards and struck-through text, plus images, a slider (with dragging), screens with `go:` and `back`, `notify:` messages, lists and records with `each`, `if` blocks, list functions and formatting, text input (a real input placed over the field while typing), charts (multi-series bar, horizontal bar and line, pie, donut, funnel and waterfall), meters (ring and gauge), a stat's change and sparkline, callouts, tables with sorting and selection, a select and a date picker that open in a popup layer on the canvas, and `derive` lines for values worked out from state. Next: scrolling and dialog, plus the accessibility layer.
+2. **Components and data**: done so far: grid, list, accordion, badge, avatar, code, rating, link, switch, radio, stepper, tabs, breadcrumb, pagination, skeleton, empty, pressable cards and struck-through text, plus images, a slider (with dragging), screens with `go:` and `back`, `notify:` messages, lists and records with `each`, `if` blocks, list functions and formatting, text input (a real input placed over the field while typing), charts (multi-series bar, horizontal bar and line, pie, donut, funnel and waterfall), meters (ring and gauge), a stat's change and sparkline, callouts, tables with sorting and selection, a select and a date picker that open in a popup layer on the canvas, and `derive` lines for values worked out from state. Next: scrolling and dialog. The accessibility mirror is built: every element describes itself to screen readers (see [Accessibility](#accessibility)).
 3. **Docs site**: started. `site/` is a VitePress site with a playground, an example gallery and documentation whose examples render live with SayShape, deployed to GitHub Pages by `.github/workflows/pages.yml`.
 4. **Model connection**: started. The playground's Ask a model box, `sayshape/model` (streaming, cleanup and one repair) and `npm run eval` work with any OpenAI-compatible server. Still to do: a production server package, and comparing the results with other generative UI formats.
 5. **An app** built on top.

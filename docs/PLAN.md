@@ -37,7 +37,7 @@ Time estimates are rough, for one developer working with AI assistance, and will
 | No host commands | "Add to cart" and "checkout" must run trusted app code |
 | One screen per spec | Apps move between catalog, product, cart and checkout |
 | No ~~text input~~ (done), ~~images~~ (done), scrolling, overlays | Search, product photos, long lists, dialogs |
-| No accessibility layer | Screen readers can't see a canvas |
+| No accessibility layer (now built: [plan](plans/accessibility.md)) | Screen readers can't see a canvas |
 | No model connection | Everything is still simulated |
 
 The phases below close these gaps in the order that unblocks the most.
@@ -192,7 +192,7 @@ screen name=product title="{product.data.name}"
 
 `notify:'Added {p.name} to your cart'` shows a short toast message. The text, position and look are controlled by the engine.
 
-**Status: built**, drawn by the engine at the bottom of the visible part of the canvas for three seconds, with a `notify` event for the host. Screen readers won't hear it until the accessibility mirror adds a live region (Phase 3.1).
+**Status: built**, drawn by the engine at the bottom of the visible part of the canvas for three seconds, with a `notify` event for the host. Screen readers hear it through the accessibility mirror's polite live region.
 
 **Exit criteria:** the catalog and product screens in [the ecommerce example](examples/ecommerce.md) parse, render (with placeholder components where Phase 3 hasn't landed) and pass streaming tests. The model guide documents sources and commands generated from their registrations.
 
@@ -210,7 +210,7 @@ screen name=product title="{product.data.name}"
 | **Images** | Async loading with placeholder and fade-in, a cache, `ratio=` to reserve space before load, and an allowlist of image hosts. CORS-enabled images only, so the canvas stays readable for tests. **Built** (`image`, `imageHosts`, `loadImage`): the page's origin is always allowed, other hosts must be https and listed. |
 | **Scrolling** | Scroll containers that clip children, handle wheel, touch and keyboard scrolling, and only lay out what is visible (virtualization) for long lists. |
 | **Overlays** | A layer above the page for dialogs, dropdowns, tooltips and toasts, with focus trapping and Escape to close. |
-| **Accessibility mirror** | A hidden DOM tree that mirrors the canvas: a role, a label and a state for each element, focus kept in sync, and live regions so screen readers hear updates. Same idea as Flutter's semantics tree. |
+| **Accessibility mirror** | A hidden DOM tree that mirrors the canvas: a role, a label and a state for each element, focus kept in sync, and live regions so screen readers hear updates. Same idea as Flutter's semantics tree. **Built** (`src/a11y/`, [plan](plans/accessibility.md)): every component describes itself (`ComponentDef.semantics`), axe passes on every visual case; control outlines at 3:1 and keyboard access to the map are still to do. |
 | **Pointer gestures** | Drag for sliders and scroll areas, long press, and touch targets at least 44 px. **Drag built** (`drag` and `key` hooks, pointer capture, `touch-action: pan-y pinch-zoom`) and used by `slider`. Long press and a 44 px minimum for every target are still to do. |
 
 ### 3.2 Components
@@ -371,7 +371,7 @@ A model is good at drafting a `ComponentDef` from a proposal. Give it [`CLAUDE.m
 - [ ] Contract tests pass (layout at 320, 600 and 1024 px; no overflow; theme tokens only)
 - [ ] Visual baselines in light and dark
 - [ ] Keyboard reachable and operable, if interactive
-- [ ] Accessibility mirror role and label (from Phase 3)
+- [x] Accessibility mirror role and label (from Phase 3)
 - [ ] Docs regenerated
 - [ ] Evaluation prompts added
 

@@ -6,6 +6,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { cases } from "./cases";
+import { examples as siteExamples } from "../site/examples/catalog";
 
 const MIRROR = "[data-sayshape-a11y]";
 
@@ -217,3 +218,11 @@ test("in a forced-colors mode the interface draws in the person's system colors"
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   expect(await page.evaluate(() => window.__sayshape!.theme.name)).not.toMatch(/forced-colors$/);
 });
+
+// The website's example gallery, as a screen reader gets it.
+for (const ex of siteExamples) {
+  test(`axe finds nothing wrong in the site example ${ex.id}`, async ({ page }) => {
+    await open(page, ex.spec);
+    await audit(page);
+  });
+}
