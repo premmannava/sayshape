@@ -13,8 +13,12 @@ export interface KindInput {
   items: Value | undefined;
   /** x=: the field holding each item's label. */
   x: string;
-  /** The first field of y=. These kinds show one number per item. */
+  /** The first field of y=: kinds that show one number per item read only this. */
   y: string;
+  /** Every field of y=, in order, for kinds with several series (multiField). */
+  fields: string[];
+  /** labels=, one name per field, blank where none was given. */
+  labels: string[];
   format: Format;
   title: string;
   /** The element's line in the spec, for warnings. */
@@ -25,7 +29,9 @@ export interface KindInput {
 
 export interface ChartKindDef {
   /** Which existing kind's placeholder to draw while the data loads. */
-  loadingAs: "bar" | "hbar";
+  loadingAs: "bar" | "hbar" | "line";
+  /** Takes up to MAX_SERIES fields in y=, with labels= naming them, like bar and line. */
+  multiField?: boolean;
   /**
    * Work out the geometry, relative to the box, headless (ctx.measure only).
    * Put the kind's own parts on g.custom; fill g.slots with a bar per item

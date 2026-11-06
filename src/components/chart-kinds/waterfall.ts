@@ -18,7 +18,7 @@
  */
 import { easeOut, staggered } from "../../ghost";
 import {
-  barPath, chartData, preciseText, chartScale, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintPremiumBar, paintSlotLabels, plotHeight,
+  barPath, barText, chartData, preciseText, chartScale, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintPremiumBar, paintSlotLabels, plotHeight,
   slotLabels, tickLabels, valueText, type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
@@ -39,20 +39,6 @@ export interface WaterfallGeometry {
   bars: Array<WaterfallBar | null>;
   /** Thin lines from each bar's end to the next bar's start, relative to the box. */
   connectors: Array<{ x1: number; x2: number; y: number }>;
-}
-
-/**
- * A value by its bar. One style for the whole chart: compact ($480K, $45K)
- * once any value reaches 10,000, so neighbouring labels read alike.
- */
-export function barText(v: number, format: "number" | "money", compact: boolean): string {
-  if (!compact || Math.abs(v) >= 1e15) return valueText(v, format);
-  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
-  try {
-    return new Intl.NumberFormat("en-US", format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts).format(v);
-  } catch {
-    return valueText(v, format);
-  }
 }
 
 /** A change as it reads: always signed, so a rise and a fall can't be confused. */

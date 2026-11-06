@@ -17,7 +17,7 @@ import { fillTint, themeFont } from "./util";
 /** The most items one chart draws. Larger lists show a message instead. */
 export const MAX_CHART_ITEMS = 200;
 
-export const KINDS = ["bar", "hbar", "line", "pie", "donut", "funnel", "waterfall"] as const;
+export const KINDS = ["bar", "hbar", "line", "area", "stacked", "pie", "donut", "funnel", "waterfall"] as const;
 export const FORMATS = ["number", "money"] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -51,6 +51,8 @@ export interface ChartSlot {
   cy?: number;
   /** The tooltip's lines for this slot, when a kind says more than "Value: 12". */
   notes?: string[];
+  /** For each note, the series color its dot takes (an index into the series colors), or null for the accent. */
+  noteSeries?: Array<number | null>;
   /** Horizontal bars: each series' value as drawn at the end of its bar; null for a gap. */
   valueLabels?: Array<{ text: string; x: number; y: number; align: "left" | "right" } | null>;
 }
@@ -559,5 +561,73 @@ export function chartData(items: Value | undefined, x: string, y: string): Chart
   const d = chartSeries(items, x, [y]);
   const slots = d.slots.map((s) => ({ label: s.label, value: s.values[0] ?? null }));
   return { slots, gaps: d.gaps[0] ?? 0, ...(d.problem ? { problem: d.problem } : {}) };
+}
+
+
+export interface LineControl {
+  cx1: number; cy1: number; cx2: number; cy2: number; x: number; y: number;
+}
+
+/**
+ * Shape-preserving cubic curve controls. Adjacent secant slopes use a
+ * weighted harmonic mean; local peaks and valleys get a zero tangent.
+ * The curve passes through every real data point without inventing a
+ * higher peak or lower trough between samples.
+ */
+export function smoothLineControls(points: readonly { x: number; y: number }[]): LineControl[] {
+  if (points.length < 2) return [];
+  const gaps: number[] = [];
+  const secants: number[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i + 1]!.x - points[i]!.x;
+    gaps.push(dx);
+    secants.push(dx > 0 ? (points[i + 1]!.y - points[i]!.y) / dx : 0);
+  }
+  const tangent = points.map((_p, i) => {
+    if (i === 0) return secants[0]!;
+    if (i === points.length - 1) return secants[secants.length - 1]!;
+    const before = secants[i - 1]!, after = secants[i]!;
+    if (before * after <= 0 || gaps[i - 1]! <= 0 || gaps[i]! <= 0) return 0;
+    const w1 = 2 * gaps[i]! + gaps[i - 1]!;
+    const w2 = gaps[i]! + 2 * gaps[i - 1]!;
+    return (w1 + w2) / (w1 / before + w2 / after);
+  });
+  return points.slice(1).map((point, i) => {
+    const from = points[i]!, dx = gaps[i]!;
+    if (!(dx > 0)) {
+      return { cx1: from.x, cy1: from.y, cx2: point.x, cy2: point.y, x: point.x, y: point.y };
+    }
+    return {
+      cx1: from.x + dx / 3, cy1: from.y + tangent[i]! * dx / 3,
+      cx2: point.x - dx / 3, cy2: point.y - tangent[i + 1]! * dx / 3,
+      x: point.x, y: point.y,
+    };
+  });
+}
+
+export function traceSmoothLine(
+  g: CanvasRenderingContext2D,
+  run: readonly { x: number; y: number }[],
+  ox: number, oy: number,
+): void {
+  if (!run.length) return;
+  g.moveTo(ox + run[0]!.x, oy + run[0]!.y);
+  for (const s of smoothLineControls(run)) {
+    g.bezierCurveTo(ox + s.cx1, oy + s.cy1, ox + s.cx2, oy + s.cy2, ox + s.x, oy + s.y);
+  }
+}
+
+/**
+ * A value by its bar. One style for the whole chart: compact ($480K, $45K)
+ * once any value reaches 10,000, so neighbouring labels read alike.
+ */
+export function barText(v: number, format: "number" | "money", compact: boolean): string {
+  if (!compact || Math.abs(v) >= 1e15) return valueText(v, format);
+  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
+  try {
+    return new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts).format(v);
+  } catch {
+    return valueText(v, format);
+  }
 }
 
