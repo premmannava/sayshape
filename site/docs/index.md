@@ -45,7 +45,7 @@ These are design properties, not benchmark results. SayShape hasn't been measure
 
 ## Status
 
-SayShape is an **early prototype, version 0.1**: the engine, the language, 48 elements, a model client and the tests work today. Canvas content isn't available to screen readers yet, so don't use it where accessibility is required. [Status and limits](./architecture/limitations) lists what else isn't built.
+SayShape is an **early prototype, version 0.1**: the engine, the language, 49 elements, a model client and the tests work today. Canvas content isn't available to screen readers yet, so don't use it where accessibility is required. [Status and limits](./architecture/limitations) lists what else isn't built.
 
 ## Where to go next
 

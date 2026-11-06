@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 48 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie and donut), stats with a change and sparkline, callouts, its own icons, timelines, carousels, segmented toggles, comparisons, tables, a model connection, tests and debugging tools are in place. Accessibility, scrolling and the docs site come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 49 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, funnel and waterfall), meters (a ring or a gauge), stats with a change and sparkline, callouts, its own icons, timelines, carousels, segmented toggles, comparisons, tables, a model connection, tests and debugging tools are in place. Accessibility, scrolling and the docs site come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -316,6 +316,16 @@ chart "Revenue by month" kind=donut items=sales x=month y=revenue format=money
 
 - Bar and line take up to 6 fields in `y=`, separated by commas with no spaces. Each is a series in the theme's series colors, all on one scale, with grouped bars side by side and a legend below (only for 2 or more). `labels=` names them in the legend; otherwise it shows the field names. One field draws exactly as it always has, in the accent, with no legend. More than 6 shows a message instead.
 - Pie and donut take one field. Each item with a value above 0 is a slice, in list order, and the legend below shows each slice's label, value and share. More than 6 slices keeps the 5 largest and adds an "Other" slice holding the rest. A donut shows the total in its middle, formatted by `format=`. Zero values are left out; a negative value, or nothing above 0, shows a message instead. A comma list in `y=` is a warning, and only the first field is used.
+- Funnel (`kind=funnel`) takes one field. Each item is a stage, top to bottom in list order, as wide as its value against the largest, narrowing to the next stage's width. Beside each band are its name, its value and its share of the stage before (`640 · 53%`). At most 12 stages; a negative value shows a message instead.
+- Waterfall (`kind=waterfall`) takes one field. Each item is a change: its bar starts where the running total stands and ends where the change takes it, rises in the good color and falls in the bad one, joined by thin lines. `total="Net income"` adds a last bar from 0 to where the changes end. An item without a number is a gap, and the total carries on without it.
+
+For one number against its range, like progress toward a goal or a score, use `meter` instead of a chart: a `ring` or a `gauge`, colored bad, warn or good by `bands=`:
+
+```
+state score=72 done=41
+meter "Health score" kind=gauge value=score max=100 bands="60,85"
+meter "Goal reached" value=done max=50 format=percent
+```
 
 - Each item is one category, in list order, evenly spaced. Line charts don't treat x as dates or numbers.
 - A value must be a number. A missing field, `null`, or text (even `"12"`) is a gap: no bar, and the line breaks there instead of joining across it. Nothing is turned into 0. A missing label shows as "—".
@@ -460,7 +470,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty) |
@@ -851,21 +861,42 @@ rating bind=stars
 
 ### `chart`
 
-A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, hbar for a ranking with long names, such as top customers, or pie or donut for how one number splits across items, such as sales by region. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).
+A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, or waterfall for how changes add up to a total, such as revenue minus costs. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).
 
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text | A title above the chart. |
-| `kind` | `bar` / `hbar` / `line` / `pie` / `donut` | bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; pie and donut show each item's share of the total, and donut puts the total in the middle. pie and donut take one y field and no negative values. |
+| `kind` | `bar` / `hbar` / `line` / `pie` / `donut` / `funnel` / `waterfall` | bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar. pie, donut, funnel and waterfall take one y field; pie, donut and funnel take no negative values. |
 | `items` | expression, required | The list of records to chart, e.g. items=sales or items={filter(sales, 'open')}. |
 | `x` | name, required | The field holding each item's label (each slice's name in a pie), e.g. x=month. |
 | `y` | names, required | The field holding each item's number, e.g. y=revenue. Bar, hbar and line can compare up to 6 fields on one scale, separated by commas with no spaces, e.g. y=revenue,last_year; each gets its own color and a legend. Items without a number are shown as gaps, not zero. |
 | `labels` | string | Bar, hbar and line with several y fields: the legend's names, in the same order, separated by commas, e.g. labels="This year,Last year". Without it the legend shows the field names. |
+| `total` | string | Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income". |
 | `format` | `number` / `money` | How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K) or money ($37K). |
 
 ```
 state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
 chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year labels="This year,Last year" format=money
+```
+
+### `meter`
+
+One number against its range, as a ring or a gauge: progress toward a goal, a score, utilization or a budget used. Add bands= to color it bad, warn or good by where the value falls.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | A short label under the meter, e.g. "Goal reached". |
+| `value` | expression, required | The number to show, e.g. value=score or value={round(spent / budget * 100)}. |
+| `kind` | `ring` / `gauge` | ring is a full circle, for progress toward a goal; gauge is a half circle, for a score or a level, and shows min and max at its ends and its bands. |
+| `min` | number | The low end of the range (default 0), a number or an {expression}. |
+| `max` | number | The high end of the range (default 100), e.g. max=500 or max={budget}. |
+| `bands` | string | One or two values that split the range into bad, warn and good, low to high, e.g. bands="60,85": below 60 is bad, 60 to 85 warn, 85 and above good. One value splits it into bad and good. |
+| `good` | `up` / `down` | Which end of bands is good: up (default), or down for costs, risk or load, where low is good. |
+| `format` | `number` / `money` / `percent` | How the number reads: number (1,200), money ($1,200) or percent, the value's share of the range (82%). |
+
+```
+state score=72
+meter "Health score" kind=gauge value=score max=100 bands="60,85"
 ```
 
 ### `table`
@@ -1893,7 +1924,7 @@ Don't use SayShape where accessibility is required until the accessibility layer
 The full phase-by-phase plan, including the component pipeline, testing strategy and how a model generates UI on the fly, is in [`docs/PLAN.md`](docs/PLAN.md). [`docs/examples/ecommerce.md`](docs/examples/ecommerce.md) shows the complete store the plan builds toward.
 
 1. **Foundation** (0.1, done): engine, parser, expressions, actions, keyboard focus, inspector, first components, tests, playground.
-2. **Components and data**: done so far: grid, list, accordion, badge, avatar, code, rating, link, switch, radio, stepper, tabs, breadcrumb, pagination, skeleton, empty, pressable cards and struck-through text, plus images, a slider (with dragging), screens with `go:` and `back`, `notify:` messages, lists and records with `each`, `if` blocks, list functions and formatting, text input (a real input placed over the field while typing), charts (multi-series bar, horizontal bar and line, pie and donut), a stat's change and sparkline, callouts, tables with sorting and selection, a select and a date picker that open in a popup layer on the canvas, and `derive` lines for values worked out from state. Next: scrolling and dialog, plus the accessibility layer.
+2. **Components and data**: done so far: grid, list, accordion, badge, avatar, code, rating, link, switch, radio, stepper, tabs, breadcrumb, pagination, skeleton, empty, pressable cards and struck-through text, plus images, a slider (with dragging), screens with `go:` and `back`, `notify:` messages, lists and records with `each`, `if` blocks, list functions and formatting, text input (a real input placed over the field while typing), charts (multi-series bar, horizontal bar and line, pie, donut, funnel and waterfall), meters (ring and gauge), a stat's change and sparkline, callouts, tables with sorting and selection, a select and a date picker that open in a popup layer on the canvas, and `derive` lines for values worked out from state. Next: scrolling and dialog, plus the accessibility layer.
 3. **Docs site**: started. `site/` is a VitePress site with a playground, an example gallery and documentation whose examples render live with SayShape, deployed to GitHub Pages by `.github/workflows/pages.yml`.
 4. **Model connection**: started. The playground's Ask a model box, `sayshape/model` (streaming, cleanup and one repair) and `npm run eval` work with any OpenAI-compatible server. Still to do: a production server package, and comparing the results with other generative UI formats.
 5. **An app** built on top.
