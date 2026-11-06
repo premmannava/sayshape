@@ -8,6 +8,8 @@
  *   npm run sessions -- --only s1,s3                 some sessions only
  *   npm run sessions -- --guide full                 SayShape's full guide instead of compact
  *   npm run sessions -- --cache 5m                   mark system prompts for caching (1h, 5m or off)
+ *   npm run sessions -- --max-tokens 32000           a reply's limit (default 8000); thinking models count
+ *                                                    their thinking toward it
  *   npm run sessions -- --rescore <results dir> …    score saved runs again with the current checks;
  *                                                    with several dirs, also writes a combined report
  *
@@ -78,6 +80,8 @@ async function main(): Promise<void> {
   const cache = cacheArg === undefined ? env.cache : cacheArg === "off" ? undefined : parseCache(cacheArg);
   if (cacheArg !== undefined && cacheArg !== "off" && !cache) throw new Error(`--cache takes 1h, 5m or off, not "${cacheArg}"`);
 
+  const maxTokens = Number(arg("max-tokens") ?? 8000);
+  if (!Number.isInteger(maxTokens) || maxTokens < 256) throw new Error(`--max-tokens takes a whole number of at least 256, not "${arg("max-tokens")}"`);
   const registry = new Registry([...coreComponents, ...mapComponents]);
   const prices = await pricesFor(env.url, models);
   const steps = chosen.reduce((n, s) => n + s.steps.length, 0);
@@ -86,7 +90,7 @@ async function main(): Promise<void> {
   console.log("");
 
   const results = await runSessions(chosen, {
-    config: { url: env.url, apiKey: env.apiKey || undefined, streamUsage: true, maxTokens: 8000, cache },
+    config: { url: env.url, apiKey: env.apiKey || undefined, streamUsage: true, maxTokens, cache },
     models, formats, registry, guide: { imageHosts: [], mode }, prices,
     onResult: (r, done, n) => {
       const mark = !r.ok ? `failed: ${r.error?.slice(0, 60)}` : r.success ? "works" : `${r.checks.filter((c) => !c.passed).length + (r.valid ? 0 : 1)} problem(s)`;
