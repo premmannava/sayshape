@@ -1,114 +1,333 @@
 <script setup lang="ts">
 /**
- * The landing page. Show, don't explain: ask a sample spreadsheet a question
- * and see the answer, with and without SayShape. Three reasons in one line
- * each, a pointer to the three-way comparison, and one way to start.
- * Anything longer lives in the build-along and the docs.
+ * The landing page: what SayShape is, why it isn't just "let the AI write
+ * HTML", how to add it, the measured numbers and what happens to your data.
+ * Short on purpose; the docs hold the rest.
+ *
+ * The numbers are medians of the seven recordings the compare page plays
+ * (site/public/compare/anthropic_claude-sonnet-5.5): tokens estimated from
+ * each answer's length, time until each answer finished.
  */
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { withBase } from "vitepress";
-import DataDemo from "./DataDemo.vue";
-import { generationAvailable, MODEL_LABEL } from "../sayshape/generate";
-
-const reasons = [
-  { title: "Private", text: "Your AI sees column names and a few rows. The rest never leaves the browser." },
-  { title: "Safe", text: "Nothing in it can run code." },
-  { title: "Instant", text: "The answer appears while the AI is still writing." },
-];
-
-const formats = [
-  { name: "SayShape", text: "Lines of text, drawn as each one arrives.", ours: true },
-  { name: "HTML", text: "Code in a sandbox, shown as markup arrives.", ours: false },
-  { name: "A2UI", text: "JSON messages, drawn once each is complete.", ours: false },
-];
+import ShowHero from "./ShowHero.vue";
 
 const href = (p: string) => withBase(p);
+const REPO = "https://github.com/premmannava/sayshape";
+
+const versus = [
+  { what: "Your data", html: "Typed into the code, so every row goes through the AI", ours: "Goes straight to the screen. The AI never reads it" },
+  { what: "Safety", html: "It's code: scripts run in your page", ours: "Nothing can run. A spec is data, not a program" },
+  { what: "Speed", html: "~1,300 tokens · ~13 s to finish", ours: "~170 tokens · ~2.4 s to finish" },
+  { what: "Looks", html: "Different fonts, colors and layout every time", ours: "Your look, every time. The AI never picks colors" },
+  { what: "Mistakes", html: "The page breaks, or looks right and isn't", ours: "A bad line is skipped and reported; the rest works" },
+];
+
+const why = [
+  { title: "Built on the fly", text: "No pre-made screens. Your agent designs each one for the question in front of it." },
+  { title: "Alive, not a picture", text: "People click, type and choose. Changing a value doesn't need another AI reply." },
+  { title: "Fast", text: "7.6× less for the AI to write than HTML, and finished about 5× sooner." },
+];
+
+const setups = [
+  { id: "vscode", name: "VS Code", where: "In .vscode/mcp.json", code: `{\n  "servers": {\n    "sayshape": {\n      "type": "stdio",\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}` },
+  { id: "claude", name: "Claude", where: "Claude Desktop → Settings → Developer → Edit Config", code: `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}` },
+  { id: "chatgpt", name: "ChatGPT", where: "Run it on port 3001 and put it behind HTTPS, then add its /mcp address as a connector in developer mode", code: `npx -y sayshape-mcp --http 3001` },
+];
+const setup = ref(setups[0]!.id);
+const shownSetup = computed(() => setups.find((s) => s.id === setup.value)!);
+
+const ownApp = `const ui = new SayShape(canvas, { components: coreComponents });
+
+ui.beginStream();
+// Your rows go to the screen, never to the model.
+ui.state.set("sales", rowsFromYourDatabase);
+for await (const text of modelStream) ui.push(text);
+ui.endStream();`;
+
+// Medians of 7 recorded tasks, Claude Sonnet 5.5.
+const numbers = [
+  { title: "What the AI writes", unit: "tokens per screen", headline: 7.6, caption: "less than HTML, and 3.7× less than A2UI", digits: 0, suffix: "", rows: [["SayShape", 171], ["A2UI", 628], ["HTML", 1299]] as const },
+  { title: "Time to a finished screen", unit: "seconds", headline: 5.4, caption: "faster than HTML, and 7× faster than A2UI", digits: 1, suffix: " s", rows: [["SayShape", 2.4], ["HTML", 13.2], ["A2UI", 17.2]] as const },
+];
+
+const trust = [
+  "No SayShape account or server",
+  "The AI never reads your rows",
+  "No React, no third-party code",
+  "Nothing the AI writes can run",
+];
+
+// Count the numbers up once, when they scroll into view. They start at their
+// final values, so the page as built (and without motion) shows the real numbers.
+const progress = ref(1);
+const numbersEl = ref<HTMLElement | null>(null);
+let observer: IntersectionObserver | null = null;
+let frame = 0;
+const ease = (t: number) => 1 - (1 - t) ** 3;
+const fmt = (n: number, d: number) => n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const counted = computed(() =>
+  numbers.map((n) => {
+    const k = ease(progress.value);
+    const max = Math.max(...n.rows.map((r) => r[1]));
+    return {
+      ...n,
+      shown: `${fmt(n.headline * k, 1)}×`,
+      bars: n.rows.map(([name, v]) => ({ name, mine: name === "SayShape", value: `${fmt(v * k, n.digits)}${n.suffix}`, width: `${Math.max(1.5, (v / max) * 100 * k)}%` })),
+    };
+  }),
+);
+const still = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function countUp() {
+  const start = performance.now();
+  const step = (now: number) => {
+    progress.value = Math.min(1, (now - start) / 1600);
+    if (progress.value < 1) frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+}
+onMounted(() => {
+  if (!numbersEl.value || typeof IntersectionObserver === "undefined" || still()) return;
+  progress.value = 0;
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some((e) => e.isIntersecting)) { observer?.disconnect(); observer = null; countUp(); }
+  }, { threshold: 0.3 });
+  observer.observe(numbersEl.value);
+});
+onBeforeUnmount(() => { observer?.disconnect(); cancelAnimationFrame(frame); });
 </script>
 
 <template>
-  <div class="landing">
+  <div class="lp">
     <section class="hero" aria-labelledby="hero-title">
-      <h1 id="hero-title" class="hero-title">Ask your data.<br><span class="ss-mark">See the answer.</span></h1>
-      <div class="hero-side">
-        <p class="hero-lede">Your AI writes a few lines. SayShape draws the answer in the browser. Your rows stay with you.</p>
-        <div class="hero-cta">
-          <a class="sayshape-btn primary" href="#demo">Try it below ↓</a>
-          <a class="sayshape-btn quiet" :href="href('/learn/')">Start the build-along</a>
+      <div class="hero-copy">
+        <p class="pill"><span class="pulse" aria-hidden="true"></span>For AI agents · open source</p>
+        <h1 id="hero-title">Let your AI<br> <span class="line2"><span class="ss-mark">show,</span> not tell.</span></h1>
+        <p class="lede">AI agents are stuck answering in text. SayShape lets them answer with a screen people can use, built on the fly in seconds.</p>
+        <div class="cta">
+          <a class="sayshape-btn primary" href="#setup">Add it to your agent →</a>
+          <a class="sayshape-btn quiet" :href="href('/compare')">Watch the comparison</a>
         </div>
-        <a class="hero-status" :href="href('/docs/architecture/limitations.html')">v0.1 · not screen-reader ready yet · Status</a>
+      </div>
+      <ShowHero class="hero-demo" />
+    </section>
+
+    <section class="block html" aria-labelledby="html-title">
+      <div class="head">
+        <h2 id="html-title">“But my AI can already write HTML.”</h2>
+        <p class="big">It can. That's the problem.</p>
+        <p>HTML is a program: long to write, free to run anything, and it only shows your data if the AI types every row into it. SayShape is a description. Your AI writes a few lines, SayShape draws them, and your data goes straight to the screen without the AI reading it.</p>
+      </div>
+      <div class="vs" role="table" aria-label="AI writes HTML compared with AI writes SayShape">
+        <div class="vs-row vs-head" role="row">
+          <span role="columnheader"></span>
+          <span role="columnheader">AI writes HTML</span>
+          <span role="columnheader" class="ours">AI writes SayShape</span>
+        </div>
+        <div v-for="v in versus" :key="v.what" class="vs-row" role="row">
+          <span role="rowheader">{{ v.what }}</span>
+          <span role="cell" class="theirs" data-label="AI writes HTML"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg><span>{{ v.html }}</span></span>
+          <span role="cell" class="ours" data-label="AI writes SayShape"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg><span>{{ v.ours }}</span></span>
+        </div>
+      </div>
+      <p class="note">SayShape does less than HTML on purpose. That's why it's fast, safe and private. <a :href="href('/compare')">Watch them side by side →</a></p>
+    </section>
+
+    <section class="block" aria-labelledby="why-title">
+      <h2 id="why-title" class="visually-hidden">Why teams use it</h2>
+      <div class="why">
+        <article v-for="(w, i) in why" :key="w.title" class="why-item" :style="{ '--i': i }">
+          <span class="why-n" aria-hidden="true">0{{ i + 1 }}</span>
+          <h3>{{ w.title }}</h3>
+          <p>{{ w.text }}</p>
+        </article>
       </div>
     </section>
 
-    <DataDemo />
-    <p class="made-up">
-      The sample spreadsheets are made up. Their suggested questions replay saved answers, drawn live by the engine.
-      <template v-if="generationAvailable">Anything you type, and any question about your own file, is answered live by {{ MODEL_LABEL }}.</template>
-    </p>
-
-    <section class="why" aria-label="Why SayShape">
-      <div v-for="r in reasons" :key="r.title" class="why-item">
-        <h2>{{ r.title }}</h2>
-        <p>{{ r.text }}</p>
+    <section id="setup" class="block" aria-labelledby="setup-title">
+      <div class="head">
+        <h2 id="setup-title">Two ways to use it.</h2>
+      </div>
+      <div class="ways">
+        <article class="way">
+          <h3>In the AI tools you already use</h3>
+          <p>Connect SayShape to VS Code, Claude or ChatGPT, then ask: <em>“show my sales by region.”</em></p>
+          <div class="tabs" role="tablist" aria-label="Where to add it">
+            <button v-for="s in setups" :id="`tab-${s.id}`" :key="s.id" type="button" role="tab" :aria-selected="setup === s.id" :aria-controls="`panel-${s.id}`" @click="setup = s.id">{{ s.name }}</button>
+          </div>
+          <div :id="`panel-${shownSetup.id}`" role="tabpanel" :aria-labelledby="`tab-${shownSetup.id}`" class="panel">
+            <p class="where">{{ shownSetup.where }}</p>
+            <pre tabindex="0"><code>{{ shownSetup.code }}</code></pre>
+          </div>
+          <p class="small">The npm package is coming soon; until then, <a :href="href('/docs/integration/mcp')">run it from the source</a>. Tested with Claude Sonnet 5.5 and GPT-4.1. Results depend on the model you connect.</p>
+        </article>
+        <article class="way">
+          <h3>In your own chatbot</h3>
+          <p>Your agent writes the screen; your app hands SayShape the data. Rows from your database go straight to the screen.</p>
+          <pre tabindex="0" class="panel-code"><code>{{ ownApp }}</code></pre>
+          <a class="more" :href="href('/docs/integration/model')">Integration guide →</a>
+        </article>
       </div>
     </section>
 
-    <section class="formats" aria-labelledby="formats">
-      <div class="formats-head">
-        <h2 id="formats">Same request. Three formats.</h2>
-        <a :href="href('/compare')">Watch the comparison →</a>
+    <section ref="numbersEl" class="block" aria-labelledby="numbers-title">
+      <div class="head">
+        <h2 id="numbers-title">Less to write. <span class="ss-mark">Done sooner.</span></h2>
+        <p>We asked one AI for the same screen three ways, in SayShape, HTML and A2UI, and measured each.</p>
       </div>
-      <div class="formats-grid">
-        <a v-for="f in formats" :key="f.name" class="format" :class="{ ours: f.ours }" :href="href('/compare')">
-          <span class="format-name">{{ f.name }}</span>
-          <span class="format-text">{{ f.text }}</span>
-        </a>
+      <div class="nums">
+        <article v-for="n in counted" :key="n.title" class="num">
+          <div class="num-top"><h3>{{ n.title }}</h3><span>{{ n.unit }}</span></div>
+          <p class="num-big">{{ n.shown }}</p>
+          <p class="num-cap">{{ n.caption }}</p>
+          <div class="bars">
+            <div v-for="b in n.bars" :key="b.name" class="bar" :class="{ mine: b.mine }">
+              <div class="bar-label"><span>{{ b.name }}</span><span>{{ b.value }}</span></div>
+              <div class="bar-track"><div class="bar-fill" :style="{ width: b.width }"></div></div>
+            </div>
+          </div>
+        </article>
       </div>
+      <p class="note">Median of 7 tasks, each answered by Claude Sonnet 5.5 in all three formats at the same moment, November 2026. Tokens are estimated from each answer's length. <a :href="href('/compare')">See the recordings →</a></p>
     </section>
 
-    <section class="start" aria-labelledby="start">
-      <h2 id="start">Try it in <span class="ss-mark">10 minutes.</span></h2>
-      <div class="start-links">
-        <a class="sayshape-btn primary" :href="href('/learn/')">Start the build-along →</a>
-        <a class="sayshape-btn quiet" :href="href('/playground.html')">Open the playground</a>
+    <section class="block trust" aria-labelledby="trust-title">
+      <h2 id="trust-title">An interface engine, not another place to store your data.</h2>
+      <ul>
+        <li v-for="t in trust" :key="t"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>{{ t }}</li>
+      </ul>
+    </section>
+
+    <section class="end" aria-labelledby="end-title">
+      <div>
+        <p class="end-kicker">Your AI already has the intelligence.</p>
+        <h2 id="end-title">Give it a visual language.</h2>
+        <p class="end-small">Open source · MIT licensed</p>
+      </div>
+      <div class="cta">
+        <a class="end-btn" href="#setup">Add it to your agent →</a>
+        <a class="end-btn quiet" :href="REPO">Star on GitHub</a>
       </div>
     </section>
   </div>
 </template>
 
 <style scoped>
-.landing { max-width: 1320px; margin: 0 auto; padding: 40px 32px 72px }
+.lp { max-width: 1240px; margin: 0 auto; padding: 56px 32px 80px }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+h1, h2, h3 { border: 0; padding: 0 }
 
-.hero { display: grid; grid-template-columns: minmax(0, 8fr) minmax(0, 4fr); gap: 24px 48px; align-items: end; margin-bottom: 40px }
-.hero-title { margin: 0; font: 800 clamp(56px, 8.4vw, 120px)/0.9 var(--sayshape-display); letter-spacing: -0.055em; color: var(--vp-c-text-1) }
-.hero-side { display: grid; gap: 18px; padding-bottom: 8px }
-.hero-lede { margin: 0; font-size: 19px; line-height: 1.5; color: var(--vp-c-text-2); text-wrap: pretty }
-.hero-cta { display: flex; flex-wrap: wrap; gap: 10px }
-.hero-status { justify-self: start; font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2); text-decoration: none; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; padding: 6px 12px }
-.hero-status:hover { border-color: var(--ss-rule); color: var(--vp-c-text-1) }
+/* Hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px 56px; align-items: center }
+.hero-copy { display: flex; flex-direction: column; gap: 24px; animation: rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both }
+.pill { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; margin: 0; padding: 6px 14px 6px 10px; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; font: 500 13px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
+.pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--vp-c-brand-1); animation: pulse 2.2s ease-in-out infinite }
+.hero h1 { margin: 0; font: 800 clamp(46px, 5.4vw, 78px)/0.95 var(--sayshape-display); letter-spacing: -0.055em; color: var(--vp-c-text-1); text-wrap: balance }
+.hero h1 .line2 { white-space: nowrap }
+.lede { margin: 0; max-width: 520px; font-size: 21px; line-height: 1.45; color: var(--vp-c-text-2); text-wrap: pretty }
+.cta { display: flex; flex-wrap: wrap; gap: 12px }
+.hero-demo { animation: rise 0.8s 0.12s cubic-bezier(0.2, 0.8, 0.2, 1) both }
 
-.made-up { margin: 18px 0 0; font-size: 13px; color: var(--vp-c-text-2) }
+/* Sections */
+.block { margin-top: 104px }
+.head { display: flex; flex-direction: column; gap: 12px; max-width: 780px; margin-bottom: 32px }
+.head h2, .trust h2 { margin: 0; font: 800 clamp(36px, 4.4vw, 58px)/1.02 var(--sayshape-display); letter-spacing: -0.045em; color: var(--vp-c-text-1) }
+.head p { margin: 0; font-size: 19px; line-height: 1.5; color: var(--vp-c-text-2) }
+.head .big { font: 700 clamp(22px, 2.2vw, 28px)/1.2 var(--sayshape-display); letter-spacing: -0.02em; color: var(--vp-c-brand-1) }
+.note { margin: 18px 0 0; font-size: 15px; color: var(--vp-c-text-2) }
+.note a, .small a, .more { font-weight: 600; color: var(--vp-c-brand-1); text-decoration: none }
 
-.why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 40px; margin-top: 48px; padding: 32px 0; border-top: 2px solid var(--ss-rule) }
-.why h2 { margin: 0; padding: 0; border: 0; font: 800 clamp(28px, 3.2vw, 40px)/1 var(--sayshape-display); letter-spacing: -0.035em }
-.why p { margin: 10px 0 0; font-size: 18px; line-height: 1.45; color: var(--vp-c-text-2) }
+/* HTML vs SayShape */
+.vs { border: 2px solid var(--ss-rule); border-radius: 22px; background: var(--ss-card); overflow: hidden; box-shadow: 6px 6px 0 var(--ss-shadow) }
+.vs-row { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(0, 2.4fr) minmax(0, 2.4fr); border-top: 1px solid var(--vp-c-divider) }
+.vs-row:first-child { border-top: 0 }
+.vs-row > span { display: flex; gap: 10px; align-items: flex-start; padding: 16px 20px; font-size: 16px; line-height: 1.45 }
+.vs-row > span:first-child { font-weight: 700; color: var(--vp-c-text-1) }
+.vs-row svg { flex: none; margin-top: 3px }
+.vs-row > span > span { flex: 1; min-width: 0 }
+.vs-head > span { font: 600 13px var(--vp-font-family-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--vp-c-text-2) }
+.vs-head .ours { color: var(--vp-c-brand-1) }
+.vs .theirs { color: var(--vp-c-text-2) }
+.vs .theirs svg { color: var(--sayshape-warn) }
+.vs-row:not(.vs-head) .ours { color: var(--vp-c-text-1); background: var(--vp-c-brand-soft); font-weight: 500 }
+.vs-row:not(.vs-head) .ours svg { color: var(--vp-c-brand-1) }
 
-.formats { display: flex; flex-direction: column; gap: 20px; padding-top: 36px; border-top: 2px solid var(--ss-rule) }
-.formats-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 16px }
-.formats-head h2 { margin: 0; padding: 0; border: 0; font: 800 clamp(32px, 4vw, 52px)/1 var(--sayshape-display); letter-spacing: -0.04em }
-.formats-head a { flex: none; font-weight: 600; color: var(--vp-c-brand-1); text-decoration: none }
-.formats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px }
-.format { display: flex; flex-direction: column; gap: 6px; padding: 20px; border: 1.5px solid var(--vp-c-divider); border-radius: 16px; background: var(--ss-card); color: var(--vp-c-text-1); text-decoration: none; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s }
-.format.ours { border: 2px solid var(--ss-rule); background: var(--ss-mark-soft) }
-.format:hover, .format:focus-visible { border-color: var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow); transform: translate(-2px, -2px) }
-.format-name { font: 800 26px/1.1 var(--sayshape-display); letter-spacing: -0.02em }
-.format-text { color: var(--vp-c-text-2) }
+/* Why */
+.why { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border-top: 2px solid var(--ss-rule) }
+.why-item { display: flex; flex-direction: column; gap: 10px; padding: 28px 28px 8px 0 }
+.why-item + .why-item { padding-left: 28px; border-left: 1px solid var(--vp-c-divider) }
+.why-n { font: 500 13px var(--vp-font-family-mono); color: var(--vp-c-text-3) }
+.why-item h3 { margin: 0; font: 800 clamp(26px, 2.8vw, 36px)/1.02 var(--sayshape-display); letter-spacing: -0.04em; color: var(--vp-c-text-1) }
+.why-item p { margin: 0; font-size: 17px; line-height: 1.5; color: var(--vp-c-text-2) }
 
-.start { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px 40px; margin-top: 56px; padding-top: 36px; border-top: 2px solid var(--ss-rule) }
-.start h2 { margin: 0; padding: 0; border: 0; font: 800 clamp(34px, 4.6vw, 60px)/1 var(--sayshape-display); letter-spacing: -0.045em }
-.start-links { display: flex; flex-wrap: wrap; gap: 10px }
+/* Two ways */
+.ways { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px }
+.way { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 28px; border: 1.5px solid var(--vp-c-divider); border-radius: 22px; background: var(--ss-card) }
+.way h3 { margin: 0; font: 800 26px/1.1 var(--sayshape-display); letter-spacing: -0.03em; color: var(--vp-c-text-1) }
+.way p { margin: 0; font-size: 16px; line-height: 1.5; color: var(--vp-c-text-2) }
+.way em { color: var(--vp-c-text-1) }
+.tabs { display: inline-flex; align-self: flex-start; gap: 4px; padding: 4px; border: 1.5px solid var(--ss-rule); border-radius: 999px }
+.tabs button { min-height: 40px; padding: 0 16px; border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--vp-c-text-1); cursor: pointer }
+.tabs button[aria-selected="true"] { background: var(--vp-c-text-1); color: var(--ss-on-ink) }
+.panel { display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.where { font: 13px var(--vp-font-family-mono) !important; color: var(--vp-c-text-3) !important }
+.way pre { margin: 0; padding: 16px 18px; border-radius: 14px; background: var(--vp-code-block-bg); border: 1px solid var(--vp-c-divider); font: 13px/1.6 var(--vp-font-family-mono); color: var(--vp-c-text-1); overflow-x: auto; white-space: pre }
+.small { font-size: 14px !important }
+.more { margin-top: auto }
 
-@media (max-width: 960px) {
-  .landing { padding: 28px 20px 56px }
-  .hero, .why, .formats-grid { grid-template-columns: minmax(0, 1fr) }
+/* Numbers */
+.nums { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px }
+.num { display: flex; flex-direction: column; gap: 18px; padding: 30px; border: 2px solid var(--ss-rule); border-radius: 22px; background: var(--ss-card); box-shadow: 6px 6px 0 var(--ss-shadow) }
+.num-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px }
+.num-top h3 { margin: 0; font: 800 24px/1.1 var(--sayshape-display); letter-spacing: -0.025em; color: var(--vp-c-text-1) }
+.num-top span { font: 13px var(--vp-font-family-mono); color: var(--vp-c-text-3) }
+.num-big { margin: 0; font: 800 clamp(60px, 6.4vw, 92px)/0.9 var(--sayshape-display); letter-spacing: -0.05em; color: var(--vp-c-brand-1); font-variant-numeric: tabular-nums }
+.num-cap { margin: -6px 0 0; font-size: 17px; color: var(--vp-c-text-2) }
+.bars { display: flex; flex-direction: column; gap: 14px }
+.bar-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; font-size: 15px; color: var(--vp-c-text-2) }
+.bar-label span:last-child { font-family: var(--vp-font-family-mono); font-variant-numeric: tabular-nums }
+.bar.mine .bar-label { color: var(--vp-c-text-1); font-weight: 700 }
+.bar-track { height: 18px; border-radius: 7px; background: var(--vp-c-bg-alt); overflow: hidden }
+.bar-fill { height: 100%; border-radius: 7px; background: var(--vp-c-text-3); opacity: 0.55 }
+.bar.mine .bar-fill { background: var(--vp-c-brand-1); opacity: 1 }
+
+/* Trust */
+.trust { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px 56px; align-items: center; padding: 48px; border-radius: 28px; background: var(--vp-c-bg-alt) }
+.trust ul { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none }
+.trust li { display: flex; align-items: center; gap: 14px; font: 700 clamp(19px, 1.8vw, 23px)/1.25 var(--sayshape-display); letter-spacing: -0.015em; color: var(--vp-c-text-1) }
+.trust li svg { flex: none; padding: 5px; box-sizing: content-box; border-radius: 50%; background: var(--vp-c-brand-soft); color: var(--vp-c-brand-1) }
+
+/* Closing */
+.end { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 28px 40px; margin-top: 104px; padding: 56px 48px; border-radius: 28px; background: var(--vp-c-text-1); color: var(--ss-on-ink) }
+.end-kicker { margin: 0 0 8px; font-size: 19px; opacity: 0.75 }
+.end h2 { margin: 0; font: 800 clamp(38px, 4.8vw, 64px)/0.98 var(--sayshape-display); letter-spacing: -0.045em; color: inherit }
+.end-small { margin: 14px 0 0; font: 13px var(--vp-font-family-mono); opacity: 0.7 }
+.end-btn { display: inline-flex; align-items: center; min-height: 50px; padding: 0 24px; border-radius: 999px; border: 2px solid var(--ss-on-ink); background: var(--ss-on-ink); color: var(--vp-c-text-1); font-weight: 600; text-decoration: none; transition: transform 0.18s, box-shadow 0.18s }
+.end-btn:hover { transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--vp-c-brand-1) }
+.end-btn.quiet { background: transparent; color: var(--ss-on-ink) }
+
+@keyframes rise { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: none } }
+@keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--vp-c-brand-soft) } 50% { box-shadow: 0 0 0 7px transparent } }
+
+@media (max-width: 1080px) {
+  .hero { grid-template-columns: minmax(0, 1fr) }
 }
-@media (prefers-reduced-motion: reduce) { .format { transition: none } .format:hover { transform: none } }
+@media (max-width: 860px) {
+  .lp { padding: 32px 20px 56px }
+  .block { margin-top: 72px }
+  .why, .ways, .nums, .trust { grid-template-columns: minmax(0, 1fr) }
+  .why-item, .why-item + .why-item { padding: 22px 0; border-left: 0; border-top: 1px solid var(--vp-c-divider) }
+  .why-item:first-child { border-top: 0 }
+  .vs-row { grid-template-columns: minmax(0, 1fr) }
+  .vs-row > span:first-child { padding-bottom: 0 }
+  .vs-head { display: none }
+  .vs-row > span[data-label] { flex-wrap: wrap }
+  .vs-row > span[data-label]::before { content: attr(data-label); flex-basis: 100%; font: 600 11px var(--vp-font-family-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--vp-c-text-3) }
+  .trust, .end { padding: 32px 24px }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-copy, .hero-demo { animation: none }
+  .pulse { animation: none }
+  .end-btn { transition: none }
+}
 </style>

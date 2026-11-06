@@ -57,4 +57,4 @@ Then restart the app. The [server's README](https://github.com/premmannava/saysh
 
 ## Compared with the website
 
-The [landing page](/#demo) answers questions about a spreadsheet with a hosted model through a proxy with a daily limit. The MCP server uses the model you already chat with, so its results depend on that model, and there's no shared limit.
+The website replays saved answers; no model runs there. The MCP server uses the model you already chat with, so its results depend on that model.

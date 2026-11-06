@@ -1,6 +1,6 @@
 # SayShape model proxy
 
-A Cloudflare Worker that answers questions about a spreadsheet on the website's landing page, **without exposing the API key and without the spreadsheet leaving the visitor's browser**. GitHub Pages only serves files, so the key can't live there: it lives here, as a Cloudflare secret.
+A Cloudflare Worker that answers questions about a spreadsheet with a SayShape interface, **without exposing the API key and without the spreadsheet leaving the visitor's browser**. The website doesn't use it at the moment: its landing page replays saved answers. It's kept for a page that answers live, with a fast enough model. GitHub Pages only serves files, so the key can't live there: it lives here, as a Cloudflare secret.
 
 ```
 landing page (GitHub Pages)                          this worker                          NVIDIA
@@ -23,7 +23,7 @@ Protections, in `src/handler.ts` and `src/answer.ts`, tested in `test/worker.tes
 - a 16 KB request limit, far too small for a spreadsheet, and a cap on reply length;
 - spreadsheet cells reach the model only as quoted, fenced data;
 - provider errors become plain messages; the provider's raw reply is never forwarded;
-- `GENERATION_ENABLED = "false"` turns live answers off without touching the site. The sample spreadsheets keep working.
+- `GENERATION_ENABLED = "false"` turns live answers off without touching the site.
 
 ## Deploy (one time)
 
@@ -54,7 +54,7 @@ Then tell the website where the worker is. In GitHub: **Settings → Secrets and
 | `SAYSHAPE_MODEL_ENDPOINT` | `https://sayshape-model.<you>.workers.dev` |
 | `TURNSTILE_SITE_KEY` | the widget's **site key** (public), if you made one |
 
-These are public values, so they're Variables, not Secrets. Re-run the **Website** workflow (or push to `main`). The landing page then takes visitors' own files and questions. Without `SAYSHAPE_MODEL_ENDPOINT`, it shows the sample spreadsheets and their saved answers only.
+These are public values, so they're Variables, not Secrets. A page that asks this worker reads them at build time; the current landing page doesn't, so they change nothing until one does.
 
 ## Change or turn off
 

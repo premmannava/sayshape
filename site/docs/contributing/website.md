@@ -50,8 +50,8 @@ After the next push to `main` (or running the workflow by hand from the **Action
 
 The engine needs a canvas, fonts and `window`, so every demo creates its instance after the page mounts in the browser and destroys it, with all its listeners, when the page unmounts. Pages are emitted as `.html` files, so every route works when visited directly or refreshed on GitHub Pages, which has no server-side routing.
 
-## Live answers on the landing page
+## The landing page's demo
 
-The landing page's demo answers questions about a sample spreadsheet or the visitor's own file. Sample spreadsheets with their suggested questions replay saved answers (`site/examples/data-demo.ts`), with no model. Anything else goes through the model proxy in `worker/` (a Cloudflare Worker that holds the API key): the page reads the file in the browser, sends only the question, the column names and three sample rows, and the engine draws the answer with every row. The site build only needs the proxy's public URL, set as the repository variable `SAYSHAPE_MODEL_ENDPOINT`; without it, the demo offers the samples and their saved answers only. Setup steps are in [`worker/README.md`](https://github.com/premmannava/sayshape/blob/main/worker/README.md).
+The hero plays three saved answers (`site/examples/hero-scenes.ts`) the way a model's response arrives, with the real engine, then presses parts of each screen through the engine's own pointer handling. `test/hero-scenes.test.ts` checks every spec and every press. No model runs on the site.
 
 The site itself holds no secrets: nothing from `.env.local` is read by the site build, and `site:check` fails if a key-shaped string or a value from `.env.local` ends up in the output.
