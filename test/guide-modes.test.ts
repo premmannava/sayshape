@@ -221,3 +221,10 @@ describe("picks", () => {
     expect(forms).toContain("choosing a date: date-picker");
   });
 });
+
+describe("the dashboard profile", () => {
+  it("offers what a dashboard's answers need, so its picks can be followed", () => {
+    const guide = languageGuide(all, { profile: "dashboard", mode: "compact" });
+    for (const pick of ["compare items=plans", "callout tone=warn", "timeline holding step", "segmented bind=view", "chart kind=heatmap", "chart kind=bullet"]) expect(guide).toContain(pick);
+  });
+});

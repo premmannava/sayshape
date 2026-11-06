@@ -32,7 +32,7 @@ export const PROFILES: Readonly<Record<string, readonly string[]>> = {
   forms: ["card", "row", "text", "divider", "input", "select", "date-picker", "check", "switch", "radio", "stepper", "slider", "button", "link", "badge", "screen"],
   lists: ["card", "row", "grid", "text", "badge", "divider", "list", "list-item", "table", "each", "select", "check", "button", "link", "input", "empty", "progress", "stat"],
   shop: ["card", "row", "grid", "text", "image", "badge", "rating", "stat", "button", "link", "radio", "select", "stepper", "each", "list", "list-item", "divider", "screen", "tabs", "input", "empty"],
-  dashboard: ["card", "row", "grid", "text", "stat", "chart", "meter", "table", "details", "detail", "select", "date-picker", "progress", "badge", "list", "list-item", "each", "tabs", "divider", "empty"],
+  dashboard: ["card", "row", "grid", "text", "stat", "chart", "meter", "table", "details", "detail", "compare", "compare-row", "callout", "timeline", "step", "segmented", "select", "date-picker", "progress", "badge", "list", "list-item", "each", "tabs", "divider", "empty"],
 };
 
 /**
