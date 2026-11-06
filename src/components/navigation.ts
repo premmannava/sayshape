@@ -358,7 +358,9 @@ screen name=checkout title="Checkout"
   text "Pay with card"
   button "Back to cart" variant=secondary on=back`,
   visible(node, scope) {
-    return scope(SCREEN_STATE) === node.props.name;
+    // A screen without a name is called "" in the engine's list of screens, so a lone one
+    // (screen title="Team hours") still shows instead of leaving the whole spec blank.
+    return scope(SCREEN_STATE) === (node.props.name ?? "");
   },
   semantics(box, ctx) {
     const p = ctx.props(box.node);

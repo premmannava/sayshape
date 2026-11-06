@@ -15,7 +15,7 @@
 import { actionExpressions, parseActions } from "./actions";
 import { COMMON_PROPS, type ComponentDef, type PropDef } from "./component";
 import { looksLikeData, parseData } from "./data";
-import { bareExpression, checkSyntax, doubledCurrency, identifiers, splitTemplate, wholeExpression } from "./expr";
+import { bareExpression, checkSyntax, doubledCurrency, identifiers, quotedTemplate, splitTemplate, wholeExpression } from "./expr";
 import { actionTargets } from "./actions";
 import { loopNames } from "./each";
 import { PATH } from "./paths";
@@ -271,6 +271,8 @@ function parseDeriveLine(body: string, line: number, diags: Diagnostic[]): Deriv
       diags.push({ line, severity: "warning", message: `derive ${name}: ${err}` });
       continue;
     }
+    const text = quotedTemplate(expr);
+    if (text !== null) diags.push({ line, severity: "warning", message: `derive ${name}: {"${text}"} is plain text, so its braces show as they are. Fill in values where the text is shown instead, in quotes without braces around them: value="${text}"` });
     out.push({ name, expr, line, reads: identifiers(expr) });
   }
   return out;
@@ -396,6 +398,8 @@ function checkProp(name: string, raw: string, def: PropDef, line: number, diags:
   if (whole !== null) {
     const err = checkSyntax(whole);
     if (err) warn(`In ${name}: ${err}`);
+    const text = err ? null : quotedTemplate(whole);
+    if (text !== null) warn(`In ${name}: {"${text}"} is plain text, so its braces show as they are. To fill in values, put the text in quotes without braces around it: ${name}="${text}"`);
     return;
   }
   switch (def.type) {

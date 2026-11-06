@@ -273,7 +273,7 @@ List functions, for computing instead of typing numbers:
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
 | `group(list, 'region')`, `group(list, 'region', 'revenue')`, `group(list, 'region', 'revenue', 'avg')` | Totals per category: one record per region, in the order each first appears, with `count` (how many items) and, given a field, its total under the field's own name: `[{region: "West", count: 12, revenue: 48200}, …]`. A fourth argument works out `'avg'`, `'min'` or `'max'` instead. Totals follow `sum()`'s rules. Values group as they are (`"US"` and `"USA"` are two groups), and items without the field share a `null` group. The groups are new, read-only records |
 
-They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. There are no methods: `rows.slice(0, 5)` is written `slice(rows, 0, 5)`, and a function given more arguments than it takes is reported rather than silently ignoring the extras. Use them for counts and totals, and for the lists people work with: items of a filtered, sorted or searched list keep their place in state, so `bind=t.done` inside `each items=shown` (with `derive shown={filter(tasks, 'owner', owner)}`) ticks the task in `tasks`, and totals worked out from `tasks` follow. To hide items without a derived list, put `if=` on the `each` or on the repeated element. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
+They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. There are no methods or template strings: `rows.slice(0, 5)` is written `slice(rows, 0, 5)`, and text with values in it goes in quotes without braces around it (`value="${total}K"`, not `value={"${total}K"}`, which is reported because its braces would show as they are), and a function given more arguments than it takes is reported rather than silently ignoring the extras. Use them for counts and totals, and for the lists people work with: items of a filtered, sorted or searched list keep their place in state, so `bind=t.done` inside `each items=shown` (with `derive shown={filter(tasks, 'owner', owner)}`) ticks the task in `tasks`, and totals worked out from `tasks` follow. To hide items without a derived list, put `if=` on the `each` or on the repeated element. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
 
 Formatting, for text people read:
 
@@ -441,7 +441,7 @@ screen name=cart title="Your cart"
   button "Keep shopping" variant=secondary on=back
 ```
 
-State is shared by every screen. Screens only go at the top level, and their names are plain words (letters, digits and `_`). `go:` to a screen that doesn't exist does nothing. Your app can move between screens too, with `ui.go("cart")` and `ui.back()`, and hears every move through the `navigate` event.
+State is shared by every screen. Screens only go at the top level, and their names are plain words (letters, digits and `_`). `go:` to a screen that doesn't exist does nothing. A screen written without `name=` gets a warning but still shows when it's the first, so a lone `screen title="Team hours"` isn't left blank; it can't be the target of `go:`. Your app can move between screens too, with `ui.go("cart")` and `ui.back()`, and hears every move through the `navigate` event.
 
 ### Conditions
 

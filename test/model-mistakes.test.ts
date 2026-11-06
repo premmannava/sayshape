@@ -56,6 +56,24 @@ describe("JavaScript habits get a message that says what to write", () => {
     expect(value("'a => b'")).toBe("a => b");
   });
 
+  it("a quoted template inside braces, which shows its braces as they are", () => {
+    const spec = `state total=515\nstat label="Total" value={"\${total}K"}`;
+    expect(warnings(spec)).toContain(`In value: {"\${total}K"} is plain text, so its braces show as they are. To fill in values, put the text in quotes without braces around it: value="\${total}K"`);
+    // Written the suggested way, it fills in the value and nothing is reported.
+    const fixed = `state total=515\nstat label="Total" value="\${total}K"`;
+    expect(warnings(fixed)).toEqual([]);
+    const ui = render(fixed, { components: coreComponents });
+    expect(ui.text()).toContain("$515K");
+    ui.destroy();
+    expect(warnings(`state total=515\nderive label={"{total} sold"}`).join(" ")).toMatch(/derive label: \{"\{total\} sold"\} is plain text/);
+    // Plain quoted text in braces is fine.
+    expect(warnings(`stat label="Total" value={'Done'}`)).toEqual([]);
+  });
+
+  it("JavaScript template strings", () => {
+    expect(value("`Total: ${page}`")).toEqual({ error: expect.stringContaining("SayShape has no template strings") });
+  });
+
   it("set:order:o inside each stores text, so it's flagged", () => {
     const spec = `state order=null orders=[{id: "A1"}]
 each items=orders as=o
