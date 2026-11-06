@@ -41,6 +41,11 @@ export interface LayoutContext {
   props(node: SayShapeNode): PropReader;
   /** Lay out a child at a position with an available width; returns its box. */
   layout(node: SayShapeNode, x: number, y: number, width: number): Box;
+  /**
+   * The width the whole screen is laid out at, for choices that depend on the device rather than
+   * on an element's own space (a button takes the full width on a phone, not in any narrow slot).
+   */
+  screenWidth(): number;
   /** Children to lay out: those whose `if` passes, with every `each` replaced by its copies. */
   visibleChildren(node: SayShapeNode): SayShapeNode[];
   /** The narrowest width a node works at: its component's minWidth, or for containers their widest child plus padding. */

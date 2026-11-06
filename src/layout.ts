@@ -59,6 +59,8 @@ export function createLayoutContext(
   const budget: EachBudget = { left: MAX_EACH_ELEMENTS };
   // Rows ask for their children's minimum widths, which may ask in turn; work each out once per layout.
   const mins = new WeakMap<SayShapeNode, number>();
+  // The first layout call is the whole screen's.
+  let screen = -1;
   const ctx: LayoutContext = {
     theme,
     measure,
@@ -69,6 +71,7 @@ export function createLayoutContext(
       return r;
     },
     layout(node, x, y, width) {
+      if (screen < 0) screen = Math.max(0, width);
       const box: Box = { node, x, y, w: Math.max(0, width), h: 0, children: [] };
       const def = registry.get(node.type);
       if (def) def.layout(box, ctx);
@@ -95,6 +98,7 @@ export function createLayoutContext(
       }
       return w;
     },
+    screenWidth: () => Math.max(0, screen),
     shift: shiftBox,
     warn,
     today,

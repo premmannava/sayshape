@@ -9,7 +9,8 @@ import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } fr
 const VARIANTS = ["primary", "secondary", "danger"] as const;
 
 /** Wider than this, a button takes its label's width instead of all the space it's given. */
-export const BUTTON_FULL_UNDER = 360;
+/** Screens this wide or narrower are phones, where a button takes the full width of its space. */
+export const BUTTON_FULL_UNDER = 480;
 
 /** A button's own width: its label with room either side. */
 function buttonWidth(node: SayShapeNode, ctx: LayoutContext): number {
@@ -35,8 +36,10 @@ button "Back" variant=secondary on=dec:step`,
   layout(box, ctx) {
     box.h = ctx.theme.control.height;
     // On a phone a button takes the full width, which is easy to tap. Anywhere wider it takes the
-    // width of its label, like buttons in apps and on the web, instead of a long slab.
-    if (box.w > BUTTON_FULL_UNDER) box.w = Math.min(box.w, buttonWidth(box.node, ctx));
+    // width of its label, like buttons in apps and on the web, instead of a long slab. It's the
+    // screen that decides, not the button's slot: two buttons in a row inside a card on a laptop
+    // each get a narrow slot, and stretching them across it made them look like slabs.
+    if (ctx.screenWidth() > BUTTON_FULL_UNDER) box.w = Math.min(box.w, buttonWidth(box.node, ctx));
   },
   minWidth(node, ctx) {
     const w = textWidth(ctx, ctx.props(node).text(), 600, 14) + 24;
