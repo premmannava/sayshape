@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 49 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, funnel and waterfall), meters (a ring or a gauge), stats with a change and sparkline, callouts, its own icons, timelines, carousels, segmented toggles, comparisons, tables, a model connection, tests and debugging tools are in place. Accessibility, scrolling and the docs site come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 51 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, funnel and waterfall), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, carousels, segmented toggles, comparisons, tables, a model connection, tests and debugging tools are in place. Accessibility, scrolling and the docs site come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -470,7 +470,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty) |
@@ -975,6 +975,41 @@ Only inside: `compare`.
 
 ```
 compare-row "Price a month" field=price format=money best=low
+```
+
+### `details`
+
+One record as label and value rows, for a single customer, order, policy or ticket: its fields one per line, with an optional status badge. Use detail children; for many records use a table.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | A title above the rows, usually the record's name. |
+| `subtitle` | string | A muted line under the title, e.g. the company and city. |
+
+Children: `detail`.
+
+```
+state renewal="Jan 14, 2027"
+details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
+  detail "Plan" value="Enterprise · 240 seats"
+  detail "Renewal" value={renewal}
+  detail "Status" value="At risk" tone=bad
+```
+
+### `detail`
+
+One row of details: a field's name and its value.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text, required | The field's name, e.g. "Plan". |
+| `value` | string, required | The value to show, usually an {expression}, e.g. value={order.total} or value="{money(total)}". Empty shows —. |
+| `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Show the value as a colored badge, for a status: good, warn, bad, accent or muted. Leave out for plain text. |
+
+Only inside: `details`.
+
+```
+detail "Status" value="At risk" tone=bad
 ```
 
 ### `button`
