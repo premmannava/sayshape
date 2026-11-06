@@ -19,7 +19,7 @@
 import { easeOut, staggered } from "../../ghost";
 import {
   barPath, barText, chartData, preciseText, chartScale, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintPremiumBar, paintSlotLabels, plotHeight,
-  slotLabels, tickLabels, valueText, type ChartGeometry, type ChartSlot, type Rect,
+  slotLabels, tickLabels, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
@@ -42,7 +42,7 @@ export interface WaterfallGeometry {
 }
 
 /** A change as it reads: always signed, so a rise and a fall can't be confused. */
-export function changeText(v: number, format: "number" | "money", compact = false): string {
+export function changeText(v: number, format: Format, compact = false): string {
   const text = barText(v, format, compact);
   return v > 0 ? "+" + text : text;
 }

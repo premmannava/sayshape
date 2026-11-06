@@ -20,7 +20,7 @@
 import { easeOut, staggered } from "../../ghost";
 import { ellipsize } from "../../text";
 import { fillTint, themeFont } from "../util";
-import { chartData, header, LOCALE, MAX_CHART_ITEMS, numberAt, preciseText, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect } from "../chart-kit";
+import { chartData, formatter, header, MAX_CHART_ITEMS, numberAt, preciseText, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
 /** More rows than this stop reading as a scorecard: show the important ones with take(). */
@@ -66,7 +66,7 @@ export function pairText(actual: number, target: number, format: Format): string
   if (a !== t || actual === target) return `${a} of ${t}`;
   const opts: Intl.NumberFormatOptions = { notation: "compact", maximumSignificantDigits: 3 };
   try {
-    const nf = new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts);
+    const nf = formatter(format, opts);
     const a3 = nf.format(actual), t3 = nf.format(target);
     if (a3 !== t3) return `${a3} of ${t3}`;
   } catch { /* fall through to exact */ }
