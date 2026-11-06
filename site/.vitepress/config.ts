@@ -91,7 +91,8 @@ export default defineConfig({
   // Pages are emitted as .html files, which GitHub Pages serves for direct visits and refreshes.
   cleanUrls: false,
   srcExclude: ["README.md", "**/node_modules/**"],
-  appearance: true,
+  // Open in light; the switch still offers dark, and a visitor's choice is remembered.
+  appearance: { initialValue: "light" },
   sitemap: { hostname: SITE_URL },
   head: [
     ["link", { rel: "icon", type: "image/svg+xml", href: `${BASE}favicon.svg` }],

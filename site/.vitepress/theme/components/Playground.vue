@@ -607,7 +607,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 
 .pg-stage { height: 640px; overflow: auto }
 .pg-stage[data-scheme="light"] { --loom-stage: #edf1ef; --loom-stage-dot: #cbd4d0 }
-.pg-stage[data-scheme="dark"] { --loom-stage: #0b0f14; --loom-stage-dot: #222b35 }
+.pg-stage[data-scheme="dark"] { --loom-stage: #16181b; --loom-stage-dot: #2d3035 }
 
 .pg-diags, .pg-events { list-style: none; margin: 0; padding: 6px 0; max-height: 280px; overflow: auto; font-size: 13.5px }
 .pg-diags li button { all: unset; box-sizing: border-box; display: grid; grid-template-columns: auto auto 1fr; gap: 10px; width: 100%; padding: 6px 14px; cursor: pointer; line-height: 1.45 }
