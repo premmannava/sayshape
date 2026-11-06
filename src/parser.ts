@@ -105,13 +105,15 @@ interface LineTokens {
   type: string;
   text?: string;
   props: Record<string, string>;
+  /** Props whose value was written in quotes: text, even when it looks like a number. */
+  quoted: Set<string>;
   problems: string[];
 }
 
 /** Tokenize one element line: `type "text" key=value key="quoted" key={expr}`. */
 export function tokenizeLine(body: string): LineTokens {
   // No prototype, so prop names like toString or __proto__ are plain keys, not inherited ones.
-  const out: LineTokens = { type: "", props: Object.create(null) as Record<string, string>, problems: [] };
+  const out: LineTokens = { type: "", props: Object.create(null) as Record<string, string>, quoted: new Set(), problems: [] };
   let i = 0;
   const n = body.length;
   const skipWs = () => { while (i < n && /\s/.test(body[i]!)) i++; };
@@ -179,7 +181,8 @@ export function tokenizeLine(body: string): LineTokens {
       i += key[0].length + 1;
       const start = i;
       let v: string | null;
-      if (body[i] === '"' || body[i] === "'") v = readQuoted();
+      const quoted = body[i] === '"' || body[i] === "'";
+      if (quoted) v = readQuoted();
       else if (body[i] === "{" || body[i] === "[") v = readGroup() ?? null;
       else v = readBare();
       if (v === null) {
@@ -189,6 +192,7 @@ export function tokenizeLine(body: string): LineTokens {
       }
       if (key[0] in out.props) out.problems.push(`"${key[0]}" is set twice; using the last one`);
       out.props[key[0]] = v;
+      if (quoted) out.quoted.add(key[0]); else out.quoted.delete(key[0]);
       continue;
     }
     const word = readBare();
@@ -223,7 +227,8 @@ function parseStateLine(body: string, line: number, diags: Diagnostic[], skipped
       continue;
     }
     if (wholeExpression(raw) !== null) diags.push({ line, severity: "warning", message: `Initial state "${key}" must be a plain value, list or record, not an expression` });
-    out.push({ key, value: literal(raw), line });
+    // A quoted value is text: state zip="02139" keeps its leading zero, and code="56" stays "56".
+    out.push({ key, value: t.quoted.has(key) ? raw : literal(raw), line });
   }
   return out;
 }
@@ -683,6 +688,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       type: tok.type,
       ...(tok.text !== undefined ? { text: tok.text } : {}),
       props: tok.props,
+      ...(tok.quoted.size ? { quoted: [...tok.quoted] } : {}),
       children: [],
       line: lineNo,
       indent,

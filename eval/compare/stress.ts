@@ -41,7 +41,8 @@ export const stressTasks: Task[] = [
   { id: "z4", category: "chart", request: "Profit bridge for Q3 in $K: Revenue 500, Cost of goods -210, Operating costs -145, Tax -38. Show it as a waterfall ending in a Net income bar, plus a stat with the net income and one with the margin as a percent of revenue.",
     checks: [
       { label: "names the steps and Net income", shows: [/Revenue/, /Cost of goods/, /Tax/, /Net income/i] },
-      { label: "net income (107) and margin (21.4%)", shows: [/\b107\b/, /21\.4\s?%/] },
+      // 107 with or without a unit after it: "107", "$107K".
+      { label: "net income (107) and margin (21.4%)", shows: [/\b107(?![\d.,])/, /21\.4\s?%/] },
     ] },
 
   // Heatmap, and a figure found from the data: Wed 6pm (41) is the busiest.
@@ -87,7 +88,8 @@ export const stressTasks: Task[] = [
     checks: [
       { label: "total spent ($2,163)", shows: [/2,?163/] },
       { label: "category totals (433, 125, 105)", shows: [/\b433\b/, /\b125\b/, /\b105\b/] },
-      { label: "the callout names Food ($433)", shows: [/Food[^\n]{0,60}433|433[^\n]{0,60}Food/] },
+      // A callout's title and detail line are separate pieces, so $433 may be in the piece after the one naming Food.
+      { label: "the callout names Food ($433)", test: (t) => t.some((p, i) => /Food/.test(p) && /larg|bigg|top|most|lead|highest|other than|after|besides|excluding/i.test(p) && (/\b433\b/.test(p) || /\b433\b/.test(t[i + 1] ?? ""))) },
     ] },
 ];
 
@@ -170,7 +172,7 @@ card
   radio "Jupiter" bind=a3 value="Jupiter"
   radio "Neptune" bind=a3 value="Neptune"
   button "Check answers" on=set:checked:true
-  text "You got {(a1 == 'Canberra' ? 1 : 0) + (a2 == 56 ? 1 : 0) + (a3 == 'Jupiter' ? 1 : 0)} of 3" if={checked}`,
+  text "You got {(a1 == 'Canberra' ? 1 : 0) + (a2 == '56' ? 1 : 0) + (a3 == 'Jupiter' ? 1 : 0)} of 3" if={checked}`,
 
   z8: `state tab="Overview" tasks=[{name: "Spec", done: true}, {name: "Design", done: true}, {name: "Build", done: false}, {name: "Test", done: false}, {name: "Launch", done: false}]
 tabs bind=tab

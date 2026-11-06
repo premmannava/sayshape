@@ -122,7 +122,7 @@ One element per line: its type, optional quoted text, then `name=value` props.
 button "Save changes" variant=secondary on=emit:save
 ```
 
-Prop values can be bare (`variant=secondary`), quoted (`label="Water (L)"`) or an expression (`value={price * qty}`). Quotes can be escaped with a backslash.
+Prop values can be bare (`variant=secondary`), quoted (`label="Water (L)"`) or an expression (`value={price * qty}`). Quotes can be escaped with a backslash. A quoted value is always text, in props and on `state` lines alike: `value="56"` is the text 56, so `{q == '56'}` matches it, and `state zip="02139"` keeps its leading zero. Bare `56`, `true` and `false` are a number and booleans; a boolean prop reads `"false"` as false either way.
 
 ### Nesting
 

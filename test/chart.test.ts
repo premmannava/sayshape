@@ -42,7 +42,7 @@ describe("chart props", () => {
     expect(g).toContain(`kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap>`);
     expect(g).toContain(`y=revenue,last_year`);
     expect(g).toMatch(/shown as gaps, not zero/);
-    expect(languageGuide(registry, { mode: "compact" })).toMatch(/^- chart \["text"\] kind=bar\|hbar\|line\|area\|stacked\|pie\|donut\|funnel\|waterfall\|bullet\|heatmap items=expr! x=name! y=name,name! labels=text rows=name target=name good=up\|down total=text format=number\|money\|percent/m);
+    expect(languageGuide(registry, { mode: "compact" })).toMatch(/^- chart "text" kind=bar\|hbar\|line\|area\|stacked\|pie\|donut\|funnel\|waterfall\|bullet\|heatmap items=expr! x=name! y=name,name! labels=text rows=name target=name good=up\|down total=text format=number\|money\|percent/m);
   });
 });
 

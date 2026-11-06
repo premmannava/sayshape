@@ -334,7 +334,9 @@ export class PropReader {
       return r.ok ? r.value : undefined;
     }
     // Text with {expressions} in it, like value="{done} of {total}".
-    return raw.includes("{") ? interpolate(raw, this.scope) : literal(raw);
+    if (raw.includes("{")) return interpolate(raw, this.scope);
+    // A quoted value is text: radio value="56" sets "56", which {q == '56'} then matches.
+    return this.node.quoted?.includes(name) ? raw : literal(raw);
   }
 
   num(name: string, fallback: number): number {
@@ -355,7 +357,10 @@ export class PropReader {
 
   bool(name: string, fallback = false): boolean {
     const v = this.value(name);
-    return v === undefined ? fallback : !!v;
+    if (v === undefined) return fallback;
+    // Quoted values stay text, so wrap="false" arrives as the text "false".
+    if (typeof v === "string") return !["", "false", "0", "null"].includes(v.trim());
+    return !!v;
   }
 
   /**
