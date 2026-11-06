@@ -102,7 +102,7 @@ EVERY ELEMENT ACCEPTS
 ELEMENTS AT A GLANCE
 - layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel
 - content: text, image, code, badge, avatar, callout, icon
-- data: stat, rating, chart, meter, table, table-column, compare, compare-row, map, pin
+- data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
 - navigation: screen, tabs, tab, breadcrumb, pagination
 - feedback: progress, skeleton, empty
@@ -287,6 +287,17 @@ ELEMENTS
     format=<text|number|money>  text, number (1,200.5) or money ($1,200.00).
     best=<low|high>  low or high: mark the lowest or highest number in the row as the best. Leave out when neither is better.
     only inside: compare
+
+  details "<text>"  — One record as label and value rows, for a single customer, order, policy or ticket: its fields one per line, with an optional status badge. Use detail children; for many records use a table.
+    "<text>"  A title above the rows, usually the record's name.
+    subtitle=<string>  A muted line under the title, e.g. the company and city.
+    children: detail
+
+  detail "<text>"  — One row of details: a field's name and its value.
+    "<text>" (required)  The field's name, e.g. "Plan".
+    value=<string, required>  The value to show, usually an {expression}, e.g. value={order.total} or value="{money(total)}". Empty shows —.
+    tone=<default|muted|accent|good|warn|bad>  Show the value as a colored badge, for a status: good, warn, bad, accent or muted. Leave out for plain text.
+    only inside: details
 
   button "<text>"  — A pressable button that runs actions. Use emit: to tell the app what the user chose.
     "<text>" (required)  The button label.
