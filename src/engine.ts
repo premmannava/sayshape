@@ -593,7 +593,9 @@ export class SayShape {
     else if (loading && !box.children.length) paintGenericGhost(ctx, box);
     else def?.paint?.(box, ctx);
     ctx.g.restore();
-    for (const k of box.children) this.paintBox(k, ctx, alpha);
+    const under = def?.surface?.(box, ctx);
+    const inner = under && under !== ctx.theme.colors.raised ? { ...ctx, theme: { ...ctx.theme, colors: { ...ctx.theme.colors, raised: under } } } : ctx;
+    for (const k of box.children) this.paintBox(k, inner, alpha);
     if (def?.paintOver && !(loading && (def.paintLoading || !box.children.length))) {
       ctx.g.save();
       ctx.g.globalAlpha = alpha;

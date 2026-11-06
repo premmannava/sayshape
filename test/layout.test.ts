@@ -29,7 +29,8 @@ describe("layout", () => {
     const { box } = lay(`row gap=10\n  stat label="Days" value=2\n  button "Add"\n`);
     const [stat, button] = box.children[0]!.children;
     expect(stat!.w).toBe(275);
-    expect(button!.x).toBe(20 + 275 + 10);
+    // Wider than a phone, the button takes its label's width at the end of its slot.
+    expect(button!.x + button!.w).toBe(20 + 275 + 10 + 275);
     expect(stat!.h).toBe(54);
     expect(button!.y - stat!.y).toBe((54 - lightTheme.control.height) / 2);
   });

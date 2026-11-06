@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { darkTheme, forcedColorsTheme, lightTheme, type Theme } from "../../src";
+import { darkTheme, forcedColorsTheme, lightTheme, studioDarkTheme, studioLightTheme, type Theme } from "../../src";
 import { parseColor } from "../../src/theme";
 import { render } from "../../src/testing";
 
@@ -14,7 +14,7 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-describe.each([["light", lightTheme], ["dark", darkTheme]] as Array<[string, Theme]>)("%s theme contrast (WCAG 2.1 AA)", (_name, theme) => {
+describe.each([["light", lightTheme], ["dark", darkTheme], ["studio-light", studioLightTheme], ["studio-dark", studioDarkTheme]] as Array<[string, Theme]>)("%s theme contrast (WCAG 2.1 AA)", (_name, theme) => {
   const c = theme.colors;
   for (const bg of ["surface", "raised"] as const) {
     it(`text reads at 4.5:1 on ${bg}: ink, muted, accent, good, warn and bad`, () => {
@@ -82,7 +82,7 @@ describe("target size (WCAG 2.2, 2.5.8)", () => {
   });
 });
 
-describe.each([["light", lightTheme], ["dark", darkTheme]] as Array<[string, Theme]>)("%s theme control outlines (WCAG 1.4.11)", (_name, theme) => {
+describe.each([["light", lightTheme], ["dark", darkTheme], ["studio-light", studioLightTheme], ["studio-dark", studioDarkTheme]] as Array<[string, Theme]>)("%s theme control outlines (WCAG 1.4.11)", (_name, theme) => {
   it("show where a control is at 3:1 on surface and raised", () => {
     for (const bg of ["surface", "raised"] as const) expect(contrast(theme.colors.control, theme.colors[bg]), bg).toBeGreaterThanOrEqual(3);
   });

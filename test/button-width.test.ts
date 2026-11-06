@@ -18,7 +18,7 @@ describe("button width", () => {
   it("takes the full width on a phone", () => {
     const [b] = boxes(`button "Book now"\n`, 360);
     expect(b!.w).toBe(360 - 40);
-    expect(360 - 40).toBeLessThanOrEqual(BUTTON_FULL_UNDER);
+    expect(360).toBeLessThanOrEqual(BUTTON_FULL_UNDER);
   });
 
   it("takes its label's width where there's room, at the start", () => {
@@ -61,6 +61,37 @@ describe("button width", () => {
 `, 360);
     expect(a!.w).toBeCloseTo(b!.w, 5);
     expect(a!.w + b!.w + 10).toBeCloseTo(320, 5);
+  });
+
+  it("keeps its label's width in a narrow slot on a wider screen", () => {
+    // Two buttons in a row in a padded card at 760: each slot is under 360, but it isn't a phone.
+    const [a, b] = boxes(`card
+  row
+    button "Export report"
+    button "Share" variant=secondary
+`, 760);
+    expect(a!.w).toBeLessThan(160);
+    expect(b!.w).toBeLessThan(120);
+    expect(b!.x).toBeCloseTo(a!.x + a!.w + 10, 5);
+    // A lone button in a narrow grid cell, too.
+    const [c] = boxes(`grid min=170
+  card
+    button "Go"
+  card
+    text "x"
+  card
+    text "y"
+  card
+    text "z"
+`, 1024);
+    expect(c!.w).toBe(96);
+  });
+
+  it("takes the full width of its slot on a phone, even in a card", () => {
+    const [a] = boxes(`card
+  button "Pay"
+`, 400);
+    expect(a!.w).toBeGreaterThan(300);
   });
 
   it("presses where it's drawn", () => {

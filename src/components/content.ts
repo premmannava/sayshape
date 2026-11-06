@@ -274,8 +274,14 @@ export function statLayout(label: string, value: string, width: number, theme: T
 
 /** Space between a value and a change beside it. */
 const STAT_CHANGE_GAP = 8;
+/**
+ * Narrower than this, a change always goes under the value. Deciding by the stat's width rather
+ * than by whether this value happens to leave room keeps a row of KPI cards consistent: before,
+ * a short value got its change beside it and a longer one in the next card got it underneath.
+ */
+const STAT_INLINE_MIN = 260;
 /** The change's pill: text size, height and padding either side. */
-const STAT_PILL_TEXT = 12, STAT_PILL_H = 20, STAT_PILL_X = 6;
+const STAT_PILL_TEXT = 12, STAT_PILL_H = 20, STAT_PILL_X = 8;
 /** A sparkline's height and its widest; it's a hint of a trend, not a chart. */
 export const SPARK_H = 28;
 const SPARK_MAX_W = 200;
@@ -349,7 +355,7 @@ function statExtras(box: Box, d: StatLayout, ctx: LayoutContext): StatExtras & {
     const valueW = loading ? Math.min(w, Math.max(56, d.size * 3.2)) : m.width(d.value[0] ?? "", themeFont(t, STAT_WEIGHT, d.size));
     // The change sits in a tinted pill, so it reads as one figure beside the value.
     const natural = loading ? 48 : m.width(full, font) + STAT_PILL_X * 2;
-    const inline = d.value.length === 1 && valueW + STAT_CHANGE_GAP + natural <= w;
+    const inline = d.value.length === 1 && w >= STAT_INLINE_MIN && valueW + STAT_CHANGE_GAP + natural <= w;
     const text = inline ? full : ellipsize(full, w - STAT_PILL_X * 2, font, m);
     const width = loading ? natural : m.width(text, font) + STAT_PILL_X * 2;
     // y is the pill's middle. Beside the value it lines up with the middle of the value's capitals.
@@ -409,15 +415,14 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     const color = e.tone === "muted" ? theme.colors.muted : statToneColor(theme, e.tone);
     ctx.roundRect(left, mid - STAT_PILL_H / 2, c.width, STAT_PILL_H, ctx.theme.radius.sm);
     fillTint(g, color, 0.085);
-    // The hairline and leading ink mark give the indicator a crisp, quiet edge.
+    // A hairline gives the pill a crisp, quiet edge. (A small bar inside its left edge read as a
+    // stray "|" before the arrow, so it's gone.)
     g.save();
     g.strokeStyle = color;
     g.lineWidth = 1;
     g.globalAlpha *= 0.16;
     g.stroke();
     g.restore();
-    ctx.roundRect(left + 2, mid - 5, 2, 10, 1);
-    fillTint(g, color, 0.62);
     g.font = ctx.font(600, STAT_PILL_TEXT);
     g.fillStyle = color;
     g.textAlign = "center";
@@ -548,7 +553,14 @@ progress value={done} max=5 label="{done} of 5 steps"`,
     if (f > 0) {
       ctx.roundRect(box.x, y, Math.max(PROGRESS_H, box.w * f), PROGRESS_H, PROGRESS_H / 2);
       const tone = p.oneOf("tone", TONES, "accent");
-      g.fillStyle = tone === "default" ? ctx.theme.colors.accent : toneColor(ctx.theme, tone);
+      const c = ctx.theme.colors;
+      if (tone === "accent" && c.accent2 !== c.accent) {
+        // The accent gradient spans the whole track, so a fuller bar reaches further into it.
+        const fill = g.createLinearGradient(box.x, 0, box.x + box.w, 0);
+        fill.addColorStop(0, c.accent);
+        fill.addColorStop(1, c.accent2);
+        g.fillStyle = fill;
+      } else g.fillStyle = tone === "default" ? c.accent : toneColor(ctx.theme, tone);
       g.fill();
     }
   },

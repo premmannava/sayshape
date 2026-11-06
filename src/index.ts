@@ -8,7 +8,7 @@ export { layoutTree, boxAt, walkBoxes, isVisible } from "./layout";
 export { Inspector, type DrawCall } from "./inspector";
 export { languageGuide, guideSections, describeGuide, componentExampleSpec, pickList, PICKS_HEADING, WORKED_EXAMPLES, COMPACT_EXAMPLE_ORDER, type GuideOptions, type GuideMode, type GuideSection, type GuideInfo, type WorkedExampleName, type AppAction } from "./prompt";
 export { resolveProfile, PROFILES, ALWAYS_EXPOSED, type ComponentProfile, type ResolvedProfile } from "./profiles";
-export { lightTheme, darkTheme, extendTheme, themeFromCSS, forcedColorsTheme, type Theme } from "./theme";
+export { lightTheme, darkTheme, studioLightTheme, studioDarkTheme, extendTheme, themeFromCSS, forcedColorsTheme, type Theme } from "./theme";
 export { CanvasMeasurer, MonoMeasurer, wrapText, type TextMeasurer } from "./text";
 export { PropReader, COMMON_PROPS, CATEGORIES, type ComponentDef, type ElementPick, type PropDef, type LayoutContext, type PaintContext, type PressContext, type DragContext, type Category } from "./component";
 export { coreComponents } from "./components";

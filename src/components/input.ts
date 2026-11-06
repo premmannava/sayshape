@@ -9,7 +9,8 @@ import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } fr
 const VARIANTS = ["primary", "secondary", "danger"] as const;
 
 /** Wider than this, a button takes its label's width instead of all the space it's given. */
-export const BUTTON_FULL_UNDER = 360;
+/** Screens this wide or narrower are phones, where a button takes the full width of its space. */
+export const BUTTON_FULL_UNDER = 480;
 
 /** A button's own width: its label with room either side. */
 function buttonWidth(node: SayShapeNode, ctx: LayoutContext): number {
@@ -35,8 +36,10 @@ button "Back" variant=secondary on=dec:step`,
   layout(box, ctx) {
     box.h = ctx.theme.control.height;
     // On a phone a button takes the full width, which is easy to tap. Anywhere wider it takes the
-    // width of its label, like buttons in apps and on the web, instead of a long slab.
-    if (box.w > BUTTON_FULL_UNDER) box.w = Math.min(box.w, buttonWidth(box.node, ctx));
+    // width of its label, like buttons in apps and on the web, instead of a long slab. It's the
+    // screen that decides, not the button's slot: two buttons in a row inside a card on a laptop
+    // each get a narrow slot, and stretching them across it made them look like slabs.
+    if (ctx.screenWidth() > BUTTON_FULL_UNDER) box.w = Math.min(box.w, buttonWidth(box.node, ctx));
   },
   minWidth(node, ctx) {
     const w = textWidth(ctx, ctx.props(node).text(), 600, 14) + 24;
@@ -53,8 +56,9 @@ button "Back" variant=secondary on=dec:step`,
     const hoverProgress = ctx.tween(box.node, "button:hover", hot ? 1 : 0, MOTION.hover);
     const pressProgress = ctx.tween(box.node, "button:press", down ? 1 : 0, MOTION.press);
     const color = variant === "danger" ? c.bad : c.accent;
-    const secondary = variant === "secondary";
-    if (disabled) g.globalAlpha *= 0.45;
+    // A disabled button is drawn flat and neutral, with its label in muted ink: still readable,
+    // clearly not ready. (Fading the filled button left a pale label on a pale fill.)
+    const secondary = variant === "secondary" || disabled;
     // Micro-scale the painted button only, never its layout or hit region.
     g.save();
     const scale = 1 - pressProgress * 0.018;
@@ -69,8 +73,19 @@ button "Back" variant=secondary on=dec:step`,
       g.shadowBlur = (2 + 4 * hoverProgress) * (1 - pressProgress);
       g.shadowOffsetY = (1 + hoverProgress) * (1 - pressProgress);
     }
-    if (secondary) {
+    if (disabled) {
       g.fillStyle = c.raised;
+      g.fill();
+      g.fillStyle = c.ink;
+      g.globalAlpha *= 0.06;
+    } else if (secondary) {
+      g.fillStyle = c.raised;
+    } else if (variant === "primary" && c.accent2 !== c.accent) {
+      // A theme with an accent gradient runs it across its primary buttons.
+      const finish = g.createLinearGradient(box.x, 0, box.x + box.w, 0);
+      finish.addColorStop(0, c.accent);
+      finish.addColorStop(1, c.accent2);
+      g.fillStyle = finish;
     } else {
       const finish = g.createLinearGradient(0, box.y, 0, box.y + box.h);
       finish.addColorStop(0, color);
@@ -103,7 +118,7 @@ button "Back" variant=secondary on=dec:step`,
     g.font = ctx.font(600, 14);
     g.textAlign = "center";
     g.textBaseline = "middle";
-    g.fillStyle = secondary ? c.ink : c.onAccent;
+    g.fillStyle = disabled ? c.muted : secondary ? c.ink : c.onAccent;
     g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
     g.restore();
     if (!disabled) ctx.addHit(box);
