@@ -72,6 +72,8 @@ column gap=6
     text "{i + 1}. {g.name}, {g.kg} kg"`,
   // Containers replace each with its copies before laying out, so this only
   // runs if an each is laid out directly; it takes no space then.
+  // Stands for its copies, which are laid out in its place.
+  semantics: () => null,
   layout(box) {
     box.h = 0;
   },

@@ -72,6 +72,8 @@ export interface PartSemantics extends Semantics {
   controls?: unknown;
   /** The detail of the part of the same element that's active while this one has focus (a combobox's highlighted option). */
   active?: unknown;
+  /** Where it is, in canvas CSS pixels, when it has no hit region of its own to place it (a table's row). Default: the element's box. */
+  rect?: Rect;
 }
 
 /** What ComponentDef.semantics returns for an element that is something. */

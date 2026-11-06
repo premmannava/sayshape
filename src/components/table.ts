@@ -36,6 +36,7 @@
  * - At most MAX_TABLE_ROWS rows and MAX_TABLE_COLUMNS columns; otherwise a
  *   message replaces the table.
  */
+import type { PartSemantics } from "../a11y/semantics";
 import type { ComponentDef, ElementView, LayoutContext, PaintContext, PressContext, PropReader } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import type { TextMeasurer } from "../text";
@@ -785,6 +786,38 @@ table items=gear key=id bind=picked sort=by direction=dir
   minWidth: () => 200,
   // Scrolled sideways, it needs as much more room as it can scroll.
   fullWidth: (box) => box.w + ((box.data as TableGeometry | undefined)?.scroll?.max ?? 0),
+  semantics(box, ctx) {
+    const d = box.data as TableGeometry | undefined;
+    const name = ctx.props(box.node).text() || ctx.textBefore() || undefined;
+    if (!d) return null;
+    if (d.message) return { role: "text", name: name ? `${name}: ${d.message}` : d.message };
+    // Rows are drawn by the table itself: header, rows and cells are parts,
+    // each placed where it's drawn (before any sideways scrolling).
+    const parts: PartSemantics[] = [{ detail: "head", role: "row", rect: { x: box.x + d.frame.x, y: box.y + d.frame.y, w: d.frame.w, h: d.headerH } }];
+    d.columns.forEach((col, ci) => parts.push({
+      detail: d.sortable ? sortDetail(col.field) : `col:${ci}`,
+      within: "head",
+      role: "columnheader",
+      name: col.label,
+      sort: col.sorted === "asc" ? "ascending" : col.sorted === "desc" ? "descending" : undefined,
+    }));
+    if (!d.rows.length && d.empty) {
+      parts.push({ detail: "empty", role: "row" }, { detail: "empty:cell", within: "empty", role: "cell", name: d.empty });
+    }
+    d.rows.forEach((row) => {
+      const rowDetail = row.detail ?? `row:${row.index}`;
+      parts.push({
+        detail: rowDetail,
+        role: "row",
+        // A row that can be focused and chosen is named by its cells, read when focus lands on it.
+        name: row.selectable ? row.cells.map((c) => c.full).join(", ") : undefined,
+        selected: row.selectable ? row.selected : undefined,
+        rect: { x: box.x + d.frame.x, y: box.y + row.y, w: d.frame.w, h: row.h },
+      });
+      row.cells.forEach((cell, ci) => parts.push({ detail: `cell:${row.index}:${ci}`, within: rowDetail, role: ci === 0 ? "rowheader" : "cell", name: cell.full }));
+    });
+    return { role: "table", name, detail: "table", parts };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const geo = tableLayout(box, p, ctx, !!ctx.isLoading?.(box.node));
@@ -886,6 +919,8 @@ export const tableColumn: ComponentDef = {
   parents: ["table"],
   example: `table-column "Price" field=price format=money`,
   // Columns have no box of their own: the table lays them out and draws them.
+  // Read as part of its table (table describes its columns).
+  semantics: () => null,
   layout(box) {
     box.h = 0;
   },

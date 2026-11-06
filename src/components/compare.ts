@@ -11,6 +11,7 @@
  * Like a table turned on its side: options are columns, attributes are rows.
  * Rows have no box of their own; compare lays them out and draws them.
  */
+import type { PartSemantics } from "../a11y/semantics";
 import type { ComponentDef, LayoutContext } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import { drawIcon } from "../icons";
@@ -68,6 +69,25 @@ compare items=plans pick="Pro"
   compare-row "Storage (GB)" field=storage format=number best=high
   compare-row "Support" field=support`,
   minWidth: () => 200,
+  semantics(box, ctx) {
+    const d = box.data as CompareLayout | undefined;
+    const name = ctx.props(box.node).text() || ctx.textBefore() || undefined;
+    if (!d) return null;
+    if (d.message) return { role: "text", name: [name, d.message.join(" ")].filter(Boolean).join(": ") };
+    // Options are columns, rows are what they're compared on.
+    const options = d.names.map((lines, i) => `${lines.join(" ")}${i === d.pick ? ", recommended" : ""}`);
+    const parts: PartSemantics[] = [{ detail: "head", role: "row" }, { detail: "head:label", within: "head", role: "cell", name: "" }];
+    options.forEach((o, i) => parts.push({ detail: `head:${i}`, within: "head", role: "columnheader", name: o }));
+    d.rows.forEach((row, r) => {
+      parts.push({ detail: `row:${r}`, role: "row", rect: { x: box.x, y: box.y + row.y, w: box.w, h: row.h } });
+      parts.push({ detail: `row:${r}:label`, within: `row:${r}`, role: "rowheader", name: row.label.join(" ") });
+      row.cells.forEach((cell, i) => {
+        const text = cell.check !== undefined ? (cell.check ? "Yes" : "No") : cell.lines.join(" ");
+        parts.push({ detail: `cell:${r}:${i}`, within: `row:${r}`, role: "cell", name: `${text}${cell.best ? ", best" : ""}` });
+      });
+    });
+    return { role: "table", name, detail: "compare", parts };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const t = ctx.theme, m = ctx.measure;
@@ -213,6 +233,8 @@ export const compareRow: ComponentDef = {
   parents: ["compare"],
   example: `compare-row "Price a month" field=price format=money best=low`,
   // Rows have no box of their own: compare lays them out and draws them.
+  // Read as a row of its compare (compare describes its rows).
+  semantics: () => null,
   layout(box) {
     box.h = 0;
   },

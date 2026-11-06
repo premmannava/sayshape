@@ -3,6 +3,7 @@
  * new component is checked against the project rules (CLAUDE.md) without
  * anyone writing tests for it first.
  */
+import { accessibleKey, type AccessibleNode } from "../src/a11y/semantics";
 import { describe, expect, it } from "vitest";
 import type { ComponentDef } from "../src/component";
 import { coreComponents } from "../src/components";
@@ -52,6 +53,36 @@ const boxesOf = (root: Box, type: string) => {
 const EPS = 0.01;
 
 describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
+  describe("accessibility", () => {
+    it("describes itself to screen readers (semantics)", () => {
+      expect(typeof def.semantics, "add semantics to its ComponentDef: see docs/plans/accessibility.md").toBe("function");
+    });
+
+    it("gives every place Tab can land a node in the accessibility tree", () => {
+      const ui = render(exampleSpec(def), { components: ALL });
+      const keys = new Set<string>();
+      const walk = (n: AccessibleNode) => { keys.add(n.key); n.children.forEach(walk); };
+      walk(ui.accessibility({ full: true }));
+      for (const h of ui.hits.filter((r) => r.focusable)) {
+        const key = accessibleKey(h.box.node, h.detail);
+        expect(keys.has(key), `${h.box.node.type} on line ${h.box.node.line}, part ${String(h.detail)}: no node with key ${key}`).toBe(true);
+      }
+      ui.destroy();
+    });
+
+    it("names every control a screen reader can focus", () => {
+      const ui = render(exampleSpec(def), { components: ALL });
+      const unnamed: string[] = [];
+      const walk = (n: AccessibleNode) => {
+        if (n.focusable && !n.name?.trim()) unnamed.push(`${n.role} ${n.key}`);
+        n.children.forEach(walk);
+      };
+      walk(ui.accessibility({ full: true }));
+      expect(unnamed).toEqual([]);
+      ui.destroy();
+    });
+  });
+
   describe("definition", () => {
     it("has no placeholders left from the scaffold", () => {
       const texts = [def.description, def.text?.description, def.example, ...Object.values(def.props).map((p) => p.description)];
