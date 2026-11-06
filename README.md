@@ -1412,7 +1412,8 @@ The canvas fills its parent's width and grows to fit its content.
 | `screens` / `currentScreen` / `canGoBack` | The spec's screen names, the visible one, and whether `back()` can move |
 | `notify(text)` | Show a short message, as `notify:` does |
 | `imagesLoaded()` | A promise that resolves once every requested image has loaded or failed |
-| `picture({ pixelRatio?, background? })` | A promise of a new canvas with the screen as it is now (current state and screen), at 2× by default, on the theme's surface, without hover, focus, popups or messages. Save it with `toBlob()` for a "Save image" button |
+| `picture({ pixelRatio?, background?, widen? })` | A promise of a new canvas with the screen as it is now (current state and screen), at 2× by default, on the theme's surface, without hover, focus, popups or messages. When a table scrolls sideways, the picture is drawn wider (up to 2,400 px) so every column shows; `widen: false` keeps the screen's width. Save it with `toBlob()` for a "Save image" button |
+| `hiddenWidth()` | How much wider the screen would need to be for nothing to scroll sideways; 0 when nothing does |
 | `setTheme(theme)` | Switch themes |
 | `find(type)` | All nodes of a type, e.g. `ui.find("button")` |
 | `expose(name?)` | Put the instance on `window` for the console (default `window.sayshape`) |

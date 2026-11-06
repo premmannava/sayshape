@@ -16,7 +16,7 @@ import { domEditorHost } from "./dom-editor";
 import { noEditor, type EditorHost, type EditorSpec } from "./editor";
 import { isList, makeList } from "./data";
 import { findItem, getIn, PATH, placeOf, setIn, type Place } from "./paths";
-import { createLayoutContext, isVisible } from "./layout";
+import { createLayoutContext, isVisible, walkBoxes } from "./layout";
 import { Loading, type LoadingView } from "./loading";
 import { MotionValues } from "./motion";
 import { easeOut, paintGenericGhost } from "./ghost";
@@ -104,6 +104,9 @@ export interface SayShapeOptions {
    */
   pixelRatio?: number;
 }
+
+/** The widest picture() draws, in CSS pixels, so a very wide table can't make a huge image. */
+export const MAX_PICTURE_WIDTH = 2400;
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
@@ -510,25 +513,40 @@ export class SayShape {
    * (default 2), on the theme's surface color (background: false leaves it
    * transparent). Hover, focus, an open popup and notices aren't in it, and
    * nothing animates: it's the screen at rest. Waits for images to settle.
-   * Browsers only: it needs a document to make the canvas.
+   *
+   * An image can't be scrolled, so when an element scrolls sideways at the
+   * screen's width (a wide table), the picture is drawn wider, up to
+   * MAX_PICTURE_WIDTH, until everything shows. widen: false keeps the
+   * screen's width. Browsers only: it needs a document to make the canvas.
    */
-  async picture(opts: { pixelRatio?: number; background?: boolean } = {}): Promise<HTMLCanvasElement> {
-    const out = document.createElement("canvas");
-    const copy = new SayShape(out, {
-      ...this.opts,
-      theme: this.theme,
-      width: this.metrics.width || this.opts.width,
-      pixelRatio: opts.pixelRatio ?? 2,
-      animate: false,
-      editor: noEditor,
-      onWarning: () => {},
-    });
-    try {
+  async picture(opts: { pixelRatio?: number; background?: boolean; widen?: boolean } = {}): Promise<HTMLCanvasElement> {
+    let width = this.metrics.width || this.opts.width || 600;
+    let out!: HTMLCanvasElement;
+    let copy!: SayShape;
+    for (let attempt = 0; ; attempt++) {
+      out = document.createElement("canvas");
+      copy = new SayShape(out, {
+        ...this.opts,
+        theme: this.theme,
+        width,
+        pixelRatio: opts.pixelRatio ?? 2,
+        animate: false,
+        editor: noEditor,
+        onWarning: () => {},
+      });
       copy.setSpec(this.source);
       // Every value, including which screen is showing, before the copy's first frame.
       for (const [key, value] of Object.entries(this.state.snapshot())) copy.state.set(key, value);
-      // The first frame asks for the images it shows; the second draws them once they've settled.
+      // The first frame lays everything out and asks for the images it shows.
       copy.renderNow();
+      const more = opts.widen === false ? 0 : copy.hiddenWidth();
+      // A few tries: widening a row or grid gives a table only its share of the extra room.
+      if (more < 1 || width >= MAX_PICTURE_WIDTH || attempt >= 3) break;
+      copy.destroy();
+      width = Math.min(MAX_PICTURE_WIDTH, Math.ceil(width + more));
+    }
+    try {
+      // The second frame draws the images once they've settled.
       await copy.imagesLoaded();
     } finally {
       copy.destroy();
@@ -546,6 +564,18 @@ export class SayShape {
       }
     }
     return out;
+  }
+
+  /** How much wider the screen would have to be for no element to scroll sideways (ComponentDef.fullWidth); 0 when none does. */
+  hiddenWidth(): number {
+    let more = 0;
+    if (this.rootBox) {
+      walkBoxes(this.rootBox, (b) => {
+        const full = this.registry.get(b.node.type)?.fullWidth?.(b);
+        if (full !== undefined && Number.isFinite(full)) more = Math.max(more, full - b.w);
+      });
+    }
+    return more;
   }
 
   // ---------------------------------------------------------------- notifications

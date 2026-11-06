@@ -780,6 +780,8 @@ table items=gear key=id bind=picked sort=by direction=dir
   table-column "Item" field=name
   table-column "Price" field=price format=money`,
   minWidth: () => 200,
+  // Scrolled sideways, it needs as much more room as it can scroll.
+  fullWidth: (box) => box.w + ((box.data as TableGeometry | undefined)?.scroll?.max ?? 0),
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const geo = tableLayout(box, p, ctx, !!ctx.isLoading?.(box.node));
