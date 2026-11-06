@@ -15,6 +15,7 @@ import { mapComponents } from "../src/components/map";
 import { Registry } from "../src/registry";
 import { a2uiPrompt } from "../eval/compare/a2ui";
 import { HTML_PROMPT, report, score, summarize, systemPrompt, waitsOnServer, type AnswerResult } from "../eval/compare/run";
+import { stressTasks } from "../eval/compare/stress";
 import { tasks } from "../eval/compare/tasks";
 
 interface Saved { url: string; models: string[]; runs: number; guide: { imageHosts: string[]; mode?: "full" | "compact" }; cache: true | "1h" | null; prices: unknown; results: AnswerResult[] }
@@ -22,7 +23,7 @@ interface Saved { url: string; models: string[]; runs: number; guide: { imageHos
 async function rescore(results: AnswerResult[]): Promise<AnswerResult[]> {
   const out: AnswerResult[] = [];
   for (const r of results) {
-    const task = tasks.find((t) => t.id === r.task);
+    const task = [...tasks, ...stressTasks].find((t) => t.id === r.task);
     if (!task || !r.ok) { out.push(r); continue; }
     const s = await score(r.format, task, r.output);
     out.push({
