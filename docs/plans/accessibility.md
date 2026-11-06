@@ -1,0 +1,88 @@
+# Plan: accessibility
+
+**Status:** in progress (started 2026-11-06). Step 1 is done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
+**Rough size:** 6 to 9 weeks for one person, in nine pull requests that each leave `main` working.
+
+## The problem
+
+SayShape draws everything on one `<canvas>`. To a screen reader the whole interface is a single element labelled "Generated interface": no buttons, no headings, no table, nothing announced. Keyboard support is mostly there already (Tab order from hit regions, Enter and Space, arrows in the richer elements, a painted focus ring), but nothing outside the canvas can see where focus is or what it's on.
+
+Enterprises buying SayShape will ask for WCAG 2.1 AA. This plan gets there without giving up the canvas.
+
+## The design
+
+A hidden **accessibility mirror**: a DOM tree beside the canvas that gives each shown element a role, a name and a state, kept in step with focus, state and the screen. Flutter's semantics tree works the same way. CLAUDE.md rule 7 already allows it.
+
+```
+spec → layout → boxes → paint (hits) → canvas
+                          │
+                          └→ semantics() per element → accessibility tree → host
+                                                                            │
+                     engine focus / press / key ←── screen reader, keyboard ┘
+```
+
+### The component hook
+
+`ComponentDef.semantics?(box, ctx)` returns what the element is (`src/a11y/semantics.ts`):
+
+- `ElementSemantics`: a `role`, a `name`, and state (`checked`, `selected`, `expanded`, `disabled`, `value` with `min`, `max`, `now` and `text`, heading `level`, and so on). Its children go inside it.
+- `null`: it's only layout or decoration; its children stand in its place.
+- `false`: it and everything inside it are hidden (a loading placeholder).
+
+Elements with pressable parts (stepper buttons, stars, tabs, page numbers) list them in `parts`, each matched to the hit region painted with the same `detail`, so each part keeps its own Tab stop.
+
+Without the hook, an element is a button for each region it paints, text for its quoted text, or nothing. Step 6 makes the contract tests require the hook on every component.
+
+### The tree
+
+`buildAccessibilityTree` (`src/a11y/tree.ts`) walks the laid-out boxes after a frame is painted. It is headless (boxes and hits in, plain objects out), so it's tested in Node: `render(spec).accessibility()` in `sayshape/testing`. Each node has a `key` that stays the same across frames (the element's id, plus the part's detail), which the browser host diffs by so screen readers keep their place.
+
+Roles whose content is their name (button, checkbox, heading, img and so on) don't get children; a focusable element inside one (a button in a pressable card) is kept just after it.
+
+### The host
+
+The engine talks only to an `AccessibilityHost` (`src/a11y/host.ts`), like the `EditorHost` for typing:
+
+- In browsers, `domAccessibilityHost` (`src/a11y/dom.ts`) puts a container right after the canvas: a polite and an assertive live region (step 1), then the mirror itself (step 2).
+- `sayshape/testing` records what it's given (`ui.announcements`).
+- `accessibility: "off"` turns it off.
+
+### How the mirror behaves (step 2)
+
+1. Each node is absolutely positioned over its box, transparent, with `pointer-events: none`, so the mouse still reaches the canvas while touch exploration on phones finds the right place.
+2. Native elements where they help: `<button>`, `<input type="checkbox">` with `role="switch"`, `<input type="range">` for sliders, `<a>` for links. Phones get increment, decrement and activation for free.
+3. Focus goes both ways: when the engine moves focus, the matching node gets DOM focus; when a screen reader or Tab moves DOM focus, the engine follows and paints its ring.
+4. A click on a node runs the engine's existing `activate`; keys go to the existing `key` handlers. No second behavior path.
+5. Focusing a field's node opens the existing editor, whose `<input>` carries the field's label.
+6. The root carries `aria-busy` while a spec streams or data loads, then "Ready" is announced once.
+
+## Steps
+
+Each is one pull request into `main`, merged only when CI is green.
+
+1. **Foundations** (done). `src/a11y/` types, the `semantics` hook, the tree builder, the host interface with live regions, the `accessibility` option, `notify:` messages and new screens announced, `ui.accessibility()` and `ui.announcements` in `sayshape/testing`.
+2. **Mirror sync.** The DOM mirror from the tree each frame, keyed diffing, placement, focus both ways, clicks and keys routed to the engine, `aria-busy`. axe on one sample.
+3. **Controls.** button, link, check, switch, radio, segmented, stepper, slider, rating, input, pressable card and list-item.
+4. **Content and structure.** text and headings, image, icon, code, badge, avatar, callout, stat, list, timeline, details, accordion, carousel, progress, meter, skeleton, empty, layout containers.
+5. **Navigation and popups.** screen, tabs, breadcrumb, pagination, select (single and multiple), date-picker.
+6. **Data.** table, compare, chart summaries and data tables for every kind, map. The contract tests start requiring `semantics` on every component.
+7. **Beyond screen readers.** Reduced motion everywhere, a contrast test of every theme token pair with fixes, a forced-colors theme, minimum target sizes, notify timing.
+8. **Language and guide.** `label=` on the few controls with no quoted text, warnings for unlabelled controls and untitled charts, two guide lines.
+9. **Verification and docs.** axe over every sample and site example in CI, a README section, a manual VoiceOver and NVDA script.
+
+## Testing
+
+| Level | What | Where |
+|---|---|---|
+| Unit and contract | The tree for each component through `render().accessibility()`; every component describes itself (from step 6) | `test/a11y/`, `test/contract.test.ts` |
+| DOM host | Live regions and the mirror in jsdom | `test/a11y/dom-host.test.ts` |
+| Browser | Roles, names, focus both ways, clicks reaching `activate` | Playwright |
+| Audit | axe-core on every visual case and sample | Playwright with `@axe-core/playwright` (a dev dependency) |
+| Screen readers | VoiceOver and NVDA on the store and a dashboard | By hand, before any AA claim |
+
+## Risks
+
+- Screen readers may not activate transparent nodes with `pointer-events: none`. Step 2 checks; if needed, nodes take pointer events only while focus is inside the mirror.
+- Rebuilding the mirror while a spec streams could lose a screen reader's place. Keyed diffing keeps node identity, and `aria-busy` holds announcements until it's done.
+- Large tables and maps add hundreds of nodes. Measured in `bench/`; if slow, only rows on screen get nodes.
+- Automated tests can't prove AA. A manual pass comes before any customer claim.

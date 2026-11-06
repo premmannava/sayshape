@@ -11,6 +11,7 @@ import type { ImageState } from "./images";
 import type { Theme } from "./theme";
 import type { TextMeasurer } from "./text";
 import type { PopupSize, PopupState } from "./popup";
+import type { SemanticsContext, SemanticsResult } from "./a11y/semantics";
 import type { Box, HitTarget, SayShapeNode, Rect, Value } from "./types";
 
 /**
@@ -292,6 +293,16 @@ export interface ComponentDef {
   fullWidth?(box: Box): number;
   /** A panel this element opens over the screen, like a select's options. Open it with ctx.openPopup in press or key. */
   popup?: PopupDef;
+  /**
+   * What this element is to a screen reader: a role, a name and a state
+   * (src/a11y/semantics.ts). Return null when it's only layout or
+   * decoration (its children stand in its place), or false to hide it and
+   * everything inside it. Elements with pressable parts list them in
+   * `parts`, matched to the hit regions they paint by `detail`. Without
+   * this, an element is a button for each region it paints, text for its
+   * quoted text, or nothing.
+   */
+  semantics?(box: Box, ctx: SemanticsContext): SemanticsResult;
 }
 
 /** Props every component accepts. */

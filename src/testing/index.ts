@@ -17,6 +17,8 @@ import { SayShape, type SayShapeEvents, type SayShapeOptions } from "../engine";
 import { interpolate } from "../expr";
 import { eachInstances, scopeOf } from "../each";
 import type { EditorEvents, EditorHost, EditorSpec } from "../editor";
+import type { AccessibilityHost, Politeness } from "../a11y/host";
+import type { AccessibleNode } from "../a11y/semantics";
 import { isVisible, walkBoxes } from "../layout";
 import { lightTheme, type Theme } from "../theme";
 import type { Box, Diagnostic, HitRegion, SayShapeNode, Value } from "../types";
@@ -91,6 +93,16 @@ export interface Rendered {
   readonly focused: SayShapeNode | null;
   /** The open popup (a select's options): its owner, where it is, and its pressable regions. */
   readonly popup: SayShape["openPopupInfo"];
+  /** What screen readers have been told (notify: messages, new screens), oldest first. */
+  readonly announcements: Announcement[];
+
+  /**
+   * The screen as a screen reader gets it: each shown element's role, name
+   * and state, in reading order. Leave out `full` for a compact, printable
+   * form; pass it for the AccessibleNode tree itself.
+   */
+  accessibility(): AccessibleSummary;
+  accessibility(opts: { full: true }): AccessibleNode;
 
   /** Elements matching a query, in spec order. Hidden elements are included with `box: null`. */
   findAll(query: Query): Found[];
@@ -144,10 +156,16 @@ export interface Rendered {
 export function render(spec: string, opts: RenderOptions = {}): Rendered {
   ensurePath2D();
   const canvas = new FakeCanvas();
+  const announcements: Announcement[] = [];
+  const accessibility: AccessibilityHost = {
+    announce: (text, politeness = "polite") => { announcements.push({ text, politeness }); },
+    destroy() {},
+  };
   let editingNode = (): string | null => null;
   const editor = new FakeEditorHost(() => editingNode());
   const sayshape: SayShape = new SayShape(canvas as unknown as HTMLCanvasElement, {
     editor,
+    accessibility,
     components: opts.components ?? coreComponents,
     theme: opts.theme ?? lightTheme,
     width: opts.width ?? 600,
@@ -245,6 +263,12 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     get hits() { return sayshape.hitRegions; },
     get focused() { return sayshape.focus?.node ?? null; },
     get popup() { return sayshape.openPopupInfo; },
+    get announcements() { return announcements; },
+    accessibility: ((o?: { full: true }) => {
+      const tree = sayshape.accessibilityTree();
+      if (!tree) throw new Error("Nothing has been rendered yet");
+      return o?.full ? tree : summarize(tree);
+    }) as Rendered["accessibility"],
 
     findAll,
     find,
@@ -339,6 +363,46 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     },
   };
   return ui;
+}
+
+/** Something a screen reader was told. */
+export interface Announcement {
+  text: string;
+  politeness: Politeness;
+}
+
+/**
+ * One accessibility node, compactly: its role, its name, and its state
+ * written as words ("checked", "disabled", "value 3"), then its children.
+ */
+export interface AccessibleSummary {
+  role: string;
+  name?: string;
+  state?: string[];
+  children?: AccessibleSummary[];
+}
+
+const STATE_FLAGS = ["selected", "expanded", "disabled", "pressed", "required", "invalid", "multiselectable"] as const;
+
+function summarize(n: AccessibleNode): AccessibleSummary {
+  const state: string[] = [];
+  if (n.checked !== undefined) state.push(n.checked === "mixed" ? "mixed" : n.checked ? "checked" : "not checked");
+  for (const f of STATE_FLAGS) if (n[f] !== undefined) state.push(n[f] ? f : `not ${f}`);
+  if (n.current) state.push(n.current === true ? "current" : `current ${n.current}`);
+  if (n.level !== undefined) state.push(`level ${n.level}`);
+  if (n.sort) state.push(`sorted ${n.sort}`);
+  if (n.value) {
+    const v = n.value;
+    if (v.text !== undefined) state.push(`value ${v.text}`);
+    else if (v.now !== undefined) state.push(`value ${v.now}`);
+    if (v.min !== undefined || v.max !== undefined) state.push(`range ${v.min ?? ""} to ${v.max ?? ""}`);
+  }
+  if (n.focusable) state.push("focusable");
+  const out: AccessibleSummary = { role: n.role };
+  if (n.name) out.name = n.name;
+  if (state.length) out.state = state;
+  if (n.children.length) out.children = n.children.map(summarize);
+  return out;
 }
 
 /** The text box a fake editor host shows: what a person would see in it. */

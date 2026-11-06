@@ -14,3 +14,5 @@ export { PropReader, COMMON_PROPS, CATEGORIES, type ComponentDef, type ElementPi
 export { coreComponents } from "./components";
 export * as components from "./components";
 export type { SayShapeNode, Box, Diagnostic, Value, HitTarget, Rect } from "./types";
+export { ROLES, accessibleKey, type Role, type Semantics, type ElementSemantics, type PartSemantics, type SemanticsResult, type SemanticsContext, type AccessibleNode, type RangeValue } from "./a11y/semantics";
+export { noAccessibility, type AccessibilityHost, type Politeness } from "./a11y/host";
