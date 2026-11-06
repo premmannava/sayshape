@@ -112,7 +112,7 @@ export const stat: ComponentDef = {
     },
   },
   picks: [
-    { for: "a headline number with how it changed and its recent trend", write: "stat change=\"+12%\" spark=weekly" },
+    { for: "a headline number with its change and recent trend", write: "stat change=\"+12%\" spark=weekly" },
   ],
   example: `state price=24 qty=2
 stat label="Total" value="\${price*qty}"`,
