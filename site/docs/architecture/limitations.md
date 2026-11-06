@@ -10,7 +10,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 ## Built
 
 - The engine: parser, expressions, actions, layout, painting, hit testing, keyboard focus (including parts of elements), popups and the inspector.
-- 51 elements ([reference](../components/)): layout, content (including callout), data (stat with a change and sparkline, rating, details for one record, charts: multi-series bar, horizontal bar and line, pie, donut, funnel and waterfall, meters as a ring or a gauge, tables with sorting and selection, the world map), input (buttons, checks, switches, radios, select, date picker, stepper, slider, text input), navigation (screens, tabs, breadcrumb, pagination) and feedback (progress, skeleton, empty).
+- 51 elements ([reference](../components/)): layout, content (including callout), data (stat with a change and sparkline, rating, details for one record, charts: multi-series bar, horizontal bar and line, stacked bars, area, pie, donut, funnel and waterfall, meters as a ring or a gauge, tables with sorting and selection, the world map), input (buttons, checks, switches, radios, select, date picker, stepper, slider, text input), navigation (screens, tabs, breadcrumb, pagination) and feedback (progress, skeleton, empty).
 - State with lists and records, host data, `each` with keys and nesting, `bind=` and actions on paths, `add`, `remove` and `clear`, `if` blocks, `derive` lines, list and formatting functions, screens with `go:` and `back`, `notify:` messages, and images from allowed hosts.
 - The model guide (full and compact, with profiles), `sayshape/model` (streaming, cleaning, checking, one repair, bounded refinement), an evaluation script, and `sayshape/testing`.
 - Unit, contract, streaming, fuzz and visual tests, benchmarks, a component scaffold and CI.
@@ -23,7 +23,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 - **Scrolling regions and overlays.** No scrolling areas inside a screen, and no dialogs, menus or tooltips. The popup layer only serves a component's own popup.
 - **Multi-select**, typing to search in a select, option groups.
 - **Larger tables**: more than 200 rows, vertical scrolling, sticky headers, editable cells, multi-row selection. (Wide tables already scroll sideways.)
-- **More charts**: stacked bars, area charts, tooltips, series from different lists, time or numeric axes.
+- **More charts**: series from different lists, time or numeric axes.
 - **Dates beyond one day**: ranges, times, time zones, other locales.
 - **Packaging**: an npm release and a production model server.
 

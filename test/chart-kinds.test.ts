@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
 import { chartHoverAt, type ChartGeometry } from "../src/components/chart";
-import { barText, changeText, CHART_KINDS, MAX_FUNNEL_STAGES, type FunnelGeometry, type WaterfallGeometry } from "../src/components/chart-kinds";
+import { barText, changeText, CHART_KINDS, MAX_FUNNEL_STAGES, type AreaGeometry, type FunnelGeometry, type StackedGeometry, type WaterfallGeometry } from "../src/components/chart-kinds";
 import { KINDS } from "../src/components/chart-kit";
 import { parse } from "../src/parser";
 import { languageGuide } from "../src/prompt";
@@ -29,7 +29,7 @@ describe("the kind seam", () => {
 
   it("teaches the new kinds in the model guide", () => {
     const guide = languageGuide(registry);
-    expect(guide).toContain("kind=<bar|hbar|line|pie|donut|funnel|waterfall>");
+    expect(guide).toContain("kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall>");
     expect(guide).toContain("funnel shows stages top to bottom");
     expect(guide).toContain("waterfall shows each item as a change");
     expect(guide).toContain("total=");
@@ -162,5 +162,102 @@ describe("waterfall", () => {
     expect(geo(waterfall(`[{step: "A"}]`)).message).toBe("No numbers to chart");
     const many = `[${Array.from({ length: 40 }, (_v, i) => `{step: "S${i}", amt: ${i}}`).join(", ")}]`;
     expect(geo(waterfall(many, "", 240)).message).toMatch(/Too narrow/);
+  });
+});
+
+const SALES = `[{m: "Jan", hw: 12000, sw: 8000, sv: 4000}, {m: "Feb", hw: 14000, sw: 9000, sv: 5000}, {m: "Mar", hw: 11000, sw: 11000, sv: 6000}]`;
+const stackedChart = (rows: string, extra = "", width = 600) => render(`state rows=${rows}\nchart "Revenue" kind=stacked items=rows x=m y=hw,sw,sv ${extra}\n`, { width });
+const areaChart = (rows: string, y = "v", extra = "", width = 600) => render(`state rows=${rows}\nchart "Visits" kind=area items=rows x=w y=${y} ${extra}\n`, { width });
+
+describe("stacked", () => {
+  it("parses with several fields and labels, like bar", () => {
+    expect(msgs(`state rows=${SALES}\nchart kind=stacked items=rows x=m y=hw,sw,sv labels="Hardware,Software,Services" format=money`)).toEqual([]);
+    expect(msgs(`state rows=${SALES}\nchart kind=stacked items=rows x=m y=hw,sw labels="One"`)[0]).toMatch(/labels has 1 names for 2 y fields/);
+    expect(msgs(`state rows=${SALES}\nchart kind=stacked items=rows x=m y=a,b,c,d,e,f,g`)[0]).toMatch(/at most 6 series/);
+  });
+
+  it("piles each item's fields into one bar, bottom up in the order written", () => {
+    const d = geo(stackedChart(SALES));
+    const s = d.custom as StackedGeometry;
+    const jan = s.bars[0]!;
+    expect(jan.map((g) => g.series)).toEqual([0, 1, 2]);
+    // Each segment sits on the one before it, and the heights follow the values.
+    expect(jan[1]!.rect.y + jan[1]!.rect.h).toBeCloseTo(jan[0]!.rect.y, 5);
+    expect(jan[1]!.rect.h / jan[0]!.rect.h).toBeCloseTo(8 / 12, 5);
+    expect(jan.map((g) => g.end)).toEqual([false, false, true]);
+    expect(d.slots[0]!.value).toBe(24000);
+    expect(d.legend.map((l) => l.label)).toEqual(["hw", "sw", "sv"]);
+  });
+
+  it("shows each total above its bar, and every part in the tooltip", () => {
+    const ui = stackedChart(SALES, `labels="Hardware,Software,Services" format=money`);
+    const d = geo(ui);
+    expect((d.custom as StackedGeometry).totals).toEqual(["$24K", "$28K", "$28K"]);
+    expect(d.slots[0]!.notes).toEqual(["Hardware: $12,000.00", "Software: $8,000.00", "Services: $4,000.00", "Total: $24,000.00"]);
+    expect(d.slots[0]!.noteSeries).toEqual([0, 1, 2, null]);
+    const bar = d.slots[1]!.bar!;
+    expect(chartHoverAt(d, bar.x + bar.w / 2, bar.y + 2)).toEqual({ kind: "slot", index: 1 });
+  });
+
+  it("stacks negative values down from 0, never into the positives", () => {
+    const d = geo(stackedChart(`[{m: "Q1", hw: 10, sw: -4, sv: 3}]`));
+    const segs = (d.custom as StackedGeometry).bars[0]!;
+    const neg = segs.find((g) => !g.up)!;
+    expect(neg.series).toBe(1);
+    expect(neg.rect.y).toBeCloseTo(d.zeroY!, 5);
+    expect(segs.filter((g) => g.up).map((g) => g.series)).toEqual([0, 2]);
+    expect(d.slots[0]!.value).toBe(9);
+  });
+
+  it("leaves a missing field out of its bar, never 0, and says so", () => {
+    const ui = stackedChart(`[{m: "Jan", hw: 5, sv: 2}, {m: "Feb", hw: 4, sw: 1, sv: 2}]`);
+    expect((geo(ui).custom as StackedGeometry).bars[0]!.map((g) => g.series)).toEqual([0, 2]);
+    expect(ui.warnings.join()).toMatch(/1 of 2 items have no number in their sw field/);
+  });
+
+  it("says so when there's nothing to chart or no room", () => {
+    expect(geo(stackedChart(`[]`)).message).toBe("No data to chart");
+    const many = `[${Array.from({ length: 60 }, (_v, i) => `{m: "M${i}", hw: ${i}, sw: 1, sv: 1}`).join(", ")}]`;
+    expect(geo(stackedChart(many, "", 240)).message).toMatch(/Too narrow/);
+  });
+});
+
+describe("area", () => {
+  const VISITS = `[{w: "W1", v: 30, l: 20}, {w: "W2", v: 40, l: 25}, {w: "W3", v: 35, l: 30}]`;
+
+  it("parses with one or several fields", () => {
+    expect(msgs(`state rows=${VISITS}\nchart kind=area items=rows x=w y=v`)).toEqual([]);
+    expect(msgs(`state rows=${VISITS}\nchart kind=area items=rows x=w y=v,l labels="This year,Last year"`)).toEqual([]);
+  });
+
+  it("keeps 0 on the scale, so the fill is true to the amounts", () => {
+    const d = geo(areaChart(`[{w: "W1", v: 90}, {w: "W2", v: 95}, {w: "W3", v: 100}]`));
+    expect(d.min).toBe(0);
+    expect(d.zeroY).not.toBeNull();
+  });
+
+  it("draws one run per series, broken at gaps", () => {
+    const d = geo(areaChart(`[{w: "W1", v: 3}, {w: "W2", v: 4}, {w: "W3"}, {w: "W4", v: 5}, {w: "W5", v: 6}]`));
+    const runs = (d.custom as AreaGeometry).runs;
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.map((r) => r.length)).toEqual([2, 2]);
+  });
+
+  it("names several series in a legend and the tooltip", () => {
+    const d = geo(areaChart(VISITS, "v,l", `labels="This year,Last year"`));
+    expect(d.legend.map((l) => l.label)).toEqual(["This year", "Last year"]);
+    expect(d.slots[1]!.notes).toEqual(["This year: 40", "Last year: 25"]);
+    const col = d.slots[1]!.bars![0]!;
+    expect(chartHoverAt(d, col.x + col.w / 2, col.y + col.h / 2)).toEqual({ kind: "slot", index: 1 });
+    expect(geo(areaChart(VISITS)).legend).toEqual([]);
+  });
+
+  it("draws a placeholder like a line while the data loads", () => {
+    const ui = render(`chart "V" kind=area items=rows x=w y=v\n`);
+    ui.sayshape.setLoading(["rows"]);
+    ui.sayshape.renderNow();
+    expect(geo(ui).loading).toBeDefined();
+    expect(geo(ui).kind).toBe("line");
+    ui.destroy();
   });
 });

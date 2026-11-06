@@ -43,14 +43,14 @@ import { easeOut, paintGhost, staggered } from "../ghost";
 import { themeFont } from "./util";
 import { CHART_KINDS } from "./chart-kinds";
 import {
-  barPath, chartData, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
+  barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
   plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
   type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
 } from "./chart-kit";
 
 // Kept importable from here, where they have always been.
-export { chartData, chartSeries, chartScale, MAX_CHART_ITEMS, niceStep, shareText, tickLabels, valueText } from "./chart-kit";
-export type { ChartData, ChartGeometry, SeriesData, ChartSlot, LegendItem, PieSlice, Rect } from "./chart-kit";
+export { chartData, chartSeries, chartScale, smoothLineControls, traceSmoothLine, MAX_CHART_ITEMS, niceStep, shareText, tickLabels, valueText } from "./chart-kit";
+export type { ChartData, ChartGeometry, LineControl, SeriesData, ChartSlot, LegendItem, PieSlice, Rect } from "./chart-kit";
 
 /** The most fields one bar or line chart draws, one color each. */
 export const MAX_SERIES = SERIES_COUNT;
@@ -106,61 +106,6 @@ export function morphPieSlices(
     return { ...slice, start, end: angle };
   });
 }
-
-export interface LineControl {
-  cx1: number; cy1: number; cx2: number; cy2: number; x: number; y: number;
-}
-
-/**
- * Shape-preserving cubic curve controls. Adjacent secant slopes use a
- * weighted harmonic mean; local peaks and valleys get a zero tangent.
- * The curve passes through every real data point without inventing a
- * higher peak or lower trough between samples.
- */
-export function smoothLineControls(points: readonly { x: number; y: number }[]): LineControl[] {
-  if (points.length < 2) return [];
-  const gaps: number[] = [];
-  const secants: number[] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const dx = points[i + 1]!.x - points[i]!.x;
-    gaps.push(dx);
-    secants.push(dx > 0 ? (points[i + 1]!.y - points[i]!.y) / dx : 0);
-  }
-  const tangent = points.map((_p, i) => {
-    if (i === 0) return secants[0]!;
-    if (i === points.length - 1) return secants[secants.length - 1]!;
-    const before = secants[i - 1]!, after = secants[i]!;
-    if (before * after <= 0 || gaps[i - 1]! <= 0 || gaps[i]! <= 0) return 0;
-    const w1 = 2 * gaps[i]! + gaps[i - 1]!;
-    const w2 = gaps[i]! + 2 * gaps[i - 1]!;
-    return (w1 + w2) / (w1 / before + w2 / after);
-  });
-  return points.slice(1).map((point, i) => {
-    const from = points[i]!, dx = gaps[i]!;
-    if (!(dx > 0)) {
-      return { cx1: from.x, cy1: from.y, cx2: point.x, cy2: point.y, x: point.x, y: point.y };
-    }
-    return {
-      cx1: from.x + dx / 3, cy1: from.y + tangent[i]! * dx / 3,
-      cx2: point.x - dx / 3, cy2: point.y - tangent[i + 1]! * dx / 3,
-      x: point.x, y: point.y,
-    };
-  });
-}
-
-export function traceSmoothLine(
-  g: CanvasRenderingContext2D,
-  run: readonly { x: number; y: number }[],
-  ox: number, oy: number,
-): void {
-  if (!run.length) return;
-  g.moveTo(ox + run[0]!.x, oy + run[0]!.y);
-  for (const s of smoothLineControls(run)) {
-    g.bezierCurveTo(ox + s.cx1, oy + s.cy1, ox + s.cx2, oy + s.cy2, ox + s.x, oy + s.y);
-  }
-}
-
-
 
 /** The datum beneath the pointer, with geometry relative to the chart box. */
 export interface ChartHover {
@@ -749,20 +694,21 @@ function check(props: Readonly<Record<string, string>>): string[] {
   // Expressions are worked out later; only what's written can be checked here.
   if (y === undefined || y.startsWith("{")) return out;
   const fields = fieldsOf(y);
-  const own = kind in CHART_KINDS;
-  if ((isRound(kind as Kind) || own) && fields.length > 1) {
+  const own = CHART_KINDS[kind];
+  const oneField = isRound(kind as Kind) || (!!own && !own.multiField);
+  if (oneField && fields.length > 1) {
     out.push(`chart kind=${kind} shows one field, so only y=${fields[0]} is used. Write y=${fields[0]}, or use kind=bar, kind=hbar or kind=line to compare ${fields.join(", ")}`);
   }
   if (props.total !== undefined && kind !== "waterfall") {
     out.push(`total= adds a final bar to kind=waterfall only, so it was ignored here; remove it, or use kind=waterfall`);
   }
-  if (!isRound(kind as Kind) && !own && fields.length > MAX_SERIES) {
+  if (!oneField && fields.length > MAX_SERIES) {
     out.push(`chart draws at most ${MAX_SERIES} series, and y lists ${fields.length}. Keep ${MAX_SERIES} fields or fewer, or make two charts`);
   }
   const labels = props.labels;
   if (labels !== undefined && !labels.includes("{")) {
     if (isRound(kind as Kind)) out.push(`labels= names the y fields of a bar or line chart; a ${kind}'s slices are named by x=, so labels= was ignored`);
-    else if (own) out.push(`labels= names the y fields of a bar or line chart; a ${kind}'s items are named by x=, so labels= was ignored`);
+    else if (oneField) out.push(`labels= names the y fields of a bar or line chart; a ${kind}'s items are named by x=, so labels= was ignored`);
     else if (labelsOf(labels).length !== fields.length) {
       out.push(`labels has ${labelsOf(labels).length} names for ${fields.length} y field${fields.length === 1 ? "" : "s"}; give one per field, in the same order, like labels="This year,Last year"`);
     }
@@ -774,22 +720,22 @@ export const chart: ComponentDef = {
   type: "chart",
   category: "data",
   description:
-    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, or waterfall for how changes add up to a total, such as revenue minus costs. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
+    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, or waterfall for how changes add up to a total, such as revenue minus costs. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
   text: { description: "A title above the chart." },
   props: {
     kind: {
       type: "enum", values: KINDS, default: "bar",
-      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar. pie, donut, funnel and waterfall take one y field; pie, donut and funnel take no negative values.",
+      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar. pie, donut, funnel and waterfall take one y field; pie, donut and funnel take no negative values.",
     },
     items: { type: "expression", required: true, description: "The list of records to chart, e.g. items=sales or items={filter(sales, 'open')}." },
     x: { type: "name", required: true, description: "The field holding each item's label (each slice's name in a pie), e.g. x=month." },
     y: {
       type: "names", required: true,
-      description: "The field holding each item's number, e.g. y=revenue. Bar, hbar and line can compare up to 6 fields on one scale, separated by commas with no spaces, e.g. y=revenue,last_year; each gets its own color and a legend. Items without a number are shown as gaps, not zero.",
+      description: "The field holding each item's number, e.g. y=revenue. Bar, hbar and line can compare up to 6 fields on one scale, separated by commas with no spaces, e.g. y=revenue,last_year; each gets its own color and a legend. stacked and area take up to 6 fields too. Items without a number are shown as gaps, not zero.",
     },
     labels: {
       type: "string",
-      description: "Bar, hbar and line with several y fields: the legend's names, in the same order, separated by commas, e.g. labels=\"This year,Last year\". Without it the legend shows the field names.",
+      description: "Bar, hbar, line, area and stacked with several y fields: the legend's names, in the same order, separated by commas, e.g. labels=\"This year,Last year\". Without it the legend shows the field names.",
     },
     total: { type: "string", description: "Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total=\"Net income\"." },
     format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K) or money ($37K)." },
@@ -807,7 +753,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const own = CHART_KINDS[kind];
     if (ctx.isLoading?.(box.node)) {
       const shape = own?.loadingAs ?? kind;
-      const out = loadingGeometry(box, shape, isRound(shape) || own ? 1 : Math.min(MAX_SERIES, Math.max(1, fields.length)), p.text(), ctx);
+      const out = loadingGeometry(box, shape, isRound(shape) || (own && !own.multiField) ? 1 : Math.min(MAX_SERIES, Math.max(1, fields.length)), p.text(), ctx);
       box.data = out.g;
       box.h = out.h;
       return;
@@ -819,7 +765,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     if (own) {
       const extra: Record<string, string> = {};
       if (p.has("total")) extra.total = p.str("total");
-      out = own.layout(box, { items, x, y: fields[0] ?? "", format, title: p.text(), line, extra }, ctx);
+      out = own.layout(box, { items, x, y: fields[0] ?? "", fields, labels: labelsOf(p.str("labels")), format, title: p.text(), line, extra }, ctx);
     } else if (isRound(kind)) {
       out = roundGeometry(box, pieData(items, x, fields[0] ?? ""), kind, format, p.text(), line, ctx);
     } else if (fields.length > MAX_SERIES) {
@@ -1146,7 +1092,12 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
   } else if (hover.kind === "slot") {
     const s = d.slots[hover.index]!;
     heading = s.label;
-    if (s.notes) for (const text of s.notes) rows.push({ text, color: c.accent });
+    if (s.notes) {
+      s.notes.forEach((text, i) => {
+        const k = s.noteSeries?.[i];
+        rows.push({ text, color: k === null || k === undefined ? c.accent : palette[k % palette.length]! });
+      });
+    }
     else s.values.forEach((v, k) => {
       if (v !== null) {
         rows.push({
