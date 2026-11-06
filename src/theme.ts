@@ -17,6 +17,12 @@ export interface Theme {
     ink: string;
     muted: string;
     line: string;
+    /**
+     * The outline that shows where a control is: a field's border, an
+     * unchecked box or radio, a switch that's off. At least 3:1 against
+     * surface and raised (WCAG 1.4.11), where line is a quiet divider.
+     */
+    control: string;
     accent: string;
     onAccent: string;
     good: string;
@@ -69,6 +75,7 @@ export const lightTheme: Theme = {
     ink: "#1B262A",
     muted: "#5C6B72",
     line: "#E1E7E8",
+    control: "#86939A",
     accent: "#176F69",
     onAccent: "#FFFFFF",
     good: "#277253",
@@ -98,6 +105,7 @@ export const darkTheme: Theme = {
     ink: "#EDF2F1",
     muted: "#ACBABC",
     line: "#344348",
+    control: "#677A80",
     accent: "#72C6BB",
     onAccent: "#112825",
     good: "#88CEAA",
@@ -264,7 +272,7 @@ export function forcedColorsTheme(base: Theme, resolve: (systemColor: string) =>
     colors: {
       ...base.colors,
       surface: canvas, raised: canvas,
-      ink: text, muted: text, line: text,
+      ink: text, muted: text, line: text, control: text,
       accent: highlight, onAccent: resolve("HighlightText"), focus: highlight,
       good: text, warn: text, bad: text,
       land: canvas, landHighlight: highlight, landHover: resolve("GrayText"),

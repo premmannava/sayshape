@@ -81,3 +81,21 @@ describe("target size (WCAG 2.2, 2.5.8)", () => {
     expect(ui.announcements.at(-1)?.text).toBe("x");
   });
 });
+
+describe.each([["light", lightTheme], ["dark", darkTheme]] as Array<[string, Theme]>)("%s theme control outlines (WCAG 1.4.11)", (_name, theme) => {
+  it("show where a control is at 3:1 on surface and raised", () => {
+    for (const bg of ["surface", "raised"] as const) expect(contrast(theme.colors.control, theme.colors[bg]), bg).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("controls draw their outline in the control token", () => {
+  it("an input's border, an unchecked box and radio, a switch that's off", () => {
+    const ui = render(`state a="" b=false c=false d=x
+input "Name" bind=a
+check "Agree" bind=b
+switch "Updates" bind=c
+radio "Other" bind=d value=y`);
+    const strokes = ui.drawOps.filter((op) => op.op === "stroke").map((op) => op.strokeStyle);
+    expect(strokes.filter((s) => s === lightTheme.colors.control).length).toBeGreaterThanOrEqual(4);
+  });
+});
