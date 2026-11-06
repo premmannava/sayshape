@@ -91,6 +91,24 @@ export const stressTasks: Task[] = [
       // A callout's title and detail line are separate pieces, so $433 may be in the piece after the one naming Food.
       { label: "the callout names Food ($433)", test: (t) => t.some((p, i) => /Food/.test(p) && /larg|bigg|top|most|lead|highest|other than|after|besides|excluding/i.test(p) && (/\b433\b/.test(p) || /\b433\b/.test(t[i + 1] ?? ""))) },
     ] },
+  // The ultra-hard one: a whole small app in one request. Figures, all regions:
+  // open pipeline (Lead + Qualified) 12,000 + 18,000 + 22,000 + 30,000 + 8,000 = 90,000;
+  // won 25,000 + 40,000 + 15,000 + 11,000 = 91,000; win rate 4 won / (4 + 3 lost) = 57.1%.
+  // Without Europe (Globex, Wayne, Soylent, Cyberdyne): open 64,000, won 76,000, 3 / (3 + 2) = 60%.
+  // Adding Zeta for $5,000 (a Lead, North America) makes the open pipeline 95,000.
+  { id: "z11", category: "app", request: "A sales pipeline app with two screens. Deals: Acme (North America, Lead, $12,000, owner Ana); Globex (Europe, Qualified, $18,000, owner Ben); Initech (North America, Won, $25,000, owner Ana); Umbrella (Asia Pacific, Lost, $9,000, owner Chen); Stark (North America, Won, $40,000, owner Ben); Wayne (Europe, Won, $15,000, owner Chen); Tyrell (Asia Pacific, Qualified, $22,000, owner Ana); Soylent (Europe, Lost, $7,000, owner Ben); Hooli (North America, Qualified, $30,000, owner Chen); Vandelay (Asia Pacific, Won, $11,000, owner Ana); Cyberdyne (Europe, Lead, $8,000, owner Ben); Oscorp (North America, Lost, $14,000, owner Chen). "
+      + "The first screen has: a region filter where several regions can be chosen at once (all chosen at first); KPIs for open pipeline (total of Lead and Qualified deals), won revenue (total of Won deals) and win rate (Won deals divided by Won plus Lost deals, as a percent with one decimal); a bar chart of the total amount per stage; "
+      + "and a list of the deals in the order given, 5 per page with page buttons. The KPIs, chart and list all follow the region filter. "
+      + "Pressing a deal opens a second screen with its company, region, stage, amount and owner, and a Back button that returns. "
+      + "The first screen also has a form to add a deal: a company name field, an amount field and an Add button; new deals are Leads in North America, and everything updates.",
+    checks: [
+      { label: "KPIs for all regions (open 90,000, won 91,000, 57.1%)", shows: [/\b90,?000\b|\b90(\.0)?\s?K\b/i, /\b91,?000\b|\b91(\.0)?\s?K\b/i, /57\.1\s?%/] },
+      { label: "leaving out Europe: open 64,000, won 76,000, 60%", steps: [{ press: /^\s*Europe\s*$/ }], shows: [/\b64,?000\b|\b64(\.0)?\s?K\b/i, /\b76,?000\b|\b76(\.0)?\s?K\b/i, /\b60(\.0)?\s?%/] },
+      { label: "page 3 shows the last two deals", steps: [{ press: /^\s*3\s*$/ }], shows: [/Cyberdyne/, /Oscorp/], hides: [/Acme/, /Stark/] },
+      { label: "pressing Stark opens its own screen", steps: [{ press: /Stark/ }], shows: [/Stark/, /\bBen\b/, /40,?000|40(\.0)?\s?K/i], hides: [/Globex/, /Acme/] },
+      { label: "Back returns to the list", steps: [{ press: /Stark/ }, { press: /^\s*(←\s*)?Back\b/i }], shows: [/Globex/, /Acme/] },
+      { label: "adding Zeta for $5,000 makes the open pipeline 95,000", steps: [{ type: [0, "Zeta"] }, { type: [1, "5000"] }, { press: /^\s*(\+\s*)?add\b/i }], shows: [/\b95,?000\b|\b95(\.0)?\s?K\b/i] },
+    ] },
 ];
 
 /** A working SayShape answer to each stress task. */
@@ -207,4 +225,36 @@ card
     table-column "Category" field=cat
     table-column "Total" field=amt format=money
   callout "Biggest after housing: {top.cat} at {money(top.amt)}" tone=accent`,
+
+  z11: `state shown=["North America", "Europe", "Asia Pacific"] regions=[{name: "North America"}, {name: "Europe"}, {name: "Asia Pacific"}] page=1 pick="" company="" amount="" deals=[{id: "D1", company: "Acme", region: "North America", stage: "Lead", amount: 12000, owner: "Ana"}, {id: "D2", company: "Globex", region: "Europe", stage: "Qualified", amount: 18000, owner: "Ben"}, {id: "D3", company: "Initech", region: "North America", stage: "Won", amount: 25000, owner: "Ana"}, {id: "D4", company: "Umbrella", region: "Asia Pacific", stage: "Lost", amount: 9000, owner: "Chen"}, {id: "D5", company: "Stark", region: "North America", stage: "Won", amount: 40000, owner: "Ben"}, {id: "D6", company: "Wayne", region: "Europe", stage: "Won", amount: 15000, owner: "Chen"}, {id: "D7", company: "Tyrell", region: "Asia Pacific", stage: "Qualified", amount: 22000, owner: "Ana"}, {id: "D8", company: "Soylent", region: "Europe", stage: "Lost", amount: 7000, owner: "Ben"}, {id: "D9", company: "Hooli", region: "North America", stage: "Qualified", amount: 30000, owner: "Chen"}, {id: "D10", company: "Vandelay", region: "Asia Pacific", stage: "Won", amount: 11000, owner: "Ana"}, {id: "D11", company: "Cyberdyne", region: "Europe", stage: "Lead", amount: 8000, owner: "Ben"}, {id: "D12", company: "Oscorp", region: "North America", stage: "Lost", amount: 14000, owner: "Chen"}]
+derive inRegion={filter(deals, 'region', shown)}
+derive open={sum(filter(inRegion, 'stage', ['Lead', 'Qualified']), 'amount')}
+derive won={sum(filter(inRegion, 'stage', 'Won'), 'amount')}
+derive wins={count(inRegion, 'stage', 'Won')}
+derive losses={count(inRegion, 'stage', 'Lost')}
+derive byStage={group(inRegion, 'stage', 'amount')}
+derive pages={max(1, ceil(len(inRegion) / 5))}
+derive deal={find(deals, 'id', pick)}
+screen name=overview title="Sales pipeline"
+  select "Regions" items=regions value=name label=name bind=shown multiple=true
+  grid min=140 gap=12
+    stat label="Open pipeline" value="{money(open)}"
+    stat label="Won revenue" value="{money(won)}"
+    stat label="Win rate" value="{wins + losses ? fixed(wins / (wins + losses) * 100, 1) : 0}%"
+  chart "Amount by stage" kind=bar items=byStage x=stage y=amount
+  list
+    each items={slice(inRegion, (page - 1) * 5, page * 5)} as=d
+      list-item "{d.company}" detail="{d.region} · {d.stage}" trailing="{money(d.amount)}" on="set:pick:{d.id};go:detail"
+  text "Page {page} of {pages}" tone=muted
+  pagination bind=page pages={pages}
+  input "Company" bind=company
+  input "Amount" bind=amount kind=number
+  button "Add" on="add:deals:{{id: 'N' + len(deals), company: company, region: 'North America', stage: 'Lead', amount: amount * 1, owner: 'You'}};set:company:'';set:amount:''"
+screen name=detail title="Deal"
+  details "{deal.company}"
+    detail "Region" value="{deal.region}"
+    detail "Stage" value="{deal.stage}"
+    detail "Amount" value="{money(deal.amount)}"
+    detail "Owner" value="{deal.owner}"
+  button "Back" on=back`,
 };
