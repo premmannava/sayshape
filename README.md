@@ -441,7 +441,7 @@ screen name=cart title="Your cart"
   button "Keep shopping" variant=secondary on=back
 ```
 
-State is shared by every screen. Screens only go at the top level, and their names are plain words (letters, digits and `_`). `go:` to a screen that doesn't exist does nothing. Your app can move between screens too, with `ui.go("cart")` and `ui.back()`, and hears every move through the `navigate` event.
+State is shared by every screen. Screens only go at the top level, and their names are plain words (letters, digits and `_`). `go:` to a screen that doesn't exist does nothing. A screen written without `name=` gets a warning but still shows when it's the first, so a lone `screen title="Team hours"` isn't left blank; it can't be the target of `go:`. Your app can move between screens too, with `ui.go("cart")` and `ui.back()`, and hears every move through the `navigate` event.
 
 ### Conditions
 
