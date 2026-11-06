@@ -461,3 +461,20 @@ describe("the Charts playground sample", () => {
     expect(geo(ui, 1).slots.map((s) => s.label)).toEqual(["Jun", "Jul", "Aug", "Sep", "Oct", "Nov"]);
   });
 });
+
+describe("bar value labels", () => {
+  it("keeps a label inside its bar, shortening it when the full value is wider than the bar", () => {
+    const ui = render(`state sales=[{m: "Jan", r: 12000}, {m: "Feb", r: 18000}, {m: "Mar", r: 15000}, {m: "Apr", r: 21000}, {m: "May", r: 17500}, {m: "Jun", r: 24000}]
+card
+  chart "Revenue by month" kind=bar items=sales x=m y=r format=money
+`, { width: 600 });
+    const jun = (ui.find("chart").box!.data as ChartGeometry).slots[5]!.bar!;
+    const label = ui.drawOps.find((o) => o.op === "fillText" && /^\$24/.test(String(o.args[0])))!;
+    expect(label.args[0]).toBe("$24K");
+    const half = monoWidth("$24K", label.font!) / 2;
+    const box = ui.find("chart").box!;
+    expect(Number(label.args[1]) - half).toBeGreaterThanOrEqual(box.x + jun.x);
+    expect(Number(label.args[1]) + half).toBeLessThanOrEqual(box.x + jun.x + jun.w);
+    ui.destroy();
+  });
+});

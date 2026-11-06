@@ -33,6 +33,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
+import { DEFAULT_VIEW_OPTIONS, withViewOptions, type ViewOptions } from "./ui/view-options";
 import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
@@ -184,6 +185,8 @@ function describeCheck(c: SpecCheck): string {
 export interface ServerOptions {
   /** The view's HTML: dist/ui.html, built by `npm run build`. */
   uiHtml: () => string | Promise<string>;
+  /** The view's own settings: --theme-picker, --theme, --no-save-image (main.ts). Default: no picker, teal, Save image on. */
+  view?: ViewOptions;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;
   /** In-memory MCP results ingested by a trusted host (one store per user/session). */
@@ -404,7 +407,7 @@ export function createServer(opts: ServerOptions): McpServer {
       {
         uri: UI_URI,
         mimeType: RESOURCE_MIME_TYPE,
-        text: await opts.uiHtml(),
+        text: withViewOptions(await opts.uiHtml(), opts.view ?? DEFAULT_VIEW_OPTIONS),
         // Everything is inline: no scripts, styles, fonts or images from anywhere else.
         _meta: { ui: { prefersBorder: true } },
       },

@@ -933,7 +933,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           paintPremiumBar(ctx, { x: ox + b.x, y: oy + b.y, w: b.w, h: b.h },
             colorOf(k), up ? "up" : "down", hover);
           if (showLabels && k === 0 && s.values[0] !== null) {
-            const label = valueText(s.values[0]!, format);
+            let label = valueText(s.values[0]!, format);
             g.save();
             g.font = ctx.font(600, 11);
             const slotRoom = pw / d.slots.length - 8;
@@ -943,7 +943,10 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
             // of dropping the label or letting it clip above the chart.
             const inside = !roomOutside && b.h >= 30;
             const labelY = roomOutside ? outside : up ? b.y + 14 : b.y + b.h - 14;
-            if ((roomOutside || inside) && g.measureText(label).width < slotRoom) {
+            // Inside, the bar is the room, not the slot: try the short form ($24K) before giving up.
+            const room = inside ? b.w - 6 : slotRoom;
+            if (inside && g.measureText(label).width >= room) label = shortValueText(s.values[0]!, format);
+            if ((roomOutside || inside) && g.measureText(label).width < room) {
               g.textAlign = "center";
               g.textBaseline = "middle";
               g.fillStyle = inside ? c.onAccent : c.muted;
@@ -1249,4 +1252,14 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
     g.fillText(fitText(row.text, bodyFont, w - pad * 2 - 14), x + pad + 14, lineY);
   });
   g.restore();
+}
+
+/** A value in its shortest form, for a label that must fit inside a bar: $24K, 1.2M. */
+function shortValueText(v: number, format: Format): string {
+  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
+  try {
+    return new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts).format(v);
+  } catch {
+    return valueText(v, format);
+  }
 }

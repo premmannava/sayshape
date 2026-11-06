@@ -22,9 +22,24 @@ you: "Compare the three phone plans I pasted"
 
 In chat apps that stream tool input, the interface builds line by line while the model is still writing it. When the person presses a button with `on=emit:name`, the view sends a message into the conversation naming the action, its value and the interface's current values. The model can then reply or show an updated interface. That's the only way anything leaves an interface: specs can't run code, open links or make requests.
 
-Interfaces match the chat app they're in. The view follows its light or dark mode, and when the app shares its design tokens (MCP Apps hosts pass them as CSS variables) it takes the app's background, text, border and status colors, its fonts and its corner radii. A view-level theme selector offers SayShape's Teal, Purple, Blue and Neutral presets; the selected preset follows the host's mode and applies to charts through the existing accent and series color tokens. The model's spec cannot set arbitrary CSS.
+Interfaces match the chat app they're in. The view follows its light or dark mode, and when the app shares its design tokens (MCP Apps hosts pass them as CSS variables) it takes the app's background, text, border and status colors, its fonts and its corner radii. Interfaces use SayShape's Teal theme unless the server is started with another (`--theme`); the theme follows the host's mode and applies to charts through the accent and series color tokens. The model's spec cannot set arbitrary CSS.
 
-In chat apps that let views download files (MCP Apps' `downloadFile` capability), a **Save image** button sits beside the theme selector. It saves the interface as it looks now, after anything the person changed, as a sharp PNG (twice the screen's resolution, on the theme's background, without hover or messages) named after the interface's title, ready to paste into an email, a chat or a slide. Nothing is sent to the model. Where the chat app can't download files, the button isn't shown.
+Above each interface, at the right, the view can show a slim toolbar:
+
+- **Save image** (a download icon), in chat apps that let views download files (MCP Apps' `downloadFile` capability). It saves the interface as it looks now, after anything the person changed, as a sharp PNG (twice the screen's resolution, on the theme's background, without hover or messages) named after the interface's title, ready to paste into an email, a chat or a slide. Nothing is sent to the model.
+- **A theme selector** for SayShape's Teal, Purple, Blue and Neutral presets, when the server is started with `--theme-picker`. Useful for demos; for a company, set its theme with `--theme` instead.
+
+When neither is on, there's no toolbar at all. Whoever installs the server chooses, with flags in the chat app's `args`:
+
+| Flag | Effect |
+|---|---|
+| `--theme-picker` | Show the theme selector (off by default) |
+| `--theme teal\|purple\|blue\|neutral` | The theme interfaces use (default `teal`) |
+| `--no-save-image` | Hide Save image (shown by default where the chat app can download) |
+
+```json
+"sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--theme", "blue", "--theme-picker"] }
+```
 
 ## Tokens
 
