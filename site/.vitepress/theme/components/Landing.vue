@@ -1,8 +1,11 @@
 <script setup lang="ts">
 /**
- * The landing page: what SayShape is, why it isn't just "let the AI write
- * HTML", how to add it, the measured numbers and what happens to your data.
- * Short on purpose; the docs hold the rest.
+ * The landing page: what SayShape lets an AI do, how to add it, why it isn't
+ * just "let the AI write a web page", the measured numbers and what happens
+ * to your data. Short on purpose; the docs hold the rest. Claims here are
+ * kept to what's true today: the MCP server isn't on npm yet, the engine
+ * (not the MCP server) is the part with no dependencies, and the AI sees
+ * column names and a sample, never needing the full data.
  *
  * The numbers are medians of the seven recordings the compare page plays
  * (site/public/compare/anthropic_claude-sonnet-5.5): tokens estimated from
@@ -15,24 +18,28 @@ import ShowHero from "./ShowHero.vue";
 const href = (p: string) => withBase(p);
 const REPO = "https://github.com/premmannava/sayshape";
 
-const versus = [
-  { what: "Your data", html: "Typed into the code, so every row goes through the AI", ours: "Goes straight to the screen. The AI never reads it" },
-  { what: "Safety", html: "It's code: scripts run in your page", ours: "Nothing can run. A spec is data, not a program" },
-  { what: "Speed", html: "~1,300 tokens · ~13 s to finish", ours: "~170 tokens · ~2.4 s to finish" },
-  { what: "Looks", html: "Different fonts, colors and layout every time", ours: "Your look, every time. The AI never picks colors" },
-  { what: "Mistakes", html: "The page breaks, or looks right and isn't", ours: "A bad line is skipped and reported; the rest works" },
-];
-
-const why = [
+const can = [
   { title: "Built on the fly", text: "No pre-made screens. Your agent designs each one for the question in front of it." },
   { title: "Alive, not a picture", text: "People click, type and choose. Changing a value doesn't need another AI reply." },
-  { title: "Fast", text: "7.6× less for the AI to write than HTML, and finished about 5× sooner." },
+  { title: "Right where people ask", text: "In Claude, ChatGPT and VS Code, or inside your own chatbot." },
 ];
 
+const versus = [
+  { what: "Your data", page: "Typed into the page, so all of it goes through the AI", ours: "Goes from your app to the screen. The AI only needs the column names and a sample" },
+  { what: "Code", page: "Usually comes with JavaScript that runs in your page", ours: "A spec can't run JavaScript. SayShape's own engine draws it" },
+  { what: "Speed", page: "~1,300 tokens · ~13 s for the AI to write", ours: "~170 tokens · ~2.4 s for the AI to write" },
+  { what: "Looks", page: "Different fonts, colors and layout every time", ours: "Your look, every time. The AI never picks colors" },
+  { what: "Mistakes", page: "A broken page, or one that looks right and isn't", ours: "A bad line is skipped and reported; the rest works" },
+];
+
+// The MCP server isn't on npm yet: the settings point at a build from source.
+const build = `git clone https://github.com/premmannava/sayshape.git
+cd sayshape/mcp && npm ci && npm run build`;
+const SERVER = "/path/to/sayshape/mcp/dist/server.js";
 const setups = [
-  { id: "vscode", name: "VS Code", where: "In .vscode/mcp.json", code: `{\n  "servers": {\n    "sayshape": {\n      "type": "stdio",\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}` },
-  { id: "claude", name: "Claude", where: "Claude Desktop → Settings → Developer → Edit Config", code: `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}` },
-  { id: "chatgpt", name: "ChatGPT", where: "Run it on port 3001 and put it behind HTTPS, then add its /mcp address as a connector in developer mode", code: `npx -y sayshape-mcp --http 3001` },
+  { id: "vscode", name: "VS Code", where: "In .vscode/mcp.json", code: `{\n  "servers": {\n    "sayshape": {\n      "type": "stdio",\n      "command": "node",\n      "args": ["${SERVER}"]\n    }\n  }\n}` },
+  { id: "claude", name: "Claude", where: "Claude Desktop → Settings → Developer → Edit Config", code: `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "node",\n      "args": ["${SERVER}"]\n    }\n  }\n}` },
+  { id: "chatgpt", name: "ChatGPT", where: "Run it on port 3001 behind HTTPS, then add its /mcp address as a connector in developer mode", code: `node ${SERVER} --http 3001` },
 ];
 const setup = ref(setups[0]!.id);
 const shownSetup = computed(() => setups.find((s) => s.id === setup.value)!);
@@ -40,7 +47,7 @@ const shownSetup = computed(() => setups.find((s) => s.id === setup.value)!);
 const ownApp = `const ui = new SayShape(canvas, { components: coreComponents });
 
 ui.beginStream();
-// Your rows go to the screen, never to the model.
+// Your rows go to the screen; the model never needs them.
 ui.state.set("sales", rowsFromYourDatabase);
 for await (const text of modelStream) ui.push(text);
 ui.endStream();`;
@@ -48,14 +55,14 @@ ui.endStream();`;
 // Medians of 7 recorded tasks, Claude Sonnet 5.5.
 const numbers = [
   { title: "What the AI writes", unit: "tokens per screen", headline: 7.6, caption: "less than HTML, and 3.7× less than A2UI", digits: 0, suffix: "", rows: [["SayShape", 171], ["A2UI", 628], ["HTML", 1299]] as const },
-  { title: "Time to a finished screen", unit: "seconds", headline: 5.4, caption: "faster than HTML, and 7× faster than A2UI", digits: 1, suffix: " s", rows: [["SayShape", 2.4], ["HTML", 13.2], ["A2UI", 17.2]] as const },
+  { title: "Time for the AI to finish", unit: "seconds of writing", headline: 5.4, caption: "faster than HTML, and 7× faster than A2UI", digits: 1, suffix: " s", rows: [["SayShape", 2.4], ["HTML", 13.2], ["A2UI", 17.2]] as const },
 ];
 
 const trust = [
-  "No SayShape account or server",
-  "The AI never reads your rows",
-  "No React, no third-party code",
-  "Nothing the AI writes can run",
+  "No SayShape account, server or hosted database",
+  "Your full data never has to pass through the AI",
+  "Specs can't run JavaScript",
+  "The engine has no dependencies: no React, no UI framework",
 ];
 
 // Count the numbers up once, when they scroll into view. They start at their
@@ -112,31 +119,13 @@ onBeforeUnmount(() => { observer?.disconnect(); cancelAnimationFrame(frame); });
       <ShowHero class="hero-demo" />
     </section>
 
-    <section class="block html" aria-labelledby="html-title">
+    <section class="block" aria-labelledby="can-title">
       <div class="head">
-        <h2 id="html-title">“But my AI can already write HTML.”</h2>
-        <p class="big">It can. That's the problem.</p>
-        <p>HTML is a program: long to write, free to run anything, and it only shows your data if the AI types every row into it. SayShape is a description. Your AI writes a few lines, SayShape draws them, and your data goes straight to the screen without the AI reading it.</p>
+        <h2 id="can-title">What your AI can do now.</h2>
+        <p>Instead of a long explanation or a table to read, people get a screen to use, right in the conversation.</p>
       </div>
-      <div class="vs" role="table" aria-label="AI writes HTML compared with AI writes SayShape">
-        <div class="vs-row vs-head" role="row">
-          <span role="columnheader"></span>
-          <span role="columnheader">AI writes HTML</span>
-          <span role="columnheader" class="ours">AI writes SayShape</span>
-        </div>
-        <div v-for="v in versus" :key="v.what" class="vs-row" role="row">
-          <span role="rowheader">{{ v.what }}</span>
-          <span role="cell" class="theirs" data-label="AI writes HTML"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg><span>{{ v.html }}</span></span>
-          <span role="cell" class="ours" data-label="AI writes SayShape"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg><span>{{ v.ours }}</span></span>
-        </div>
-      </div>
-      <p class="note">SayShape does less than HTML on purpose. That's why it's fast, safe and private. <a :href="href('/compare')">Watch them side by side →</a></p>
-    </section>
-
-    <section class="block" aria-labelledby="why-title">
-      <h2 id="why-title" class="visually-hidden">Why teams use it</h2>
       <div class="why">
-        <article v-for="(w, i) in why" :key="w.title" class="why-item" :style="{ '--i': i }">
+        <article v-for="(w, i) in can" :key="w.title" class="why-item">
           <span class="why-n" aria-hidden="true">0{{ i + 1 }}</span>
           <h3>{{ w.title }}</h3>
           <p>{{ w.text }}</p>
@@ -146,12 +135,16 @@ onBeforeUnmount(() => { observer?.disconnect(); cancelAnimationFrame(frame); });
 
     <section id="setup" class="block" aria-labelledby="setup-title">
       <div class="head">
-        <h2 id="setup-title">Two ways to use it.</h2>
+        <h2 id="setup-title">Add it to your agent.</h2>
+        <p>Two ways, both open source.</p>
       </div>
       <div class="ways">
         <article class="way">
           <h3>In the AI tools you already use</h3>
           <p>Connect SayShape to VS Code, Claude or ChatGPT, then ask: <em>“show my sales by region.”</em></p>
+          <p class="step"><span>1</span>Build the server (Node.js 20 or later):</p>
+          <pre tabindex="0"><code>{{ build }}</code></pre>
+          <p class="step"><span>2</span>Point your AI tool at it:</p>
           <div class="tabs" role="tablist" aria-label="Where to add it">
             <button v-for="s in setups" :id="`tab-${s.id}`" :key="s.id" type="button" role="tab" :aria-selected="setup === s.id" :aria-controls="`panel-${s.id}`" @click="setup = s.id">{{ s.name }}</button>
           </div>
@@ -159,21 +152,42 @@ onBeforeUnmount(() => { observer?.disconnect(); cancelAnimationFrame(frame); });
             <p class="where">{{ shownSetup.where }}</p>
             <pre tabindex="0"><code>{{ shownSetup.code }}</code></pre>
           </div>
-          <p class="small">The npm package is coming soon; until then, <a :href="href('/docs/integration/mcp')">run it from the source</a>. Tested with Claude Sonnet 5.5 and GPT-4.1. Results depend on the model you connect.</p>
+          <p class="small">Use the full path to your copy. An npm package that makes this one line is coming soon. <a :href="href('/docs/integration/mcp')">Full setup →</a><br>Tested with Claude Sonnet 5.5 and GPT-4.1. Results depend on the model you connect.</p>
         </article>
         <article class="way">
           <h3>In your own chatbot</h3>
-          <p>Your agent writes the screen; your app hands SayShape the data. Rows from your database go straight to the screen.</p>
+          <p>Your agent writes the screen; your app hands SayShape the data. Rows from your database go to the screen without passing through the model.</p>
           <pre tabindex="0" class="panel-code"><code>{{ ownApp }}</code></pre>
           <a class="more" :href="href('/docs/integration/model')">Integration guide →</a>
         </article>
       </div>
     </section>
 
+    <section class="block html" aria-labelledby="html-title">
+      <div class="head">
+        <h2 id="html-title">“But my AI can already write web pages.”</h2>
+        <p class="big">It can. Here's why that's slower and riskier.</p>
+        <p>An AI-written web page is long, usually comes with JavaScript that runs in your page, and only shows your data if the AI types it in. SayShape is a short description of a screen. Your AI writes a few lines, SayShape's own engine draws them, and your data goes from your app to the screen.</p>
+      </div>
+      <div class="vs" role="table" aria-label="AI writes a web page compared with AI writes SayShape">
+        <div class="vs-row vs-head" role="row">
+          <span role="columnheader"></span>
+          <span role="columnheader">AI writes a web page</span>
+          <span role="columnheader" class="ours">AI writes SayShape</span>
+        </div>
+        <div v-for="v in versus" :key="v.what" class="vs-row" role="row">
+          <span role="rowheader">{{ v.what }}</span>
+          <span role="cell" class="theirs" data-label="AI writes a web page"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg><span>{{ v.page }}</span></span>
+          <span role="cell" class="ours" data-label="AI writes SayShape"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg><span>{{ v.ours }}</span></span>
+        </div>
+      </div>
+      <p class="note">SayShape does less than a web page on purpose. That's why it's fast, safe and private. <a :href="href('/compare')">Watch them side by side →</a></p>
+    </section>
+
     <section ref="numbersEl" class="block" aria-labelledby="numbers-title">
       <div class="head">
         <h2 id="numbers-title">Less to write. <span class="ss-mark">Done sooner.</span></h2>
-        <p>We asked one AI for the same screen three ways, in SayShape, HTML and A2UI, and measured each.</p>
+        <p>We asked one AI for the same screen three ways, in SayShape, HTML and A2UI, and measured how much it wrote and how long it took to finish.</p>
       </div>
       <div class="nums">
         <article v-for="n in counted" :key="n.title" class="num">
@@ -188,11 +202,14 @@ onBeforeUnmount(() => { observer?.disconnect(); cancelAnimationFrame(frame); });
           </div>
         </article>
       </div>
-      <p class="note">Median of 7 tasks, each answered by Claude Sonnet 5.5 in all three formats at the same moment, November 2026. Tokens are estimated from each answer's length. <a :href="href('/compare')">See the recordings →</a></p>
+      <p class="note">Median of 7 tasks, each answered by Claude Sonnet 5.5 in all three formats at the same moment, November 2026. Times are how long the AI took to finish writing, not drawing time. Tokens are estimated from each answer's length. Results vary by model, task and environment. <a :href="href('/compare')">See the recordings →</a></p>
     </section>
 
     <section class="block trust" aria-labelledby="trust-title">
-      <h2 id="trust-title">An interface engine, not another place to store your data.</h2>
+      <div>
+        <h2 id="trust-title">An interface engine, not another place to store your data.</h2>
+        <p class="trust-note">With the MCP server's database mode, or in your own chatbot, your app hands the rows to the screen. The AI sees the column names and a small sample. The AI provider you connect has its own data rules.</p>
+      </div>
       <ul>
         <li v-for="t in trust" :key="t"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>{{ t }}</li>
       </ul>
@@ -273,6 +290,8 @@ h1, h2, h3 { border: 0; padding: 0 }
 .where { font: 13px var(--vp-font-family-mono) !important; color: var(--vp-c-text-3) !important }
 .way pre { margin: 0; padding: 16px 18px; border-radius: 14px; background: var(--vp-code-block-bg); border: 1px solid var(--vp-c-divider); font: 13px/1.6 var(--vp-font-family-mono); color: var(--vp-c-text-1); overflow-x: auto; white-space: pre }
 .small { font-size: 14px !important }
+.step { display: flex; align-items: center; gap: 10px; font-weight: 600; color: var(--vp-c-text-1) !important }
+.step span { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--ss-mark); color: #0f1a17; font: 700 13px var(--vp-font-family-mono) }
 .more { margin-top: auto }
 
 /* Numbers */
@@ -293,6 +312,7 @@ h1, h2, h3 { border: 0; padding: 0 }
 
 /* Trust */
 .trust { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px 56px; align-items: center; padding: 48px; border-radius: 28px; background: var(--vp-c-bg-alt) }
+.trust-note { margin: 16px 0 0; font-size: 16px; line-height: 1.5; color: var(--vp-c-text-2) }
 .trust ul { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none }
 .trust li { display: flex; align-items: center; gap: 14px; font: 700 clamp(19px, 1.8vw, 23px)/1.25 var(--sayshape-display); letter-spacing: -0.015em; color: var(--vp-c-text-1) }
 .trust li svg { flex: none; padding: 5px; box-sizing: content-box; border-radius: 50%; background: var(--vp-c-brand-soft); color: var(--vp-c-brand-1) }
