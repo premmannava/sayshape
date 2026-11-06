@@ -27,7 +27,8 @@ import { mapComponents } from "../src/components/map";
 import type { GuideMode } from "../src/prompt";
 import { Registry } from "../src/registry";
 import { a2uiPrompt } from "../eval/compare/a2ui";
-import { HTML_PROMPT, report, runCompare, summarize, systemPrompt, type Format, type Prices } from "../eval/compare/run";
+import { pricesFor } from "../eval/compare/prices";
+import { HTML_PROMPT, report, runCompare, summarize, systemPrompt, type Format } from "../eval/compare/run";
 import { stressTasks } from "../eval/compare/stress";
 import { tasks } from "../eval/compare/tasks";
 import { parseCache, readModelEnv } from "./model-env";
@@ -37,26 +38,6 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 const list = (name: string) => arg(name)?.split(",").map((s) => s.trim()).filter(Boolean);
-
-/** Dollars per token for each model, from OpenRouter's model list. Other servers: unknown. */
-async function pricesFor(url: string, models: string[]): Promise<Record<string, Prices>> {
-  if (!/openrouter\.ai/.test(url)) return {};
-  const res = await fetch(`${url}/models`).catch(() => null);
-  if (!res?.ok) return {};
-  const json = (await res.json()) as { data?: Array<{ id: string; pricing?: { prompt?: string; completion?: string; input_cache_read?: string; input_cache_write?: string } }> };
-  const out: Record<string, Prices> = {};
-  for (const m of json.data ?? []) {
-    if (models.includes(m.id) && m.pricing?.prompt !== undefined && m.pricing.completion !== undefined) {
-      const p = m.pricing;
-      out[m.id] = {
-        prompt: Number(p.prompt), completion: Number(p.completion),
-        ...(p.input_cache_read !== undefined ? { cacheRead: Number(p.input_cache_read) } : {}),
-        ...(p.input_cache_write !== undefined ? { cacheWrite: Number(p.input_cache_write) } : {}),
-      };
-    }
-  }
-  return out;
-}
 
 async function main(): Promise<void> {
   const env = readModelEnv("development", resolve(__dirname, ".."));
