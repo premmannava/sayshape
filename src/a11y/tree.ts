@@ -10,6 +10,7 @@ import { interpolate, type Scope } from "../expr";
 import type { Registry } from "../registry";
 import type { Box, HitRegion, SayShapeNode } from "../types";
 import { accessibleKey, type AccessibleNode, type ElementSemantics, type Role, type SemanticsContext, type SemanticsResult } from "./semantics";
+import type { Rect } from "../types";
 
 export interface TreeInput {
   root: Box;
@@ -62,20 +63,48 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
     return words.join(" ");
   };
 
-  const build = (box: Box): AccessibleNode[] => {
+  /** Groups that consecutive siblings asked to be wrapped in (radios sharing a bind=), by node. */
+  const groups = new WeakMap<AccessibleNode, NonNullable<ElementSemantics["group"]>>();
+
+  const build = (box: Box, prev: Box | undefined): AccessibleNode[] => {
     const node = box.node;
     const regions = regionsOf.get(node.id) ?? [];
     const def = registry.get(node.type);
-    const ctx: SemanticsContext = { props, text, textWithin, regions, popupOpen: input.popupOwner === node.id, today: input.today };
+    const textBefore = () => (prev?.node.type === "text" ? text(prev.node) || undefined : undefined);
+    const ctx: SemanticsContext = { props, text, textWithin, textBefore, regions, popupOpen: input.popupOwner === node.id, today: input.today };
     const result: SemanticsResult = def?.semantics ? def.semantics(box, ctx) : fallback(box, ctx);
     if (result === false) return [];
-    const inner = box.children.flatMap(build);
+    const inner = buildAll(box.children);
     if (result === null) return inner;
 
     const own = toNode(node, box, result, regions);
+    if (result.group) groups.set(own, { ...result.group, name: result.group.name ?? textBefore() });
     if (NAMED_FROM_CONTENT.has(result.role)) return [own, ...inner.flatMap(focusableWithin)];
     own.children.push(...inner);
     return [own];
+  };
+
+  /** Siblings in order, with neighbours that share a group wrapped in it. */
+  const buildAll = (boxes: Box[]): AccessibleNode[] => {
+    const out: AccessibleNode[] = [];
+    let open: { key: string; node: AccessibleNode } | null = null;
+    boxes.forEach((b, i) => {
+      for (const n of build(b, boxes[i - 1])) {
+        const g = groups.get(n);
+        if (g && open?.key === g.key) {
+          open.node.children.push(n);
+          open.node.rect = union(open.node.rect, n.rect);
+          continue;
+        }
+        open = null;
+        if (g) {
+          const wrap: AccessibleNode = { role: g.role, ...(g.name ? { name: g.name } : {}), key: `group:${g.key}@${n.key}`, rect: { ...n.rect }, focusable: false, node: n.node, children: [n] };
+          open = { key: g.key, node: wrap };
+          out.push(wrap);
+        } else out.push(n);
+      }
+    });
+    return out;
   };
 
   return {
@@ -85,12 +114,12 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
     rect: { x: root.x, y: root.y, w: root.w, h: root.h },
     focusable: false,
     node: root.node,
-    children: root.children.flatMap(build),
+    children: buildAll(root.children),
   };
 }
 
 function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: readonly HitRegion[]): AccessibleNode {
-  const { parts, detail, ...own } = s;
+  const { parts, detail, group: _group, ...own } = s;
   const whole = regions.find((r) => sameDetail(r.detail, detail));
   const out: AccessibleNode = {
     ...clean(own),
@@ -137,6 +166,11 @@ function fallback(box: Box, ctx: SemanticsContext): SemanticsResult {
 /** The nodes keyboard focus can land on, inside one whose content is its name. */
 function focusableWithin(n: AccessibleNode): AccessibleNode[] {
   return n.focusable ? [n] : n.children.flatMap(focusableWithin);
+}
+
+function union(a: Rect, b: Rect): Rect {
+  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
 }
 
 function sameDetail(a: unknown, b: unknown): boolean {

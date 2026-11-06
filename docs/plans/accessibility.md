@@ -1,6 +1,6 @@
 # Plan: accessibility
 
-**Status:** in progress (started 2026-11-06). Steps 1 and 2 are done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
+**Status:** in progress (started 2026-11-06). Steps 1 to 3 are done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
 **Rough size:** 6 to 9 weeks for one person, in nine pull requests that each leave `main` working.
 
 ## The problem
@@ -58,6 +58,8 @@ The engine talks only to an `AccessibilityHost` (`src/a11y/host.ts`), like the `
 7. Shift+Tab before the first element leaves the interface: the canvas drops out of the Tab order for that one move, or the browser would land on it and send focus straight back in.
 8. Focus that arrives on the canvas from the keyboard (not a press) turns on keyboard mode, so the focus ring shows and DOM focus moves on to the mirror.
 
+Controls that have no label of their own (a slider, an input or a segmented without quoted text) take the text element just before them in the same container (`ctx.textBefore()`). Radios sharing a `bind=` ask to be wrapped together (`group`), so the tree gets one radiogroup around neighbours, named by the text above the first. A stepper is a group of a Decrease button, its value as a `status` (so each new value is read out) and an Increase button; a part that can't be pressed (at the limit) stays in the tree as disabled, so focus doesn't fall out of it.
+
 An element whose one region is painted with a detail (a slider's `"track"`) names that `detail` in its semantics, so its own node is the one focus and presses go to.
 
 ## Steps
@@ -66,7 +68,7 @@ Each is one pull request into `main`, merged only when CI is green.
 
 1. **Foundations** (done). `src/a11y/` types, the `semantics` hook, the tree builder, the host interface with live regions, the `accessibility` option, `notify:` messages and new screens announced, `ui.accessibility()` and `ui.announcements` in `sayshape/testing`.
 2. **Mirror sync** (done). The DOM mirror from the tree each frame, keyed diffing, placement, focus both ways, clicks and keys routed to the engine, `aria-busy`. axe on one sample.
-3. **Controls.** button, link, check, switch, radio, segmented, stepper, slider, rating, input, pressable card and list-item.
+3. **Controls** (done). button, link, check, switch, radio, segmented, stepper, slider, rating, input, pressable card and list-item.
 4. **Content and structure.** text and headings, image, icon, code, badge, avatar, callout, stat, list, timeline, details, accordion, carousel, progress, meter, skeleton, empty, layout containers.
 5. **Navigation and popups.** screen, tabs, breadcrumb, pagination, select (single and multiple), date-picker.
 6. **Data.** table, compare, chart summaries and data tables for every kind, map. The contract tests start requiring `semantics` on every component.

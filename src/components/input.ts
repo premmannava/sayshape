@@ -28,6 +28,10 @@ export const button: ComponentDef = {
   },
   example: `button "Book now" on=emit:book
 button "Back" variant=secondary on=dec:step`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    return { role: "button", name: p.text(), disabled: p.cond("disabled") || undefined };
+  },
   layout(box, ctx) {
     box.h = ctx.theme.control.height;
     // On a phone a button takes the full width, which is easy to tap. Anywhere wider it takes the
@@ -116,6 +120,10 @@ export const check: ComponentDef = {
   },
   example: `state agreed=false
 check "I agree to the terms" bind=agreed`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    return { role: "checkbox", name: p.text(), checked: !!p.bound() };
+  },
   layout(box, ctx) {
     const l = labelLines(ctx, ctx.props(box.node).text(), box.w - 30, 3);
     box.data = l;
@@ -181,6 +189,10 @@ export const switchToggle: ComponentDef = {
   },
   example: `state updates=true
 switch "Email me order updates" bind=updates`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    return { role: "switch", name: p.text(), checked: !!p.bound() };
+  },
   layout(box, ctx) {
     const l = labelLines(ctx, ctx.props(box.node).text(), box.w - 52, 3);
     box.data = l;
@@ -246,6 +258,11 @@ export const radio: ComponentDef = {
 radio "Small" bind=size value=s
 radio "Medium" bind=size value=m
 radio "Large" bind=size value=l`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    // Radios sharing a bind= are one group, named by the text just above the first.
+    return { role: "radio", name: p.text(), checked: p.bound() === (p.value("value") ?? ""), group: { key: `radio:${p.raw("bind") ?? ""}`, role: "radiogroup" } };
+  },
   layout(box, ctx) {
     const l = labelLines(ctx, ctx.props(box.node).text(), box.w - 30, 3);
     box.data = l;
@@ -319,6 +336,21 @@ export const stepper: ComponentDef = {
   },
   example: `state qty=2
 stepper "Quantity" bind=qty min=1 max=10`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const { min, max, value } = stepperState(p);
+    const label = p.text() || ctx.textBefore() || "Amount";
+    return {
+      role: "group",
+      name: label,
+      parts: [
+        { detail: "dec", role: "button", name: `Decrease ${label}`, disabled: !(value - 1e-9 > min) || undefined },
+        // A status, so the new value is read after each press.
+        { detail: "value", role: "status", name: String(Math.round(value * 1000) / 1000) },
+        { detail: "inc", role: "button", name: `Increase ${label}`, disabled: !(value + 1e-9 < max) || undefined },
+      ],
+    };
+  },
   layout(box, ctx) {
     const control = ctx.theme.control.height;
     const label = ctx.props(box.node).text();
@@ -427,6 +459,19 @@ export const rating: ComponentDef = {
   example: `state stars=4
 rating value=4.5
 rating bind=stars`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const max = Math.max(1, Math.min(10, Math.round(p.num("max", 5))));
+    const bind = p.raw("bind");
+    const value = bind ? toNumber(p.bound()) || 0 : p.num("value", 0);
+    const stars = (n: number) => `${n} ${n === 1 ? "star" : "stars"}`;
+    if (!bind) return { role: "img", name: `${Math.round(value * 10) / 10} out of ${stars(max)}` };
+    return {
+      role: "radiogroup",
+      name: ctx.textBefore() ?? "Rating",
+      parts: Array.from({ length: max }, (_, i) => ({ detail: i + 1, role: "radio" as const, name: stars(i + 1), checked: value === i + 1 })),
+    };
+  },
   layout(box) {
     box.h = STAR + 4;
   },
@@ -475,6 +520,9 @@ export const link: ComponentDef = {
     on: { type: "action", required: true, description: "What happens when pressed, e.g. emit:size_guide." },
   },
   example: `link "Size guide" on=emit:size_guide`,
+  semantics(box, ctx) {
+    return { role: "link", name: ctx.props(box.node).text() };
+  },
   layout(box, ctx) {
     box.h = Math.round(ctx.theme.text.body * 1.35);
   },
@@ -531,6 +579,11 @@ export const slider: ComponentDef = {
   },
   example: `state maxPrice=120
 slider "Up to \${maxPrice}" bind=maxPrice min=20 max=300 step=10`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const { min, max, value } = sliderState(p);
+    return { role: "slider", name: p.text() || ctx.textBefore(), value: { now: value, min, max }, detail: "track" };
+  },
   layout(box, ctx) {
     const l = labelLines(ctx, ctx.props(box.node).text(), box.w, 2);
     box.data = l;
@@ -700,6 +753,20 @@ export const input: ComponentDef = {
 input "New item" bind=task placeholder="e.g. Sunscreen" on="add:todos:{task};set:task:''"
 text "{plural(len(todos), 'item')}" tone=muted`,
   minWidth: () => 120,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const kind = p.str("kind", "text");
+    const placeholder = p.str("placeholder") || undefined;
+    const typed = fieldValue(p);
+    return {
+      role: kind === "search" ? "searchbox" : "textbox",
+      name: p.text() || ctx.textBefore() || placeholder,
+      placeholder,
+      // A password's characters are never read out.
+      value: kind === "password" || !typed ? undefined : { text: typed },
+      disabled: p.cond("disabled") || undefined,
+    };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     box.h = fieldBox(box, p, ctx.theme.control.height).y - box.y + ctx.theme.control.height;
