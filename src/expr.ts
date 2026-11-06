@@ -571,11 +571,24 @@ const cache = new Map<string, Node | ExprError>();
 const hasArrow = (src: string) => /=>/.test(src.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, ""));
 const NO_ARROWS = "SayShape has no arrow functions (x => …): list functions take a field name and a value instead, like filter(list, 'priority', 'High'), count(list, 'done') or sort(list, 'price', 'desc')";
 
+/** A JavaScript template string (`Total: ${n}`): models write them, and the parse error didn't say what to write. */
+const NO_TEMPLATES = "SayShape has no template strings (`…`): put the text in quotes outside the braces, and it fills in each {…}: value=\"${total}K\" or text \"Total: {money(total)}\"";
+
+/**
+ * Text in quotes that holds {…} (or ${…}), as a whole expression: {"${total}K"}. It's valid, but
+ * it's just text, so the braces show as they are. Returns that text, or null.
+ */
+export function quotedTemplate(src: string): string | null {
+  const m = /^\s*(['"])((?:\\.|(?!\1)[^\\])*)\1\s*$/.exec(src);
+  return m && /\{[^{}]*\}/.test(m[2]!) ? m[2]! : null;
+}
+
 function compile(src: string): Node {
   let c = cache.get(src);
   if (!c) {
     try { c = parseExpr(src); } catch (e) { c = e instanceof ExprError ? e : new ExprError(String(e)); }
     if (c instanceof ExprError && hasArrow(src)) c = new ExprError(NO_ARROWS);
+    else if (c instanceof ExprError && src.includes("`")) c = new ExprError(NO_TEMPLATES);
     if (cache.size > 2000) cache.clear();
     cache.set(src, c);
   }
