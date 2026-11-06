@@ -9,8 +9,12 @@ const p = (src: string, partial = false) => parse(src, reg, { partial });
 describe("tokenizeLine", () => {
   it("reads type, text and props", () => {
     expect(tokenizeLine(`button "Add day" on=inc:days variant=secondary`)).toEqual({
-      type: "button", text: "Add day", props: { on: "inc:days", variant: "secondary" }, problems: [],
+      type: "button", text: "Add day", props: { on: "inc:days", variant: "secondary" }, quoted: new Set(), problems: [],
     });
+  });
+
+  it("remembers which props were quoted", () => {
+    expect([...tokenizeLine(`radio "56" bind=q value="56" min=1 label='x'`).quoted]).toEqual(["value", "label"]);
   });
 
   it("keeps spaces inside braces and quotes", () => {

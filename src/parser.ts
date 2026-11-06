@@ -105,13 +105,15 @@ interface LineTokens {
   type: string;
   text?: string;
   props: Record<string, string>;
+  /** Props whose value was written in quotes: text, even when it looks like a number. */
+  quoted: Set<string>;
   problems: string[];
 }
 
 /** Tokenize one element line: `type "text" key=value key="quoted" key={expr}`. */
 export function tokenizeLine(body: string): LineTokens {
   // No prototype, so prop names like toString or __proto__ are plain keys, not inherited ones.
-  const out: LineTokens = { type: "", props: Object.create(null) as Record<string, string>, problems: [] };
+  const out: LineTokens = { type: "", props: Object.create(null) as Record<string, string>, quoted: new Set(), problems: [] };
   let i = 0;
   const n = body.length;
   const skipWs = () => { while (i < n && /\s/.test(body[i]!)) i++; };
@@ -179,7 +181,8 @@ export function tokenizeLine(body: string): LineTokens {
       i += key[0].length + 1;
       const start = i;
       let v: string | null;
-      if (body[i] === '"' || body[i] === "'") v = readQuoted();
+      const quoted = body[i] === '"' || body[i] === "'";
+      if (quoted) v = readQuoted();
       else if (body[i] === "{" || body[i] === "[") v = readGroup() ?? null;
       else v = readBare();
       if (v === null) {
@@ -189,6 +192,7 @@ export function tokenizeLine(body: string): LineTokens {
       }
       if (key[0] in out.props) out.problems.push(`"${key[0]}" is set twice; using the last one`);
       out.props[key[0]] = v;
+      if (quoted) out.quoted.add(key[0]); else out.quoted.delete(key[0]);
       continue;
     }
     const word = readBare();
@@ -223,7 +227,8 @@ function parseStateLine(body: string, line: number, diags: Diagnostic[], skipped
       continue;
     }
     if (wholeExpression(raw) !== null) diags.push({ line, severity: "warning", message: `Initial state "${key}" must be a plain value, list or record, not an expression` });
-    out.push({ key, value: literal(raw), line });
+    // A quoted value is text: state zip="02139" keeps its leading zero, and code="56" stays "56".
+    out.push({ key, value: t.quoted.has(key) ? raw : literal(raw), line });
   }
   return out;
 }
@@ -303,6 +308,9 @@ function findCycles(defs: readonly DerivedDef[], diags: Diagnostic[]): Set<strin
   return cyclic;
 }
 
+/** A state name or path written without braces, like pages or t.qty. */
+const BARE_NAME = /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$/;
+
 /** Every expression a line reads, for checking which names it uses. */
 function expressionsOf(text: string | undefined, props: Record<string, string>, defs: Record<string, PropDef>): string[] {
   const out: string[] = [];
@@ -319,6 +327,7 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
       if (PATH.test(raw)) out.push(raw);
     } else if (whole !== null) out.push(whole);
     else if (def.type === "condition" || def.type === "expression") out.push(raw);
+    else if (def.type === "number" && BARE_NAME.test(raw)) out.push(raw);
     else if (raw.includes("{")) template(raw);
   }
   return out;
@@ -391,7 +400,8 @@ function checkProp(name: string, raw: string, def: PropDef, line: number, diags:
   }
   switch (def.type) {
     case "number":
-      if (isNaN(Number(raw))) warn(`${name} should be a number or {expression}, got "${raw}"`);
+      // A bare name (pages=pages) reads that value, like items=sales does; expressionsOf checks it exists.
+      if (isNaN(Number(raw)) && !BARE_NAME.test(raw)) warn(`${name} should be a number or {expression}, got "${raw}"`);
       break;
     case "boolean":
       if (raw !== "true" && raw !== "false") warn(`${name} should be true or false, got "${raw}"`);
@@ -675,7 +685,18 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       const pdef = def.props[name] ?? COMMON_PROPS[name];
       const wrote = (n: string) => { written.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
       if (pdef?.type === "state" && PATH.test(raw)) wrote(raw.split(".")[0]!);
-      if (pdef?.type === "action") { const r = parseActions(raw); if ("actions" in r) actionTargets(r.actions).forEach(wrote); }
+      if (pdef?.type === "action") {
+        const r = parseActions(raw);
+        if ("actions" in r) {
+          actionTargets(r.actions).forEach(wrote);
+          // set:order:o stores the text "o", never the item o: a silent mistake models make.
+          for (const a of r.actions) {
+            if ((a.op === "set" || a.op === "add") && inScope.has(a.value)) {
+              diagnostics.push({ line: lineNo, severity: "warning", message: `${a.op}:${a.key}:${a.value} stores the text "${a.value}". To store the item, write ${a.op}:${a.key}:{${a.value}}` });
+            }
+          }
+        }
+      }
     }
 
     const node: SayShapeNode = {
@@ -683,6 +704,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       type: tok.type,
       ...(tok.text !== undefined ? { text: tok.text } : {}),
       props: tok.props,
+      ...(tok.quoted.size ? { quoted: [...tok.quoted] } : {}),
       children: [],
       line: lineNo,
       indent,

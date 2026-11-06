@@ -5,6 +5,9 @@
  *   npm run compare -- --models openai/gpt-4.1,anthropic/claude-sonnet-4.5
  *   npm run compare -- --runs 3                      each task three times per model and format
  *   npm run compare -- --only kpi,d1                 some categories or task ids
+ *   npm run compare -- --set stress                  the harder requests in eval/compare/stress.ts
+ *   npm run compare -- --formats sayshape,mcp        mcp: SayShape through the MCP server's tools
+ *                                                    (needs npm ci --prefix mcp)
  *   npm run compare -- --guide compact               SayShape's compact guide instead of the full one
  *   npm run compare -- --repair                      one repair when the first answer has problems
  *   npm run compare -- --cache 1h                    mark the guide for prompt caching (1h, 5m or off;
@@ -23,7 +26,9 @@ import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import type { GuideMode } from "../src/prompt";
 import { Registry } from "../src/registry";
+import { a2uiPrompt } from "../eval/compare/a2ui";
 import { HTML_PROMPT, report, runCompare, summarize, systemPrompt, type Format, type Prices } from "../eval/compare/run";
+import { stressTasks } from "../eval/compare/stress";
 import { tasks } from "../eval/compare/tasks";
 import { parseCache, readModelEnv } from "./model-env";
 
@@ -57,11 +62,15 @@ async function main(): Promise<void> {
   const env = readModelEnv("development", resolve(__dirname, ".."));
   const models = list("models") ?? (env.model ? [env.model] : []);
   if (!models.length) throw new Error("No model: pass --models, or set SAYSHAPE_MODEL in .env.local.");
+  const set = arg("set") ?? "main";
+  if (set !== "main" && set !== "stress") throw new Error(`--set takes main or stress, not "${set}"`);
+  const pool = set === "stress" ? stressTasks : tasks;
   const only = list("only");
-  const chosen = only ? tasks.filter((t) => only.includes(t.id) || only.includes(t.category)) : tasks;
+  const chosen = only ? pool.filter((t) => only.includes(t.id) || only.includes(t.category)) : pool;
   if (!chosen.length) throw new Error(`No tasks match --only ${only?.join(",")}`);
   const runs = Math.max(1, Number(arg("runs") ?? 1) || 1);
   const formats = (list("formats") ?? ["sayshape", "html"]) as Format[];
+  for (const f of formats) if (!["sayshape", "html", "a2ui", "mcp"].includes(f)) throw new Error(`--formats takes sayshape, html, a2ui and mcp, not "${f}"`);
   const mode = (arg("guide") ?? "full") as GuideMode;
   if (mode !== "full" && mode !== "compact") throw new Error(`--guide takes full or compact, not "${mode}"`);
 
@@ -73,7 +82,7 @@ async function main(): Promise<void> {
   const prices = await pricesFor(env.url, models);
   const total = chosen.length * formats.length * models.length * runs;
   if (cache) console.log(`Prompt caching: the guide is marked for ${cache === "1h" ? "an hour" : "about 5 minutes"}.`);
-  console.log(`SayShape vs HTML: ${chosen.length} tasks × ${formats.join(" and ")} × ${models.length} model${models.length === 1 ? "" : "s"} × ${runs} run${runs === 1 ? "" : "s"} = ${total} requests at ${env.url}`);
+  console.log(`Comparing ${chosen.length} tasks × ${formats.join(" and ")} × ${models.length} model${models.length === 1 ? "" : "s"} × ${runs} run${runs === 1 ? "" : "s"} = ${total} requests at ${env.url}`);
   for (const m of models) console.log(`  ${m}: ${prices[m] ? `$${(prices[m].prompt * 1e6).toFixed(2)} / $${(prices[m].completion * 1e6).toFixed(2)} per million tokens in / out` : "price unknown"}`);
   console.log("");
 
@@ -96,17 +105,17 @@ async function main(): Promise<void> {
     },
   });
 
-  const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 16);
+  const stamp = new Date().toISOString().replace(/[:T]/g, "-").slice(0, 19);
   const dir = resolve(__dirname, "..", "eval", "compare", "results", stamp);
   mkdirSync(resolve(dir, "answers"), { recursive: true });
-  const md = report(results, { date: new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC", url: env.url, runs, guideChars: systemPrompt("sayshape", registry, guide).length, htmlPromptChars: HTML_PROMPT.length, cache });
+  const md = report(results, { date: new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC", url: env.url, runs, guideChars: systemPrompt("sayshape", registry, guide).length, htmlPromptChars: HTML_PROMPT.length, ...(formats.includes("a2ui") ? { a2uiPromptChars: a2uiPrompt().length } : {}), cache });
   writeFileSync(resolve(dir, "report.md"), md);
   writeFileSync(resolve(dir, "results.json"), JSON.stringify({ url: env.url, models, runs, guide, cache: cache ?? null, prices, summary: summarize(results), results }, null, 2));
   for (const r of results) {
     if (!r.output) continue;
-    writeFileSync(resolve(dir, "answers", `${r.model.replace(/[^\w.-]+/g, "_")}.${r.task}.${r.run}.${r.format === "sayshape" ? "sayshape" : "html"}`), r.output);
+    writeFileSync(resolve(dir, "answers", `${r.model.replace(/[^\w.-]+/g, "_")}.${r.task}.${r.run}.${r.format === "a2ui" ? "a2ui.jsonl" : r.format === "mcp" ? "mcp.sayshape" : r.format}`), r.output);
   }
-  console.log("\n" + md.split("\n## By category")[0]);
+  console.log("\n" + md.split("\n## Code")[0]);
   console.log(`Full report: ${dir}/report.md`);
 }
 

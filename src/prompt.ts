@@ -336,11 +336,11 @@ function dataSection(ctx: GuideContext): string {
     `- Inside each, the current item is t (from as=t; item if as= is left out). index=i gives its position from 0. t only exists inside its each.`,
     `- Read fields: {t.text}, {cart[0].price}, {todos.length}`,
     `- Compute numbers from the list instead of writing them yourself: len(list), count(list, 'done') counts items whose field is true, count(list, 'cat', 'Gas') counts items whose field equals a value, sum(list, 'price'), sum(list, 'price', 'qty') multiplies two fields per item, avg(list, 'field'), min(list, 'field'), max(list, 'field'), join(list, 'name'), includes(list, value). These count only numbers: write prices and quantities as numbers (24, not "24")`,
-    `- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), filter(list, 'region', regions) for any of a list of values (a multi-select's), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), first(list) and last(list) for one item, pluck(list, 'revenue') for one field of every item (a stat's spark=). Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate`,
+    `- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), filter(list, 'region', regions) for any of a list of values (a multi-select's), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), slice(list, (page - 1) * 10, page * 10) for one page of a longer list (from 0, the end not included), first(list) and last(list) for one item, pluck(list, 'revenue') for one field of every item (a stat's spark=). Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate`,
     `- Use filter() for counts and totals. Items of a filtered or sorted list still write back: bind=t.done inside each items=shown as=t changes that task in tasks, and totals worked out from tasks follow. if= on an each picks items per item: each items=todos as=t if={!t.done}`,
     `- Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}`,
     `- A filter with an All choice: derive shown={region == 'All' ? orders : filter(orders, 'region', region)}`,
-    `- Totals per category: derive byCat={sort(group(spend, 'cat', 'amt'), 'amt', 'desc')} makes one record per category, {cat, count, amt}: count is how many items it has and amt their total. Then items=byCat x=cat y=amt. group(list, 'cat') only counts; a fourth argument works out 'avg', 'min' or 'max' instead of the total. Groups are read-only`,
+    `- Totals per category: derive byCat={sort(group(spend, 'category', 'amount'), 'amount', 'desc')} makes one record per category, its fields named after the ones you grouped by and added up: {category, count, amount}, where count is how many items it has and amount their total. Then items=byCat x=category y=amount. Use your own field names: grouping by 'team' and adding up 'hours' gives {team, count, hours}. group(list, 'category') only counts; a fourth argument works out 'avg', 'min' or 'max' instead of the total. Groups are read-only`,
     `- Data the app passes in can be large (thousands of rows). Never copy its rows into the spec: read it by name, and put totals, groups and filters over it in derive lines, so they're worked out once`,
     ...(has("radio") ? [`- To compare two fields of an item (an answer and its correct answer), set a field when choosing, then count it: radio "{o}" bind=q.pick value={o} on="set:q.ok:{o == q.answer}" and later count(qs, 'ok')`] : []),
     `- Format for people: money(2400) shows $2,400.00, number(37000) shows 37,000, compact(12345678) shows 12.3M and compact(n, 'USD') shows $12.3M (use it for big figures in stats), plural(n, 'item') shows 1 item or 3 items, lower(), upper(), trim()`,
@@ -434,6 +434,8 @@ const COMPACT_TYPES: Record<PropDef["type"], string> = {
 /** One line for an element: its signature, where it may go, and what it's for. */
 function compactLine(c: ComponentDef): string {
   const parts: string[] = [c.type];
+  // Optional text keeps its brackets: shown like required text, models wrote screen lines with a bare
+  // word for their name (screen budget). The legend says the brackets are never written.
   if (c.text) parts.push(c.text.required ? `"text"` : `["text"]`);
   for (const [n, d] of Object.entries(c.props)) {
     const type = d.type === "enum" && d.values ? d.values.join("|") : COMPACT_TYPES[d.type];
@@ -463,7 +465,7 @@ function compactSections(ctx: GuideContext): GuideSection[] {
 - {…} reads state and loop variables: {count}, {price*qty}, {t.text}, {cart[0].price}, {todos.length}. Text mixes words and {…}: "Total: \${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! a ? b : c. Words inside {…} are names, so quote text: {done ? 'Yes' : 'No'}
 - Functions: ${EXPRESSION_FUNCTIONS.join(", ")}
-- On lists: count(l, 'done'), count(l, 'cat', 'Gas'), sum(l, 'price'), sum(l, 'price', 'qty') multiplies per item, avg/min/max(l, 'f'), group(l, 'cat'[, 'amt'[, 'avg']]) one {cat, count, amt} record per category, filter(l, 'f'[, value or list of values]), find(l, 'id', x), search(l, 'f', text), sort(l, 'f'[, 'desc']), take(l, n), first(l)/last(l) (best: first(sort(l, 'f', 'desc')).name), pluck(l, 'f') one field of each, join(l, 'f'), includes(l, x). Compute totals; never type them
+- On lists: count(l, 'done'), count(l, 'cat', 'Gas'), sum(l, 'price'), sum(l, 'price', 'qty') multiplies per item, avg/min/max(l, 'f'), group(l, 'f'[, 'n'[, 'avg']]) one record per value of f, named after your fields: group(spend, 'category', 'amount') gives {category, count, amount}, filter(l, 'f'[, value or list of values]), find(l, 'id', x), search(l, 'f', text), sort(l, 'f'[, 'desc']), take(l, n), slice(l, start, end) from 0 with the end left out, so one page is slice(l, (page - 1) * 5, page * 5), first(l)/last(l) (best: first(sort(l, 'f', 'desc')).name), pluck(l, 'f') one field of each, join(l, 'f'), includes(l, x). Compute totals; never type them
 - Formatting: money(2400) = $2,400.00, number(37000) = 37,000, compact(12345678) = 12.3M, compact(n, 'USD') = $12.3M for big figures in stats, plural(n, 'item') = 1 item / 3 items`);
   const local = ["inc:key[:by]", "dec:key[:by] (never below 0)", "toggle:key", "set:key:value or set:key:{expr}", ...(has("each") ? ["add:list:value", "remove:t (current item) or remove:list:index", "clear:list"] : []), "notify:'text {expr}'", ...(has("screen") ? ["go:screen", "back"] : [])];
   add("actions", `ACTIONS on=…, several joined with ; and quoted when they have spaces: on="inc:n;notify:'Saved {n}'"
@@ -480,7 +482,7 @@ ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty
 - No JSX, HTML or JavaScript: {…} computes values, never elements`);
   }
   const showExample = (c: ComponentDef) => opts.examples === true && !!c.example && ctx.valid(componentExampleSpec(c, comps));
-  add("elements", `ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path a state name or t.field, action an on= value)
+  add("elements", `ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path a state name or t.field, action an on= value; ["text"] is optional quoted text, written without the brackets: "Sales", never ["Sales"])
 - every element: if=cond
 ${comps.map((c) => `- ${compactLine(c)}${showExample(c) ? `\n    example:\n${indent(c.example!, "      ")}` : ""}`).join("\n")}`);
   const picks = pickList(comps);

@@ -33,7 +33,7 @@ export interface TaskCheck {
 
 export interface Task {
   id: string;
-  category: "kpi" | "chart" | "table" | "form" | "calculator" | "dashboard" | "map" | "security";
+  category: "kpi" | "chart" | "table" | "form" | "calculator" | "dashboard" | "map" | "security" | "app";
   request: string;
   checks: TaskCheck[];
 }

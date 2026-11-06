@@ -122,7 +122,7 @@ One element per line: its type, optional quoted text, then `name=value` props.
 button "Save changes" variant=secondary on=emit:save
 ```
 
-Prop values can be bare (`variant=secondary`), quoted (`label="Water (L)"`) or an expression (`value={price * qty}`). Quotes can be escaped with a backslash.
+Prop values can be bare (`variant=secondary`), quoted (`label="Water (L)"`) or an expression (`value={price * qty}`). Quotes can be escaped with a backslash. A quoted value is always text, in props and on `state` lines alike: `value="56"` is the text 56, so `{q == '56'}` matches it, and `state zip="02139"` keeps its leading zero. Bare `56`, `true` and `false` are a number and booleans; a boolean prop reads `"false"` as false either way.
 
 ### Nesting
 
@@ -268,11 +268,12 @@ List functions, for computing instead of typing numbers:
 | `search(list, 'name', query)` | Items whose field contains some text, ignoring case (all of them for empty text) |
 | `sort(list, 'price')`, `sort(list, 'price', 'desc')`, `sort(list)` | The list in order, by a field or by value |
 | `take(list, 3)` | The first items |
+| `slice(list, 10, 20)`, `slice(name, 0, 1)` | Items (or characters) from a start up to, not including, an end, counting from 0: one page of a `pagination` is `slice(rows, (page - 1) * 10, page * 10)` |
 | `pluck(list, 'revenue')` | One field of every item, as a list (`null` where it's missing), e.g. for a stat's `spark=` |
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
 | `group(list, 'region')`, `group(list, 'region', 'revenue')`, `group(list, 'region', 'revenue', 'avg')` | Totals per category: one record per region, in the order each first appears, with `count` (how many items) and, given a field, its total under the field's own name: `[{region: "West", count: 12, revenue: 48200}, …]`. A fourth argument works out `'avg'`, `'min'` or `'max'` instead. Totals follow `sum()`'s rules. Values group as they are (`"US"` and `"USA"` are two groups), and items without the field share a `null` group. The groups are new, read-only records |
 
-They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. Use them for counts and totals, and for the lists people work with: items of a filtered, sorted or searched list keep their place in state, so `bind=t.done` inside `each items=shown` (with `derive shown={filter(tasks, 'owner', owner)}`) ticks the task in `tasks`, and totals worked out from `tasks` follow. To hide items without a derived list, put `if=` on the `each` or on the repeated element. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
+They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. There are no methods: `rows.slice(0, 5)` is written `slice(rows, 0, 5)`, and a function given more arguments than it takes is reported rather than silently ignoring the extras. Use them for counts and totals, and for the lists people work with: items of a filtered, sorted or searched list keep their place in state, so `bind=t.done` inside `each items=shown` (with `derive shown={filter(tasks, 'owner', owner)}`) ticks the task in `tasks`, and totals worked out from `tasks` follow. To hide items without a derived list, put `if=` on the `each` or on the repeated element. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
 
 Formatting, for text people read:
 
@@ -946,7 +947,7 @@ Rows of a list of records, one table-column per field, for things like inventory
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text | A title above the table. |
-| `items` | expression, required | The list of records, e.g. items=equipment. At most 200 rows; show a page of a longer list with take() or pagination. |
+| `items` | expression, required | The list of records, e.g. items=equipment. At most 200 rows; show a page of a longer list with slice() and pagination. |
 | `key` | name | The field that identifies each row, e.g. key=id. Needed for bind=. |
 | `bind` | state | State that holds the selected row's key. Pressing a row sets it. |
 | `sort` | state | State that holds the field to sort by. Pressing a header sets it; missing values sort last. |
@@ -1323,12 +1324,12 @@ breadcrumb "Shop / Shoes / Trail runners" bind=at
 
 ### `pagination`
 
-Previous, next and page-number buttons for moving through pages of results.
+Previous, next and page-number buttons for moving through pages of results. Show the current page's items with slice(rows, (page - 1) * 10, page * 10).
 
 | Prop | Type | Description |
 |---|---|---|
 | `bind` | state, required | The number state holding the current page, starting at 1. |
-| `pages` | number, required | How many pages there are. |
+| `pages` | number, required | How many pages there are, e.g. pages={ceil(len(rows) / 10)}. |
 | `on` | action | Actions to run after the page changes, e.g. emit:changed. Separate several with ; |
 
 ```

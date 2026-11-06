@@ -18,6 +18,8 @@ export interface SayShapeNode {
   text?: string;
   /** Raw prop strings. Components interpret them through a PropReader. */
   props: Record<string, string>;
+  /** Props written in quotes (value="56"), which stay text instead of becoming numbers or booleans. */
+  quoted?: string[];
   children: SayShapeNode[];
   /** 1-based line number in the spec. */
   line: number;

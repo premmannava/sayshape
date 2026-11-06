@@ -14,10 +14,14 @@ import { generateSpec } from "../../src/model/generate";
 import { streamChat, type ChatMessage, type ModelConfig, type Usage } from "../../src/model/stream";
 import { languageGuide, type GuideOptions } from "../../src/prompt";
 import type { Registry } from "../../src/registry";
+import { a2uiPrompt } from "./a2ui";
+import { a2uiScreen, cleanA2ui } from "./a2ui-screen";
+import { askMcp } from "./mcp-route";
 import { htmlScreen, sayshapeScreen, type Screen } from "./screens";
 import type { Task, TaskCheck } from "./tasks";
 
-export type Format = "sayshape" | "html";
+/** "mcp" is SayShape through the MCP server's tools (mcp-route.ts), scored like "sayshape". */
+export type Format = "sayshape" | "html" | "a2ui" | "mcp";
 
 /**
  * What the HTML answer is told. Kept short and fair: the same constraints a
@@ -84,6 +88,12 @@ export interface AnswerResult {
   checks: CheckResult[];
   /** Valid and every check passed. */
   success: boolean;
+  /**
+   * A2UI only: an answer that renders but failed only checks that need using it, and whose
+   * controls send an event to the server. A2UI's basic catalog has no client-side way to change
+   * data, so the agent answers those events with another model call: by design, not a broken answer.
+   */
+  waitsOnServer?: boolean;
   /** Whether a repair ran, and the first try's result, when it did. */
   repaired?: boolean;
   firstSuccess?: boolean;
@@ -200,6 +210,32 @@ export async function askHtml(task: Task, config: ModelConfig, fetchImpl?: typeo
   return { output: firstOutput, raw: first.raw, usage: first.usage, firstTokenMs, totalMs: clock() - start, inputChars };
 }
 
+/** A SayShape answer through the MCP server's tools; the turns it took go in raw. */
+async function askThroughMcp(task: Task, config: ModelConfig, fetchImpl?: typeof fetch): Promise<Answer> {
+  const a = await askMcp(task.request, config, fetchImpl);
+  return { output: a.output, raw: JSON.stringify({ turns: a.turns, docsCalls: a.docsCalls, showCalls: a.showCalls, messages: JSON.parse(a.raw) as unknown }), usage: a.usage, totalMs: a.totalMs, inputChars: a.inputChars };
+}
+
+let a2uiSystem: string | undefined;
+
+/**
+ * An A2UI answer: A2UI's own schemas and examples as the system prompt (a2ui.ts), the
+ * reply's JSON messages kept. First try only: A2UI has no repair step of its own here.
+ */
+export async function askA2ui(task: Task, config: ModelConfig, fetchImpl?: typeof fetch): Promise<Answer> {
+  a2uiSystem ??= a2uiPrompt();
+  const messages: ChatMessage[] = [{ role: "system", content: a2uiSystem }, { role: "user", content: task.request }];
+  const start = clock();
+  let firstTokenMs: number | undefined;
+  const usage: Usage = {};
+  let raw = "";
+  for await (const part of streamChat(config, messages, { usage, fetch: fetchImpl })) {
+    firstTokenMs ??= clock() - start;
+    if (part.kind === "content") raw += part.text;
+  }
+  return { output: cleanA2ui(raw), raw, usage, firstTokenMs, totalMs: clock() - start, inputChars: a2uiSystem.length + task.request.length };
+}
+
 /** Two attempts' usage added up; a figure either didn't report stays unknown. */
 function addUsage(a: Usage, b: Usage): Usage {
   const out: Usage = {};
@@ -210,7 +246,7 @@ function addUsage(a: Usage, b: Usage): Usage {
 }
 
 async function open(format: Format, code: string): Promise<Screen> {
-  return format === "sayshape" ? sayshapeScreen(code) : htmlScreen(code);
+  return format === "sayshape" || format === "mcp" ? sayshapeScreen(code) : format === "a2ui" ? a2uiScreen(code) : htmlScreen(code);
 }
 
 /** Run one check on a fresh screen. */
@@ -292,8 +328,10 @@ export async function runCompare(tasks: Task[], o: CompareOptions): Promise<Answ
   for (let run = 1; run <= runs; run++) {
     for (const model of o.models) {
       const config: ModelConfig = { ...o.config, model, streamUsage: o.config.streamUsage ?? true };
-      for (const task of tasks) {
-        const order = run % 2 === 0 ? [...formats].reverse() : formats;
+      for (const [i, task] of tasks.entries()) {
+        // Rotate which format goes first, task by task, so none is always first (or last).
+        const shift = (i + run - 1) % formats.length;
+        const order = [...formats.slice(shift), ...formats.slice(0, shift)];
         for (const format of order) {
           const r = await answerOne(task, format, model, run, config, o, guide);
           out.push(r);
@@ -309,7 +347,10 @@ async function answerOne(task: Task, format: Format, model: string, run: number,
   const base = { model, task: task.id, category: task.category, format, run };
   let a: Answer;
   try {
-    a = format === "sayshape" ? await askSayShape(task, config, o.registry, guide, o.fetch, o.repair) : await askHtml(task, config, o.fetch, o.repair);
+    a = format === "sayshape" ? await askSayShape(task, config, o.registry, guide, o.fetch, o.repair)
+      : format === "a2ui" ? await askA2ui(task, config, o.fetch)
+      : format === "mcp" ? await askThroughMcp(task, config, o.fetch)
+      : await askHtml(task, config, o.fetch, o.repair);
   } catch (e) {
     return {
       ...base, ok: false, error: e instanceof Error ? e.message : String(e), output: "", raw: "", usage: {}, totalMs: 0, inputChars: 0,
@@ -322,9 +363,17 @@ async function answerOne(task: Task, format: Format, model: string, run: number,
   return {
     ...base, ok: true, output: a.output, raw: a.raw, usage: a.usage, cost, firstTokenMs: a.firstTokenMs, totalMs: a.totalMs, inputChars: a.inputChars,
     valid: s.valid, problems: s.problems, checks: s.checks, success: s.valid && s.checks.every((c) => c.passed),
+    ...(format === "a2ui" ? { waitsOnServer: waitsOnServer(task, a.output, s) } : {}),
     code: codeStats(format, a.output, a.warnings ?? 0),
     ...(o.repair ? await firstTry(format, task, a) : {}),
   };
+}
+
+/** See AnswerResult.waitsOnServer. */
+export function waitsOnServer(task: Task, code: string, s: { valid: boolean; checks: CheckResult[] }): boolean {
+  if (!s.valid || s.checks.every((c) => c.passed)) return false;
+  const failedNeedUse = task.checks.every((c, i) => s.checks[i]?.passed || (c.steps?.length ?? 0) > 0);
+  return failedNeedUse && /"action"\s*:\s*\{\s*"event"/.test(code);
 }
 
 /** With repair on: whether it ran, and how the first answer did on its own. */
@@ -336,6 +385,8 @@ async function firstTry(format: Format, task: Task, a: Answer): Promise<Pick<Ans
 
 /** The system prompt each format is sent, for the report. */
 export function systemPrompt(format: Format, registry: Registry, guide: GuideOptions = { imageHosts: [] }): string {
+  if (format === "a2ui") return (a2uiSystem ??= a2uiPrompt());
+  if (format === "mcp") return "(the MCP server's instructions and tools: show_interface with its quick start, and sayshape_docs)";
   return format === "sayshape" ? languageGuide(registry, guide) : HTML_PROMPT;
 }
 
@@ -360,6 +411,8 @@ export interface Summary {
   firstSuccessRate: number;
   /** Answers a repair ran on. */
   repaired: number;
+  /** A2UI: answers that only failed because using them needs the agent to answer an event. */
+  waitsOnServer: number;
   checkRate: number;
   /** Medians over answered requests; undefined when the server didn't report them. */
   inputTokens?: number;
@@ -406,6 +459,7 @@ export function summarize(results: AnswerResult[]): Summary[] {
       successRate: answered.length ? successes / answered.length : 0,
       firstSuccessRate: answered.length ? answered.filter((r) => (r.repaired ? r.firstSuccess : r.success)).length / answered.length : 0,
       repaired: answered.filter((r) => r.repaired).length,
+      waitsOnServer: answered.filter((r) => r.waitsOnServer).length,
       checkRate: checks.length ? checks.filter((c) => c.passed).length / checks.length : 0,
       inputTokens: median(known(answered.map((r) => r.usage.promptTokens))),
       cachedShare: cachedShare(answered),
@@ -430,11 +484,13 @@ const num = (x: number | undefined, unit = "") => (x === undefined ? "?" : `${Ma
 const secs = (ms: number | undefined) => (ms === undefined ? "?" : `${(ms / 1000).toFixed(1)} s`);
 const usd = (x: number | undefined) => (x === undefined ? "?" : x < 0.01 ? `$${x.toFixed(4)}` : `$${x.toFixed(3)}`);
 
-export function report(results: AnswerResult[], meta: { date: string; url: string; runs: number; guideChars: number; htmlPromptChars: number; cache?: true | "1h" }): string {
+export function report(results: AnswerResult[], meta: { date: string; url: string; runs: number; guideChars: number; htmlPromptChars: number; a2uiPromptChars?: number; cache?: true | "1h" }): string {
   const sums = summarize(results);
   const lines: string[] = [];
-  lines.push(`# SayShape vs HTML`, "", `${meta.date} · ${meta.url} · ${meta.runs} run${meta.runs === 1 ? "" : "s"} per task · first tries only, no repair`, "");
-  lines.push(`System prompts: SayShape guide ${meta.guideChars.toLocaleString("en-US")} characters, HTML instructions ${meta.htmlPromptChars} characters. Prompt caching: ${meta.cache === "1h" ? "marked, 1 hour" : meta.cache ? "marked, about 5 minutes" : "not marked (servers that cache on their own still may)"}.`, "");
+  const formatsRun = [...new Set(results.map((r) => r.format))];
+  const title = formatsRun.map((f) => (f === "sayshape" ? "SayShape" : f === "a2ui" ? "A2UI" : "HTML")).join(" vs ");
+  lines.push(`# ${title}`, "", `${meta.date} · ${meta.url} · ${meta.runs} run${meta.runs === 1 ? "" : "s"} per task · first tries only, no repair`, "");
+  lines.push(`System prompts: SayShape guide ${meta.guideChars.toLocaleString("en-US")} characters, HTML instructions ${meta.htmlPromptChars} characters${meta.a2uiPromptChars ? `, A2UI schemas and examples ${meta.a2uiPromptChars.toLocaleString("en-US")} characters` : ""}. Prompt caching: ${meta.cache === "1h" ? "marked, 1 hour" : meta.cache ? "marked, about 5 minutes" : "not marked (servers that cache on their own still may)"}.`, "");
   lines.push("## Summary", "");
   const repair = results.some((r) => r.repaired !== undefined);
   lines.push(`| Model | Format | ${repair ? "Works first try | Works after repair | Repairs |" : "Works (all checks) |"} Checks passed | Renders cleanly | Input tokens | From cache | Output tokens | First token | Total time | Cost | Cost per working UI |`);
@@ -442,7 +498,10 @@ export function report(results: AnswerResult[], meta: { date: string; url: strin
   for (const s of sums) {
     lines.push(`| ${s.model} | ${s.format} | ${repair ? `${pct(s.firstSuccessRate)} | ${pct(s.successRate)} | ${s.repaired} |` : `${pct(s.successRate)} |`} ${pct(s.checkRate)} | ${pct(s.validRate)} | ${num(s.inputTokens)} | ${s.cachedShare === undefined ? "?" : pct(s.cachedShare)} | ${num(s.outputTokens)} | ${secs(s.firstTokenMs)} | ${secs(s.totalMs)} | ${usd(s.cost)} | ${usd(s.costPerSuccess)} |`);
   }
+  const waiting = sums.filter((s) => s.waitsOnServer);
+  if (waiting.length) lines.push("", ...waiting.map((s) => `${s.model} A2UI: ${s.waitsOnServer} of ${s.answers} answers render fine but wait on the server when used (their buttons send an event for the agent to answer with another model call; A2UI's basic catalog can't change data on its own). They count as not working on their own here.`));
   lines.push("", "Token and time figures are medians per answer; From cache is the share of all input tokens the server read from its prompt cache; cost is the total over all answers.", "");
+  lines.push(...projection(results, 100_000), "");
   lines.push("## Code", "");
   lines.push("| Model | Format | Median size | HTML inserted as strings | Code from strings | External scripts | Fixed colors | Security tasks kept safe |");
   lines.push("|---|---|---|---|---|---|---|---|");
@@ -460,7 +519,28 @@ export function report(results: AnswerResult[], meta: { date: string; url: strin
   lines.push("", "## Every answer", "", "| Task | Model | Format | Run | Works | Failed checks or problems | Output tokens | Time |", "|---|---|---|---|---|---|---|---|");
   for (const r of results) {
     const failed = r.ok ? [...r.problems, ...r.checks.filter((c) => !c.passed).map((c) => `${c.label} (${c.why})`)] : [r.error ?? "request failed"];
-    lines.push(`| ${r.task} | ${r.model} | ${r.format} | ${r.run} | ${r.success ? "yes" : "no"} | ${failed.join("; ").replace(/\|/g, "\\|").slice(0, 300)} | ${num(r.usage.completionTokens)} | ${secs(r.totalMs)} |`);
+    lines.push(`| ${r.task} | ${r.model} | ${r.format} | ${r.run} | ${r.success ? "yes" : r.waitsOnServer ? "waits on server" : "no"} | ${failed.join("; ").replace(/\|/g, "\\|").slice(0, 300)} | ${num(r.usage.completionTokens)} | ${secs(r.totalMs)} |`);
   }
   return lines.join("\n") + "\n";
+}
+
+/**
+ * What `requests` answers would cost and take, from the averages measured here (means, not
+ * medians, since a bill adds up every answer). Cost per working UI divides by the share that
+ * worked: the honest figure when failures have to be asked again.
+ */
+export function projection(results: AnswerResult[], requests: number): string[] {
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : undefined);
+  const lines = [`## ${requests.toLocaleString("en-US")} requests, projected`, "",
+    `From the average per answer in this run. A rough estimate: ${results.length} answers in all, so treat small differences as ties.`, "",
+    "| Model | Format | Avg input tokens | Avg output tokens | Avg cost per answer | Avg time | Cost for " + requests.toLocaleString("en-US") + " | Cost for " + requests.toLocaleString("en-US") + " working UIs |",
+    "|---|---|---|---|---|---|---|---|"];
+  for (const s of summarize(results)) {
+    const rs = results.filter((r) => r.model === s.model && r.format === s.format && r.ok);
+    const costs = known(rs.map((r) => r.cost));
+    const c = mean(costs);
+    const per = (x: number | undefined) => (x === undefined ? "?" : `$${x.toLocaleString("en-US", { maximumFractionDigits: x < 100 ? 2 : 0 })}`);
+    lines.push(`| ${s.model} | ${s.format} | ${num(mean(known(rs.map((r) => r.usage.promptTokens))))} | ${num(mean(known(rs.map((r) => r.usage.completionTokens))))} | ${c === undefined ? "?" : `$${c.toFixed(5)}`} | ${secs(mean(rs.map((r) => r.totalMs)))} | ${per(c === undefined ? undefined : c * requests)} | ${per(c === undefined || !s.successRate ? undefined : (c * requests) / s.successRate)} |`);
+  }
+  return lines;
 }
