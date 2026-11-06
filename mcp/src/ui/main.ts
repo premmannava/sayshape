@@ -18,9 +18,9 @@ import { mapComponents } from "../../../src/components/map";
 import type { Theme } from "../../../src/theme";
 import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
-import { eventDelivery, FIXING_SPEC, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
+import { eventDelivery, FIXING_SPEC, imageName, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
-import { DEFAULT_PRESET, isPresetId, THEME_CONTROL_SPEC, themeForPreset } from "./theme-selection";
+import { DEFAULT_PRESET, isPresetId, SAVE_ACTION, THEME_CONTROL_SPEC, themeForPreset } from "./theme-selection";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
 
@@ -285,6 +285,34 @@ async function deliver(name: string, value: Value | undefined, state: Record<str
   }
 }
 
+/**
+ * Save the interface as it looks right now, after anything the person changed,
+ * as a PNG the chat app downloads (MCP Apps' ui/download-file). The engine
+ * draws a clean copy at twice the screen's sharpness on the theme's surface
+ * (no hover, focus or notices), so it reads well pasted into an email or a
+ * slide. Nothing goes to the model.
+ */
+async function saveImage(): Promise<void> {
+  if (!sayshape) return;
+  if (introShowing || folded !== null) { sayshape.notify("There's no interface to save yet"); return; }
+  let blob = "";
+  try {
+    const picture = await sayshape.picture({ pixelRatio: 2 });
+    blob = picture.toDataURL("image/png").split(",")[1] ?? "";
+  } catch {
+    blob = "";
+  }
+  if (!blob) { sayshape.notify("Couldn't save the image"); return; }
+  try {
+    const r = await app.downloadFile({
+      contents: [{ type: "resource", resource: { uri: `file:///${imageName(sayshape.spec)}`, mimeType: "image/png", blob } }],
+    });
+    sayshape.notify(r.isError ? "The image wasn't saved" : "Image saved");
+  } catch {
+    sayshape.notify("Couldn't save the image");
+  }
+}
+
 async function start(): Promise<void> {
   await app.connect();
   const theme = await applyTheme(app.getHostContext());
@@ -295,6 +323,7 @@ async function start(): Promise<void> {
     onWarning: () => {},
   });
   themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
+    if (name === SAVE_ACTION) { void saveImage(); return; }
     if (name !== "theme") return;
     if (!isPresetId(value)) {
       themePicker?.state.set("preset", activePreset);
@@ -304,6 +333,8 @@ async function start(): Promise<void> {
     void applyTheme(app.getHostContext());
   });
   themePicker.setSpec(THEME_CONTROL_SPEC);
+  // Only offer saving where the chat app can download files; elsewhere the button stays hidden.
+  themePicker.state.set("canSave", !!app.getHostCapabilities()?.downloadFile);
   sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents],
     theme,

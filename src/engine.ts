@@ -97,6 +97,12 @@ export interface SayShapeOptions {
    * calendar day. Pass a fixed one in tests and screenshots.
    */
   today?: () => string;
+  /**
+   * Device pixels per CSS pixel in the canvas bitmap. Default: the window's
+   * devicePixelRatio. picture() uses 2, so a saved image is sharp in a slide
+   * or an email even when the screen it came from isn't.
+   */
+  pixelRatio?: number;
 }
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
@@ -127,6 +133,8 @@ export class SayShape {
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private dirty = { parse: true, layout: true, paint: true };
   private frame = 0;
+  /** Set by destroy(): late callbacks (fonts loading, images settling) must not draw again. */
+  private destroyed = false;
   private width = 0;
   private lastDiagKey = "";
   private cleanup: Array<() => void> = [];
@@ -295,6 +303,7 @@ export class SayShape {
     if (stage === "parse") this.dirty.parse = this.dirty.layout = this.dirty.paint = true;
     else if (stage === "layout") this.dirty.layout = this.dirty.paint = true;
     else this.dirty.paint = true;
+    if (this.destroyed) return;
     if (!this.frame && typeof requestAnimationFrame !== "undefined") {
       this.frame = requestAnimationFrame(() => { this.frame = 0; this.renderNow(); });
     }
@@ -340,7 +349,7 @@ export class SayShape {
     // A popup that needs more room than the screen has makes the canvas taller while it's open.
     const area = this.placeOpenPopup(ctx, width);
     if (area) height = Math.max(height, area.y + area.h + POPUP_MARGIN);
-    const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+    const dpr = this.opts.pixelRatio ?? ((typeof window !== "undefined" && window.devicePixelRatio) || 1);
     const pw = Math.round(width * dpr), ph = Math.round(height * dpr);
     if (this.canvas.width !== pw) this.canvas.width = pw;
     if (this.canvas.height !== ph) this.canvas.height = ph;
@@ -490,6 +499,50 @@ export class SayShape {
   async imagesLoaded(): Promise<void> {
     await this.images.settled();
     this.renderNow();
+  }
+
+  /**
+   * The screen as it is now, drawn onto a new canvas, for saving as an image:
+   * the same spec, state and screen, at pixelRatio device pixels per CSS pixel
+   * (default 2), on the theme's surface color (background: false leaves it
+   * transparent). Hover, focus, an open popup and notices aren't in it, and
+   * nothing animates: it's the screen at rest. Waits for images to settle.
+   * Browsers only: it needs a document to make the canvas.
+   */
+  async picture(opts: { pixelRatio?: number; background?: boolean } = {}): Promise<HTMLCanvasElement> {
+    const out = document.createElement("canvas");
+    const copy = new SayShape(out, {
+      ...this.opts,
+      theme: this.theme,
+      width: this.metrics.width || this.opts.width,
+      pixelRatio: opts.pixelRatio ?? 2,
+      animate: false,
+      editor: noEditor,
+      onWarning: () => {},
+    });
+    try {
+      copy.setSpec(this.source);
+      // Every value, including which screen is showing, before the copy's first frame.
+      for (const [key, value] of Object.entries(this.state.snapshot())) copy.state.set(key, value);
+      // The first frame asks for the images it shows; the second draws them once they've settled.
+      copy.renderNow();
+      await copy.imagesLoaded();
+    } finally {
+      copy.destroy();
+    }
+    if (opts.background !== false) {
+      const g = out.getContext("2d");
+      if (g) {
+        g.save();
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        // Under what's drawn, so the transparent gutter and gaps take the surface color.
+        g.globalCompositeOperation = "destination-over";
+        g.fillStyle = this.theme.colors.surface;
+        g.fillRect(0, 0, out.width, out.height);
+        g.restore();
+      }
+    }
+    return out;
   }
 
   // ---------------------------------------------------------------- notifications
@@ -1241,6 +1294,7 @@ export class SayShape {
   }
 
   destroy(): void {
+    this.destroyed = true;
     this.endEdit();
     this.popup = null;
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
