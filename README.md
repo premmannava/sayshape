@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 51 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, carousels, segmented toggles, comparisons, tables, a model connection, tests and debugging tools are in place. Accessibility, scrolling and the docs site come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 51 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -1957,7 +1957,7 @@ A canvas is one picture to assistive technology, so SayShape keeps a hidden **ac
 - **Keyboard**: Tab moves through everything you can press, Enter and Space press, arrows work inside sliders, selects, date pickers, tables and segmented controls, Escape closes popups. DOM focus follows, so screen readers announce where you are.
 - **Announcements**: `notify:` messages, new screens, and "Ready" once a streamed screen has arrived (the interface is marked busy while it streams or data loads).
 - **Names**: controls are named by their quoted text, or by the text just above them; `label=` names a segmented control, a rating or a meaningful icon. The model guide asks for labels and chart titles.
-- **Beyond screen readers**: text and focus colors meet WCAG AA contrast in light and dark; Windows Contrast Themes (forced colors) redraw everything in the person's own colors; reduced motion turns animation off; small targets are at least 24 px tall; longer `notify:` messages stay up longer.
+- **Beyond screen readers**: text, focus and control-outline colors meet WCAG AA contrast in light and dark; Windows Contrast Themes (forced colors) redraw everything in the person's own colors; reduced motion turns animation off; small targets are at least 24 px tall; longer `notify:` messages stay up longer.
 
 ```js
 canvas.setAttribute("aria-label", "Trip planner");                        // what the whole interface is called
@@ -1965,7 +1965,7 @@ const sayshape = new SayShape(canvas, { components: coreComponents });   // the 
 // new SayShape(canvas, { components: coreComponents, accessibility: "off" }) turns it off
 ```
 
-In tests, `render(spec).accessibility()` shows the screen as a screen reader gets it, `ui.announcements` what it was told, and `ui.mirror` sends a screen reader's actions; the visual suite runs [axe](https://github.com/dequelabs/axe-core) on every sample. Automated checks can't prove WCAG conformance on their own: [`docs/accessibility-testing.md`](docs/accessibility-testing.md) is a short manual pass with VoiceOver and NVDA to run before claiming it. Still to do: control outlines (a field's border, an unchecked box) at 3:1 contrast, which changes how controls look, and reaching the map by keyboard.
+In tests, `render(spec).accessibility()` shows the screen as a screen reader gets it, `ui.announcements` what it was told, and `ui.mirror` sends a screen reader's actions; the visual suite runs [axe](https://github.com/dequelabs/axe-core) on every sample. Automated checks can't prove WCAG conformance on their own: [`docs/accessibility-testing.md`](docs/accessibility-testing.md) is a short manual pass with VoiceOver and NVDA to run before claiming it. Still to do: reaching the map by keyboard.
 
 ---
 
