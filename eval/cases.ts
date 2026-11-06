@@ -83,6 +83,14 @@ export const cases: EvalCase[] = [
   { id: "choose-score", category: "choose", request: "Our customer health score is 72 out of 100, where under 60 is at risk and 85 or more is healthy.", expect: ["meter"] },
   { id: "choose-record", category: "choose", request: "Order #1042: placed Oct 3, shipped by UPS, in transit, total $186.40, going to Phoenix, AZ.", expect: ["details"] },
   { id: "choose-plans", category: "choose", request: "Help me choose between the Basic ($9 a month, 50 GB), Pro ($19, 500 GB) and Team ($49, 2 TB) plans.", expect: ["compare"] },
+  { id: "choose-grid", category: "choose", request: "When do orders come in? Weekdays peak around noon at about 65 an hour and 7pm at about 45; weekends peak at 7pm at about 80. Show 6am to 9pm for all 7 days.", expect: ["chart"], checks: [writes(/kind=heatmap/, "a heatmap")] },
+  { id: "choose-volume", category: "choose", request: "Weekly site visitors over the last 10 weeks, growing from 12,000 to 31,000, so I can see how much traffic we're getting overall.", expect: ["chart"], checks: [writes(/kind=area/, "an area chart")] },
+  { id: "choose-rate", category: "choose", request: "Our checkout conversion rate by month: Jan 3.2%, Feb 3.5%, Mar 3.1%, Apr 3.9%, May 4.4%, Jun 4.1%.", expect: ["chart"], checks: [writes(/format=percent/, "percent formatting")] },
+  { id: "choose-regions", category: "choose", request: "Sales by region: West $820K, East $610K, Central $455K, South $380K, Northeast $290K. Let me choose which regions are included in the total and the chart.", expect: ["select"], checks: [writes(/multiple=true/, "a multi-select"), calls("filter")] },
+  { id: "choose-period", category: "choose", request: "This month's 10 orders with their dates and amounts. Let me pick a date range and see the revenue for just those days.", expect: ["date-picker"], checks: [writes(/range=true/, "a date range"), calls("filter")] },
+  { id: "choose-trend", category: "choose", request: "Daily signups for the last 14 days in a table, with a headline total above it that has a small trend line of those days.", expect: ["stat", "table"], checks: [writes(/spark=\{?\s*pluck\(/, "a sparkline taken from the data with pluck()")] },
+  { id: "choose-alert", category: "choose", request: "Show our churn for this quarter: it rose to 4.1% from 3.0%. Make sure the warning about it is the first thing people notice.", expect: ["callout"] },
+  { id: "choose-views", category: "choose", request: "A revenue chart where I can switch between the Week, Month and Year views.", expect: ["chart", "segmented"] },
   { id: "choose-delivery", category: "choose", request: "Where's my package? Ordered Oct 1, shipped Oct 2, out for delivery now, expected Oct 4.", expect: ["timeline"] },
 
   // Hard: several ideas at once, from testing with a 14B model
