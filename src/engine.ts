@@ -29,6 +29,10 @@ import { CanvasMeasurer, font as fontString, wrapText } from "./text";
 import { darkTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
+import { domAccessibilityHost } from "./a11y/dom";
+import { noAccessibility, type AccessibilityHost } from "./a11y/host";
+import type { AccessibleNode } from "./a11y/semantics";
+import { buildAccessibilityTree } from "./a11y/tree";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
 
 export interface Metrics {
@@ -103,6 +107,12 @@ export interface SayShapeOptions {
    * or an email even when the screen it came from isn't.
    */
   pixelRatio?: number;
+  /**
+   * Where screen-reader output goes. Default: live regions next to the
+   * canvas in browsers, nothing elsewhere. "off" turns it off;
+   * sayshape/testing passes a recording host.
+   */
+  accessibility?: AccessibilityHost | "off";
 }
 
 /** The widest picture() draws, in CSS pixels, so a very wide table can't make a huge image. */
@@ -155,6 +165,7 @@ export class SayShape {
   private returningFromEditor = false;
   private warn: (message: string) => void;
   private editorHost: EditorHost;
+  private a11y: AccessibilityHost;
   /** The field being typed into, if any. */
   editing: HitTarget | null = null;
   /** What was last typed and the value it wrote, so writing "1." (stored as 1) doesn't rewrite the field to "1". */
@@ -191,6 +202,8 @@ export class SayShape {
     // the canvas (sliders). Also removes the tap delay, like "manipulation".
     canvas.style.touchAction = "pan-y pinch-zoom";
     if (!canvas.getAttribute("aria-label")) canvas.setAttribute("aria-label", "Generated interface");
+    const a = opts.accessibility;
+    this.a11y = a === "off" ? noAccessibility : a ?? (typeof document !== "undefined" ? domAccessibilityHost(canvas) : noAccessibility);
 
     // A derived value that can't be worked out shows as nothing; say why, once per spec.
     this.state.onDerivedError = (d, error) => this.loadingView().waitsFor(d.name) || this.warnOnce(`derive ${d.name} on line ${d.line} couldn't be worked out, so it shows as nothing: ${error}`);
@@ -256,6 +269,23 @@ export class SayShape {
   /** The interactive regions registered while painting the last frame, in paint order. */
   get hitRegions(): readonly HitRegion[] {
     return this.hits;
+  }
+
+  /**
+   * What the last frame is to a screen reader: each shown element's role,
+   * name and state, in reading order (src/a11y). Null before the first frame.
+   */
+  accessibilityTree(): AccessibleNode | null {
+    if (!this.rootBox) return null;
+    return buildAccessibilityTree({
+      root: this.rootBox,
+      hits: this.hits,
+      registry: this.registry,
+      scope: this.state.scope,
+      label: this.canvas.getAttribute("aria-label") || "Generated interface",
+      popupOwner: this.popup?.owner.node.id,
+      today: this.today,
+    });
   }
 
   on<K extends keyof SayShapeEvents>(name: K, fn: (p: SayShapeEvents[K]) => void): () => void {
@@ -586,6 +616,7 @@ export class SayShape {
   notify(text: string): void {
     this.toast = { text, shownAt: now() };
     this.events.emit("notify", { text });
+    this.a11y.announce(text);
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     // Repaint once it has expired, so it disappears even without animation.
     this.toastTimer = setTimeout(() => { this.toastTimer = null; this.invalidate("paint"); }, TOAST_MS + 20);
@@ -884,6 +915,7 @@ export class SayShape {
     if (from !== undefined) this.history.push(from);
     this.state.set(SCREEN_KEY, screen);
     this.events.emit("navigate", { screen, from });
+    this.announceScreen(screen);
   }
 
   /** Return to the previous screen. Does nothing on the first one. */
@@ -895,6 +927,14 @@ export class SayShape {
     if (prev === undefined) return;
     this.state.set(SCREEN_KEY, prev);
     this.events.emit("navigate", { screen: prev, from });
+    this.announceScreen(prev);
+  }
+
+  /** Tell screen readers a new screen is showing, by its title (or its name when it has none). */
+  private announceScreen(name: string): void {
+    const node = this.parsed?.root.children.find((n) => n.type === "screen" && n.props.name === name);
+    const title = node ? new PropReader(node, this.state.scope).str("title").trim() : "";
+    this.a11y.announce(title || name);
   }
 
   /** Whether back() has somewhere to go. */
@@ -1355,6 +1395,7 @@ export class SayShape {
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     if (this.frame && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(this.frame);
     this.cleanup.forEach((f) => f());
+    this.a11y.destroy();
     this.events.clear();
   }
 
