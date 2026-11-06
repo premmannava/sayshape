@@ -70,6 +70,9 @@ export const image: ComponentDef = {
     fit: { type: "enum", values: FITS, default: "cover", description: "cover fills the space and crops the edges; contain shows the whole image." },
   },
   example: `image "Ridgeline trail runners, side view" src="/images/ridgeline.jpg" ratio=4:3`,
+  semantics(box, ctx) {
+    return { role: "img", name: ctx.props(box.node).text() };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     box.h = Math.round(box.w / ratioValue(p.oneOf("ratio", RATIOS, "16:9")));

@@ -58,6 +58,21 @@ carousel bind=page
     text "Camelback Suites" style=lead weight=semibold
     text "$229 a night · 4.8 stars" tone=muted`,
   minWidth: (node, ctx) => Math.min(ctx.props(node).num("min", 220), 260),
+  semantics(box, ctx) {
+    const { page, pages } = (box.data as CarouselLayout | undefined) ?? { page: 0, pages: 1 };
+    if (pages <= 1) return null;
+    // The arrows' details name the page they go to, as painted.
+    return {
+      role: "region",
+      roleDescription: "carousel",
+      name: ctx.textBefore(),
+      description: `Page ${page + 1} of ${pages}`,
+      parts: [
+        { detail: `prev:${page - 1}`, role: "button", name: "Previous page", disabled: page <= 0 || undefined },
+        { detail: `next:${page + 1}`, role: "button", name: "Next page", disabled: page >= pages - 1 || undefined },
+      ],
+    };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const gap = p.num("gap", 12);

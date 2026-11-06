@@ -36,6 +36,8 @@ interface Row {
   tone?: Tone;
   y: number;
   h: number;
+  /** The whole row as a screen reader reads it, uncut: "Plan: Pro". */
+  spoken: string;
 }
 
 type DetailsLayout = {
@@ -76,6 +78,17 @@ details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
   detail "Renewal" value={renewal}
   detail "Status" value="At risk" tone=bad`,
   minWidth: () => 160,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    // Its rows are drawn by details itself, not laid out as children: each is a part.
+    const rows = (box.data as DetailsLayout | undefined)?.rows ?? [];
+    return {
+      role: "group",
+      name: p.text() || undefined,
+      description: p.str("subtitle") || undefined,
+      parts: rows.map((r, i) => ({ detail: `row:${i}`, role: "text" as const, name: r.spoken })),
+    };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const t = ctx.theme, m = ctx.measure;
@@ -113,7 +126,7 @@ details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
       const label = fitLines(labels[i] ?? "", stacked ? box.w : labelW - t.space.lg, fonts.label, m, LABEL_LINES);
       const lines = stacked ? label.length + value.length : Math.max(label.length, value.length);
       const h = lines * lh + pad * 2;
-      const row: Row = { label, value, y, h, ...(badge ? { tone } : {}) };
+      const row: Row = { label, value, y, h, spoken: `${labels[i] ?? ""}: ${text}`, ...(badge ? { tone } : {}) };
       y += h;
       return row;
     });
@@ -188,6 +201,8 @@ export const detail: ComponentDef = {
   parents: ["details"],
   example: `detail "Status" value="At risk" tone=bad`,
   // Rows have no box of their own: details lays them out and draws them.
+  // Read as one of its details' rows (details describes them).
+  semantics: () => null,
   layout(box) {
     box.h = 0;
   },

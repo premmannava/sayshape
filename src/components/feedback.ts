@@ -18,6 +18,8 @@ export const skeleton: ComponentDef = {
   },
   example: `skeleton lines=2
 skeleton shape=block height=80`,
+  // A placeholder: the interface is busy until the real thing arrives.
+  semantics: () => false,
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const shape = p.oneOf("shape", SHAPES, "text");
@@ -60,6 +62,16 @@ export const empty: ComponentDef = {
     { for: "nothing to show yet, or no results", write: "empty \"No results\"" },
   ],
   example: `empty "No results" detail="Try a wider price range." action="Clear filters" on=emit:clear_filters`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const action = p.str("action");
+    return {
+      role: "group",
+      name: p.text(),
+      description: p.str("detail") || undefined,
+      parts: action && p.has("on") ? [{ detail: "action", role: "button", name: action }] : undefined,
+    };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const t = ctx.theme;

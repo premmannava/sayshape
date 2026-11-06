@@ -31,6 +31,16 @@ text "{guests} guests, {nights} nights" tone=muted
 text "$160" tone=muted strike=true
 text "Payment received" icon=check-circle tone=good`,
   check: (props) => iconProblems(props.icon, "icon"),
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const name = p.text();
+    if (!name.trim()) return false;
+    // display and title are what a page's headings look like.
+    const style = p.oneOf("style", TEXT_STYLES, "body");
+    if (style === "display") return { role: "heading", level: 1, name };
+    if (style === "title") return { role: "heading", level: 2, name };
+    return { role: "text", name };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", WEIGHTS, "regular") : undefined);
@@ -116,6 +126,11 @@ export const stat: ComponentDef = {
   ],
   example: `state price=24 qty=2
 stat label="Total" value="\${price*qty}"`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const change = p.str("change");
+    return { role: "text", name: `${p.str("label")}: ${p.str("value")}${change ? `, ${change}` : ""}` };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const d = statLayout(p.str("label"), p.str("value"), box.w, ctx.theme, ctx.measure);
@@ -504,6 +519,11 @@ export const progress: ComponentDef = {
   },
   example: `state done=3
 progress value={done} max=5 label="{done} of 5 steps"`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const max = p.num("max", 100) || 1;
+    return { role: "progressbar", name: p.str("label") || ctx.textBefore() || "Progress", value: { now: p.num("value", 0), min: 0, max } };
+  },
   layout(box, ctx) {
     box.h = ctx.props(box.node).has("label") ? 20 + PROGRESS_H : PROGRESS_H;
   },
@@ -545,6 +565,9 @@ export const badge: ComponentDef = {
     tone: { type: "enum", values: BADGE_TONES, default: "accent", description: "Color role: accent, good, warn, bad or muted." },
   },
   example: `badge "Shipped" tone=good`,
+  semantics(box, ctx) {
+    return { role: "text", name: ctx.props(box.node).text() };
+  },
   layout(box, ctx) {
     box.h = BADGE_H;
     // A badge takes its label's width, so rows keep tags together instead of spreading them out.
@@ -594,6 +617,8 @@ export const icon: ComponentDef = {
   example: `icon name=sun tone=warn size=lg
 icon name=check-circle tone=good`,
   check: (props) => iconProblems(props.name, "name"),
+  // Icons decorate: what they mean is in the words beside them.
+  semantics: () => false,
   layout(box, ctx) {
     box.h = ICON_SIZES[ctx.props(box.node).oneOf("size", ICON_SIZE_NAMES, "md")];
   },
@@ -631,6 +656,11 @@ export const avatar: ComponentDef = {
     name: { type: "boolean", default: true, description: "Show the name beside the circle (default true)." },
   },
   example: `avatar "Ada Lovelace" detail="Trip organizer"`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const detail = p.str("detail");
+    return { role: "text", name: detail ? `${p.text()}, ${detail}` : p.text() };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const d = AVATAR_SIZES[p.oneOf("size", AVATAR_SIZE_NAMES, "md")];
@@ -682,6 +712,9 @@ export const code: ComponentDef = {
   text: { description: "The code. Long lines wrap.", required: true },
   props: {},
   example: `code "npm install sayshape"`,
+  semantics(box, ctx) {
+    return { role: "code", name: ctx.props(box.node).text() };
+  },
   layout(box, ctx) {
     const font = themeFont(ctx.theme, 400, CODE_SIZE, "mono");
     const lines = wrapText(ctx.props(box.node).text(), Math.max(20, box.w - CODE_PAD * 2), font, ctx.measure);

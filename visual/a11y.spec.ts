@@ -5,6 +5,7 @@
  */
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
+import { coreComponents } from "../src/components";
 
 const MIRROR = "[data-sayshape-a11y]";
 
@@ -119,8 +120,8 @@ test("a notify: message reaches the polite live region", async ({ page }) => {
   await expect(page.locator(`${MIRROR} [aria-live="polite"]`)).toHaveText("Placed");
 });
 
-// Every control's own example, as the gallery shows it, audited.
-for (const type of ["button", "link", "check", "switch", "radio", "segmented", "stepper", "slider", "rating", "input", "card", "list-item"]) {
+// Every component's own example, as the gallery shows it, audited.
+for (const type of coreComponents.filter((c) => c.example).map((c) => c.type)) {
   test(`axe finds nothing wrong with ${type}`, async ({ page }) => {
     await page.goto(`/visual/index.html?case=component-${type}&theme=light&width=600`);
     await page.waitForFunction(() => window.__sayShapeReady || window.__sayShapeError);
