@@ -1737,13 +1737,39 @@ result.usage.cacheWriteTokens;  // input tokens written to it, usually on the fi
 ```
 
 - **Anthropic models** (directly or through OpenRouter) cache only what's marked: `cache: true` sends the guide as a text block with `cache_control`, kept about 5 minutes; `cache: "1h"` keeps it an hour. A cache read costs about a tenth of the input price; writing it costs more than a normal read (more for an hour).
-- **OpenAI** caches prompts over 1,024 tokens on its own, so leave `cache` off. Gemini 2.5 and later also cache on their own.
+- **OpenAI** caches prompts over 1,024 tokens on its own, best effort, and Gemini 2.5 and later do too. Through OpenRouter, `cache: true` still helped: with the guide as its own marked block, GPT-6 Luna read it from the cache for every new user, while one plain system text was reused only when it repeated exactly. GPT-4.1's caching varied from run to run either way.
 - The cache only pays when requests keep coming before it expires. Don't add anything that changes per request (a date, a user's name) before or inside the guide: put it in the request.
 - `cachedTokens` and `cacheWriteTokens` are read from whichever fields the server uses (`prompt_tokens_details`, or Anthropic's `cache_read_input_tokens` and `cache_creation_input_tokens`), and stay `undefined` when it reports neither.
 
 `npm run eval` and `npm run compare` turn it on with `SAYSHAPE_PROMPT_CACHE=1` (or `1h`) in `.env.local`; `npm run compare -- --cache 1h` overrides that for one run, and the report shows how much input came from the cache and prices cache reads and writes at the model's own rates.
 
 Putting the guide first and the request last means requests with the same guide options share a prefix, which servers with prefix caching (vLLM, llama.cpp, many hosted APIs) can reuse. That's the server's doing: SayShape builds the same text each time, but doesn't cache anything itself.
+
+#### Your own model calls
+
+When your app calls its model itself (its own chatbot, its own SDK), `cachedPrompt` builds the system prompt in a cache-friendly order and in each provider's shape: the guide (compact by default) and your lasting instructions first, never changing, then whatever changes per user or request.
+
+```ts
+import { cachedPrompt } from "sayshape/model";
+
+const prompt = cachedPrompt(registry, {
+  instructions: "You help Acme's managers see their sales numbers.", // the same for everyone: cached
+  context: `The user is ${user.name}. Today is ${today}.`,             // changes per request: sent after it
+});
+
+// Anthropic's Messages API: the stable part is marked for caching.
+await anthropic.messages.create({ model, system: prompt.anthropic(), messages, max_tokens: 4000 });
+
+// OpenRouter or another OpenAI-compatible server that takes text blocks, for any model.
+await fetch(`${url}/chat/completions`, { method: "POST", body: JSON.stringify({ model, messages: [...prompt.marked(), ...messages] }) });
+
+// A server that only takes plain text.
+const plain = [...prompt.messages(), ...messages];
+
+prompt.cacheKey; // a fingerprint of the cached part: if it changes between requests, so does the prompt
+```
+
+`prompt.stable` is the cached part, `prompt.variable` the per-request part and `prompt.text` both. Measured through OpenRouter with a different user on each request, the marked forms let Claude Haiku 5.5 read the whole guide from the cache on the second request (5,541 of 5,574 input tokens) and GPT-6 Luna on every request after its first; a single plain system text was reused only when it repeated exactly. Give lasting instructions as `instructions` (or `guide.notes`, not both), and keep anything personal or dated in `context`, so the cached part stays the same for every user.
 
 Send the user's choices back to the model with `emit` actions, passing `result.messages` as `history` to continue the conversation:
 
