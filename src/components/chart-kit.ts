@@ -17,8 +17,8 @@ import { fillTint, themeFont } from "./util";
 /** The most items one chart draws. Larger lists show a message instead. */
 export const MAX_CHART_ITEMS = 200;
 
-export const KINDS = ["bar", "hbar", "line", "area", "stacked", "pie", "donut", "funnel", "waterfall", "bullet"] as const;
-export const FORMATS = ["number", "money"] as const;
+export const KINDS = ["bar", "hbar", "line", "area", "stacked", "pie", "donut", "funnel", "waterfall", "bullet", "heatmap"] as const;
+export const FORMATS = ["number", "money", "percent"] as const;
 export type Kind = (typeof KINDS)[number];
 
 export type Format = (typeof FORMATS)[number];
@@ -222,16 +222,31 @@ export function tickLabels(ticks: readonly number[], step: number, format: Forma
   for (let f = 0; f <= 15; f++) tries.push({ notation: "scientific", minimumFractionDigits: 0, maximumFractionDigits: f });
   for (const opts of tries) {
     try {
-      const nf = new Intl.NumberFormat(LOCALE, money ? { ...opts, style: "currency", currency: "USD" } : opts);
+      const nf = formatter(format, opts);
       // Zero reads as 0 in every format, not 0E0.
-      const out = ticks.map((v) => (v === 0 && opts.notation === "scientific" ? (money ? "$0" : "0") : nf.format(Object.is(v, -0) ? 0 : v)));
+      const out = ticks.map((v) => (v === 0 && opts.notation === "scientific" ? plainText(0, format) : nf.format(Object.is(v, -0) ? 0 : v)));
       if (new Set(out).size === out.length) return out;
     } catch {
       // An option this runtime doesn't support: try the next.
     }
   }
   // JavaScript's own shortest form always tells two different numbers apart.
-  return ticks.map((v) => (money ? "$" : "") + String(v));
+  return ticks.map((v) => plainText(v, format));
+}
+
+/**
+ * A number formatter for a chart's format=: money in dollars, percent with a
+ * % after the number. A percent value is already a percentage (42 reads
+ * 42%, not 4200%), as people write rates in data.
+ */
+export function formatter(format: Format, opts: Intl.NumberFormatOptions): { format(v: number): string } {
+  const nf = new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts);
+  return format === "percent" ? { format: (v: number) => nf.format(v) + "%" } : nf;
+}
+
+/** A number in its format without Intl, for when an option isn't supported: $12, 12% or 12. */
+export function plainText(v: number, format: Format): string {
+  return format === "money" ? "$" + String(v) : format === "percent" ? String(v) + "%" : String(v);
 }
 
 // ---------------------------------------------------------------- layout
@@ -258,9 +273,9 @@ export function valueText(v: number, format: Format): string {
     : a >= 100_000 ? { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 }
     : { minimumFractionDigits: money && !whole ? 2 : 0, maximumFractionDigits: whole ? 0 : 2 };
   try {
-    return new Intl.NumberFormat(LOCALE, money ? { ...opts, style: "currency", currency: "USD" } : opts).format(v);
+    return formatter(format, opts).format(v);
   } catch {
-    return (money ? "$" : "") + String(v);
+    return plainText(v, format);
   }
 }
 
@@ -268,9 +283,9 @@ export function valueText(v: number, format: Format): string {
 export function preciseText(v: number, format: Format): string {
   const opts: Intl.NumberFormatOptions = { maximumFractionDigits: 6 };
   try {
-    return new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts).format(v);
+    return formatter(format, opts).format(v);
   } catch {
-    return (format === "money" ? "$" : "") + String(v);
+    return plainText(v, format);
   }
 }
 
@@ -621,11 +636,11 @@ export function traceSmoothLine(
  * A value by its bar. One style for the whole chart: compact ($480K, $45K)
  * once any value reaches 10,000, so neighbouring labels read alike.
  */
-export function barText(v: number, format: "number" | "money", compact: boolean): string {
+export function barText(v: number, format: Format, compact: boolean): string {
   if (!compact || Math.abs(v) >= 1e15) return valueText(v, format);
   const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
   try {
-    return new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts).format(v);
+    return formatter(format, opts).format(v);
   } catch {
     return valueText(v, format);
   }

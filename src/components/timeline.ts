@@ -45,7 +45,7 @@ export const timeline: ComponentDef = {
   },
   children: ["step"],
   picks: [
-    { for: "steps in order with their status, such as a delivery or an onboarding", write: "timeline holding step status=done|current|upcoming" },
+    { for: "steps in order with their status, such as a delivery", write: "timeline holding step status=done|current|upcoming" },
   ],
   example: `timeline
   step "Day 1: Sedona" detail="Cathedral Rock at sunrise"

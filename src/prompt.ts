@@ -119,7 +119,7 @@ export function elementGuide(registry: Registry, names: readonly string[]): { te
 }
 
 /** The heading of the picks section, everywhere it's shown. */
-export const PICKS_HEADING = "PICK BY WHAT YOU'RE SHOWING (use these rather than building the same thing from stats, progress bars, text or a plain bar chart)";
+export const PICKS_HEADING = "PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)";
 
 /**
  * Every exposed element's picks, one line each: what the answer shows, then

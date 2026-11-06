@@ -45,7 +45,7 @@ import { CHART_KINDS } from "./chart-kinds";
 import {
   barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
   plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
-  type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
+  formatter, type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
 } from "./chart-kit";
 
 // Kept importable from here, where they have always been.
@@ -708,6 +708,12 @@ function check(props: Readonly<Record<string, string>>): string[] {
   if (props.target !== undefined && kind !== "bullet") {
     out.push(`target= marks each item's goal on kind=bullet only, so it was ignored here; remove it, or use kind=bullet`);
   }
+  if (kind === "heatmap" && props.rows === undefined) {
+    out.push(`chart kind=heatmap needs rows= naming the field that picks each item's row, like rows=day; x= picks its column and y= its number`);
+  }
+  if (props.rows !== undefined && kind !== "heatmap") {
+    out.push(`rows= picks each item's row on kind=heatmap only, so it was ignored here; remove it, or use kind=heatmap`);
+  }
   if (props.good !== undefined && kind !== "bullet") {
     out.push(`good= says which side of the target is good on kind=bullet only, so it was ignored here; remove it, or use kind=bullet`);
   }
@@ -729,12 +735,12 @@ export const chart: ComponentDef = {
   type: "chart",
   category: "data",
   description:
-    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, or bullet for each KPI against its target, such as quarterly goals. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
+    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, bullet for each KPI against its target, such as quarterly goals, or heatmap for one number across two dimensions, such as retention by cohort. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
   text: { description: "A title above the chart." },
   props: {
     kind: {
       type: "enum", values: KINDS, default: "bar",
-      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows. pie, donut, funnel, waterfall and bullet take one y field; pie, donut, funnel and bullet take no negative values.",
+      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows; heatmap draws a grid with a row per value of rows= and a column per value of x=, each cell shaded by its y number (darker is more), for patterns such as orders by weekday and hour. pie, donut, funnel, waterfall, bullet and heatmap take one y field; pie, donut, funnel and bullet take no negative values.",
     },
     items: { type: "expression", required: true, description: "The list of records to chart, e.g. items=sales or items={filter(sales, 'open')}." },
     x: { type: "name", required: true, description: "The field holding each item's label (each slice's name in a pie), e.g. x=month." },
@@ -746,10 +752,11 @@ export const chart: ComponentDef = {
       type: "string",
       description: "Bar, hbar, line, area and stacked with several y fields: the legend's names, in the same order, separated by commas, e.g. labels=\"This year,Last year\". Without it the legend shows the field names.",
     },
+    rows: { type: "name", description: "Heatmap only: the field holding each item's row, e.g. rows=day; x= holds its column and y= its number." },
     target: { type: "name", description: "Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal." },
     good: { type: "enum", values: ["up", "down"], default: "up", description: "Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time)." },
     total: { type: "string", description: "Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total=\"Net income\"." },
-    format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K) or money ($37K)." },
+    format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5." },
   },
   picks: [
     { for: "a ranking or a top 10 with long names", write: "chart kind=hbar" },
@@ -759,6 +766,7 @@ export const chart: ComponentDef = {
     { for: "stages people drop out of, such as leads to won deals", write: "chart kind=funnel" },
     { for: "changes adding up to a total, such as revenue minus costs", write: "chart kind=waterfall total=\"Net income\"" },
     { for: "several KPIs, quotas or budgets against their targets (good=down when under target is good)", write: "chart kind=bullet target=goal" },
+    { for: "one number across two dimensions, such as retention by cohort or orders by weekday and hour", write: "chart kind=heatmap rows=day x=hour y=orders" },
   ],
   example: `state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
 chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year labels="This year,Last year" format=money`,
@@ -786,6 +794,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       const extra: Record<string, string> = {};
       if (p.has("total")) extra.total = p.str("total");
       if (p.has("target")) extra.target = p.str("target");
+      if (p.has("rows")) extra.rows = p.str("rows");
       if (p.has("good")) extra.good = p.oneOf("good", ["up", "down"] as const, "up");
       out = own.layout(box, { items, x, y: fields[0] ?? "", fields, labels: labelsOf(p.str("labels")), format, title: p.text(), line, extra }, ctx);
     } else if (isRound(kind)) {
@@ -1084,7 +1093,7 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
   const format = ctx.props(box.node).oneOf("format", FORMATS, "number");
   const precise = (value: number): string => {
     const opts: Intl.NumberFormatOptions = { maximumFractionDigits: 6 };
-    return new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts).format(value);
+    return formatter(format, opts).format(value);
   };
   let heading = "";
   const rows: Array<{ text: string; color: string }> = [];
@@ -1231,7 +1240,7 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
 function shortValueText(v: number, format: Format): string {
   const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
   try {
-    return new Intl.NumberFormat(LOCALE, format === "money" ? { ...opts, style: "currency", currency: "USD" } : opts).format(v);
+    return formatter(format, opts).format(v);
   } catch {
     return valueText(v, format);
   }

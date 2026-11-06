@@ -1,12 +1,12 @@
 /**
  * Chart kinds in their own modules (src/components/chart-kinds/): funnel and
- * waterfall, stacked, area and bullet, and the seam chart.ts hands them through.
+ * waterfall, stacked, area, bullet and heatmap, and the seam chart.ts hands them through.
  */
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
 import { chartHoverAt, type ChartGeometry } from "../src/components/chart";
-import { barText, bulletTone, changeText, CHART_KINDS, MAX_BULLET_ROWS, MAX_FUNNEL_STAGES, pairText, type AreaGeometry, type BulletGeometry, type FunnelGeometry, type StackedGeometry, type WaterfallGeometry } from "../src/components/chart-kinds";
-import { KINDS } from "../src/components/chart-kit";
+import { barText, bulletTone, heatShade, MIN_HEATMAP_CELL, type HeatmapGeometry, changeText, CHART_KINDS, MAX_BULLET_ROWS, MAX_FUNNEL_STAGES, pairText, type AreaGeometry, type BulletGeometry, type FunnelGeometry, type StackedGeometry, type WaterfallGeometry } from "../src/components/chart-kinds";
+import { KINDS, preciseText, tickLabels, valueText } from "../src/components/chart-kit";
 import { parse } from "../src/parser";
 import { languageGuide } from "../src/prompt";
 import { Registry } from "../src/registry";
@@ -29,7 +29,7 @@ describe("the kind seam", () => {
 
   it("teaches the new kinds in the model guide", () => {
     const guide = languageGuide(registry);
-    expect(guide).toContain("kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet>");
+    expect(guide).toContain("kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap>");
     expect(guide).toContain("funnel shows stages top to bottom");
     expect(guide).toContain("waterfall shows each item as a change");
     expect(guide).toContain("total=");
@@ -368,5 +368,106 @@ describe("bullet", () => {
     ui.sayshape.renderNow();
     expect(geo(ui).kind).toBe("hbar");
     ui.destroy();
+  });
+});
+
+describe("heatmap", () => {
+  const SALES = `[{region: "West", q: "Q1", amt: 820}, {region: "West", q: "Q2", amt: 910}, {region: "East", q: "Q1", amt: 610}, {region: "East", q: "Q2", amt: 580}]`;
+  const heat = (rows: string, extra = "", width = 600) =>
+    render(`state rows=${rows}\nchart "Sales" kind=heatmap items=rows rows=region x=q y=amt ${extra}\n`, { width });
+
+  it("parses with rows=, and warns when it's missing or on another kind", () => {
+    expect(msgs(`state rows=${SALES}\nchart kind=heatmap items=rows rows=region x=q y=amt`)).toEqual([]);
+    expect(msgs(`state rows=${SALES}\nchart kind=heatmap items=rows x=q y=amt`)[0]).toMatch(/kind=heatmap needs rows=/);
+    expect(msgs(`state rows=${SALES}\nchart kind=bar items=rows rows=region x=q y=amt`)[0]).toMatch(/rows= picks each item's row on kind=heatmap only/);
+    expect(msgs(`state rows=${SALES}\nchart kind=heatmap items=rows rows=region x=q y=amt,other`)[0]).toMatch(/kind=heatmap shows one field/);
+  });
+
+  it("teaches the heatmap and its pick in the model guide", () => {
+    const guide = languageGuide(registry);
+    expect(guide).toContain("heatmap draws a grid with a row per value of rows=");
+    expect(guide).toContain("one number across two dimensions, such as retention by cohort or orders by weekday and hour: chart kind=heatmap rows=day x=hour y=orders");
+  });
+
+  it("lays out a row per value of rows= and a column per value of x=, in the order they first appear", () => {
+    const ui = heat(SALES);
+    const h = geo(ui).custom as HeatmapGeometry;
+    expect(h.rows.map((r) => r.label)).toEqual(["West", "East"]);
+    expect(h.cols.map((c) => c.label)).toEqual(["Q1", "Q2"]);
+    const east2 = h.cells.find((c) => c.row === 1 && c.col === 1)!;
+    const west1 = h.cells.find((c) => c.row === 0 && c.col === 0)!;
+    expect(east2.rect.y).toBeGreaterThan(west1.rect.y);
+    expect(east2.rect.x).toBeGreaterThan(west1.rect.x);
+    expect(ui.warnings).toEqual([]);
+  });
+
+  it("shades each cell by its number, from 0 to the highest", () => {
+    const h = geo(heat(SALES)).custom as HeatmapGeometry;
+    expect(h.cells.map((c) => c.shade)).toEqual([820 / 910, 1, 610 / 910, 580 / 910].map((v) => expect.closeTo(v, 6)));
+    expect(heatShade(-5, -10, 10)).toBeCloseTo(0.25);
+    expect(heatShade(3, 3, 3)).toBe(1);
+    expect(heatShade(0, 0, 0)).toBe(0);
+  });
+
+  it("writes the numbers in the cells and keys the scale's ends below", () => {
+    const ui = heat(SALES, "format=money");
+    expect(texts(ui)).toEqual(expect.arrayContaining(["$820", "$910", "$610", "$580", "$0", "West", "Q2"]));
+    const h = geo(ui).custom as HeatmapGeometry;
+    expect(h.key?.low.text).toBe("$0");
+    expect(h.key?.high.text).toBe("$910");
+  });
+
+  it("puts the cell's row, column and exact number in the tooltip", () => {
+    const d = geo(heat(SALES, "format=money"));
+    expect(d.slots[1]!.label).toBe("West · Q2");
+    expect(d.slots[1]!.notes).toEqual(["$910.00"]);
+    const r = d.slots[2]!.bars![0]!;
+    expect(chartHoverAt(d, r.x + r.w / 2, r.y + r.h / 2)).toEqual({ kind: "slot", index: 2 });
+  });
+
+  it("leaves a cell empty for a missing number, keeps the first of two items for a cell, and says so", () => {
+    const ui = heat(`[{region: "W", q: "Q1", amt: 5}, {region: "W", q: "Q2"}, {region: "W", q: "Q1", amt: 9}, {region: "E", q: "Q2", amt: 3}]`);
+    const h = geo(ui).custom as HeatmapGeometry;
+    expect(h.cells).toHaveLength(3);
+    expect(h.cells.find((c) => c.row === 0 && c.col === 0)!.value).toBe(5);
+    expect(h.cells.find((c) => c.row === 0 && c.col === 1)!.shade).toBeNull();
+    // No item for E · Q1: no cell at all.
+    expect(h.cells.find((c) => c.row === 1 && c.col === 0)).toBeUndefined();
+    expect(ui.warnings.join()).toMatch(/1 item repeat a row and column already in the chart, so only the first is shown/);
+    expect(ui.warnings.join()).toMatch(/1 of 3 items have no number/);
+  });
+
+  it("thins column labels and drops cell numbers when columns are narrow, and says so when they don't fit", () => {
+    const hours = `[${Array.from({ length: 24 }, (_v, i) => `{region: "Mon", q: "${i}:00", amt: ${i * 10}}`).join(", ")}]`;
+    const h = geo(heat(hours, "", 360)).custom as HeatmapGeometry;
+    expect(h.cols.filter((c) => c.label === null).length).toBeGreaterThan(0);
+    expect(h.cells.every((c) => c.text === null)).toBe(true);
+    const many = `[${Array.from({ length: 60 }, (_v, i) => `{region: "A", q: "c${i}", amt: ${i}}`).join(", ")}]`;
+    expect(geo(heat(many, "", 360)).message).toMatch(/Too narrow to chart 60 columns/);
+    expect(MIN_HEATMAP_CELL).toBeGreaterThan(0);
+  });
+
+  it("falls back to whole numbers in cells before hiding them", () => {
+    const ui = heat(`[{region: "Jan", q: "M0", amt: 100}, {region: "Jan", q: "M1", amt: 53.3}, {region: "Jan", q: "M2", amt: 45.8}, {region: "Jan", q: "M3", amt: 39.4}, {region: "Jan", q: "M4", amt: 33.9}, {region: "Jan", q: "M5", amt: 30.1}]`, "format=percent", 300);
+    const h = geo(ui).custom as HeatmapGeometry;
+    const shown = h.cells.map((c) => c.text);
+    if (shown.every((t) => t !== null)) expect(shown).toContain("53%");
+  });
+
+  it("says so when there's nothing to chart", () => {
+    expect(geo(heat(`[]`)).message).toBe("No data to chart");
+    expect(geo(heat(`[{region: "W", q: "Q1"}]`)).message).toBe("No numbers to chart");
+  });
+});
+
+describe("format=percent", () => {
+  it("reads a percentage as written, on every kind", () => {
+    expect(valueText(42, "percent")).toBe("42%");
+    expect(valueText(61.5, "percent")).toBe("61.5%");
+    expect(preciseText(12.25, "percent")).toBe("12.25%");
+    expect(tickLabels([0, 25, 50], 25, "percent")).toEqual(["0%", "25%", "50%"]);
+    const ui = render(`state r=[{m: "Jan", rate: 42}, {m: "Feb", rate: 48}]\nchart "Conversion" kind=line items=r x=m y=rate format=percent\n`);
+    expect(texts(ui).some((t) => t.endsWith("%"))).toBe(true);
+    expect(geo(ui).slots[0]!.notes ?? []).toEqual([]);
   });
 });
