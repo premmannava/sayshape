@@ -7,7 +7,7 @@ import { render } from "../../src/testing";
 import { darkTheme, lightTheme, seriesColors } from "../../src/theme";
 import { PRESETS } from "../../playground/appearance/presets";
 import type { ReadVar } from "../src/ui/host-theme";
-import { DEFAULT_PRESET, isPresetId, THEME_CONTROL_SPEC, themeForPreset } from "../src/ui/theme-selection";
+import { DEFAULT_PRESET, isPresetId, SAVE_ACTION, THEME_CONTROL_SPEC, themeForPreset } from "../src/ui/theme-selection";
 
 const registry = new Registry();
 for (const component of coreComponents) registry.register(component);
@@ -85,6 +85,26 @@ button "Add" on=inc:count
 
     expect(ui.sayshape.state.snapshot()).toEqual(before);
     expect(ui.text()).toContain("Count: 7");
+    ui.destroy();
+  });
+});
+
+describe("MCP view Save image control", () => {
+  it("stays hidden until the view knows the chat app can download files", () => {
+    const ui = render(THEME_CONTROL_SPEC);
+    expect(ui.isShown({ type: "button" })).toBe(false);
+    // The theme picker keeps the whole width when there's no button beside it.
+    expect(ui.find("select").box!.w).toBe(600 - 40);
+    ui.destroy();
+  });
+
+  it("sends the view's own save action, never a message for the model", () => {
+    const ui = render(THEME_CONTROL_SPEC);
+    ui.sayshape.state.set("canSave", true);
+    ui.sayshape.renderNow();
+    ui.press({ type: "button", text: "Save image" });
+    expect(ui.emitted).toEqual([{ name: SAVE_ACTION, value: undefined }]);
+    expect(ui.state.preset).toBe(DEFAULT_PRESET);
     ui.destroy();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventDelivery, eventMessage, nextChunk, outcomeOf, visibleMessage, FIXING_SPEC, REPEAT_SPEC, SHOW_ANYWAY, MAX_MESSAGE_CHARS, MAX_VISIBLE_CHARS } from "../src/ui/messages";
+import { eventDelivery, eventMessage, imageName, nextChunk, outcomeOf, visibleMessage, FIXING_SPEC, REPEAT_SPEC, SHOW_ANYWAY, MAX_MESSAGE_CHARS, MAX_VISIBLE_CHARS } from "../src/ui/messages";
 import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
@@ -70,5 +70,21 @@ describe("view helpers", () => {
     for (const c of coreComponents) registry.register(c);
     for (const spec of [FIXING_SPEC, REPEAT_SPEC]) expect(parse(spec, registry).diagnostics).toEqual([]);
     expect(FIXING_SPEC).toContain(`on=emit:${SHOW_ANYWAY}`);
+  });
+});
+
+describe("saved image names", () => {
+  it("names the file after the interface's first title", () => {
+    expect(imageName(`card\n  text "Q3 at a glance" style=title\n  chart "Pipeline" kind=funnel items=s x=a y=b\n`)).toBe("q3-at-a-glance.png");
+    expect(imageName(`chart "Revenue by month (USD)" items=s x=a y=b\n`)).toBe("revenue-by-month-usd.png");
+    expect(imageName(`meter "Health score" value=72\n`)).toBe("health-score.png");
+  });
+
+  it("skips plain text, expressions and anything a file system could object to", () => {
+    expect(imageName(`text "Just some words"\nbutton "Go"\n`)).toBe("sayshape.png");
+    expect(imageName(`text "{name}'s plan / \\\\ ..: *" style=title\n`)).toBe("s-plan.png");
+    expect(imageName(`text "../../etc" style=title\n`)).toBe("etc.png");
+    expect(imageName(``)).toBe("sayshape.png");
+    expect(imageName(`text "${"long ".repeat(40)}" style=title\n`).length).toBeLessThanOrEqual(64);
   });
 });

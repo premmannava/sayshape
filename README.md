@@ -1395,6 +1395,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `editor` | an `<input>` over the field | How text fields are typed into ([Typing](#typing)); `sayshape/testing` passes a fake one |
 | `today` | the device's local day | Today's date as `() => "YYYY-MM-DD"`, for date pickers; fix it in tests and screenshots |
 | `viewport` | from the window | The part of the canvas people can see, `() => ({ top, bottom })` in canvas pixels, for placing a select's list ([Popups](#popups)) |
+| `pixelRatio` | the window's `devicePixelRatio` | Device pixels per CSS pixel in the canvas bitmap |
 
 ### Methods
 
@@ -1411,6 +1412,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `screens` / `currentScreen` / `canGoBack` | The spec's screen names, the visible one, and whether `back()` can move |
 | `notify(text)` | Show a short message, as `notify:` does |
 | `imagesLoaded()` | A promise that resolves once every requested image has loaded or failed |
+| `picture({ pixelRatio?, background? })` | A promise of a new canvas with the screen as it is now (current state and screen), at 2× by default, on the theme's surface, without hover, focus, popups or messages. Save it with `toBlob()` for a "Save image" button |
 | `setTheme(theme)` | Switch themes |
 | `find(type)` | All nodes of a type, e.g. `ui.find("button")` |
 | `expose(name?)` | Put the instance on `window` for the console (default `window.sayshape`) |

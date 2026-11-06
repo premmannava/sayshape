@@ -70,7 +70,8 @@ try {
   const listen = `<script>document.addEventListener("securitypolicyviolation", (e) => console.error("Content Security Policy blocked " + e.violatedDirective))</script>`;
   const strict = uiHtml.replace(/<head>/i, `<head>${csp}${listen}`);
   check(strict !== uiHtml, "the view runs under a strict Content Security Policy");
-  await page.evaluate((html) => window.TestHost.mount(html, "light"), strict);
+  // This host can download files, so the view offers "Save image" beside the theme picker.
+  await page.evaluate((html) => window.TestHost.mount(html, "light", undefined, false, true), strict);
   await page.evaluate(() => window.host.ready);
   check(true, "the view completed the MCP Apps handshake");
 
@@ -106,7 +107,7 @@ try {
   check(painted.h > 300 && painted.ink > 50, `the engine painted the canvas (${painted.w}×${painted.h}, ${painted.ink} sampled pixels)`);
 
   // The trusted picker changes the preset without replacing the model's spec or emitting an action.
-  await frame.locator("#theme-picker").click({ position: { x: 300, y: 70 } });
+  await frame.locator("#theme-picker").click({ position: { x: 150, y: 70 } });
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await page.waitForTimeout(350);
@@ -130,6 +131,19 @@ try {
   await page.waitForTimeout(300);
   await page.screenshot({ path: out + "3-after-emit.png" });
 
+  // "Save image" hands the host a PNG of the interface as it looks now, and tells the model nothing.
+  const before = (await page.evaluate(() => window.host.messages)).length;
+  const strip = await frame.evaluate(() => document.querySelector("#theme-picker").getBoundingClientRect().width);
+  await frame.locator("#theme-picker").click({ position: { x: Math.round(strip / 2 + 70), y: 63 } });
+  await page.waitForTimeout(400);
+  const files = await page.evaluate(() => window.host.downloads);
+  const png = files[0]?.blob ? Buffer.from(files[0].blob, "base64") : Buffer.alloc(0);
+  check(files.length === 1 && files[0].mimeType === "image/png", `Save image asked the host to download one PNG (${files.map((f) => f.uri).join(", ")})`);
+  check(files[0]?.uri === "file:///weekend-hike-planner.png", "the image is named after the interface's title");
+  check(png.subarray(1, 4).toString() === "PNG" && png.readUInt32BE(16) > 300 && png.readUInt32BE(20) > 300, `the download is a real PNG of the interface (${png.length ? `${png.readUInt32BE(16)}×${png.readUInt32BE(20)}` : "empty"})`);
+  writeFileSync(out + "5-saved.png", png);
+  check((await page.evaluate(() => window.host.messages)).length === before, "saving sends nothing to the model");
+
   await page.evaluate(() => { document.body.style.background = "#1f1f1e"; window.host.bridge.setHostContext({ theme: "dark" }); });
   await page.waitForTimeout(400);
   await page.screenshot({ path: out + "4-dark.png" });
@@ -145,6 +159,8 @@ try {
   // itself cannot move, trapping trackpad/mouse-wheel scrolling over the UI.
   // Keep this as a browser regression using the real, built MCP App view.
   await page.addStyleTag({ content: "iframe { max-height: 260px !important; }" });
+  // Wait for the frame to be laid out at the capped height before measuring inside it.
+  await frame.waitForFunction(() => innerHeight <= 262, undefined, { timeout: 2000 }).catch(() => {});
   const constrained = await frame.evaluate(() => ({
     scrollable: document.documentElement.scrollHeight - document.documentElement.clientHeight,
     overflow: getComputedStyle(document.body).overflowY,
