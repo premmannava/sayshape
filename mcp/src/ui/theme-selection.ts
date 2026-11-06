@@ -39,7 +39,9 @@ export function toolbarWidth(t: Tools): number {
  */
 export function toolbarSpec(t: Tools): string {
   if (!t.picker && !t.save) return "";
-  const select = `select items=presets value=id label=label bind=preset on="emit:theme:{preset}"`;
+  // No visible label; a theme is always chosen, so the placeholder is never
+  // shown, but it names the selector for screen readers.
+  const select = `select items=presets value=id label=label bind=preset placeholder="Theme" on="emit:theme:{preset}"`;
   const save = `tool-button "Save image" icon=download on=emit:${SAVE_ACTION}`;
   const state = `state preset="${t.theme}" presets=[${PRESETS.map(
     ({ id, label }) => `{id:${JSON.stringify(id)},label:${JSON.stringify(label)}}`,

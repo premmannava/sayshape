@@ -96,9 +96,11 @@ button "Add" on=inc:count
 describe("MCP view toolbar", () => {
   it("is one slim strip with no label: the selector, then the download icon at the right", () => {
     expect(parse(BOTH, registry).diagnostics).toEqual([]);
-    expect(BOTH).not.toContain('"Theme"');
+    expect(BOTH).not.toContain('select "Theme"');
     const width = toolbarWidth({ picker: true, save: true, theme: DEFAULT_PRESET });
     const ui = render(BOTH, { components: TOOLS, width, padding: TOOLBAR_PADDING });
+    // "Theme" names the selector for screen readers but is never drawn.
+    expect(ui.text().join(" ")).not.toContain("Theme");
     const select = ui.find("select").box!;
     const save = ui.hits.find((h) => h.box.node.type === "tool-button")!.box;
     expect(save.x).toBeGreaterThan(select.x + select.w);
@@ -134,6 +136,17 @@ describe("MCP view toolbar", () => {
     ui.press({ type: "tool-button" });
     expect(ui.emitted).toEqual([{ name: SAVE_ACTION, value: undefined }]);
     expect(ui.state.preset).toBe(DEFAULT_PRESET);
+    ui.destroy();
+  });
+
+  it("reads to a screen reader as the theme selector and a Save image button", () => {
+    const ui = render(BOTH, { components: TOOLS, width: toolbarWidth({ picker: true, save: true, theme: "teal" }), padding: TOOLBAR_PADDING });
+    const nodes = ui.accessibility().children!;
+    expect(nodes.at(-1)).toEqual({ role: "button", name: "Save image", state: ["focusable"] });
+    expect(nodes[0]).toMatchObject({ role: "group", children: [{ role: "combobox", name: "Theme", state: ["not expanded", "value Teal", "focusable"] }] });
+    // A screen reader's activation saves, like a press.
+    ui.mirror.activate(ui.mirror.keyOf("tool-button"));
+    expect(ui.emitted).toEqual([{ name: SAVE_ACTION, value: undefined }]);
     ui.destroy();
   });
 
