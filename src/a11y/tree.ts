@@ -137,9 +137,9 @@ function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: read
   // Parts go inside the element, or inside another part they name with within.
   const made: Array<{ detail: unknown; node: AccessibleNode; within: unknown }> = [];
   for (const part of parts ?? []) {
-    const { detail, within, controls, active, ...sem } = part;
+    const { detail, within, controls, active, rect, ...sem } = part;
     const region = regions.find((r) => sameDetail(r.detail, detail));
-    const b = region?.box ?? box;
+    const b = region?.box ?? rect ?? box;
     const n: AccessibleNode = {
       ...clean(sem),
       key: accessibleKey(node, detail),

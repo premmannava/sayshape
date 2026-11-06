@@ -34,6 +34,7 @@
  *   little width for them, shows a message instead of a chart: nothing is
  *   dropped silently.
  */
+import { chartSemantics } from "./chart-a11y";
 import type { ComponentDef } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import { ellipsize } from "../text";
@@ -821,6 +822,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
   },
   cursor: () => "crosshair",
   paintLoading: paintChartLoading,
+  semantics: chartSemantics,
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;

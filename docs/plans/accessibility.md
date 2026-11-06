@@ -1,6 +1,6 @@
 # Plan: accessibility
 
-**Status:** in progress (started 2026-11-06). Steps 1 to 5 are done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
+**Status:** in progress (started 2026-11-06). Steps 1 to 6 are done; this file is updated as each step lands. Part of [Phase 3](../PLAN.md#phase-3-components-and-engine) (the accessibility mirror).
 **Rough size:** 6 to 9 weeks for one person, in nine pull requests that each leave `main` working.
 
 ## The problem
@@ -64,6 +64,8 @@ Some elements draw their own rows instead of laying out children (details): they
 
 Open popups follow the ARIA combobox pattern: focus stays on the combobox while the arrows move a highlight, the combobox `controls` a listbox of the options (or of the open month's days) and points at the highlighted one (`aria-activedescendant`). Parts can sit inside other parts (`within`) and name the parts they control or that are active (`controls`, `active`), which the mirror turns into element ids. The options use the same details their rows are painted with, so a screen reader can also choose one directly. A tablist holds only its tabs; the selected tab's panel follows it (`contentAfter`).
 
+Charts are figures: named by their title (or the text above, or the kind), described by a one-sentence summary worked out from the data for each kind (`src/components/chart-a11y.ts`: highest and lowest, where a line starts and ends, a pie's total and largest share, a funnel's first and last stage, a heatmap's size and highest cell), with the numbers they draw as a table inside. Tables and compares draw their own rows, so header, rows and cells are parts placed where they're drawn (`rect`); sortable headers and choosable rows are focusable and act through the mirror. A map is a figure listing its places (pins, or the data rows largest first). The contract tests now require `semantics` on every component, a tree node wherever Tab can land, and a name on every focusable node.
+
 An element whose one region is painted with a detail (a slider's `"track"`) names that `detail` in its semantics, so its own node is the one focus and presses go to.
 
 ## Steps
@@ -75,7 +77,7 @@ Each is one pull request into `main`, merged only when CI is green.
 3. **Controls** (done). button, link, check, switch, radio, segmented, stepper, slider, rating, input, pressable card and list-item.
 4. **Content and structure** (done). text and headings, image, icon, code, badge, avatar, callout, stat, list, timeline, details, accordion, carousel, progress, meter, skeleton, empty, layout containers.
 5. **Navigation and popups** (done). screen, tabs, breadcrumb, pagination, select (single and multiple), date-picker.
-6. **Data.** table, compare, chart summaries and data tables for every kind, map. The contract tests start requiring `semantics` on every component.
+6. **Data** (done). table, compare, chart summaries and data tables for every kind, map. The contract tests start requiring `semantics` on every component.
 7. **Beyond screen readers.** Reduced motion everywhere, a contrast test of every theme token pair with fixes, a forced-colors theme, minimum target sizes, notify timing.
 8. **Language and guide.** `label=` on the few controls with no quoted text, warnings for unlabelled controls and untitled charts, two guide lines.
 9. **Verification and docs.** axe over every sample and site example in CI, a README section, a manual VoiceOver and NVDA script.

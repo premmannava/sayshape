@@ -217,6 +217,35 @@ export const map: ComponentDef = {
 map bind=selected fit=pins cluster=true controls=true
   pin "Phoenix" lat=33.4484 lon=-112.074 detail="Status: delayed | Contract: 120000" tone=bad size=8`,
   minWidth: () => 200,
+  semantics(box, ctx) {
+    const data = box.data as MapData | undefined;
+    if (!data) return null;
+    const name = ctx.textBefore() || "Map";
+    const num = (v: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(v);
+    // The places on it as a list, largest first for data maps, so the map
+    // reads without seeing it.
+    let places: string[];
+    let summary: string;
+    if (data.kind === "choropleth" && data.regions) {
+      const rows = [...data.regions.values].sort((a, b) => b[1] - a[1]);
+      places = rows.map(([region, v]) => `${region}: ${num(v)}`);
+      summary = rows.length ? `${rows.length} countries shaded by value, from ${num(data.regions.min)} to ${num(data.regions.max)}. Highest: ${rows[0]![0]}.` : "No values to show.";
+    } else if (data.kind === "bubble" && data.bubbles) {
+      const rows = [...data.bubbles.points].sort((a, b) => b.value - a.value);
+      places = rows.map((b) => `${b.label}: ${num(b.value)}`);
+      summary = rows.length ? `${rows.length} places sized by value. Largest: ${rows[0]!.label}.` : "No values to show.";
+    } else {
+      places = data.pins.map((pin) => [pin.label, ...pin.detail.split("|").map((s) => s.trim())].filter(Boolean).join(", "));
+      summary = `${data.pins.length} ${data.pins.length === 1 ? "place" : "places"} marked.`;
+    }
+    return {
+      role: "figure",
+      roleDescription: "map",
+      name,
+      description: summary,
+      parts: places.length ? [{ detail: "places", role: "list", name: "Places" }, ...places.slice(0, 200).map((text, i) => ({ detail: `place:${i}`, within: "places", role: "listitem" as const, name: text }))] : undefined,
+    };
+  },
   layout(box, ctx) {
     const scale = box.w / WORLD.w;
     box.h = WORLD.h * scale;
@@ -670,6 +699,8 @@ export const pin: ComponentDef = {
   },
   parents: ["map"],
   example: `pin "Phoenix" lat=33.4484 lon=-112.074 tone=bad size=9 detail="Status: delayed | Value: 120000"`,
+  // Read in its map's list of places (map describes its pins).
+  semantics: () => false,
   layout(box) { box.h = 0; },
 };
 
