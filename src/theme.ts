@@ -247,3 +247,30 @@ export function themeFromCSS(el: Element, from: Theme): Theme {
 export function isDarkTheme(theme: Theme): boolean {
   return isDark(theme.colors.surface);
 }
+
+/**
+ * The colors to draw with in a forced-colors mode (Windows Contrast Themes),
+ * where the person has chosen a few system colors for everything. A canvas
+ * isn't recolored by the browser, so SayShape draws with those colors
+ * itself: the background in Canvas, text and lines in CanvasText, what's
+ * chosen or focused in Highlight. resolve turns a CSS system color name
+ * into the color it stands for now (the engine asks the browser).
+ */
+export function forcedColorsTheme(base: Theme, resolve: (systemColor: string) => string): Theme {
+  const canvas = resolve("Canvas"), text = resolve("CanvasText"), highlight = resolve("Highlight");
+  return {
+    ...base,
+    name: `${base.name}-forced-colors`,
+    colors: {
+      ...base.colors,
+      surface: canvas, raised: canvas,
+      ink: text, muted: text, line: text,
+      accent: highlight, onAccent: resolve("HighlightText"), focus: highlight,
+      good: text, warn: text, bad: text,
+      land: canvas, landHighlight: highlight, landHover: resolve("GrayText"),
+      debug: text, shadow: "transparent",
+      // Series are told apart by their legend and labels here, not by color.
+      series1: highlight, series2: text, series3: text, series4: text, series5: text, series6: text,
+    },
+  };
+}
