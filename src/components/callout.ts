@@ -127,6 +127,10 @@ export const callout: ComponentDef = {
     { for: "the one takeaway or warning to notice first", write: "callout tone=warn" },
   ],
   example: `callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    return { role: "note", name: p.text(), description: p.str("detail") || undefined };
+  },
   layout(box, ctx) {
     const d = measure(box, ctx);
     box.data = { ...d };

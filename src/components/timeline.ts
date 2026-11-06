@@ -57,6 +57,9 @@ timeline
   step "Out for delivery" detail="Arrives by 8 PM" status=current
   step "Delivered" status=upcoming`,
   minWidth: () => 160,
+  semantics(box) {
+    return box.children.length && box.children.every((c) => c.node.type === "step") ? { role: "list" } : null;
+  },
   layout(box, ctx) {
     stack(box, ctx, 0, ctx.props(box.node).num("gap", 20));
   },
@@ -125,6 +128,12 @@ export const step: ComponentDef = {
   parents: ["timeline"],
   example: `step "Shipped" detail="Left the Phoenix warehouse" time="Oct 19" status=done icon=truck`,
   check: (props) => iconProblems(props.icon, "icon"),
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const status = p.has("status") ? p.oneOf("status", STATUSES, "upcoming") : null;
+    const name = [p.text(), status, p.str("detail"), p.str("time")].filter(Boolean).join(", ");
+    return { role: "listitem", name, current: status === "current" ? "step" : undefined };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const t = ctx.theme, m = ctx.measure;

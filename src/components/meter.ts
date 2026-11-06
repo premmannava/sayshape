@@ -188,6 +188,13 @@ export const meter: ComponentDef = {
 meter "Health score" kind=gauge value=score max=100 bands="60,85"`,
   check,
   minWidth: () => 120,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const min = p.num("min", 0), max = p.num("max", 100);
+    const value = asNumber(p.expr("value"));
+    const text = meterText(value, min, max, p.oneOf("format", FORMATS, "number"));
+    return { role: "meter", name: p.text() || ctx.textBefore() || "Meter", value: { now: value ?? undefined, min, max, text } };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const raw = p.expr("value");

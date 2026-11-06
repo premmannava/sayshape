@@ -23,6 +23,7 @@ export const column: ComponentDef = {
   example: `column gap=6
   text "First"
   text "Second"`,
+  semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
     stack(box, ctx, p.num("pad", 0), p.num("gap", 8));
@@ -43,6 +44,7 @@ export const row: ComponentDef = {
   example: `row gap=10
   button "Cancel" variant=secondary
   button "Save"`,
+  semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
     rowLayout(box, ctx, p.num("pad", 0), p.num("gap", 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true));
@@ -157,6 +159,7 @@ export const divider: ComponentDef = {
   description: "A thin horizontal line separating sections.",
   props: {},
   example: "divider",
+  semantics: () => false,
   layout(box) {
     box.h = 1;
   },
@@ -172,6 +175,7 @@ export const spacer: ComponentDef = {
   description: "Empty vertical space.",
   props: { size: { type: "number", default: 8, description: "Height in pixels (default 8)." } },
   example: "spacer size=16",
+  semantics: () => false,
   layout(box, ctx) {
     box.h = Math.max(0, ctx.props(box.node).num("size", 8));
   },
@@ -190,6 +194,7 @@ export const grid: ComponentDef = {
   stat label="Orders" value=12
   stat label="Returns" value=1
   stat label="Rating" value=4.8`,
+  semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const gap = Math.max(0, p.num("gap", 14));
@@ -229,6 +234,10 @@ export const list: ComponentDef = {
   example: `list
   list-item "Trail runner socks" detail="Merino blend" trailing="$24"
   list-item "Rain shell" detail="Packs into its pocket" trailing="$129" on=emit:open_shell`,
+  semantics(box) {
+    // A list of list-items; anything else in it reads as it is.
+    return box.children.length && box.children.every((c) => c.node.type === "list-item") ? { role: "list" } : null;
+  },
   layout(box, ctx) {
     // A list-item brings its own padding; anything else gets the same, so every row lines up.
     const rows: ListRow[] = [];
@@ -285,6 +294,13 @@ export const listItem: ComponentDef = {
   children: "any",
   example: `list-item "Rain shell" detail="Packs into its pocket" trailing="$129" icon=package on=emit:open_shell`,
   check: (props) => iconProblems(props.icon, "icon"),
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    const name = [p.text(), p.str("detail"), p.str("trailing")].filter(Boolean).join(", ");
+    if (!box.node.props.on) return { role: "listitem", name };
+    // A pressable row is a button inside its list item, so the list still reads as a list.
+    return { role: "listitem", detail: "row", parts: [{ detail: undefined, role: "button", name }] };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const t = ctx.theme;
@@ -372,6 +388,10 @@ accordion "Returns" bind=returns
   text "Free returns within 30 days, unworn."
 accordion "Shipping" bind=shipping
   text "Ships in two business days."`,
+  semantics(box, ctx) {
+    const p = ctx.props(box.node);
+    return { role: "group", parts: [{ detail: "header", role: "button", name: p.text(), expanded: !!p.bound() }] };
+  },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const open = !!p.bound();
