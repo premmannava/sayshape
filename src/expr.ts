@@ -10,7 +10,7 @@
  * nothing else. There is no assignment and no way to reach JavaScript
  * objects or globals, so model-written expressions cannot run code.
  */
-import { displayData, fieldOf, isData, isList, isScalar, makeList, makeRecord, MAX_DATA_DEPTH, readField, toNumber } from "./data";
+import { displayData, fieldOf, isData, isList, isRecord, isScalar, makeList, makeRecord, MAX_DATA_DEPTH, readField, toNumber } from "./data";
 import type { Value } from "./types";
 
 type Node =
@@ -58,7 +58,20 @@ function matches(item: Value, field: Value | undefined, value: Value | undefined
   if (value === undefined) return !!v;
   // A list of values, like a multi-select's: the field is any one of them (none for an empty list).
   if (isList(value)) return v !== undefined && value.some((x) => x === v);
+  // A range, like a date picker's {from, to}: from the start to the end, both included; an empty end is open.
+  if (isRecord(value) && (fieldOf(value, "from") !== undefined || fieldOf(value, "to") !== undefined)) return within(v, fieldOf(value, "from"), fieldOf(value, "to"));
   return v === value;
+}
+
+/** Whether a value is between two ends of the same kind (text, like YYYY-MM-DD dates, or numbers); a missing or "" end is open. */
+function within(v: Value | undefined, from: Value | undefined, to: Value | undefined): boolean {
+  const open = (x: Value | undefined) => x === undefined || x === null || x === "";
+  if (open(from) && open(to)) return true;
+  const comparable = (x: Value | undefined): x is string | number => (typeof x === "string" || (typeof x === "number" && !isNaN(x)));
+  if (!comparable(v)) return false;
+  const ok = (end: Value | undefined, after: boolean) =>
+    open(end) || (comparable(end) && typeof end === typeof v && (after ? v >= end : v <= end));
+  return ok(from, true) && ok(to, false);
 }
 
 /** Order for sort(): numbers by size, text alphabetically, missing values last. */
@@ -187,6 +200,8 @@ const BUILTINS: Record<string, Fn> = {
   first: (v) => (isList(v) ? v[0] ?? null : NaN),
   /** The last item of a list, or null when it's empty. */
   last: (v) => (isList(v) ? v[v.length - 1] ?? null : NaN),
+  /** One field of every item, as a list (null where it's missing): pluck(sales, 'revenue') for a stat's spark=. */
+  pluck: (v, field) => (isList(v) ? makeList(v.map((item) => fieldOf(item, field) ?? null)) : NaN),
   /** The first n items: take(sort(players, 'score', 'desc'), 3). */
   take: (v, n) => (isList(v) ? makeList(v.slice(0, Math.max(0, Math.floor(toNumber(n ?? 0)) || 0))) : NaN),
   sum: (v, a, b) => amounts(v, a, b)?.reduce((t, x) => t + x, 0) ?? NaN,
@@ -282,7 +297,8 @@ const FUNCTION_HINTS: Record<string, string> = {
   where: "filter(list, 'field', value)", contains: "includes(list, value)",
   groupby: "group(list, 'field', 'amount')", group_by: "group(list, 'field', 'amount')", aggregate: "group(list, 'field', 'amount')", pivot: "group(list, 'field', 'amount')",
   format: "number(n) or money(n)", currency: "money(n)", tofixed: "fixed(n, 2)", str: "text in quotes: \"{n} items\"", string: "text in quotes: \"{n} items\"",
-  if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes", map: "each, or sum/avg/join with a field",
+  if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes", map: "each, pluck(list, 'field') for one field of every item, or sum/avg/join with a field",
+  values: "pluck(list, 'field')", column: "pluck(list, 'field')", get: "pluck(list, 'field')",
 };
 
 function unknownFunction(name: string): string {

@@ -262,11 +262,12 @@ List functions, for computing instead of typing numbers:
 | `includes(list, value)` | Whether a value is in the list |
 | `min(list)`, `max(list)`, `min(list, 'price')`, `max(list, 'price')` | Smallest and largest, of the items or of a field |
 | `count(list, 'cat', 'Gas')` | Items whose field equals a value, or any value in a list: `count(list, 'region', shown)` |
-| `filter(list, 'done')`, `filter(list, 'cat', 'Gas')`, `filter(list, 'region', shown)` | The items whose field is true, equals a value, or is any value in a list (a multi-select's; an empty list keeps none), as a list |
+| `filter(list, 'done')`, `filter(list, 'cat', 'Gas')`, `filter(list, 'region', shown)`, `filter(list, 'date', period)` | The items whose field is true, equals a value, is any value in a list (a multi-select's; an empty list keeps none), or is within a `{from, to}` range (a date range's, or numbers; both ends included, an empty end open), as a list |
 | `find(list, 'id', picked)` | The first item whose field equals a value, or `null`: `{find(rooms, 'id', room).rate}` |
 | `search(list, 'name', query)` | Items whose field contains some text, ignoring case (all of them for empty text) |
 | `sort(list, 'price')`, `sort(list, 'price', 'desc')`, `sort(list)` | The list in order, by a field or by value |
 | `take(list, 3)` | The first items |
+| `pluck(list, 'revenue')` | One field of every item, as a list (`null` where it's missing), e.g. for a stat's `spark=` |
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
 | `group(list, 'region')`, `group(list, 'region', 'revenue')`, `group(list, 'region', 'revenue', 'avg')` | Totals per category: one record per region, in the order each first appears, with `count` (how many items) and, given a field, its total under the field's own name: `[{region: "West", count: 12, revenue: 48200}, …]`. A fourth argument works out `'avg'`, `'min'` or `'max'` instead. Totals follow `sum()`'s rules. Values group as they are (`"US"` and `"USA"` are two groups), and items without the field share a `null` group. The groups are new, read-only records |
 
@@ -388,6 +389,20 @@ The props are in the [reference](#date-picker). How it treats dates:
 - **Opening.** The calendar opens on the chosen date's month, or else on today's, moved inside the limits. Today is the device's local day, or the engine's `today` option, which tests and screenshots use to fix it.
 - **Choosing** a day, or Today, writes `bind=`, closes the calendar and runs `on=` if the date changed. Clear, and Delete or Backspace on the field, write `""`, unless `required=true`.
 - **Locale.** Month and day names are US English, weeks start on Sunday, and the field shows dates like "Tue, Mar 3, 2026". There's no other locale yet.
+
+With `range=true` it picks a start and an end, for report filters like the last 30 days. `bind=` then holds `{from, to}`, starting from a record in state:
+
+```
+state period={from: "", to: ""} orders=[{id: 1, date: "2026-10-02", amt: 120}, {id: 2, date: "2026-10-12", amt: 340}]
+derive shown={filter(orders, 'date', period)}
+date-picker "Period" bind=period range=true
+stat label="Revenue" value={money(sum(shown, 'amt'))}
+```
+
+- **Choosing.** The first day pressed (or entered with the keyboard) marks the start; the band follows the pointer to show the range so far. The second day writes both ends, earliest first, closes the calendar and runs `on=` if the range changed. The start is the calendar's own until then, never state.
+- **Presets.** Last 7 days and Last 30 days end today and stay inside `min=` and `max=`. Clear, and Delete or Backspace on the field, write `{from: "", to: ""}` unless `required=true`.
+- **The field** shows "Oct 6 – Oct 16, 2026", without the year when it doesn't fit, and across years "Dec 28, 2026 – Jan 3, 2027".
+- **Filtering.** `filter(list, 'date', period)` keeps the items from the start to the end, both included, and every item while the range is empty. A value that isn't a `{from, to}` record shows "Invalid dates" and is reported through `onWarning`.
 
 #### Tables
 
@@ -854,7 +869,7 @@ A labelled number, for key figures like totals or counts. Add change= to show ho
 | `change` | string | How the figure moved, shown small beside or under it with ▲ or ▼, e.g. change="+12%" or change="{round(growth, 1)}%". Write the sign; don't add an arrow. |
 | `trend` | `up` / `down` / `flat` | up, down or flat: which way the change went, for its arrow and color. Leave it out to take it from change's sign. |
 | `good` | `up` / `down` | Which way is good news: up (default, colored good) or down, for figures like costs or churn where falling is good. |
-| `spark` | expression | A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]} or spark=weekly. |
+| `spark` | expression | A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]}, spark=weekly, or from a list of records spark={pluck(sales, 'revenue')}. |
 
 ```
 state price=24 qty=2
@@ -1134,7 +1149,7 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
 
 ### `date-picker`
 
-A field that opens a month calendar to pick one date, kept in bind= as YYYY-MM-DD text ("" for none). For deadlines, bookings or report filters.
+A field that opens a month calendar to pick one date, kept in bind= as YYYY-MM-DD text ("" for none), or with range=true a start and an end. For deadlines, bookings or report filters.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -1142,6 +1157,7 @@ A field that opens a month calendar to pick one date, kept in bind= as YYYY-MM-D
 | `bind` | state, required | State that holds the date as YYYY-MM-DD, like due or t.date. Start it as "" for no date. |
 | `min` | string | The earliest date that can be chosen, YYYY-MM-DD, included. |
 | `max` | string | The latest date that can be chosen, YYYY-MM-DD, included. |
+| `range` | boolean | Pick a start and an end date: bind= holds {from, to} as YYYY-MM-DD, starting from a record in state like period={from: "", to: ""}. The calendar offers Last 7 days and Last 30 days. filter(orders, 'date', period) keeps the items from the start to the end, both included, and all of them while it's empty. |
 | `placeholder` | string | Shown while no date is chosen. |
 | `required` | boolean | When true, the calendar has no Clear button. |
 | `disabled` | condition | Expression; when true the field is greyed out and doesn't open. |
@@ -1973,7 +1989,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 - **Dates beyond one day.** `date-picker` picks a single calendar day: no ranges, times, recurring dates or time zones, and names are in US English with weeks starting on Sunday.
 - **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.
 - **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.
-- **Charts beyond the basics.** `chart` draws bars (up or across, `kind=hbar`, or stacked), lines or areas of up to 6 series on one shared scale (with a legend), or a pie or donut of one field (at most 6 slices; smaller ones are summed into Other), from at most 200 items with labels evenly spaced in list order. Horizontal bars stop at 1200 px of rows and ask for `take()`. A stat's sparkline takes a list of numbers only. No series from different lists, zoom, time or numeric x-axes, or pressing a bar.
+- **Charts beyond the basics.** `chart` draws bars (up or across, `kind=hbar`, or stacked), lines or areas of up to 6 series on one shared scale (with a legend), or a pie or donut of one field (at most 6 slices; smaller ones are summed into Other), from at most 200 items with labels evenly spaced in list order. Horizontal bars stop at 1200 px of rows and ask for `take()`. A stat's sparkline takes a list of numbers; `pluck()` takes one from a list of records. No series from different lists, zoom, time or numeric x-axes, or pressing a bar.
 - **Right-to-left or complex-script text shaping** beyond what the canvas does on its own.
 
 Don't use SayShape where accessibility is required until the accessibility layer lands.

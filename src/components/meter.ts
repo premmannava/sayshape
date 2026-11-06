@@ -182,7 +182,7 @@ export const meter: ComponentDef = {
     format: { type: "enum", values: FORMATS, default: "number", description: "How the number reads: number (1,200), money ($1,200) or percent, the value's share of the range (82%)." },
   },
   picks: [
-    { for: "one score or level against its range, such as a health score or disk used", write: "meter kind=gauge bands=\"60,85\"" },
+    { for: "one score against its range, such as a health score", write: "meter kind=gauge bands=\"60,85\"" },
   ],
   example: `state score=72
 meter "Health score" kind=gauge value=score max=100 bands="60,85"`,

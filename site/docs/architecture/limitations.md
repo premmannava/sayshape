@@ -24,7 +24,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 - **Typing to search** in a select, and option groups. (A select picks several with `multiple=true`.)
 - **Larger tables**: more than 200 rows, vertical scrolling, sticky headers, editable cells, multi-row selection. (Wide tables already scroll sideways.)
 - **More charts**: series from different lists, time or numeric axes.
-- **Dates beyond one day**: ranges, times, time zones, other locales.
+- **Dates beyond days**: times, time zones, other locales. (A date picker picks a range with `range=true`.)
 - **Packaging**: an npm release and a production model server.
 
 ## Built-in limits
