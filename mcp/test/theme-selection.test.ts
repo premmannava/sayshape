@@ -7,10 +7,14 @@ import { render } from "../../src/testing";
 import { darkTheme, lightTheme, seriesColors } from "../../src/theme";
 import { PRESETS } from "../../playground/appearance/presets";
 import type { ReadVar } from "../src/ui/host-theme";
-import { DEFAULT_PRESET, isPresetId, SAVE_ACTION, THEME_CONTROL_SPEC, themeForPreset } from "../src/ui/theme-selection";
+import { DEFAULT_PRESET, isPresetId, SAVE_ACTION, toolbarSpec, toolbarWidth, TOOLBAR_PADDING, themeForPreset } from "../src/ui/theme-selection";
+import { toolButton } from "../src/ui/tool-button";
 
 const registry = new Registry();
-for (const component of coreComponents) registry.register(component);
+for (const component of [...coreComponents, toolButton]) registry.register(component);
+const TOOLS = [...coreComponents, toolButton];
+const PICKER_ONLY = toolbarSpec({ picker: true, save: false, theme: DEFAULT_PRESET });
+const BOTH = toolbarSpec({ picker: true, save: true, theme: DEFAULT_PRESET });
 
 const hostReader = (variables: Record<string, string>): ReadVar => (name) => variables[name];
 
@@ -22,13 +26,13 @@ describe("MCP view theme selection", () => {
   it("provides a trusted Teal-default picker from the existing four presets", () => {
     expect(DEFAULT_PRESET).toBe("teal");
     expect(PRESETS.map(({ id }) => id)).toEqual(["teal", "purple", "blue", "neutral"]);
-    expect(parse(THEME_CONTROL_SPEC, registry).diagnostics).toEqual([]);
-    expect(THEME_CONTROL_SPEC).toContain('state preset="teal"');
+    expect(parse(PICKER_ONLY, registry).diagnostics).toEqual([]);
+    expect(PICKER_ONLY).toContain('state preset="teal"');
     expect(isPresetId("purple")).toBe(true);
     expect(isPresetId("url(javascript:alert(1))")).toBe(false);
     expect(isPresetId({ accent: "red" })).toBe(false);
 
-    const ui = render(THEME_CONTROL_SPEC);
+    const ui = render(PICKER_ONLY);
     ui.press("select");
     const purple = ui.popup!.regions.find((region) => region.detail === `opt:${optionKey("purple")}`)!.box;
     ui.click(purple.x + purple.w / 2, purple.y + purple.h / 2);
@@ -89,22 +93,50 @@ button "Add" on=inc:count
   });
 });
 
-describe("MCP view Save image control", () => {
-  it("stays hidden until the view knows the chat app can download files", () => {
-    const ui = render(THEME_CONTROL_SPEC);
-    expect(ui.isShown({ type: "button" })).toBe(false);
-    // The theme picker keeps the whole width when there's no button beside it.
-    expect(ui.find("select").box!.w).toBe(600 - 40);
+describe("MCP view toolbar", () => {
+  it("is one slim strip with no label: the selector, then the download icon at the right", () => {
+    expect(parse(BOTH, registry).diagnostics).toEqual([]);
+    expect(BOTH).not.toContain('"Theme"');
+    const width = toolbarWidth({ picker: true, save: true, theme: DEFAULT_PRESET });
+    const ui = render(BOTH, { components: TOOLS, width, padding: TOOLBAR_PADDING });
+    const select = ui.find("select").box!;
+    const save = ui.hits.find((h) => h.box.node.type === "tool-button")!.box;
+    expect(save.x).toBeGreaterThan(select.x + select.w);
+    expect(save.x + save.w).toBeCloseTo(width - TOOLBAR_PADDING, 0);
+    // A control's height plus the strip's padding: far less than a labelled row.
+    expect(ui.sayshape.boxes!.h).toBeLessThanOrEqual(40 + 2 * TOOLBAR_PADDING);
     ui.destroy();
   });
 
-  it("sends the view's own save action, never a message for the model", () => {
-    const ui = render(THEME_CONTROL_SPEC);
-    ui.sayshape.state.set("canSave", true);
-    ui.sayshape.renderNow();
-    ui.press({ type: "button", text: "Save image" });
+  it("shows only the tools that are on, and nothing at all when none are", () => {
+    expect(toolbarSpec({ picker: false, save: false, theme: "teal" })).toBe("");
+    expect(toolbarWidth({ picker: false, save: false, theme: "teal" })).toBe(2 * TOOLBAR_PADDING);
+    const saveOnly = toolbarSpec({ picker: false, save: true, theme: "teal" });
+    expect(saveOnly).not.toContain("select");
+    expect(parse(PICKER_ONLY, registry).diagnostics).toEqual([]);
+    expect(PICKER_ONLY).not.toContain("tool-button");
+    const ui = render(saveOnly, { components: TOOLS, width: toolbarWidth({ picker: false, save: true, theme: "teal" }), padding: TOOLBAR_PADDING });
+    expect(ui.hits.map((h) => h.box.node.type)).toEqual(["tool-button"]);
+    ui.destroy();
+  });
+
+  it("starts the selector on the theme the server was started with", () => {
+    const ui = render(toolbarSpec({ picker: true, save: false, theme: "blue" }));
+    expect(ui.state.preset).toBe("blue");
+    ui.destroy();
+  });
+
+  it("sends the view's own save action from the download icon, never a message for the model", () => {
+    const ui = render(BOTH, { components: TOOLS, width: toolbarWidth({ picker: true, save: true, theme: "teal" }), padding: TOOLBAR_PADDING });
+    ui.press({ type: "tool-button" });
     expect(ui.emitted).toEqual([{ name: SAVE_ACTION, value: undefined }]);
     expect(ui.state.preset).toBe(DEFAULT_PRESET);
     ui.destroy();
+  });
+
+  it("keeps the tool button out of what models can write", () => {
+    const models = new Registry(coreComponents);
+    expect(models.has("tool-button")).toBe(false);
+    expect(parse(`tool-button "Save" icon=download\n`, models).diagnostics[0]?.message).toMatch(/tool-button/);
   });
 });

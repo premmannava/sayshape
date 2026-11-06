@@ -4,6 +4,9 @@
  *
  *   sayshape-mcp                 stdio, for Claude Desktop, Claude Code, VS Code, Goose…
  *   sayshape-mcp --data file.db  also let the model query a SQLite database (read-only)
+ *   sayshape-mcp --theme-picker  show a theme selector above interfaces (off by default)
+ *   sayshape-mcp --theme blue    the theme interfaces use: teal (default), purple, blue or neutral
+ *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --http [port]   Streamable HTTP on /mcp (default port 3001), for
  *                                clients that connect to a URL. Bind it behind
  *                                HTTPS before exposing it beyond localhost.
@@ -15,6 +18,7 @@ import { basename } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createServer } from "./server";
+import { parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
 
@@ -36,7 +40,7 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   return chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : undefined;
 }
 
-async function serveHttp(port: number, data: DataSource | undefined): Promise<void> {
+async function serveHttp(port: number, data: DataSource | undefined, view: ViewOptions): Promise<void> {
   const http = createHttpServer(async (req, res) => {
     if (new URL(req.url ?? "/", "http://localhost").pathname !== "/mcp") {
       res.writeHead(404, { "Content-Type": "text/plain" }).end("SayShape MCP server: use /mcp\n");
@@ -51,7 +55,7 @@ async function serveHttp(port: number, data: DataSource | undefined): Promise<vo
       const body = await readJson(req);
       // A fresh server and transport per request keeps requests independent.
       // Datasets live in the shared DataSource, so a later request (the interface fetching rows) finds them.
-      const server = createServer({ uiHtml, data });
+      const server = createServer({ uiHtml, data, view });
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       res.on("close", () => { void transport.close(); void server.close(); });
       await server.connect(transport);
@@ -67,9 +71,17 @@ async function serveHttp(port: number, data: DataSource | undefined): Promise<vo
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
-    console.error("Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...] [--http [port]]");
+    console.error([
+      "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...] [--http [port]]",
+      "                    [--theme-picker] [--theme teal|purple|blue|neutral] [--no-save-image]",
+      "",
+      "  --theme-picker   show a theme selector above each interface (off by default)",
+      "  --theme <name>   the theme interfaces use (default teal)",
+      "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
+    ].join("\n"));
     return;
   }
+  const view = parseViewArgs(args);
   const dataAt = args.indexOf("--data");
   let data: DataSource | undefined;
   if (dataAt >= 0) {
@@ -105,11 +117,11 @@ async function main(): Promise<void> {
   }
   if (httpAt >= 0) {
     const port = Number(args[httpAt + 1] ?? 3001);
-    await serveHttp(Number.isInteger(port) && port > 0 ? port : 3001, data);
+    await serveHttp(Number.isInteger(port) && port > 0 ? port : 3001, data, view);
     return;
   }
   // stdout carries the protocol, so anything for people goes to stderr.
-  await createServer({ uiHtml, data, mcpResults }).connect(new StdioServerTransport());
+  await createServer({ uiHtml, data, mcpResults, view }).connect(new StdioServerTransport());
 }
 
 main().catch((e) => {

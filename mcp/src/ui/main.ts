@@ -20,17 +20,22 @@ import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
 import { eventDelivery, FIXING_SPEC, imageName, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
-import { DEFAULT_PRESET, isPresetId, SAVE_ACTION, THEME_CONTROL_SPEC, themeForPreset } from "./theme-selection";
+import { isPresetId, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
+import { toolButton } from "./tool-button";
+import { readViewOptions } from "./view-options";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
 
-const themeCanvas = document.querySelector<HTMLCanvasElement>("#theme-picker")!;
+const bar = document.querySelector<HTMLElement>("#bar")!;
+const themeCanvas = document.querySelector<HTMLCanvasElement>("#view-tools")!;
+/** What the server was started with: --theme-picker, --theme, --no-save-image. */
+const viewOptions = readViewOptions(document);
 const canvas = document.querySelector<HTMLCanvasElement>("#sayshape")!;
 const app = new App({ name: "SayShape", version: "0.1.0" }, {}, { autoResize: true });
 
 let sayshape: SayShape | null = null;
 let themePicker: SayShape | null = null;
-let activePreset = DEFAULT_PRESET;
+let activePreset = viewOptions.theme;
 /** The spec text the engine has been given so far in the current stream. */
 let shown = "";
 /** Input that arrived before the engine was ready. */
@@ -153,7 +158,7 @@ async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
   // background using the resolved host-aware theme, without changing layout
   // or making the entire iframe opaque.
   canvas.style.backgroundColor = theme.colors.surface;
-  themeCanvas.style.backgroundColor = theme.colors.surface;
+  bar.style.backgroundColor = theme.colors.surface;
   sayshape?.setTheme(theme);
   themePicker?.setTheme(theme);
   return theme;
@@ -316,25 +321,36 @@ async function saveImage(): Promise<void> {
 async function start(): Promise<void> {
   await app.connect();
   const theme = await applyTheme(app.getHostContext());
-  themePicker = new SayShape(themeCanvas, {
-    components: coreComponents,
-    theme,
-    imageHosts: [],
-    onWarning: () => {},
-  });
-  themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
-    if (name === SAVE_ACTION) { void saveImage(); return; }
-    if (name !== "theme") return;
-    if (!isPresetId(value)) {
-      themePicker?.state.set("preset", activePreset);
-      return;
-    }
-    activePreset = value;
-    void applyTheme(app.getHostContext());
-  });
-  themePicker.setSpec(THEME_CONTROL_SPEC);
-  // Only offer saving where the chat app can download files; elsewhere the button stays hidden.
-  themePicker.state.set("canSave", !!app.getHostCapabilities()?.downloadFile);
+  // The theme selector only when the server was started with --theme-picker; the download
+  // button unless --no-save-image, and only where the chat app can download files.
+  const tools = {
+    picker: viewOptions.themePicker,
+    save: viewOptions.saveImage && !!app.getHostCapabilities()?.downloadFile,
+    theme: viewOptions.theme,
+  };
+  const toolbar = toolbarSpec(tools);
+  if (toolbar) {
+    bar.hidden = false;
+    themePicker = new SayShape(themeCanvas, {
+      components: [...coreComponents, toolButton],
+      theme,
+      width: toolbarWidth(tools),
+      padding: TOOLBAR_PADDING,
+      imageHosts: [],
+      onWarning: () => {},
+    });
+    themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
+      if (name === SAVE_ACTION) { void saveImage(); return; }
+      if (name !== "theme") return;
+      if (!isPresetId(value)) {
+        themePicker?.state.set("preset", activePreset);
+        return;
+      }
+      activePreset = value;
+      void applyTheme(app.getHostContext());
+    });
+    themePicker.setSpec(toolbar);
+  }
   sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents],
     theme,

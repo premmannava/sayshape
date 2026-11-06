@@ -68,8 +68,10 @@ try {
   // A violation is logged as a console error, so "no errors in the page" catches it.
   const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data:">`;
   const listen = `<script>document.addEventListener("securitypolicyviolation", (e) => console.error("Content Security Policy blocked " + e.violatedDirective))</script>`;
-  const strict = uiHtml.replace(/<head>/i, `<head>${csp}${listen}`);
-  check(strict !== uiHtml, "the view runs under a strict Content Security Policy");
+  // Started with --theme-picker, as the server would write it into the view.
+  const withPicker = uiHtml.replace(/<head>/i, `<head><meta name="sayshape-view" content="picker=1&theme=teal&save=1">`);
+  const strict = withPicker.replace(/<head>/i, `<head>${csp}${listen}`);
+  check(strict !== withPicker, "the view runs under a strict Content Security Policy");
   // This host can download files, so the view offers "Save image" beside the theme picker.
   await page.evaluate((html) => window.TestHost.mount(html, "light", undefined, false, true), strict);
   await page.evaluate(() => window.host.ready);
@@ -107,7 +109,13 @@ try {
   check(painted.h > 300 && painted.ink > 50, `the engine painted the canvas (${painted.w}×${painted.h}, ${painted.ink} sampled pixels)`);
 
   // The trusted picker changes the preset without replacing the model's spec or emitting an action.
-  await frame.locator("#theme-picker").click({ position: { x: 150, y: 70 } });
+  // The toolbar is one slim strip at the right: the theme selector, then the download icon.
+  const bar = await frame.evaluate(() => {
+    const r = document.querySelector("#view-tools").getBoundingClientRect();
+    return { x: r.x, w: r.width, h: r.height, page: document.documentElement.clientWidth };
+  });
+  check(bar.h <= 56 && Math.round(bar.page - (bar.x + bar.w)) === 14, `the toolbar is a slim strip at the right, lined up with the interface (${Math.round(bar.w)}×${Math.round(bar.h)})`);
+  await frame.locator("#view-tools").click({ position: { x: 60, y: 26 } });
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await page.waitForTimeout(350);
@@ -133,8 +141,7 @@ try {
 
   // "Save image" hands the host a PNG of the interface as it looks now, and tells the model nothing.
   const before = (await page.evaluate(() => window.host.messages)).length;
-  const strip = await frame.evaluate(() => document.querySelector("#theme-picker").getBoundingClientRect().width);
-  await frame.locator("#theme-picker").click({ position: { x: Math.round(strip / 2 + 70), y: 63 } });
+  await frame.locator("#view-tools").click({ position: { x: Math.round(bar.w - 26), y: 26 } });
   await page.waitForTimeout(400);
   const files = await page.evaluate(() => window.host.downloads);
   const png = files[0]?.blob ? Buffer.from(files[0].blob, "base64") : Buffer.alloc(0);
@@ -197,6 +204,8 @@ try {
   const styledFrame = styled.frames().find((f) => f !== styled.mainFrame());
   const hostBacking = await styledFrame.evaluate(() => getComputedStyle(document.querySelector("#sayshape")).backgroundColor);
   check(hostBacking === "rgb(48, 48, 46)", `Canvas gutter respects the host's custom surface color (${hostBacking})`);
+  // Started without flags, in a chat app that can't download: no theme picker, no download, no toolbar at all.
+  check(await styledFrame.evaluate(() => document.querySelector("#bar").hidden), "without flags or downloads the view shows no toolbar");
   const cardPixel = await styledFrame.evaluate(() => {
     const c = document.querySelector("#sayshape");
     // A point inside the card, left of the title and above it.
