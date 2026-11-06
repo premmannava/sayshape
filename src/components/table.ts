@@ -26,10 +26,17 @@
  *   included). Rows whose key is missing or repeats an earlier row's can't
  *   be selected. A selected key no row has selects nothing; state is left as
  *   it is.
- * - At most MAX_TABLE_ROWS rows and MAX_TABLE_COLUMNS columns, and only
- *   when the columns fit the width; otherwise a message replaces the table.
+ * - Width: columns get their natural widths, and text columns narrow (never
+ *   below MIN_TEXT_COLUMN) to fit. When even that doesn't fit, the table
+ *   scrolls sideways instead: every column keeps a readable width, the first
+ *   column stays pinned at the left, and a scrollbar shows under the rows.
+ *   It scrolls with a sideways swipe or Shift and the wheel, by dragging the
+ *   rows or the scrollbar, and with the arrow keys, Home and End. The offset
+ *   is view state (ctx.view), never app state.
+ * - At most MAX_TABLE_ROWS rows and MAX_TABLE_COLUMNS columns; otherwise a
+ *   message replaces the table.
  */
-import type { ComponentDef, LayoutContext, PaintContext, PropReader } from "../component";
+import type { ComponentDef, ElementView, LayoutContext, PaintContext, PressContext, PropReader } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import type { TextMeasurer } from "../text";
 import { wrapText } from "../text";
@@ -41,8 +48,11 @@ import { MOTION } from "../design";
 
 /** The most rows one table shows. Larger lists show a message: page them with take() or pagination. */
 export const MAX_TABLE_ROWS = 200;
-/** The most columns one table shows. */
-export const MAX_TABLE_COLUMNS = 8;
+/**
+ * The most columns one table shows. Wide tables scroll sideways, so this is
+ * only a safety bound (a whole property schedule of values has about 56).
+ */
+export const MAX_TABLE_COLUMNS = 64;
 /** The placeholder for a missing or unusable value. */
 export const EMPTY_CELL = "—";
 
@@ -55,6 +65,16 @@ const LOCALE = "en-US";
 const MIN_TEXT_COLUMN = 72;
 /** Room for the sort arrow beside a header. */
 const ARROW = 14;
+/** When the table scrolls, text columns are at most this wide, so one long value doesn't take the screen. */
+const MAX_SCROLL_TEXT_COLUMN = 260;
+/** The pinned first column takes at most this share of the width, so there's room left to scroll. */
+const PIN_SHARE = 0.4;
+/** Height of the strip under the rows that holds the scrollbar. */
+const SCROLLBAR_STRIP = 14;
+/** How far an arrow key scrolls, in pixels. */
+const ARROW_STEP = 48;
+/** How far the pointer moves before pressing the rows becomes dragging them. */
+const DRAG_SLOP = 5;
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -107,7 +127,26 @@ export type TableGeometry = {
   embeddedInCard?: boolean;
   /** Data still loading: placeholder rows of this height under the real header. */
   loading?: { rows: number; h: number };
+  /** Set when the columns are wider than the table, which then scrolls sideways. */
+  scroll?: TableScroll;
 };
+
+/**
+ * Sideways scrolling. Column x values are where each column sits when the
+ * table isn't scrolled; columns after the pinned one move left by the offset.
+ */
+export interface TableScroll {
+  /** Width of the pinned first column, or 0 when nothing is pinned. */
+  pinned: number;
+  /** Width of the area the other columns scroll in. */
+  view: number;
+  /** Total width of the columns that scroll. */
+  content: number;
+  /** The furthest it scrolls: content - view. */
+  max: number;
+  /** The scrollbar's strip at the bottom of the frame, relative to the box. */
+  bar: Rect;
+}
 
 /** Placeholder rows a loading table shows. */
 const GHOST_ROWS = 5;
@@ -261,7 +300,7 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
   // No columns yet is normal while a spec streams in, so it isn't a warning.
   if (!specs.length) return say("No columns yet");
   if (specs.length > MAX_TABLE_COLUMNS) {
-    warn(`${specs.length} columns is more than the ${MAX_TABLE_COLUMNS} a table shows. Keep the most useful ones`);
+    warn(`${specs.length} columns is more than the ${MAX_TABLE_COLUMNS} a table shows. Keep the most useful ones, or split it into two tables`);
     return say(`Too many columns: at most ${MAX_TABLE_COLUMNS}`);
   }
 
@@ -318,11 +357,21 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
   const natural = specs.map((_, ci) => Math.max(headerW[ci]!, cellW[ci]!));
   // Numbers are never cut short; text and headers can be.
   const minimum = specs.map((c, ci) => (c.format === "text" ? Math.min(natural[ci]!, MIN_TEXT_COLUMN) : Math.max(cellW[ci]!, Math.min(headerW[ci]!, MIN_TEXT_COLUMN))));
-  const widths = fitColumns(natural, minimum, box.w, specs.map((c) => c.format === "text"));
+  let widths = fitColumns(natural, minimum, box.w, specs.map((c) => c.format === "text"));
+  let scrollParts: Omit<TableScroll, "bar"> | undefined;
   if (!widths) {
-    const need = Math.ceil(minimum.reduce((a, b) => a + b, 0));
-    warn(`${specs.length} columns need about ${need} pixels and there are ${Math.round(box.w)}. Use fewer columns, or a list`);
-    return say(`Too narrow to show ${specs.length} columns`);
+    // Too wide even squeezed: keep every column readable and scroll sideways instead.
+    const w = specs.map((c, ci) => (c.format === "text" ? Math.max(minimum[ci]!, Math.min(natural[ci]!, MAX_SCROLL_TEXT_COLUMN)) : natural[ci]!));
+    // The first column (usually what each row is: a name, a team) stays put, when it can be narrow enough.
+    let pinned = 0;
+    if (specs.length > 1) {
+      const first = Math.min(w[0]!, Math.max(minimum[0]!, box.w * PIN_SHARE));
+      if (first <= box.w * 0.5) { w[0] = first; pinned = first; }
+    }
+    const content = w.reduce((a, b) => a + b, 0) - pinned;
+    const view = box.w - pinned;
+    widths = w;
+    scrollParts = { pinned, view, content, max: Math.max(0, content - view) };
   }
 
   let x = 0;
@@ -352,19 +401,71 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
       cells: texts[r]!.map((full, ci) => ({ full, text: fit(full, columns[ci]!.w - 2 * pad, cellFont, m) })),
     };
   });
+  const strip = scrollParts ? SCROLLBAR_STRIP : 0;
+  const withBar = (frame: Rect): TableScroll | undefined =>
+    scrollParts && { ...scrollParts, bar: { x: frame.x + scrollParts.pinned, y: frame.y + frame.h - strip, w: scrollParts.view, h: strip } };
   if (loading) {
-    return { ...base, frame: { x: 0, y: top, w: box.w, h: headerH + GHOST_ROWS * rowH }, columns, rows: [], sortable: false, loading: { rows: GHOST_ROWS, h: rowH } };
+    const frame = { x: 0, y: top, w: box.w, h: headerH + GHOST_ROWS * rowH + strip };
+    return { ...base, frame, columns, rows: [], sortable: false, loading: { rows: GHOST_ROWS, h: rowH }, scroll: withBar(frame) };
   }
   const emptyH = items.length ? 0 : rowH * 1.5;
+  const frame = { x: 0, y: top, w: box.w, h: headerH + rows.length * rowH + emptyH + strip };
   return {
     ...base,
-    frame: { x: 0, y: top, w: box.w, h: headerH + rows.length * rowH + emptyH },
+    frame,
     columns,
     rows,
     empty: items.length ? undefined : isList(raw) ? "Nothing to show" : "No data",
     sortable,
+    scroll: withBar(frame),
   };
 }
+
+// ---------------------------------------------------------------- scrolling
+
+const SCROLL_AREA = "scroll:area";
+const SCROLL_BAR = "scroll:bar";
+
+/** How far the table is scrolled, kept in range (the columns may have changed since). */
+function scrollOf(v: ElementView, s: TableScroll | undefined): number {
+  if (!s) return 0;
+  const x = Math.max(0, Math.min(s.max, v.x ?? 0));
+  v.x = x;
+  return x;
+}
+
+/** Scroll to x (kept in range). Returns whether it moved. */
+function scrollTo(v: ElementView, s: TableScroll, x: number): boolean {
+  const before = v.x ?? 0;
+  v.x = Math.max(0, Math.min(s.max, x));
+  return Math.abs(v.x - before) > 0.01;
+}
+
+/** The scrollbar's track and thumb, in box coordinates, for an offset. */
+export function scrollThumb(s: TableScroll, x: number): { trackX: number; trackW: number; x: number; w: number } {
+  const inset = 8;
+  const trackX = s.bar.x + inset, trackW = Math.max(0, s.bar.w - 2 * inset);
+  const w = Math.min(trackW, Math.max(28, (trackW * s.view) / Math.max(1, s.content)));
+  return { trackX, trackW, x: trackX + (trackW - w) * (s.max ? x / s.max : 0), w };
+}
+
+/** What a table's hit regions carry, so press, drag, wheel and key can find the table they're part of. */
+interface TablePart { table: TableGeometry; x: number; y: number }
+
+/** A pressable part of a table: a header, a row, the scrollbar. */
+function tablePart(box: Box, x: number, y: number, w: number, h: number): Box {
+  const part: TablePart = { table: box.data as TableGeometry, x: box.x, y: box.y };
+  return { ...partBox(box, x, y, w, h), data: part as unknown as Box["data"] };
+}
+
+/** The table a pressed part belongs to, and where its box is. */
+function partOf(box: Box): TablePart | null {
+  const d = box.data as unknown as TablePart | undefined;
+  return d && "table" in d ? d : null;
+}
+
+/** Whether column ci moves when the table scrolls (everything but the pinned first column). */
+const scrolls = (s: TableScroll | undefined, ci: number) => !!s && (s.pinned === 0 || ci > 0);
 
 // ---------------------------------------------------------------- paint
 
@@ -411,6 +512,43 @@ function paintTable(box: Box, ctx: PaintContext): void {
     return;
   }
 
+  // Sideways scrolling: where each column is drawn, and the area the moving ones are clipped to.
+  const s = d.scroll;
+  const view = ctx.view(box.node);
+  let sx = scrollOf(view, s);
+  // Keyboard focus on a header that's scrolled out of sight brings it into view.
+  if (s) {
+    d.columns.forEach((col, ci) => {
+      if (!scrolls(s, ci) || !ctx.isFocused(box.node, sortDetail(col.field))) return;
+      const left = col.x - s.pinned, right = left + col.w;
+      if (left < sx) sx = left;
+      else if (right > sx + s.view) sx = right - s.view;
+      scrollTo(view, s, sx);
+      sx = view.x ?? 0;
+    });
+  }
+  const colX = (ci: number) => d.columns[ci]!.x - (scrolls(s, ci) ? sx : 0);
+  const clipLeft = ox + f.x + (s?.pinned ?? 0), clipRight = ox + f.x + f.w;
+  const clipped = (ci: number, draw: () => void) => {
+    if (!scrolls(s, ci)) { draw(); return; }
+    g.save();
+    g.beginPath();
+    g.rect(clipLeft, oy + f.y, clipRight - clipLeft, f.h);
+    g.clip();
+    draw();
+    g.restore();
+  };
+  /** The part of column ci that shows, in canvas x, or null when it's scrolled out of sight. */
+  const visiblePart = (ci: number): { x: number; w: number } | null => {
+    const x = ox + colX(ci), w = d.columns[ci]!.w;
+    if (!scrolls(s, ci)) return { x, w };
+    const l = Math.max(x, clipLeft), r = Math.min(x + w, clipRight);
+    return r - l > 1 ? { x: l, w: r - l } : null;
+  };
+  // Anywhere on a scrolling table takes the wheel and a drag (registered first, so its parts sit on top).
+  if (s) ctx.addHit(tablePart(box, ox + f.x, oy + f.y, f.w, f.h), { detail: SCROLL_AREA, focusable: false });
+  const strip = s ? s.bar.h : 0;
+
   // A faint band behind the header sets it apart from the rows, inside the frame's rounded corners.
   g.save();
   ctx.roundRect(ox + f.x + 1, oy + f.y + 1, f.w - 2, f.h - 2, theme.radius.md - 1);
@@ -442,29 +580,36 @@ function paintTable(box: Box, ctx: PaintContext): void {
   // Header: a pressable cell per column when the table sorts.
   const hy = oy + f.y;
   g.font = d.headerFont;
-  for (const col of d.columns) {
-    const cell = partBox(box, ox + col.x, hy, col.w, d.headerH);
+  d.columns.forEach((col, ci) => {
+    const part = visiblePart(ci);
+    if (!part) return;
+    clipped(ci, () => paintHeader(col, ci, part));
+  });
+  function paintHeader(col: TableColumn, ci: number, part: { x: number; w: number }) {
+    const cell = tablePart(box, part.x, hy, part.w, d!.headerH);
+    const cx = ox + colX(ci);
     const detail = sortDetail(col.field);
-    const hovered = d.sortable && ctx.isHovered(box.node, detail);
-    if (d.sortable) ctx.addHit(cell, { detail });
+    const hovered = d!.sortable && ctx.isHovered(box.node, detail);
+    if (d!.sortable) ctx.addHit(cell, { detail });
     // A sorted column says so quietly: its label in ink with a small arrow, no box
     // or underline. Hover previews the same, with the arrow faint.
     const shown = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, MOTION.hover);
+    g.font = d!.headerFont;
     g.fillStyle = col.sorted || hovered ? c.ink : c.muted;
     // The label lines up with the cells; the arrow goes on its far side from that edge.
     const right = col.align === "right";
     g.textAlign = right ? "right" : "left";
-    const tx = right ? ox + col.x + col.w - pad : ox + col.x + pad;
-    g.fillText(col.shownLabel, tx, hy + d.headerH / 2);
+    const tx = right ? cx + col.w - pad : cx + pad;
+    g.fillText(col.shownLabel, tx, hy + d!.headerH / 2);
     if (shown > 0) {
       const labelW = g.measureText(col.shownLabel).width;
       const ax = right ? tx - labelW - 8 : tx + labelW + 8;
       g.save();
       g.globalAlpha *= col.sorted ? shown : 0.45 * shown;
-      chevron(g, ax, hy + d.headerH / 2, 7, col.sorted === "desc" ? "down" : "up", col.sorted ? c.ink : c.muted);
+      chevron(g, ax, hy + d!.headerH / 2, 7, col.sorted === "desc" ? "down" : "up", col.sorted ? c.ink : c.muted);
       g.restore();
     }
-    if (d.sortable && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
+    if (d!.sortable && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
   }
   rule(f.y + d.headerH, false);
 
@@ -473,16 +618,23 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const { rows, h } = d.loading;
     for (let r = 1; r < rows; r++) rule(f.y + d.headerH + r * h);
     const pillH = 10;
-    paintGhost(ctx, { x: ox, y: oy + f.y + d.headerH, w: f.w, h: rows * h }, (s) => {
+    g.save();
+    g.beginPath();
+    g.rect(ox + f.x, oy + f.y, f.w, f.h);
+    g.clip();
+    paintGhost(ctx, { x: ox, y: oy + f.y + d.headerH, w: f.w, h: rows * h }, (ghost) => {
       for (let r = 0; r < rows; r++) {
         const cy = oy + f.y + d.headerH + r * h + h / 2;
         d.columns.forEach((col, ci) => {
+          if (!visiblePart(ci)) return;
           const room = col.w - 2 * pad;
           const w = Math.max(12, room * (col.align === "right" ? 0.5 : 0.55 + 0.35 * (((r * 7 + ci * 3) % 5) / 4)));
-          s.pill(col.align === "right" ? ox + col.x + col.w - pad - w : ox + col.x + pad, cy - pillH / 2, Math.min(room, w), pillH);
+          const x = ox + colX(ci);
+          ghost.pill(col.align === "right" ? x + col.w - pad - w : x + pad, cy - pillH / 2, Math.min(room, w), pillH);
         });
       }
     });
+    g.restore();
     return;
   }
 
@@ -495,11 +647,13 @@ function paintTable(box: Box, ctx: PaintContext): void {
     g.globalAlpha = base * shown;
     const ry = oy + row.y + (1 - shown) * 6;
     const last = r === d.rows.length - 1;
+    // The scrollbar's strip sits under the last row, so its corners stay square.
+    const roundLast = last && !s;
     const hovered = row.detail ? ctx.isHovered(box.node, row.detail) : false;
     const highlight = row.detail ? ctx.tween(box.node, "table:hover:" + String(row.detail), hovered ? 1 : 0, MOTION.hover) : 0;
     const selected = row.detail ? ctx.tween(box.node, "table:selected:" + String(row.detail), row.selected ? 1 : 0, MOTION.selection) : 0;
     if (r % 2 || highlight > 0 || selected > 0) {
-      if (last) ctx.roundRect(ox + f.x + 1, ry, f.w - 2, row.h - 1, theme.radius.md - 1);
+      if (roundLast) ctx.roundRect(ox + f.x + 1, ry, f.w - 2, row.h - 1, theme.radius.md - 1);
       else { g.beginPath(); g.rect(ox + f.x + 1, ry, f.w - 2, row.h); }
       if (r % 2) fillTint(g, c.ink, 0.012);
       if (highlight) fillTint(g, c.ink, 0.032 * highlight);
@@ -514,16 +668,20 @@ function paintTable(box: Box, ctx: PaintContext): void {
       g.fill();
       g.restore();
     }
-    if (row.detail) ctx.addHit(partBox(box, ox + f.x, ry, f.w, row.h), { detail: row.detail });
+    if (row.detail) ctx.addHit(tablePart(box, ox + f.x, ry, f.w, row.h), { detail: row.detail });
     d.columns.forEach((col, ci) => {
+      if (!visiblePart(ci)) return;
       const cell = row.cells[ci]!;
       const tone = tableValueTone(cell.full, col.format);
-      g.fillStyle = cell.full === EMPTY_CELL ? c.muted : tone === "negative" ? c.bad : tone === "positive" ? c.good : c.ink;
-      const right = col.align === "right";
-      g.textAlign = right ? "right" : "left";
-      g.fillText(cell.text, right ? ox + col.x + col.w - pad : ox + col.x + pad, ry + row.h / 2);
+      const x = ox + colX(ci);
+      clipped(ci, () => {
+        g.fillStyle = cell.full === EMPTY_CELL ? c.muted : tone === "negative" ? c.bad : tone === "positive" ? c.good : c.ink;
+        const right = col.align === "right";
+        g.textAlign = right ? "right" : "left";
+        g.fillText(cell.text, right ? x + col.w - pad : x + pad, ry + row.h / 2);
+      });
     });
-    if (!last) rule(row.y + row.h);
+    if (!last || s) rule(row.y + row.h);
     if (row.detail && ctx.isFocused(box.node, row.detail)) focusRing(ox + f.x, ry, f.w, row.h);
   });
   g.globalAlpha = base;
@@ -531,7 +689,72 @@ function paintTable(box: Box, ctx: PaintContext): void {
   if (d.empty) {
     g.fillStyle = c.muted;
     g.textAlign = "center";
-    g.fillText(d.empty, ox + f.w / 2, oy + f.y + d.headerH + (f.h - d.headerH) / 2);
+    g.fillText(d.empty, ox + f.w / 2, oy + f.y + d.headerH + (f.h - d.headerH - strip) / 2);
+  }
+
+  if (s) paintScroll(box, ctx, d, s, sx);
+}
+
+/** The pinned column's edge and the scrollbar of a table that scrolls sideways. */
+function paintScroll(box: Box, ctx: PaintContext, d: TableGeometry, s: TableScroll, sx: number): void {
+  const { g, theme } = ctx;
+  const c = theme.colors;
+  const ox = box.x, oy = box.y, f = d.frame;
+  // Soft fades where columns run out of sight, so it's clear there's more to scroll to.
+  const top = oy + f.y + 1, bottom = oy + f.y + f.h - s.bar.h;
+  const fade = (edge: number, inward: 1 | -1) => {
+    const steps = 8, step = 2;
+    g.save();
+    ctx.roundRect(ox + f.x + 1, oy + f.y + 1, f.w - 2, f.h - 2, theme.radius.md - 1);
+    g.clip();
+    for (let i = 0; i < steps; i++) {
+      g.beginPath();
+      g.rect(inward > 0 ? edge + i * step : edge - (i + 1) * step, top, step, bottom - top);
+      fillTint(g, c.raised, 1 - i / steps);
+    }
+    g.restore();
+  };
+  if (sx < s.max - 0.5) fade(ox + f.x + f.w, -1);
+  if (sx > 0.5) fade(ox + f.x + s.pinned + (s.pinned ? 1 : 0), 1);
+
+  // A rule at the pinned column's edge, firmer with a soft shadow once columns slide under it.
+  if (s.pinned) {
+    const ex = Math.round(ox + f.x + s.pinned) + 0.5;
+    if (sx > 0) {
+      for (let i = 1; i <= 3; i++) {
+        g.beginPath();
+        g.rect(ex + 0.5, top, 2 * i, bottom - top);
+        fillTint(g, c.ink, 0.012);
+      }
+    }
+    g.beginPath();
+    g.moveTo(ex, top);
+    g.lineTo(ex, bottom);
+    g.strokeStyle = c.line;
+    g.lineWidth = 1;
+    g.save();
+    g.globalAlpha *= sx > 0 ? 0.9 : 0.5;
+    g.stroke();
+    g.restore();
+  }
+
+  // The scrollbar: a faint track and a thumb, thicker under the pointer or while dragged.
+  const bar = tablePart(box, ox + s.bar.x, oy + s.bar.y, s.bar.w, s.bar.h);
+  const t = scrollThumb(s, sx);
+  const active = ctx.isHovered(box.node, SCROLL_BAR) || ctx.isPressed(box.node, SCROLL_BAR);
+  const grow = ctx.tween(box.node, "table:scrollbar", active ? 1 : 0, MOTION.hover);
+  const h = 4 + 2 * grow;
+  const cy = oy + s.bar.y + s.bar.h / 2;
+  ctx.roundRect(ox + t.trackX, cy - h / 2, t.trackW, h, h / 2);
+  fillTint(g, c.ink, 0.05);
+  ctx.roundRect(ox + t.x, cy - h / 2, t.w, h, h / 2);
+  fillTint(g, c.ink, 0.22 + 0.14 * grow);
+  ctx.addHit(bar, { detail: SCROLL_BAR });
+  if (ctx.isFocused(box.node, SCROLL_BAR)) {
+    ctx.roundRect(ox + t.trackX - 4, oy + s.bar.y + 1, t.trackW + 8, s.bar.h - 2, theme.radius.sm);
+    g.strokeStyle = c.focus;
+    g.lineWidth = 2;
+    g.stroke();
   }
 }
 
@@ -541,7 +764,7 @@ export const table: ComponentDef = {
   type: "table",
   category: "data",
   description:
-    "Rows of a list of records, one table-column per field, for things like inventory, orders or expenses. With sort= and direction=, pressing a header sorts by it; with bind= and key=, pressing a row selects it.",
+    "Rows of a list of records, one table-column per field, for things like inventory, orders or expenses. With sort= and direction=, pressing a header sorts by it; with bind= and key=, pressing a row selects it; columns too wide for the space scroll sideways, the first one staying in view.",
   text: { description: "A title above the table." },
   props: {
     items: { type: "expression", required: true, description: `The list of records, e.g. items=equipment. At most ${MAX_TABLE_ROWS} rows; show a page of a longer list with take() or pagination.` },
@@ -566,30 +789,84 @@ table items=gear key=id bind=picked sort=by direction=dir
   paint: paintTable,
   // The header is real while rows load; paintTable draws placeholder rows under it.
   paintLoading: paintTable,
-  press(ctx) {
-    const detail = ctx.target.detail;
-    if (typeof detail !== "string") return;
-    const p = ctx.props(ctx.target.node);
-    if (detail.startsWith("sort:")) {
-      const field = detail.slice(5);
-      const sortPath = p.raw("sort"), dirPath = p.raw("direction");
-      if (!sortPath) return;
-      if (p.bound("sort") === field && dirPath) {
-        ctx.set(dirPath, p.bound("direction") === "desc" ? "asc" : "desc");
-      } else {
-        ctx.set(sortPath, field);
-        if (dirPath) ctx.set(dirPath, "asc");
-      }
-      return;
+  press: pressTable,
+  // Dragging the rows or the scrollbar scrolls a wide table; a press that doesn't move still sorts or selects.
+  drag(ctx) {
+    const v = ctx.view(ctx.target.node);
+    const s = partOf(ctx.target.box)?.table.scroll;
+    if (ctx.phase === "start") {
+      v.dragX = ctx.x;
+      v.dragFrom = v.x ?? 0;
+      v.dragMoved = 0;
+      return false;
     }
-    const key = keyFromDetail(detail);
-    const bind = p.raw("bind");
-    if (key === null || !bind) return;
-    ctx.set(bind, key);
-    runOn(ctx);
+    const dx = ctx.x - (v.dragX ?? ctx.x);
+    const onBar = ctx.target.detail === SCROLL_BAR;
+    if (ctx.phase === "move") {
+      if (!s || (!v.dragMoved && Math.abs(dx) < DRAG_SLOP)) return false;
+      v.dragMoved = 1;
+      // The thumb follows the pointer; the rows move with it, the other way round.
+      const t = scrollThumb(s, 0);
+      const perPixel = onBar ? s.max / Math.max(1, t.trackW - t.w) : -1;
+      scrollTo(v, s, (v.dragFrom ?? 0) + dx * perPixel);
+      return false;
+    }
+    const moved = !!v.dragMoved;
+    delete v.dragX; delete v.dragFrom; delete v.dragMoved;
+    if (moved) return false;
+    if (onBar && s) {
+      // A click on the track centres the thumb there.
+      const t = scrollThumb(s, 0);
+      const at = ctx.x - (partOf(ctx.target.box)?.x ?? 0) - t.trackX - t.w / 2;
+      scrollTo(v, s, (at / Math.max(1, t.trackW - t.w)) * s.max);
+      return false;
+    }
+    pressTable(ctx);
+    return false;
   },
-  cursor: () => "pointer",
+  wheel(ctx) {
+    const s = partOf(ctx.target.box)?.table.scroll;
+    if (!s) return false;
+    // Only sideways movement scrolls the table; up and down still scroll the page.
+    const dx = ctx.deltaX || (ctx.shiftKey ? ctx.deltaY : 0);
+    if (!dx) return false;
+    const v = ctx.view(ctx.target.node);
+    return scrollTo(v, s, (v.x ?? 0) + dx);
+  },
+  key(ctx, key) {
+    const s = partOf(ctx.target.box)?.table.scroll;
+    if (!s) return false;
+    const v = ctx.view(ctx.target.node);
+    const x = v.x ?? 0;
+    const to = key === "ArrowRight" ? x + ARROW_STEP : key === "ArrowLeft" ? x - ARROW_STEP : key === "Home" ? 0 : key === "End" ? s.max : null;
+    return to !== null && scrollTo(v, s, to);
+  },
+  cursor: (target) => (target.detail === SCROLL_AREA ? "default" : "pointer"),
 };
+
+/** Pressing a header sorts by it; pressing a row selects it. */
+function pressTable(ctx: PressContext): void {
+  const detail = ctx.target.detail;
+  if (typeof detail !== "string" || detail.startsWith("scroll:")) return;
+  const p = ctx.props(ctx.target.node);
+  if (detail.startsWith("sort:")) {
+    const field = detail.slice(5);
+    const sortPath = p.raw("sort"), dirPath = p.raw("direction");
+    if (!sortPath) return;
+    if (p.bound("sort") === field && dirPath) {
+      ctx.set(dirPath, p.bound("direction") === "desc" ? "asc" : "desc");
+    } else {
+      ctx.set(sortPath, field);
+      if (dirPath) ctx.set(dirPath, "asc");
+    }
+    return;
+  }
+  const key = keyFromDetail(detail);
+  const bind = p.raw("bind");
+  if (key === null || !bind) return;
+  ctx.set(bind, key);
+  runOn(ctx);
+}
 
 export const tableColumn: ComponentDef = {
   type: "table-column",

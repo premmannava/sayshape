@@ -9,7 +9,7 @@
  * changing state re-lays out, hovering only repaints.
  */
 import { parseActions, runActions } from "./actions";
-import { PropReader, type ComponentDef, type DragContext, type LayoutContext, type PaintContext, type PopupContext, type PressContext } from "./component";
+import { PropReader, type ComponentDef, type DragContext, type ElementView, type LayoutContext, type PaintContext, type PopupContext, type PressContext } from "./component";
 import { Emitter } from "./emitter";
 import { locateOf, scopeOf } from "./each";
 import { domEditorHost } from "./dom-editor";
@@ -126,6 +126,8 @@ export class SayShape {
   private hits: HitRegion[] = [];
   private seen = new Map<string, number>();
   private transitions = new MotionValues();
+  /** Per-element view state (a table's scroll offset), by element id; see ElementView. */
+  private views = new Map<string, ElementView>();
   private loading: Loading;
   /** Screens visited before the current one, for back. */
   private history: string[] = [];
@@ -461,6 +463,7 @@ export class SayShape {
         return r;
       },
       image: (src) => this.images.get(src),
+      view: this.viewOf,
     };
   }
 
@@ -663,6 +666,7 @@ export class SayShape {
       openPopup: (state) => this.openPopup(target, state),
       popupOpen: !!this.popup && this.popup.owner.node.id === target.node.id,
       today: this.today,
+      view: this.viewOf,
     };
   }
 
@@ -808,9 +812,22 @@ export class SayShape {
     return !!def?.key?.(this.pressContext(this.focus), key);
   }
 
+  /** An element's view state (how far a table is scrolled), by element id, for tools and tests. */
+  viewState(id: string): Readonly<ElementView> | undefined {
+    return this.views.get(id);
+  }
+
+  /** An element's view state, made on first use. */
+  private readonly viewOf = (node: SayShapeNode): ElementView => {
+    let v = this.views.get(node.id);
+    if (!v) this.views.set(node.id, (v = Object.create(null) as ElementView));
+    return v;
+  };
+
   private resetState(): void {
     this.state.clear();
     this.seen.clear();
+    this.views.clear();
     this.history = [];
   }
 
@@ -1212,7 +1229,9 @@ export class SayShape {
         ...this.pressContext(target),
         x: at.x, y: at.y,
         deltaY: e.deltaY * factor,
+        deltaX: (e.deltaX || 0) * factor,
         ctrlKey: !!e.ctrlKey,
+        shiftKey: !!e.shiftKey,
       });
       if (handled) {
         e.preventDefault();

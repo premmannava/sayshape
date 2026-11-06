@@ -111,8 +111,12 @@ export interface Rendered {
    * top-left corner; y defaults to where the drag started.
    */
   drag(query: Query, toX: number, toY?: number): void;
-  /** Turn the mouse wheel at a point, in CSS pixels from the canvas's top-left corner. */
-  wheel(x: number, y: number, deltaY: number): void;
+  /**
+   * Turn the mouse wheel at a point, in CSS pixels from the canvas's top-left
+   * corner. deltaX is a sideways swipe; shift holds Shift, as for sideways
+   * scrolling with an ordinary wheel.
+   */
+  wheel(x: number, y: number, deltaY: number, opts?: { deltaX?: number; shift?: boolean }): void;
   /** Send a key press to the canvas, e.g. key("Tab"), key("Enter"), key("Tab", { shift: true }). */
   key(key: string, opts?: { shift?: boolean }): void;
   /** Move keyboard focus with Tab (or Shift+Tab when `back` is true). */
@@ -247,8 +251,8 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     isShown: (query) => find(query).box !== null,
     text: () => drawOps.filter((d) => d.op === "fillText").map((d) => String(d.args[0])),
 
-    wheel(x, y, deltaY) {
-      canvas.dispatch("wheel", { clientX: x, clientY: y, deltaY });
+    wheel(x, y, deltaY, o = {}) {
+      canvas.dispatch("wheel", { clientX: x, clientY: y, deltaY, deltaX: o.deltaX ?? 0, shiftKey: !!o.shift });
       flush();
     },
 
