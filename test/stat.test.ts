@@ -221,3 +221,13 @@ describe("stat while loading", () => {
     ui.destroy();
   });
 });
+
+describe("spark from a list of records", () => {
+  it("draws one field with pluck(), and says to use it when given the records", () => {
+    const spec = (spark: string) => `state sales=[{m: "Jan", rev: 3}, {m: "Feb", rev: 5}, {m: "Mar", rev: 4}]\nstat label="Revenue" value="$12K" spark=${spark}\n`;
+    const good = render(spec("{pluck(sales, 'rev')}"));
+    expect(good.warnings).toEqual([]);
+    const bad = render(spec("sales"));
+    expect(bad.warnings.join()).toMatch(/spark is a list of records; it takes numbers\. Take one field of each with pluck\(\), like spark=\{pluck\(sales, 'revenue'\)\}/);
+  });
+});

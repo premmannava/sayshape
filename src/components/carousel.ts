@@ -44,7 +44,7 @@ export const carousel: ComponentDef = {
   },
   children: "any",
   picks: [
-    { for: "cards to page through, such as photos or featured products", write: "carousel bind=page" },
+    { for: "cards to page through, such as photos", write: "carousel bind=page" },
   ],
   example: `state page=0
 carousel bind=page

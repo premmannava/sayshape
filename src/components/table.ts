@@ -776,7 +776,7 @@ export const table: ComponentDef = {
   },
   children: ["table-column"],
   picks: [
-    { for: "many rows with several columns each", write: "table items=rows holding table-column field=name" },
+    { for: "many rows with several columns", write: "table items=rows holding table-column field=name" },
   ],
   example: `state gear=[{id: "tent", name: "Tent", price: 180}, {id: "stove", name: "Stove", price: 45}] picked="" by="name" dir="asc"
 table items=gear key=id bind=picked sort=by direction=dir

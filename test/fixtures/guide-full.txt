@@ -19,7 +19,7 @@ EXPRESSIONS
 - {…} reads state: {count}, {price*qty}, {done ? 'Yes' : 'No'}, {round(total, 2)}
 - Text can mix words and expressions: "Total: ${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! and a ? b : c
-- Functions: min, max, len, count, filter, find, search, sort, first, last, take, sum, avg, group, join, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim
+- Functions: min, max, len, count, filter, find, search, sort, first, last, pluck, take, sum, avg, group, join, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim
 - Words inside {…} are state names. Quote text: {done ? 'Packed' : 'To pack'}, tone={late ? 'bad' : 'good'}
 
 ACTIONS (on=…)
@@ -44,7 +44,7 @@ DATA AND LISTS
 - Inside each, the current item is t (from as=t; item if as= is left out). index=i gives its position from 0. t only exists inside its each.
 - Read fields: {t.text}, {cart[0].price}, {todos.length}
 - Compute numbers from the list instead of writing them yourself: len(list), count(list, 'done') counts items whose field is true, count(list, 'cat', 'Gas') counts items whose field equals a value, sum(list, 'price'), sum(list, 'price', 'qty') multiplies two fields per item, avg(list, 'field'), min(list, 'field'), max(list, 'field'), join(list, 'name'), includes(list, value). These count only numbers: write prices and quantities as numbers (24, not "24")
-- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), filter(list, 'region', regions) for any of a list of values (a multi-select's), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), first(list) and last(list) for one item. Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate
+- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), filter(list, 'region', regions) for any of a list of values (a multi-select's), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), first(list) and last(list) for one item, pluck(list, 'revenue') for one field of every item (a stat's spark=). Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate
 - Use filter() for counts and totals. Items of a filtered or sorted list still write back: bind=t.done inside each items=shown as=t changes that task in tasks, and totals worked out from tasks follow. if= on an each picks items per item: each items=todos as=t if={!t.done}
 - Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}
 - A filter with an All choice: derive shown={region == 'All' ? orders : filter(orders, 'region', region)}
@@ -313,7 +313,7 @@ ELEMENTS
     change=<string>  How the figure moved, shown small beside or under it with ▲ or ▼, e.g. change="+12%" or change="{round(growth, 1)}%". Write the sign; don't add an arrow.
     trend=<up|down|flat>  up, down or flat: which way the change went, for its arrow and color. Leave it out to take it from change's sign.
     good=<up|down>  Which way is good news: up (default, colored good) or down, for figures like costs or churn where falling is good.
-    spark=<expression>  A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]} or spark=weekly.
+    spark=<expression>  A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]}, spark=weekly, or from a list of records spark={pluck(sales, 'revenue')}.
     example:
       state price=24 qty=2
       stat label="Total" value="${price*qty}"
@@ -478,11 +478,12 @@ ELEMENTS
       state teams=[{id: "eng", name: "Engineering"}, {id: "sales", name: "Sales"}] team=""
       select "Team" items=teams value=id label=name bind=team placeholder="Choose a team"
 
-  date-picker "<text>"  — A field that opens a month calendar to pick one date, kept in bind= as YYYY-MM-DD text ("" for none). For deadlines, bookings or report filters.
+  date-picker "<text>"  — A field that opens a month calendar to pick one date, kept in bind= as YYYY-MM-DD text ("" for none), or with range=true a start and an end. For deadlines, bookings or report filters.
     "<text>"  The label above the field.
     bind=<state, required>  State that holds the date as YYYY-MM-DD, like due or t.date. Start it as "" for no date.
     min=<string>  The earliest date that can be chosen, YYYY-MM-DD, included.
     max=<string>  The latest date that can be chosen, YYYY-MM-DD, included.
+    range=<boolean>  Pick a start and an end date: bind= holds {from, to} as YYYY-MM-DD, starting from a record in state like period={from: "", to: ""}. The calendar offers Last 7 days and Last 30 days. filter(orders, 'date', period) keeps the items from the start to the end, both included, and all of them while it's empty.
     placeholder=<string>  Shown while no date is chosen.
     required=<boolean>  When true, the calendar has no Clear button.
     disabled=<condition>  Expression; when true the field is greyed out and doesn't open.
@@ -655,17 +656,17 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - changes adding up to a total, such as revenue minus costs: chart kind=waterfall total="Net income"
 - several KPIs, quotas or budgets against their targets (good=down when under target is good): chart kind=bullet target=goal
 - one number across two dimensions, such as retention by cohort or orders by weekday and hour: chart kind=heatmap rows=day x=hour y=orders
-- one score or level against its range, such as a health score or disk used: meter kind=gauge bands="60,85"
-- many rows with several columns each: table items=rows holding table-column field=name
+- one score against its range, such as a health score: meter kind=gauge bands="60,85"
+- many rows with several columns: table items=rows holding table-column field=name
 - 2 to 4 options side by side, such as plans or products: compare items=plans name=name holding compare-row field=price best=low
 - one record's fields, such as an order, a customer or a flight: details "Order #1042" holding detail "Status" value="Shipped"
 - places on a map: map holding pin
 - steps in order with their status, such as a delivery: timeline holding step status=done|current|upcoming
-- cards to page through, such as photos or featured products: carousel bind=page
+- cards to page through, such as photos: carousel bind=page
 - the one takeaway or warning to notice first: callout tone=warn
 - one choice from a long list: select items=teams bind=team
 - filtering by several values at once, such as regions or statuses: select items=regions bind=shown multiple=true
-- choosing a date: date-picker bind=due
+- choosing a date, or a period such as the last 30 days (range=true): date-picker bind=due
 - switching a view between 2 to 6 options: segmented bind=view options="Week,Month,Year"
 - nothing to show yet, or no results: empty "No results"
 

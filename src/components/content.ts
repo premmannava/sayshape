@@ -2,7 +2,7 @@ import type { ComponentDef, LayoutContext, PaintContext } from "../component";
 import type { TextMeasurer } from "../text";
 import type { Theme } from "../theme";
 import type { Box, Value } from "../types";
-import { isList } from "../data";
+import { isList, isRecord } from "../data";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
 import { easeOut, paintGhost } from "../ghost";
@@ -108,7 +108,7 @@ export const stat: ComponentDef = {
     },
     spark: {
       type: "expression",
-      description: "A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]} or spark=weekly.",
+      description: "A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]}, spark=weekly, or from a list of records spark={pluck(sales, 'revenue')}.",
     },
   },
   picks: [
@@ -366,7 +366,9 @@ function sparkPoints(list: Value | undefined, area: Omit<StatSpark, "points">, l
     return [];
   }
   const nums = list.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
-  if (nums.length < list.length) ctx.warn?.(`stat on line ${line}: spark has ${list.length - nums.length} entries that aren't numbers, so they're left out. Give a list of numbers, like spark={[12, 15, 14, 19]}`);
+  if (nums.length < list.length && list.some((v) => isRecord(v))) {
+    ctx.warn?.(`stat on line ${line}: spark is a list of records; it takes numbers. Take one field of each with pluck(), like spark={pluck(sales, 'revenue')}`);
+  } else if (nums.length < list.length) ctx.warn?.(`stat on line ${line}: spark has ${list.length - nums.length} entries that aren't numbers, so they're left out. Give a list of numbers, like spark={[12, 15, 14, 19]}`);
   if (nums.length < 2) return [];
   // Halves, so the range can't overflow for values near the largest number.
   const lo = Math.min(...nums), hi = Math.max(...nums);

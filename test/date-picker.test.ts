@@ -4,6 +4,8 @@ import { addDays, addMonths, daysInMonth, displayDate, formatDate, fromDays, isL
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render, type Rendered } from "../src/testing";
+import { displayRange, presetRange, rangeOf } from "../src/components/date-picker";
+import { toData } from "../src/data";
 import { darkTheme, lightTheme } from "../src/theme";
 
 const registry = new Registry(coreComponents);
@@ -349,5 +351,97 @@ describe("the Request playground sample", () => {
     expect(ui.text()).toContain("Delivered by 2026-11-12");
     ui.press({ type: "button", text: "Send request" });
     expect(ui.emitted.at(-1)).toEqual({ name: "request", value: "laptop" });
+  });
+});
+
+describe("range=true", () => {
+  const ranged = (value = `{from: "", to: ""}`, props = "") =>
+    `state period=${value} n=0 orders=[{id: 1, date: "2026-10-02"}, {id: 2, date: "2026-10-12"}, {id: 3, date: "2026-10-20"}, {id: 4}]\n` +
+    `date-picker "Period" bind=period range=true ${props} on=inc:n\ntext "{len(filter(orders, 'date', period))} orders"\n`;
+  const json = (v: unknown) => JSON.parse(JSON.stringify(v));
+
+  it("parses with a {from, to} record and teaches the pick", () => {
+    expect(parse(ranged(), registry).diagnostics).toEqual([]);
+    expect(registry.get("date-picker")!.picks?.map((p) => p.for).join()).toMatch(/a period such as the last 30 days \(range=true\)/);
+  });
+
+  it("marks the start with the first press, writes both ends in order with the second, then closes and runs on=", () => {
+    const ui = render(ranged(), { today: TODAY });
+    expect(ui.text()).toContain("4 orders");
+    open(ui);
+    pressPopup(ui, "day:2026-10-15");
+    // The start lives in the popup until the end is chosen.
+    expect(ui.popup).not.toBeNull();
+    expect(json(ui.state.period)).toEqual({ from: "", to: "" });
+    pressPopup(ui, "day:2026-10-05");
+    expect(json(ui.state.period)).toEqual({ from: "2026-10-05", to: "2026-10-15" });
+    expect(ui.popup).toBeNull();
+    expect(ui.state.n).toBe(1);
+    expect(ui.text()).toContain("Oct 5 – Oct 15, 2026");
+    expect(ui.text()).toContain("1 orders");
+  });
+
+  it("offers Last 7 and Last 30 days ending today, inside min and max", () => {
+    const ui = render(ranged(), { today: TODAY });
+    open(ui);
+    pressPopup(ui, "last:7");
+    expect(json(ui.state.period)).toEqual({ from: "2026-10-15", to: "2026-10-21" });
+    open(ui);
+    pressPopup(ui, "last:30");
+    expect(json(ui.state.period)).toEqual({ from: "2026-09-22", to: "2026-10-21" });
+    expect(ui.text()).toContain("Sep 22 – Oct 21, 2026");
+    expect(ui.text()).toContain("3 orders");
+    const today = parseDate(TODAY)!;
+    expect(presetRange(30, today, { min: parseDate("2026-10-10"), max: null })).toEqual({ from: parseDate("2026-10-10"), to: today });
+    expect(presetRange(7, today, { min: null, max: parseDate("2026-10-01") })).toBeNull();
+  });
+
+  it("clears to an empty range, which filters nothing out", () => {
+    const ui = render(ranged(`{from: "2026-10-01", to: "2026-10-10"}`), { today: TODAY });
+    expect(ui.text()).toContain("1 orders");
+    open(ui);
+    pressPopup(ui, "clear");
+    expect(json(ui.state.period)).toEqual({ from: "", to: "" });
+    expect(ui.text()).toContain("4 orders");
+    expect(ui.text()).toContain("Choose dates");
+  });
+
+  it("works from the keyboard: Enter marks the start, arrows move, Enter ends it", () => {
+    const ui = render(ranged(), { today: TODAY });
+    ui.tab();
+    ui.key("ArrowDown");
+    ui.key("Enter");
+    ui.key("ArrowRight");
+    ui.key("ArrowRight");
+    ui.key("Enter");
+    expect(json(ui.state.period)).toEqual({ from: "2026-10-21", to: "2026-10-23" });
+  });
+
+  it("reads ranges in either order, and says so when bind= isn't one", () => {
+    expect(rangeOf(toData({ from: "2026-03-09", to: "2026-03-03" }))).toEqual({ kind: "range", from: parseDate("2026-03-03"), to: parseDate("2026-03-09") });
+    expect(rangeOf(toData({ from: "", to: "" })).kind).toBe("none");
+    expect(rangeOf("2026-03-03").kind).toBe("invalid");
+    expect(displayRange(parseDate("2026-03-03")!, parseDate("2026-03-09")!)).toBe("Mar 3 – Mar 9, 2026");
+    expect(displayRange(parseDate("2026-12-28")!, parseDate("2027-01-03")!)).toBe("Dec 28, 2026 – Jan 3, 2027");
+    expect(displayRange(parseDate("2026-03-03")!, parseDate("2026-03-03")!)).toBe("Mar 3, 2026");
+    const bad = render(ranged(`"2026-10-01"`), { today: TODAY });
+    expect(bad.warnings.join()).toMatch(/with range=true, bind= holds \{from, to\} .* Start it as period=\{from: "", to: ""\}/);
+    expect(bad.text()).toContain("Invalid dates");
+    expect(render(ranged(), { today: TODAY }).warnings).toEqual([]);
+  });
+
+  it("clears with Delete on the field", () => {
+    const ui = render(ranged(`{from: "2026-10-01", to: "2026-10-10"}`), { today: TODAY });
+    ui.tab();
+    ui.key("Delete");
+    expect(json(ui.state.period)).toEqual({ from: "", to: "" });
+  });
+});
+
+describe("filter() and count() with a range", () => {
+  it("keep the items from the start to the end, both included, for dates and numbers, with open ends", () => {
+    const ui = render(`state rows=[{d: "2026-01-05", n: 5}, {d: "2026-01-10", n: 10}, {d: "2026-01-20", n: 20}, {n: 30}]\n` +
+      `text "{len(filter(rows, 'd', {from: '2026-01-05', to: '2026-01-10'}))} {count(rows, 'n', {from: 10, to: 20})} {len(filter(rows, 'n', {from: 15}))} {len(filter(rows, 'd', {from: '', to: ''}))} {len(filter(rows, 'n', {from: '1', to: '99'}))}"\n`);
+    expect(ui.text()).toContain("2 2 2 4 0");
   });
 });

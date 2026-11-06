@@ -235,3 +235,24 @@ progress value={1} max=2 label="{len(tx)} of {2}"
     expect(ui.state.msg).toBe("Hi Ada!");
   });
 });
+
+describe("pluck", () => {
+  it("takes one field of every item, null where it's missing, for a sparkline", () => {
+    expect(val("pluck(cart, 'price')")).toEqual([24, 129]);
+    expect(val("pluck(todos, 'done')")).toEqual([false, true, true]);
+    expect(val("pluck(cart, 'colour')")).toEqual([null, null]);
+    expect(val("sum(pluck(cart, 'qty'))")).toBe(3);
+    expect(isData(val("pluck(cart, 'price')"))).toBe(true);
+  });
+
+  it("can't reach past an item's own fields", () => {
+    expect(val("pluck(cart, '__proto__')")).toEqual([null, null]);
+    expect(val("pluck(cart, 'constructor')")).toEqual([null, null]);
+    expect(val("pluck(tags, 'length')")).toEqual([null, null]);
+  });
+
+  it("points models that write map() or values() at it", () => {
+    expect(err("map(cart, 'price')")).toMatch(/pluck\(list, 'field'\)/);
+    expect(err("values(cart, 'price')")).toMatch(/Use pluck\(list, 'field'\)/);
+  });
+});
