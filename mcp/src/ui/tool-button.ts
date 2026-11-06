@@ -27,6 +27,10 @@ export const toolButton: ComponentDef = {
   },
   example: `tool-button "Save image" icon=download on=emit:save_image`,
   minWidth: (_node, ctx) => toolSize(ctx.theme.control.height),
+  // Only an icon is drawn, so its text is its name for screen readers.
+  semantics(box, ctx) {
+    return { role: "button", name: ctx.props(box.node).text() };
+  },
   layout(box, ctx) {
     box.h = toolSize(ctx.theme.control.height);
   },
