@@ -159,8 +159,8 @@ check "I agree to the terms" bind=agreed`,
     }
     ctx.roundRect(box.x + 0.5, box.y + 4.5, 18, 18, Math.min(5, theme.radius.sm));
     g.save();
-    g.globalAlpha *= (0.6 + 0.4 * hover) * (1 - selected);
-    g.strokeStyle = hot ? c.accent : c.muted;
+    g.globalAlpha *= 1 - selected;
+    g.strokeStyle = hot ? c.accent : c.control;
     g.lineWidth = 1.25;
     g.stroke();
     g.restore();
@@ -216,6 +216,15 @@ switch "Email me order updates" bind=updates`,
     ctx.roundRect(tx, ty, tw, th, th / 2);
     // The track transitions with the knob instead of flipping abruptly.
     fillTint(g, c.ink, 0.16);
+    if (position < 1) {
+      // Off, its outline shows where it is (the tint alone is too faint to see).
+      g.save();
+      g.globalAlpha *= 1 - position;
+      g.strokeStyle = c.control;
+      g.lineWidth = 1;
+      g.stroke();
+      g.restore();
+    }
     if (position > 0) {
       g.save();
       g.globalAlpha *= position;
@@ -282,8 +291,7 @@ radio "Large" bind=size value=l`,
     g.fill();
     g.save();
     const strong = chosen || ctx.isHovered(box.node);
-    if (!strong) g.globalAlpha *= 0.6;
-    g.strokeStyle = strong ? c.accent : c.muted;
+    g.strokeStyle = strong ? c.accent : c.control;
     g.lineWidth = chosen ? 1.75 : 1.25;
     g.stroke();
     g.restore();
@@ -680,7 +688,7 @@ export function paintField(g: CanvasRenderingContext2D, c: Theme["colors"], acti
   g.fillStyle = c.surface;
   g.fill();
   g.save();
-  g.strokeStyle = c.line;
+  g.strokeStyle = c.control;
   g.lineWidth = 1;
   g.stroke();
   if (hover > 0) {
