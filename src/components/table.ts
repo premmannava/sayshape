@@ -447,28 +447,21 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const detail = sortDetail(col.field);
     const hovered = d.sortable && ctx.isHovered(box.node, detail);
     if (d.sortable) ctx.addHit(cell, { detail });
-    const headerHighlight = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, MOTION.hover);
-    if (headerHighlight) {
-      ctx.roundRect(cell.x + 3, cell.y + 3, Math.max(0, cell.w - 6), cell.h - 6, theme.radius.sm);
-      fillTint(g, col.sorted ? c.accent : c.ink, headerHighlight * (col.sorted ? 0.075 : 0.035));
-    }
+    // A sorted column says so quietly: its label in ink with a small arrow, no box
+    // or underline. Hover previews the same, with the arrow faint.
+    const shown = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, MOTION.hover);
     g.fillStyle = col.sorted || hovered ? c.ink : c.muted;
     // The label lines up with the cells; the arrow goes on its far side from that edge.
     const right = col.align === "right";
     g.textAlign = right ? "right" : "left";
     const tx = right ? ox + col.x + col.w - pad : ox + col.x + pad;
     g.fillText(col.shownLabel, tx, hy + d.headerH / 2);
-    if (col.sorted || hovered) {
+    if (shown > 0) {
       const labelW = g.measureText(col.shownLabel).width;
-      const ax = right ? tx - labelW - 9 : tx + labelW + 9;
-      chevron(g, ax, hy + d.headerH / 2, 8, col.sorted === "desc" ? "down" : "up", col.sorted ? c.accent : c.muted);
-    }
-    if (col.sorted) {
-      ctx.roundRect(cell.x + pad, cell.y + cell.h - 3, Math.max(0, cell.w - pad * 2), 2, 1);
-      g.fillStyle = c.accent;
+      const ax = right ? tx - labelW - 8 : tx + labelW + 8;
       g.save();
-      g.globalAlpha *= headerHighlight;
-      g.fill();
+      g.globalAlpha *= col.sorted ? shown : 0.45 * shown;
+      chevron(g, ax, hy + d.headerH / 2, 7, col.sorted === "desc" ? "down" : "up", col.sorted ? c.ink : c.muted);
       g.restore();
     }
     if (d.sortable && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);

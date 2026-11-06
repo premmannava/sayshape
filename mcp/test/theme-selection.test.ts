@@ -105,6 +105,9 @@ describe("MCP view toolbar", () => {
     expect(save.x + save.w).toBeCloseTo(width - TOOLBAR_PADDING, 0);
     // A control's height plus the strip's padding: far less than a labelled row.
     expect(ui.sayshape.boxes!.h).toBeLessThanOrEqual(40 + 2 * TOOLBAR_PADDING);
+    // The download button is smaller than the selector: a utility, not a primary control.
+    expect(save.w).toBe(30);
+    expect(save.h).toBe(30);
     ui.destroy();
   });
 
