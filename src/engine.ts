@@ -26,7 +26,7 @@ import { parse, type ParseResult } from "./parser";
 import { Registry } from "./registry";
 import { Store } from "./state";
 import { CanvasMeasurer, font as fontString, wrapText } from "./text";
-import { darkTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
+import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
 import { domAccessibilityHost } from "./a11y/dom";
@@ -144,7 +144,7 @@ export class SayShape {
   private loading: Loading;
   /** Screens visited before the current one, for back. */
   private history: string[] = [];
-  private toast: { text: string; shownAt: number } | null = null;
+  private toast: { text: string; shownAt: number; ms: number } | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private dirty = { parse: true, layout: true, paint: true };
   private frame = 0;
@@ -546,7 +546,10 @@ export class SayShape {
       },
       font: (w, s) => fontString(w, s, theme.font.family),
       roundRect: (x, y, w, h, r) => roundRectPath(g, x, y, w, h, r),
-      addHit: (box, o = {}) => this.hits.push({ box, detail: o.detail, focusable: o.focusable ?? true }),
+      addHit: (box, o = {}) => {
+        const focusable = o.focusable ?? true;
+        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable });
+      },
       isHovered: (n, d) => same(this.hover, n, d),
       isFocused: (n, d) => this.keyboardMode && same(this.focus, n, d),
       isPressed: (n, d) => same(this.pressed, n, d),
@@ -689,29 +692,31 @@ export class SayShape {
 
   /** Show a short message over the screen for a few seconds, replacing any current one. */
   notify(text: string): void {
-    this.toast = { text, shownAt: now() };
+    const ms = toastMs(text);
+    this.toast = { text, shownAt: now(), ms };
     this.events.emit("notify", { text });
     this.a11y.announce(text);
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     // Repaint once it has expired, so it disappears even without animation.
-    this.toastTimer = setTimeout(() => { this.toastTimer = null; this.invalidate("paint"); }, TOAST_MS + 20);
+    this.toastTimer = setTimeout(() => { this.toastTimer = null; this.invalidate("paint"); }, ms + 20);
     this.invalidate("paint");
   }
 
   /** The message currently shown, if any. */
   get notification(): string | null {
-    return this.toast && now() - this.toast.shownAt < TOAST_MS ? this.toast.text : null;
+    return this.toast && now() - this.toast.shownAt < this.toast.ms ? this.toast.text : null;
   }
 
   private paintToast(g: CanvasRenderingContext2D): void {
     if (!this.toast) return;
     const age = now() - this.toast.shownAt;
-    if (age >= TOAST_MS) { this.toast = null; return; }
+    const ms = this.toast.ms;
+    if (age >= ms) { this.toast = null; return; }
     const animate = this.opts.animate ?? !(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
     let alpha = 1;
     if (animate) {
-      alpha = Math.min(1, age / TOAST_FADE, (TOAST_MS - age) / TOAST_FADE);
-      if (age < TOAST_FADE || age > TOAST_MS - TOAST_FADE) this.invalidate("paint");
+      alpha = Math.min(1, age / TOAST_FADE, (ms - age) / TOAST_FADE);
+      if (age < TOAST_FADE || age > ms - TOAST_FADE) this.invalidate("paint");
     }
     const t = this.theme;
     const font = fontString(600, 14, t.font.family);
@@ -1466,6 +1471,11 @@ export class SayShape {
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const onScheme = () => { if ((this.opts.theme ?? "auto") === "auto") { this.theme = this.resolveTheme(); this.invalidate("layout"); } };
     mq.addEventListener("change", onScheme);
+    // Turning a forced-colors mode on or off redraws in its colors, whatever the theme.
+    const forced = matchMedia("(forced-colors: active)");
+    const onForced = () => { this.theme = this.resolveTheme(); this.invalidate("layout"); };
+    forced.addEventListener("change", onForced);
+    this.cleanup.push(() => forced.removeEventListener("change", onForced));
     const mo = new MutationObserver(onScheme);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class", "style"] });
     this.cleanup.push(() => { mq.removeEventListener("change", onScheme); mo.disconnect(); });
@@ -1478,6 +1488,15 @@ export class SayShape {
   }
 
   private resolveTheme(): Theme {
+    const chosen = this.chosenTheme();
+    // In a forced-colors mode the person's own colors win over any theme.
+    if (typeof matchMedia !== "undefined" && matchMedia("(forced-colors: active)").matches) {
+      return forcedColorsTheme(chosen, (name) => this.systemColor(name));
+    }
+    return chosen;
+  }
+
+  private chosenTheme(): Theme {
     const t = this.opts.theme ?? "auto";
     if (t !== "auto") return t;
     if (typeof window === "undefined") return lightTheme;
@@ -1485,6 +1504,17 @@ export class SayShape {
     const explicit = root.getAttribute("data-theme");
     const dark = explicit ? explicit === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
     return themeFromCSS(this.canvas, dark ? darkTheme : lightTheme);
+  }
+
+  /** What a CSS system color (Canvas, CanvasText, Highlight) is right now, as the browser computes it. */
+  private systemColor(name: string): string {
+    const probe = document.createElement("span");
+    probe.style.color = name;
+    probe.style.display = "none";
+    (this.canvas.parentElement ?? document.body).append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color || "CanvasText";
   }
 
   /** Make this instance available in the browser console as window[name]. */
@@ -1520,6 +1550,30 @@ function sameRegion(h: HitRegion, t: HitTarget): boolean {
 
 /** How long a notify: message stays up, and how long it takes to fade in or out. */
 const TOAST_MS = 3000;
+/** The longest a message stays up, however long it is. */
+const TOAST_MAX_MS = 10_000;
+
+/**
+ * How long a message stays up: at least TOAST_MS, longer for longer text, so
+ * there's time to read it (about 60 ms a character beyond a short message).
+ */
+export function toastMs(text: string): number {
+  return Math.min(TOAST_MAX_MS, Math.max(TOAST_MS, 1500 + 60 * text.length));
+}
+
+/** The least height of a focusable region, in CSS pixels (WCAG 2.2 target size, 2.5.8). */
+export const MIN_TARGET = 24;
+
+/**
+ * A region grown to at least MIN_TARGET tall around its middle, so a link or
+ * a crumb on one line of text is easy to hit. Only height: a region narrower
+ * than that is a sliver cut off by scrolling (a table's column at the edge),
+ * and widening it would reach past its element.
+ */
+function atLeastTarget(box: Box): Box {
+  if (box.h >= MIN_TARGET) return box;
+  return { ...box, y: box.y - (MIN_TARGET - box.h) / 2, h: MIN_TARGET };
+}
 const TOAST_FADE = 180;
 
 /** The state name that holds the visible screen. */

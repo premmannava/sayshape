@@ -198,3 +198,22 @@ date-picker "Due" bind=due`);
   });
   await audit(page);
 });
+
+test("in a forced-colors mode the interface draws in the person's system colors", async ({ page }) => {
+  await page.emulateMedia({ forcedColors: "active" });
+  await open(page, `button "Go" on=notify:Hi`);
+  const seen = await page.evaluate(() => {
+    const s = window.__sayshape!;
+    const probe = document.createElement("span");
+    probe.style.color = "Canvas";
+    document.body.append(probe);
+    const canvas = getComputedStyle(probe).color;
+    probe.remove();
+    return { name: s.theme.name, surface: s.theme.colors.surface, canvas };
+  });
+  expect(seen.name).toMatch(/forced-colors$/);
+  expect(seen.surface).toBe(seen.canvas);
+  await page.emulateMedia({ forcedColors: "none" });
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  expect(await page.evaluate(() => window.__sayshape!.theme.name)).not.toMatch(/forced-colors$/);
+});
