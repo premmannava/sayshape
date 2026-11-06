@@ -10,11 +10,11 @@ import { tasks } from "../eval/compare/tasks";
 const registry = new Registry([...coreComponents, ...mapComponents]);
 
 /** A model server that answers each request with the reference answer in the format its system prompt asks for. */
-function fakeModel(answer: (request: string, format: Format) => string, usage: Record<string, unknown> = { prompt_tokens: 1000, completion_tokens: 200 }) {
+function fakeModel(answer: (request: string, format: "sayshape" | "html") => string, usage: Record<string, unknown> = { prompt_tokens: 1000, completion_tokens: 200 }) {
   return (async (_url: string, init: RequestInit) => {
     const body = JSON.parse(init.body as string) as { messages: Array<{ role: string; content: string }> };
     const system = body.messages[0]!.content as unknown;
-    const format: Format = (typeof system === "string" ? system : JSON.stringify(system)).includes("You write interactive UI") ? "html" : "sayshape";
+    const format: "sayshape" | "html" = (typeof system === "string" ? system : JSON.stringify(system)).includes("You write interactive UI") ? "html" : "sayshape";
     const request = body.messages.find((m) => m.role === "user")!.content as string;
     const text = answer(request, format);
     const sse = `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n\ndata: ${JSON.stringify({ choices: [], usage })}\n\ndata: [DONE]\n\n`;
@@ -143,7 +143,7 @@ describe("repair", () => {
     const fetchImpl = (async (url: string, init: RequestInit) => {
       const body = JSON.parse(init.body as string) as { messages: Array<{ role: string; content: unknown }> };
       const system = body.messages[0]!.content;
-      const format: Format = (typeof system === "string" ? system : JSON.stringify(system)).includes("You write interactive UI") ? "html" : "sayshape";
+      const format: "sayshape" | "html" = (typeof system === "string" ? system : JSON.stringify(system)).includes("You write interactive UI") ? "html" : "sayshape";
       seen[format] = (seen[format] ?? 0) + 1;
       lastUser.push(String(body.messages.at(-1)!.content));
       // Mid-spec, where models write it: a leading non-SayShape line is dropped as prose before the spec.

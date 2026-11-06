@@ -149,7 +149,15 @@ window.Chart = function (el, config) {
   (data.datasets || []).forEach(function (d) { if (d.label) pieces.push(d.label); (d.data || []).forEach(function (v) { if (typeof v === "number") pieces.push(String(v)); }); });
   const chart = { config: config, data: data, options: (config && config.options) || {}, pieces: pieces,
     update: function () { chart.pieces = [].concat(chart.data.labels || []); (chart.data.datasets || []).forEach(function (d) { if (d.label) chart.pieces.push(d.label); (d.data || []).forEach(function (v) { if (typeof v === "number") chart.pieces.push(String(v)); }); }); },
-    destroy: function () { const i = window.__charts.indexOf(chart); if (i >= 0) window.__charts.splice(i, 1); }, resize: function () {} };
+    destroy: function () { const i = window.__charts.indexOf(chart); if (i >= 0) window.__charts.splice(i, 1); }, resize: function () {},
+    // The rest of Chart.js 4's instance API that answers call (legend toggles and the like), so they don't fail only because this is a stand-in.
+    __hidden: {}, __hiddenSets: {},
+    getDataVisibility: function (i) { return !chart.__hidden[i]; }, toggleDataVisibility: function (i) { chart.__hidden[i] = !chart.__hidden[i]; },
+    isDatasetVisible: function (i) { return !chart.__hiddenSets[i]; }, setDatasetVisibility: function (i, v) { chart.__hiddenSets[i] = !v; },
+    hide: function (i) { chart.__hiddenSets[i] = true; }, show: function (i) { chart.__hiddenSets[i] = false; },
+    getDatasetMeta: function () { return { data: [], hidden: null, type: (config && config.type) || "" }; }, getVisibleDatasetCount: function () { return (chart.data.datasets || []).length; },
+    getElementsAtEventForMode: function () { return []; }, getActiveElements: function () { return []; }, setActiveElements: function () {},
+    render: function () {}, reset: function () {}, stop: function () { return chart; }, clear: function () { return chart; }, toBase64Image: function () { return ""; } };
   window.__charts.push(chart);
   return chart;
 };
