@@ -48,9 +48,10 @@ export const sessions: Session[] = [
           { label: "the chart is still there", shows: [/APAC|Asia/] },
         ] },
       { request: "Now show Europe only: the KPIs and the chart should cover just Europe.",
-        checks: [{ label: "Europe's total (150), no other region", shows: [num(150), /\bEU\b|Europe/], hides: [/APAC|Asia/, num(515)] }] },
+        // Region names can stay in a filter's options; the other regions' totals (210, 155) and the overall 515 can't.
+        checks: [{ label: "Europe's total (150), no other region's figures", shows: [num(150), /\bEU\b|Europe/], hides: [num(515), num(210), num(155)] }] },
       { request: "Split Europe's sales by product.",
-        checks: [{ label: "Laptops 80 and Phones 70, still Europe only", shows: [/Laptops/, /Phones/, num(80), num(70)], hides: [/APAC|Asia/] }] },
+        checks: [{ label: "Laptops 80 and Phones 70, still Europe only", shows: [/Laptops/, /Phones/, num(80), num(70)], hides: [num(515), num(210), num(155), num(95)] }] },
     ],
   },
 
@@ -67,11 +68,12 @@ export const sessions: Session[] = [
         ] },
       { request: "Also show how many open tickets each person has.",
         checks: [
-          { label: "Ana 2, Ben 1, Chen 2", test: (t) => near(t, /\bAna\b/, num(2)) && near(t, /\bBen\b/, num(1)) && near(t, /\bChen\b/, num(2)) },
+          // A chart draws its labels and then its values, so a count can be three pieces from its name.
+          { label: "Ana 2, Ben 1, Chen 2", test: (t) => near(t, /\bAna\b/, num(2), 3) && near(t, /\bBen\b/, num(1), 3) && near(t, /\bChen\b/, num(2), 3) },
           { label: "the table is still there", shows: [/Login fails/, /Typo on page/] },
         ] },
       { request: "Ticket #102 is resolved now, so remove it.",
-        checks: [{ label: "Slow export is gone, the rest stay, Chen still has 2", shows: [/Login fails/, /Billing error/], hides: [/Slow export/], test: (t) => near(t, /\bChen\b/, num(2)) }] },
+        checks: [{ label: "Slow export is gone, the rest stay, Chen still has 2", shows: [/Login fails/, /Billing error/], hides: [/Slow export/], test: (t) => near(t, /\bChen\b/, num(2), 3) }] },
     ],
   },
 
@@ -99,13 +101,14 @@ export const sessions: Session[] = [
       { request: "Our team's hours this week: Ana (Design) 32, Ben (Engineering) 40, Chen (Engineering) 28, Dee (Sales) 36. Show each person's hours as a horizontal bar chart.",
         checks: [{ label: "everyone on the chart", shows: [/\bAna\b/, /\bBen\b/, /\bChen\b/, /\bDee\b/] }] },
       { request: "Add each team's total hours.",
-        checks: [{ label: "Engineering 68", test: (t) => near(t, /Engineering/, num(68)) }, { label: "the chart is still there", shows: [/\bDee\b/] }] },
+        // 68 and 61 are only ever team totals, so they're checked on their own.
+        checks: [{ label: "Engineering 68", shows: [/Engineering/, num(68)] }, { label: "the chart is still there", shows: [/\bDee\b/] }] },
       { request: "Flag anyone under 30 hours.",
-        checks: [{ label: "Chen is flagged", test: (t) => near(t, /\bChen\b/, FLAG) }] },
+        checks: [{ label: "Chen is flagged", test: (t) => near(t, /\bChen\b/, FLAG, 3) }] },
       { request: "Add Eli to Sales with 25 hours.",
         checks: [
-          { label: "Eli is there, and Sales is now 61", shows: [/\bEli\b/], test: (t) => near(t, /Sales/, num(61)) },
-          { label: "Eli is flagged too", test: (t) => near(t, /\bEli\b/, FLAG) },
+          { label: "Eli is there, and Sales is now 61", shows: [/\bEli\b/, num(61)] },
+          { label: "Eli is flagged too", test: (t) => near(t, /\bEli\b/, FLAG, 3) },
         ] },
     ],
   },

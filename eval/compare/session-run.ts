@@ -19,7 +19,7 @@ import type { GuideOptions } from "../../src/prompt";
 import type { Registry } from "../../src/registry";
 import { a2uiPrompt } from "./a2ui";
 import { cleanA2ui } from "./a2ui-screen";
-import { cleanHtml, costOf, HTML_PROMPT, score, type CheckResult, type Prices } from "./run";
+import { cleanHtml, costOf, HTML_PROMPT, score, waitsOnServer, type CheckResult, type Prices } from "./run";
 import type { Session } from "./sessions";
 
 export type SessionFormat = "sayshape" | "html" | "a2ui";
@@ -46,6 +46,8 @@ export interface StepResult {
   problems: string[];
   checks: CheckResult[];
   success: boolean;
+  /** A2UI: renders, but what failed needs the agent to answer an event (see run.ts). */
+  waitsOnServer?: boolean;
 }
 
 export interface SessionOptions {
@@ -139,7 +141,8 @@ export async function runSessions(list: Session[], o: SessionOptions): Promise<S
               const a = await convo.next(step.request);
               const s = await score(format, task, a.output);
               const p = o.prices?.[model];
-              r = { ...base, ok: true, output: a.output, raw: a.raw, usage: a.usage, cost: p ? costOf(a.usage, p) : undefined, firstTokenMs: a.firstTokenMs, totalMs: a.totalMs, valid: s.valid, problems: s.problems, checks: s.checks, success: s.valid && s.checks.every((c) => c.passed) };
+              r = { ...base, ok: true, output: a.output, raw: a.raw, usage: a.usage, cost: p ? costOf(a.usage, p) : undefined, firstTokenMs: a.firstTokenMs, totalMs: a.totalMs, valid: s.valid, problems: s.problems, checks: s.checks, success: s.valid && s.checks.every((c) => c.passed),
+                ...(format === "a2ui" ? { waitsOnServer: waitsOnServer(task, a.output, s) } : {}) };
             } catch (e) {
               failed = e instanceof Error ? e.message : String(e);
               r = { ...base, ok: false, error: failed, output: "", raw: "", usage: {}, totalMs: 0, valid: false, problems: ["request failed"], checks: step.checks.map((c) => ({ label: c.label, passed: false, why: "request failed" })), success: false };
@@ -150,6 +153,20 @@ export async function runSessions(list: Session[], o: SessionOptions): Promise<S
         }
       }
     }
+  }
+  return out;
+}
+
+/** Score saved steps again with the checks as they are now, without asking a model. */
+export async function rescoreSessions(results: StepResult[], list: Session[]): Promise<StepResult[]> {
+  const out: StepResult[] = [];
+  for (const r of results) {
+    const step = list.find((x) => x.id === r.session)?.steps[r.step - 1];
+    if (!step || !r.ok) { out.push(r); continue; }
+    const task = { id: `${r.session}.${r.step}`, category: "dashboard" as const, request: step.request, checks: step.checks };
+    const s = await score(r.format, task, r.output);
+    out.push({ ...r, valid: s.valid, problems: s.problems, checks: s.checks, success: s.valid && s.checks.every((c) => c.passed),
+      ...(r.format === "a2ui" ? { waitsOnServer: waitsOnServer(task, r.output, s) } : {}) });
   }
   return out;
 }
@@ -214,6 +231,8 @@ export function sessionReport(results: StepResult[], meta: { date: string; url: 
   for (const s of sums) {
     lines.push(`| ${s.model} | ${name(s.format)} | ${s.stepsWorking}/${s.steps} | ${s.sessionsWorking}/${s.sessions} | ${num(s.inputTokens)} | ${num(s.outputTokens)} | ${secs(s.totalMs)} | ${usd(s.cost)} | ${s.cost === undefined ? "?" : usd(s.cost * 100_000, 0)} |`);
   }
+  const waiting = results.filter((r) => r.waitsOnServer).length;
+  if (waiting) lines.push("", `${waiting === 1 ? "1 A2UI step renders but waits" : `${waiting} A2UI steps render but wait`} on the server when used: the controls send an event for the agent to answer with another model call. ${waiting === 1 ? "It counts" : "They count"} as not working on its own.`.replace("not working on its own.", waiting === 1 ? "not working on its own." : "not working on their own."));
   const steps = Math.max(...sums.map((s) => s.inputByStep.length));
   lines.push("", "## How the context grows", "", "Average input tokens sent at each step.", "",
     `| Model | Format | ${Array.from({ length: steps }, (_, i) => `Step ${i + 1}`).join(" | ")} |`, `|---|---|${"---|".repeat(steps)}`);
@@ -221,7 +240,7 @@ export function sessionReport(results: StepResult[], meta: { date: string; url: 
   lines.push("", "## Every step", "", "| Session | Step | Model | Format | Works | Failed checks or problems | Input | Output | Time |", "|---|---|---|---|---|---|---|---|---|");
   for (const r of results) {
     const failed = r.ok ? [...r.problems, ...r.checks.filter((c) => !c.passed).map((c) => `${c.label} (${c.why})`)] : [r.error ?? "request failed"];
-    lines.push(`| ${r.session} | ${r.step} | ${r.model} | ${r.format} | ${r.success ? "yes" : "no"} | ${failed.join("; ").replace(/\|/g, "\\|").slice(0, 300)} | ${num(r.usage.promptTokens)} | ${num(r.usage.completionTokens)} | ${secs(r.totalMs)} |`);
+    lines.push(`| ${r.session} | ${r.step} | ${r.model} | ${r.format} | ${r.success ? "yes" : r.waitsOnServer ? "waits on server" : "no"} | ${failed.join("; ").replace(/\|/g, "\\|").slice(0, 300)} | ${num(r.usage.promptTokens)} | ${num(r.usage.completionTokens)} | ${secs(r.totalMs)} |`);
   }
   return lines.join("\n") + "\n";
 }
