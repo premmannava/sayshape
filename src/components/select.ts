@@ -240,6 +240,9 @@ export const select: ComponentDef = {
     disabled: { type: "condition", description: "Expression; when true the field is greyed out and doesn't open." },
     on: onProp("after an option is chosen, with bind= already set"),
   },
+  picks: [
+    { for: "one choice from a long list", write: "select items=teams bind=team" },
+  ],
   example: `state teams=[{id: "eng", name: "Engineering"}, {id: "sales", name: "Sales"}] team=""
 select "Team" items=teams value=id label=name bind=team placeholder="Choose a team"`,
   minWidth: () => 120,

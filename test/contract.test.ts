@@ -174,3 +174,52 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
     });
   }
 });
+
+// Picks are what a model reads before any element's docs, to choose the right
+// element; one naming a prop or value that doesn't exist would teach it wrong.
+describe("element picks", () => {
+  const byType = new Map(ALL.map((c) => [c.type, c] as const));
+  // Words, "quoted text" and name=value (the value may be quoted).
+  const tokens = (write: string) => write.match(/[\w-]+="[^"]*"|"[^"]*"|\S+/g) ?? [];
+
+  for (const def of ALL) {
+    for (const pick of def.picks ?? []) {
+      it(`${def.type}: "${pick.for}" writes ${pick.write}`, () => {
+        expect(pick.for.length).toBeLessThanOrEqual(100);
+        const words = tokens(pick.write);
+        expect(words[0]).toBe(def.type);
+        // "holding x" names a child the element takes; x's props may follow it.
+        let current = def;
+        for (let i = 1; i < words.length; i++) {
+          const w = words[i]!;
+          if (w === "holding") {
+            const child = byType.get(words[i + 1] ?? "");
+            expect(child, `"holding" is followed by an element in ${pick.write}`).toBeDefined();
+            expect(Array.isArray(current.children) ? current.children : []).toContain(child!.type);
+            current = child!;
+            i++;
+            continue;
+          }
+          if (w.startsWith('"')) {
+            expect(current.text, `${current.type} takes quoted text`).toBeDefined();
+            continue;
+          }
+          const m = /^([\w-]+)=(.*)$/.exec(w);
+          expect(m, `"${w}" in ${pick.write} is a name=value prop`).not.toBeNull();
+          const [, name, raw] = m!;
+          const prop = current.props[name!];
+          expect(prop, `${current.type} has a prop ${name}`).toBeDefined();
+          const value = raw!.replace(/^"|"$/g, "");
+          if (prop!.type === "enum") for (const v of value.split("|")) expect(prop!.values).toContain(v);
+        }
+      });
+    }
+  }
+
+  it("covers every chart kind beyond bar and line, so models know they exist", () => {
+    const chart = byType.get("chart")!;
+    const kinds = (chart.picks ?? []).map((p) => /kind=(\w+)/.exec(p.write)?.[1]);
+    const values = chart.props.kind!.values ?? [];
+    for (const k of values) if (!["bar", "line", "pie"].includes(k)) expect(kinds, `a pick for kind=${k}`).toContain(k);
+  });
+});

@@ -450,6 +450,28 @@ ELEMENTS
     size=<number>  Marker radius in CSS pixels, clamped to 2..18. Supports expressions.
     only inside: map
 
+PICK BY WHAT YOU'RE SHOWING (use these rather than building the same thing from stats, progress bars, text or a plain bar chart)
+- a headline number with how it changed and its recent trend: stat change="+12%" spark=weekly
+- a ranking or a top 10 with long names: chart kind=hbar
+- parts of each total, such as revenue by product per month: chart kind=stacked y=hardware,software
+- an amount over time, such as visitors a week: chart kind=area
+- how one whole splits up, such as sales by region: chart kind=donut
+- stages people drop out of, such as leads to won deals: chart kind=funnel
+- changes adding up to a total, such as revenue minus costs: chart kind=waterfall total="Net income"
+- several KPIs, quotas or budgets against their targets (good=down when under target is good): chart kind=bullet target=goal
+- one score or level against its range, such as a health score or disk used: meter kind=gauge bands="60,85"
+- many rows with several columns each: table items=rows holding table-column field=name
+- 2 to 4 options side by side, such as plans or products: compare items=plans name=name holding compare-row field=price best=low
+- one record's fields, such as an order, a customer or a flight: details "Order #1042" holding detail "Status" value="Shipped"
+- places on a map: map holding pin
+- steps in order with their status, such as a delivery or an onboarding: timeline holding step status=done|current|upcoming
+- cards to page through, such as photos or featured products: carousel bind=page
+- the one takeaway or warning to notice first: callout tone=warn
+- one choice from a long list: select items=teams bind=team
+- choosing a date: date-picker bind=due
+- switching a view between 2 to 6 options: segmented bind=view options="Week,Month,Year"
+- nothing to show yet, or no results: empty "No results"
+
 RULES
 - Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.
 - Use cards to group related content, not around every title or section. Keep page headings outside a decorative hero card.

@@ -40,6 +40,9 @@ export const segmented: ComponentDef = {
     options: { type: "string", required: true, description: "The options, comma-separated, e.g. options=\"Week,Month,Year\". At most 6, one or two words each." },
     on: onProp("after the choice changes"),
   },
+  picks: [
+    { for: "switching a view between 2 to 6 options", write: "segmented bind=view options=\"Week,Month,Year\"" },
+  ],
   example: `state view="Chart"
 segmented bind=view options="Chart,Table"
 text "Showing the {lower(view)}" tone=muted`,

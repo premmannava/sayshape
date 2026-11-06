@@ -194,6 +194,14 @@ export interface WheelContext extends PressContext {
   shiftKey: boolean;
 }
 
+/** One entry in the guide's "pick by what you're showing" list (see ComponentDef.picks). */
+export interface ElementPick {
+  /** The kind of answer, in a few plain words: "a ranking or a top 10 with long names". */
+  for: string;
+  /** How to start writing it: the element's type and the props that make it this pick. */
+  write: string;
+}
+
 export interface ComponentDef {
   type: string;
   category: Category;
@@ -208,6 +216,16 @@ export interface ComponentDef {
   parents?: readonly string[];
   /** A short spec snippet for docs and the model prompt. */
   example?: string;
+  /**
+   * What this element is the right choice for, as short pairs: the kind of
+   * answer ("several KPIs against their targets") and how to start writing it
+   * ("chart kind=bullet target=goal"). The model guide and the MCP quick start
+   * list every pick before a model reads any element's docs, so it chooses
+   * the specific element rather than building a lookalike from stats,
+   * progress bars or text. Only for answers a model might build some other
+   * way; write starts with the element's type and uses real props.
+   */
+  picks?: readonly ElementPick[];
   /**
    * Checks that need several props together (a pie given more than one field),
    * run by the parser after each prop is checked on its own. Gets the props as

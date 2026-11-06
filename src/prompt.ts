@@ -118,6 +118,22 @@ export function elementGuide(registry: Registry, names: readonly string[]): { te
   return { text: wanted.map((c) => componentBlock(c, true)).join("\n\n"), unknown };
 }
 
+/** The heading of the picks section, everywhere it's shown. */
+export const PICKS_HEADING = "PICK BY WHAT YOU'RE SHOWING (use these rather than building the same thing from stats, progress bars, text or a plain bar chart)";
+
+/**
+ * Every exposed element's picks, one line each: what the answer shows, then
+ * how to start writing it. Element names alone don't say that chart has a
+ * bullet kind or that details shows one record, and a model chooses its
+ * elements before it reads their docs.
+ */
+export function pickList(comps: readonly ComponentDef[]): string {
+  // Data first: charts and records are where a lookalike costs the most.
+  const rank = (c: ComponentDef) => (c.category === "data" ? -1 : CATEGORIES.indexOf(c.category));
+  return [...comps].sort((a, b) => rank(a) - rank(b))
+    .flatMap((c) => (c.picks ?? []).map((p) => `- ${p.for}: ${p.write}`)).join("\n");
+}
+
 /** One line per element, grouped by category, so the model sees the whole menu first. */
 export function elementIndex(comps: readonly ComponentDef[]): string {
   return CATEGORIES.map((cat) => [cat, comps.filter((c) => c.category === cat)] as const)
@@ -386,6 +402,8 @@ ${elementIndex(comps)}`);
   // An element's example is shown only if it works with the exposed elements.
   add("elements", `ELEMENTS
 ${comps.map((c) => componentBlock(c, examples && ctx.valid(componentExampleSpec(c, comps)))).join("\n\n")}`);
+  const picks = pickList(comps);
+  if (picks) add("picks", `${PICKS_HEADING}\n${picks}`);
 
   const rules = [
     "- Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.",
@@ -464,6 +482,8 @@ ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty
   add("elements", `ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path a state name or t.field, action an on= value)
 - every element: if=cond
 ${comps.map((c) => `- ${compactLine(c)}${showExample(c) ? `\n    example:\n${indent(c.example!, "      ")}` : ""}`).join("\n")}`);
+  const picks = pickList(comps);
+  if (picks) add("picks", `${PICKS_HEADING}\n${picks}`);
   const rules = [
     "- Use only these elements and props. No colors, sizes or fonts: choose roles with tone=, variant= and style=; for \"red\" or \"big\", use the closest role.",
     `- ${has("card") ? "Cards group related content; leave page titles outside decorative cards. " : ""}One task per screen, short labels, realistic values.`,

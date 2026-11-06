@@ -775,6 +775,9 @@ export const table: ComponentDef = {
     on: onProp("after a row is selected, with bind= already set"),
   },
   children: ["table-column"],
+  picks: [
+    { for: "many rows with several columns each", write: "table items=rows holding table-column field=name" },
+  ],
   example: `state gear=[{id: "tent", name: "Tent", price: 180}, {id: "stove", name: "Stove", price: 45}] picked="" by="name" dir="asc"
 table items=gear key=id bind=picked sort=by direction=dir
   table-column "Item" field=name

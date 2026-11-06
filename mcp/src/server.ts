@@ -38,7 +38,7 @@ import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
-import { elementGuide, elementIndex, guideSections, languageGuide } from "../../src/prompt";
+import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PICKS_HEADING } from "../../src/prompt";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
@@ -99,8 +99,10 @@ function topics(withData: boolean, withMcp = false): Record<string, string> {
 
 /**
  * What every model gets up front, in show_interface's description: the
- * syntax, every element's name, the rules for writing into a chat, and how
- * to ask for more. Simple interfaces need nothing else.
+ * syntax, every element's name, which element suits which kind of answer
+ * (so a model picks a bullet chart or details before it reads any docs), the
+ * rules for writing into a chat, and how to ask for more. Simple interfaces
+ * need nothing else.
  */
 export function quickStart(withData = false, withMcp = false): string {
   return [
@@ -112,6 +114,7 @@ export function quickStart(withData = false, withMcp = false): string {
     "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue')`,
     `ELEMENTS\n${elementIndex(components)}`,
+    `${PICKS_HEADING}\n${pickList(components)}`,
     "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
     `BEFORE YOU USE AN ELEMENT for the first time in a conversation, get its props and an example with sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
@@ -232,7 +235,7 @@ export function createServer(opts: ServerOptions): McpServer {
         "The person installed SayShape so that visual answers appear as interactive SayShape interfaces inside the chat. " +
         "Whenever they ask for a chart, graph, table, dashboard, scorecard, stat card, form, calculator, tracker, checklist or any other visual or interactive answer, " +
         "use show_interface rather than writing HTML, React, SVG or chart code, or making an artifact. Its description has a quick start; " +
-        "call sayshape_docs only for the elements you're about to use." +
+        "choose elements from its PICK BY WHAT YOU'RE SHOWING list, then call sayshape_docs only for the elements you're about to use." +
         (data
           ? " A database is connected: answer questions about it with describe_data and query_data, then show the result with show_interface, " +
             "passing the dataset in its data argument instead of typing the numbers."

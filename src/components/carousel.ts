@@ -43,6 +43,9 @@ export const carousel: ComponentDef = {
     on: onProp("after the page changes"),
   },
   children: "any",
+  picks: [
+    { for: "cards to page through, such as photos or featured products", write: "carousel bind=page" },
+  ],
   example: `state page=0
 carousel bind=page
   card

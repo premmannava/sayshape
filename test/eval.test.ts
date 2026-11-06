@@ -24,9 +24,9 @@ function fakeModel(byRequest: (request: string, attempt: number) => string) {
 const config = { url: "http://model.test/v1", model: "fake" };
 
 describe("evaluation set", () => {
-  it("has 42 requests with unique ids, expecting only elements that exist", () => {
-    expect(cases).toHaveLength(42);
-    expect(new Set(cases.map((c) => c.id)).size).toBe(42);
+  it("has 52 requests with unique ids, expecting only elements that exist", () => {
+    expect(cases).toHaveLength(52);
+    expect(new Set(cases.map((c) => c.id)).size).toBe(52);
     for (const c of cases) for (const e of (c.expect ?? []).flat()) expect(registry.has(e), `${c.id}: ${e}`).toBe(true);
   });
 });
@@ -221,6 +221,26 @@ card
 `,
     ],
   };
+
+  answers["choose-targets"] = [
+    `state kpis=[{name: "Revenue", actual: 1240000, goal: 1150000}, {name: "New customers", actual: 182, goal: 200}]
+card
+  chart "Q3 goals" kind=bullet items=kpis x=name y=actual target=goal
+`,
+    `state kpis=[{name: "Revenue", actual: 1240000, goal: 1150000}, {name: "New customers", actual: 182, goal: 200}]
+card
+  each items=kpis as=k
+    progress value={k.actual} max={k.goal} label="{k.name}"
+`,
+  ];
+  answers["choose-funnel"] = [
+    `state steps=[{s: "Visited", n: 12400}, {s: "Started", n: 3100}, {s: "Paid", n: 640}]
+chart "Signup" kind=funnel items=steps x=s y=n
+`,
+    `state steps=[{s: "Visited", n: 12400}, {s: "Started", n: 3100}, {s: "Paid", n: 640}]
+chart "Signup" items=steps x=s y=n
+`,
+  ];
 
   for (const [id, [good, bad]] of Object.entries(answers)) {
     it(`${id}: passes a working answer and catches a broken one`, async () => {
