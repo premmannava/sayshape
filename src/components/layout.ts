@@ -85,7 +85,7 @@ type CardVariant = (typeof CARD_VARIANTS)[number];
 /** How strongly a card's variant tints it toward the accent, light and dark: its wash, and for a hero the glow in its top corner. */
 function cardTint(variant: CardVariant, dark: boolean): { wash: number; glow: number } | null {
   if (variant === "hero") return dark ? { wash: 0.13, glow: 0.2 } : { wash: 0.075, glow: 0.12 };
-  if (variant === "tinted") return dark ? { wash: 0.09, glow: 0 } : { wash: 0.055, glow: 0 };
+  if (variant === "tinted") return dark ? { wash: 0.07, glow: 0 } : { wash: 0.075, glow: 0 };
   return null;
 }
 
@@ -123,7 +123,10 @@ card on=emit:open_order
   },
   surface(box, ctx) {
     const c = ctx.theme.colors;
-    const tint = cardTint(ctx.props(box.node).oneOf("variant", CARD_VARIANTS, "raised"), isDarkTheme(ctx.theme));
+    const variant = ctx.props(box.node).oneOf("variant", CARD_VARIANTS, "raised");
+    // An outline card has no fill: what's in it sits on the page.
+    if (variant === "outline") return c.surface;
+    const tint = cardTint(variant, isDarkTheme(ctx.theme));
     if (!tint) return undefined;
     // Children sit on the middle of the wash.
     return mixColors(c.raised, mixColors(c.accent, c.accent2, 0.5) ?? c.accent, tint.wash) ?? undefined;
@@ -194,8 +197,9 @@ card on=emit:open_order
       g.lineWidth = 1;
       g.stroke();
       g.restore();
-      // The highlight replaced the path; a hero's border goes round the card.
-      if (variant === "hero") ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
+      // The highlight replaced the path: the border goes round the card again, not along the
+      // highlight (which drew a short dark line across the top, with gaps at the corners).
+      ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
     }
     if (variant !== "tinted") {
       g.strokeStyle = variant === "hero" ? c.accent : c.line;

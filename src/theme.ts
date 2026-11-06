@@ -232,6 +232,8 @@ export const SERIES_COUNT = 6;
 export function sliceColors(theme: Theme): string[] {
   const [accent, steel, sage, stone, blue, moss] = seriesColors(theme);
   const { raised, ink } = theme.colors;
+  // A theme with an accent gradient (Studio) is a vivid one: its slices are its series colors.
+  if (theme.colors.accent2 !== theme.colors.accent) return seriesColors(theme);
   if (isDarkTheme(theme)) {
     return [
       mixColors(raised, accent!, 0.77) ?? accent!,
