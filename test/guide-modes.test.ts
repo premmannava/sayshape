@@ -4,7 +4,7 @@ import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { parse } from "../src/parser";
 import { ALWAYS_EXPOSED, PROFILES, resolveProfile } from "../src/profiles";
-import { COMPACT_EXAMPLE_ORDER, describeGuide, guideSections, languageGuide, WORKED_EXAMPLES, type GuideMode } from "../src/prompt";
+import { COMPACT_EXAMPLE_ORDER, describeGuide, guideSections, languageGuide, pickList, WORKED_EXAMPLES, type GuideMode } from "../src/prompt";
 import { Registry } from "../src/registry";
 
 const all = new Registry([...coreComponents, ...mapComponents]);
@@ -51,7 +51,7 @@ describe("full guide", () => {
 
   it("joins its sections with blank lines, in a fixed order", () => {
     const sections = guideSections(all, playground);
-    expect(sections.map((s) => s.name)).toEqual(["intro", "format", "expressions", "actions", "data", "common-props", "index", "elements", "rules", "example"]);
+    expect(sections.map((s) => s.name)).toEqual(["intro", "format", "expressions", "actions", "data", "common-props", "index", "elements", "picks", "rules", "example"]);
     expect(sections.map((s) => s.text).join("\n\n")).toBe(languageGuide(all, playground));
   });
 });
@@ -197,5 +197,27 @@ describe("describeGuide", () => {
     expect(d.chars).toBe(languageGuide(all, { mode: "compact", profile: "forms" }).length);
     expect(d.estimatedTokens).toBe(Math.round(d.chars / 4));
     expect(describeGuide(all).profile).toBe("all");
+  });
+});
+
+describe("picks", () => {
+  it("tells models which element suits which answer, in both modes, before any docs are read", () => {
+    for (const mode of ["full", "compact"] as const) {
+      const guide = languageGuide(all, { mode });
+      expect(guide).toContain("PICK BY WHAT YOU'RE SHOWING");
+      expect(guide).toContain("- several KPIs, quotas or budgets against their targets (good=down when under target is good): chart kind=bullet target=goal");
+      expect(guide).toContain("- one record's fields, such as an order, a customer or a flight: details");
+    }
+  });
+
+  it("lists data picks first", () => {
+    const list = pickList(all.all());
+    expect(list.split("\n")[0]).toMatch(/: (stat|chart|meter|table|compare|details|map) /);
+  });
+
+  it("lists only the picks of elements a profile exposes", () => {
+    const forms = languageGuide(all, { profile: "forms" });
+    expect(forms).not.toContain("kind=bullet");
+    expect(forms).toContain("choosing a date: date-picker");
   });
 });

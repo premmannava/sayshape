@@ -210,6 +210,9 @@ export const map: ComponentDef = {
     }
     return [];
   },
+  picks: [
+    { for: "places on a map", write: "map holding pin" },
+  ],
   example: `state selected=""
 map bind=selected fit=pins cluster=true controls=true
   pin "Phoenix" lat=33.4484 lon=-112.074 detail="Status: delayed | Contract: 120000" tone=bad size=8`,

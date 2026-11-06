@@ -56,6 +56,9 @@ export const empty: ComponentDef = {
     action: { type: "string", description: "Label for a button under the message." },
     on: onProp("when the button is pressed"),
   },
+  picks: [
+    { for: "nothing to show yet, or no results", write: "empty \"No results\"" },
+  ],
   example: `empty "No results" detail="Try a wider price range." action="Clear filters" on=emit:clear_filters`,
   layout(box, ctx) {
     const p = ctx.props(box.node);

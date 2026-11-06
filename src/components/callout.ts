@@ -123,6 +123,9 @@ export const callout: ComponentDef = {
     },
     icon: { type: "boolean", default: false, description: "Show a small icon matching the tone: i, a tick, ! or ×." },
   },
+  picks: [
+    { for: "the one takeaway or warning to notice first", write: "callout tone=warn" },
+  ],
   example: `callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true`,
   layout(box, ctx) {
     const d = measure(box, ctx);

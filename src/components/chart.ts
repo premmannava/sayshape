@@ -751,6 +751,15 @@ export const chart: ComponentDef = {
     total: { type: "string", description: "Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total=\"Net income\"." },
     format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K) or money ($37K)." },
   },
+  picks: [
+    { for: "a ranking or a top 10 with long names", write: "chart kind=hbar" },
+    { for: "parts of each total, such as revenue by product per month", write: "chart kind=stacked y=hardware,software" },
+    { for: "an amount over time, such as visitors a week", write: "chart kind=area" },
+    { for: "how one whole splits up, such as sales by region", write: "chart kind=donut" },
+    { for: "stages people drop out of, such as leads to won deals", write: "chart kind=funnel" },
+    { for: "changes adding up to a total, such as revenue minus costs", write: "chart kind=waterfall total=\"Net income\"" },
+    { for: "several KPIs, quotas or budgets against their targets (good=down when under target is good)", write: "chart kind=bullet target=goal" },
+  ],
   example: `state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
 chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year labels="This year,Last year" format=money`,
   check,

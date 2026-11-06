@@ -245,6 +245,9 @@ export const datePicker: ComponentDef = {
     disabled: { type: "condition", description: "Expression; when true the field is greyed out and doesn't open." },
     on: onProp("after the date changes, with bind= already set"),
   },
+  picks: [
+    { for: "choosing a date", write: "date-picker bind=due" },
+  ],
   example: `state due=""
 date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
   minWidth: () => 120,

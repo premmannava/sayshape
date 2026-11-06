@@ -2,13 +2,15 @@
  * The evaluation set: requests a model should be able to turn into SayShape.
  * `expect` lists elements a good answer uses; a list inside it means any one
  * of them will do. `checks` render the answer and use it (see checks.ts).
+ * Choosing cases describe the data without naming the element, to check a
+ * model picks the specific one (a bullet chart, details) over a lookalike.
  * Traps check that models stay within the language.
  */
-import { acts, allDoneShowsMore, calls, nested, pressChanges, removes, repeats, shows, typingChanges, typingFilters, type Check } from "./checks";
+import { acts, allDoneShowsMore, calls, nested, pressChanges, removes, repeats, shows, typingChanges, typingFilters, writes, type Check } from "./checks";
 
 export interface EvalCase {
   id: string;
-  category: "form" | "compare" | "dashboard" | "shop" | "navigation" | "content" | "interactive" | "data" | "hard" | "trap";
+  category: "form" | "compare" | "dashboard" | "shop" | "navigation" | "content" | "interactive" | "data" | "choose" | "hard" | "trap";
   request: string;
   expect?: Array<string | string[]>;
   /** What the screen must do when used, checked on the final spec. */
@@ -27,12 +29,12 @@ export const cases: EvalCase[] = [
   { id: "form-checklist", category: "form", request: "A packing checklist for a day hike with six items and a bar showing how many are packed.", expect: ["check", "progress"] },
 
   // Comparisons
-  { id: "compare-laptops", category: "compare", request: "Compare two laptops side by side: price, weight and battery life, with a button to choose each.", expect: [["row", "grid"], "button"] },
+  { id: "compare-laptops", category: "compare", request: "Compare two laptops side by side: price, weight and battery life, with a button to choose each.", expect: [["row", "grid", "compare"], "button"] },
   { id: "compare-plans", category: "compare", request: "Three pricing plans (Free, Pro, Team) with their main features and a Choose button for each.", expect: ["card", "button"] },
 
   // Dashboards
   { id: "dash-sales", category: "dashboard", request: "A sales dashboard for today: revenue, orders, average order value and conversion rate.", expect: ["stat"] },
-  { id: "dash-running", category: "dashboard", request: "My running this week: total distance, longest run, and progress toward a 40 km goal.", expect: ["stat", "progress"] },
+  { id: "dash-running", category: "dashboard", request: "My running this week: total distance, longest run, and progress toward a 40 km goal.", expect: ["stat", ["progress", "meter"]] },
   { id: "dash-habits", category: "dashboard", request: "A water tracker: a button to add a glass, and progress toward 8 glasses a day.", expect: ["button", "progress"] },
 
   // Shopping
@@ -53,7 +55,7 @@ export const cases: EvalCase[] = [
   { id: "content-empty", category: "content", request: "What to show when a search for hotels finds nothing.", expect: ["empty"] },
   { id: "content-loading", category: "content", request: "A loading placeholder for a list of news articles.", expect: ["skeleton"] },
   { id: "content-install", category: "content", request: "Show how to install our command line tool with npm.", expect: ["code"] },
-  { id: "content-status", category: "content", request: "Order status for a package: ordered, shipped, out for delivery (current), delivered.", expect: [["list", "text", "badge"]] },
+  { id: "content-status", category: "content", request: "Order status for a package: ordered, shipped, out for delivery (current), delivered.", expect: [["timeline", "list", "text", "badge"]] },
 
   // Interactive
   { id: "int-quiz", category: "interactive", request: "A quiz question about which planet is largest, with four answers, that tells me if I'm right.", expect: [["radio", "button"]] },
@@ -70,6 +72,18 @@ export const cases: EvalCase[] = [
   { id: "data-kanban", category: "data", request: "A kanban board with three columns, To do, Doing and Done, each holding 2 or 3 task cards.", expect: ["each"], checks: [repeats(6)] },
   { id: "data-contacts", category: "data", request: "A contact list of 6 people with name and phone, where I can remove a contact or add a new one.", expect: ["each", "button", "input"], checks: [repeats(6), acts("add"), removes(/remove|delete/i)] },
   { id: "data-search", category: "data", request: "A list of 8 hiking trails near Phoenix with a search box that filters them as I type.", expect: ["each", "input"], checks: [repeats(8), typingFilters] },
+
+  // Choosing: the data is described, the element isn't named
+  { id: "choose-targets", category: "choose", request: "How are we doing against our Q3 goals? Revenue $1.24M of $1.15M, new customers 182 of 200, expansion $310K of $400K, pipeline $2.1M of $2M.", expect: ["chart"], checks: [writes(/kind=bullet/, "a bullet chart")] },
+  { id: "choose-funnel", category: "choose", request: "Our signup flow last month: 12,400 visited, 3,100 started signing up, 1,900 verified their email and 640 paid. Where do we lose people?", expect: ["chart"], checks: [writes(/kind=funnel/, "a funnel chart")] },
+  { id: "choose-bridge", category: "choose", request: "Walk me from revenue to net income: revenue $480K, cost of goods -$190K, salaries -$140K, other income $22K.", expect: ["chart"], checks: [writes(/kind=waterfall/, "a waterfall chart")] },
+  { id: "choose-mix", category: "choose", request: "Monthly revenue from January to April, split into hardware, software and services, so I can see the total and the mix.", expect: ["chart"], checks: [writes(/kind=stacked/, "a stacked chart")] },
+  { id: "choose-ranking", category: "choose", request: "Our top 8 customers by annual spend, with their full company names.", expect: ["chart"], checks: [writes(/kind=hbar/, "a horizontal bar chart")] },
+  { id: "choose-share", category: "choose", request: "How our sales split across regions: West $820K, East $610K, Central $455K, South $380K.", expect: ["chart"], checks: [writes(/kind=(donut|pie)/, "a pie or donut chart")] },
+  { id: "choose-score", category: "choose", request: "Our customer health score is 72 out of 100, where under 60 is at risk and 85 or more is healthy.", expect: ["meter"] },
+  { id: "choose-record", category: "choose", request: "Order #1042: placed Oct 3, shipped by UPS, in transit, total $186.40, going to Phoenix, AZ.", expect: ["details"] },
+  { id: "choose-plans", category: "choose", request: "Help me choose between the Basic ($9 a month, 50 GB), Pro ($19, 500 GB) and Team ($49, 2 TB) plans.", expect: ["compare"] },
+  { id: "choose-delivery", category: "choose", request: "Where's my package? Ordered Oct 1, shipped Oct 2, out for delivery now, expected Oct 4.", expect: ["timeline"] },
 
   // Hard: several ideas at once, from testing with a 14B model
   { id: "hard-bill", category: "hard", request: "Split a $186 dinner bill: tip from 0 to 25% with a slider, 2 to 8 people with a stepper, and show each person's share.", expect: ["slider", "stepper"], checks: [pressChanges("stepper")] },

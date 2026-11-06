@@ -67,6 +67,9 @@ export const details: ComponentDef = {
     subtitle: { type: "string", description: "A muted line under the title, e.g. the company and city." },
   },
   children: ["detail"],
+  picks: [
+    { for: "one record's fields, such as an order, a customer or a flight", write: "details \"Order #1042\" holding detail \"Status\" value=\"Shipped\"" },
+  ],
   example: `state renewal="Jan 14, 2027"
 details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
   detail "Plan" value="Enterprise · 240 seats"

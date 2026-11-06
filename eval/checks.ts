@@ -20,6 +20,12 @@ export const calls = (fn: string): Check => ({
   test: (spec) => new RegExp(`\\b${fn}\\(`).test(spec),
 });
 
+/** The spec has something written a certain way, like kind=bullet: the element was chosen for what the request shows, without being named. */
+export const writes = (pattern: RegExp, what: string): Check => ({
+  label: `uses ${what}`,
+  test: (spec) => pattern.test(spec),
+});
+
 /** Some text on screen matches, like a computed figure the request can be checked against. */
 export const shows = (pattern: RegExp, what: string): Check => ({
   label: `shows ${what}`,

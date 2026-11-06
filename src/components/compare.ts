@@ -59,6 +59,9 @@ export const compare: ComponentDef = {
     pick: { type: "string", description: "The name of the option to recommend: its column is highlighted and marked Recommended." },
   },
   children: ["compare-row"],
+  picks: [
+    { for: "2 to 4 options side by side, such as plans or products", write: "compare items=plans name=name holding compare-row field=price best=low" },
+  ],
   example: `state plans=[{name: "Basic", price: 9, storage: 50, support: "Email"}, {name: "Pro", price: 19, storage: 500, support: "Chat"}, {name: "Team", price: 49, storage: 2000, support: "Phone"}]
 compare items=plans pick="Pro"
   compare-row "Price a month" field=price format=money best=low
