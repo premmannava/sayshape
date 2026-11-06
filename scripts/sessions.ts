@@ -35,10 +35,14 @@ const list = (name: string) => arg(name)?.split(",").map((s) => s.trim()).filter
 async function rescore(dirs: string[]): Promise<void> {
   type Saved = { url: string; guide: string; cache: true | "1h" | null; prices: unknown; models: string[]; results: StepResult[] };
   const all: StepResult[] = [];
+  const prices: Record<string, unknown> = {};
+  const models: string[] = [];
   let first: Saved | undefined;
   for (const dir of dirs) {
     const saved = JSON.parse(readFileSync(resolve(dir, "results.json"), "utf8")) as Saved;
     first ??= saved;
+    Object.assign(prices, saved.prices);
+    models.push(...saved.models);
     const results = await rescoreSessions(saved.results, sessions);
     all.push(...results);
     const meta = { date: new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC (rescored)", url: saved.url, guide: saved.guide, ...(saved.cache ? { cache: saved.cache } : {}) };
@@ -51,7 +55,7 @@ async function rescore(dirs: string[]): Promise<void> {
     mkdirSync(out, { recursive: true });
     const md = sessionReport(all, { date: new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC (combined)", url: first.url, guide: first.guide, ...(first.cache ? { cache: first.cache } : {}) });
     writeFileSync(resolve(out, "report.md"), md);
-    writeFileSync(resolve(out, "results.json"), JSON.stringify({ ...first, summary: summarizeSessions(all), results: all }, null, 2));
+    writeFileSync(resolve(out, "results.json"), JSON.stringify({ ...first, models: [...new Set(models)], prices, summary: summarizeSessions(all), results: all }, null, 2));
     console.log("\n" + md.split("\n## Every step")[0]);
     console.log(`Combined report: ${out}/report.md`);
   }
