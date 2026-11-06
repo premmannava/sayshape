@@ -110,12 +110,15 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
 
     const entry: Entry = { el, role: node.role, node, attrs: new Set() };
     el.addEventListener("focus", () => { if (!moving) events?.focus(entry.node.key); });
+    // Clicks and keys bubble up through the nodes a node sits in: each
+    // element answers only for itself, or a key would be handled twice.
     el.addEventListener("click", (e) => {
+      if (e.target !== el) return;
       // The engine decides what a press does; a native checkbox mustn't toggle itself.
       e.preventDefault();
       events?.activate(entry.node.key);
     });
-    el.addEventListener("keydown", (e) => events?.key(e));
+    el.addEventListener("keydown", (e) => { if (e.target === el) events?.key(e); });
     el.addEventListener("blur", (e) => {
       const to = e.relatedTarget;
       if (to !== canvas && !owns(to)) events?.blur();

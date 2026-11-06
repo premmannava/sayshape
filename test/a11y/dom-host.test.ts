@@ -203,6 +203,15 @@ describe("the browser accessibility host", () => {
       expect(events.log).toEqual(["focus next", "activate next", "key Enter"]);
     });
 
+    it("reports a key or a click on a node inside another once, for that node only", () => {
+      host.update!(root([n("box", { role: "group", name: "Box" }, [n("inner", { role: "button", name: "Inner", focusable: true })])]), false);
+      const inner = mirror().children[0]!.children[0] as HTMLElement;
+      inner.focus();
+      inner.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      inner.click();
+      expect(events.log).toEqual(["focus inner", "key ArrowDown", "activate inner"]);
+    });
+
     it("turns a screen reader adjusting a range input into one step, keeping the engine's value", () => {
       const slider = el(2) as HTMLInputElement;
       slider.value = "180";
