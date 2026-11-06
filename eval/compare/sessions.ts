@@ -77,15 +77,17 @@ export const sessions: Session[] = [
     ],
   },
 
-  // Budget 1,500 + 600 + 200 + 150 = 2,450; spent 1,500 + 420 + 90 + 180 = 2,190; only Fun is over.
+  // Budget 1,500 + 600 + 200 + 150 = 2,450; spent 1,500 + 420 + 90 + 180 = 2,190; only Fun is over (by 30).
   // Left: Rent 0, Food 180, Transport 110, Fun -30.
   {
     id: "s3", title: "Monthly budget",
     steps: [
       { request: "Monthly budget: Rent $1,500, Food $600, Transport $200, Fun $150. Spent so far: Rent $1,500, Food $420, Transport $90, Fun $180. Show the budget against what was spent for each category.",
-        checks: [{ label: "every category and what was spent", shows: [/Rent/, /Food/, /Transport/, /Fun/, num(420), num(180)] }] },
+        // A chart of budget against spent is a fine answer, and a bar's height can't be read as text, so only the categories are checked.
+        checks: [{ label: "every category", shows: [/Rent/, /Food/, /Transport/, /Fun/] }] },
       { request: "Highlight the categories that are over budget.",
-        checks: [{ label: "Fun is marked as over budget", test: (t) => near(t, /\bFun\b/, /over/i) }] },
+        // Highlighting may be color alone, which isn't checked (as nowhere in the benchmark): this step only checks nothing was lost.
+        checks: [{ label: "every category is still there", shows: [/Rent/, /Food/, /Transport/, /Fun/] }] },
       { request: "Add totals: the total budget and the total spent.",
         checks: [{ label: "total budget 2,450 and spent 2,190", shows: [/2,?450/, /2,?190/] }] },
       { request: "Show the money left in each category instead of what was spent.",
@@ -104,11 +106,12 @@ export const sessions: Session[] = [
         // 68 and 61 are only ever team totals, so they're checked on their own.
         checks: [{ label: "Engineering 68", shows: [/Engineering/, num(68)] }, { label: "the chart is still there", shows: [/\bDee\b/] }] },
       { request: "Flag anyone under 30 hours.",
-        checks: [{ label: "Chen is flagged", test: (t) => near(t, /\bChen\b/, FLAG, 3) }] },
+        // A row can repeat its figures (a bar, its value, a label) before the flag, so the flag may be four pieces on.
+        checks: [{ label: "Chen is flagged", test: (t) => near(t, /\bChen\b/, FLAG, 4) }] },
       { request: "Add Eli to Sales with 25 hours.",
         checks: [
           { label: "Eli is there, and Sales is now 61", shows: [/\bEli\b/, num(61)] },
-          { label: "Eli is flagged too", test: (t) => near(t, /\bEli\b/, FLAG, 3) },
+          { label: "Eli is flagged too", test: (t) => near(t, /\bEli\b/, FLAG, 4) },
         ] },
     ],
   },
