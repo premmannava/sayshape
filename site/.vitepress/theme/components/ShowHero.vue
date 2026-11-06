@@ -134,7 +134,8 @@ onBeforeUnmount(() => { run.cancelled = true; });
       <div class="sh-bar">
         <span class="sh-dots" aria-hidden="true"><i></i><i></i><i></i></span>
         <span class="sh-title">Your AI agent</span>
-        <span class="sh-meta" aria-live="off">{{ phase === "asking" ? "" : `${lines} lines written` }}</span>
+        <span class="sh-demo">Demo · prerecorded answers</span>
+        <span class="sh-meta" aria-live="off">{{ phase === "asking" ? "" : `${lines} lines` }}</span>
       </div>
 
       <div class="sh-chat">
@@ -153,7 +154,7 @@ onBeforeUnmount(() => { run.cancelled = true; });
         </div>
 
         <transition name="sh-reply">
-          <p v-if="reply" class="sh-reply" role="status">{{ reply }}</p>
+          <p v-if="reply" class="sh-reply" role="status"><span class="sh-example">Example</span> {{ reply }}</p>
         </transition>
       </div>
     </div>
@@ -174,6 +175,8 @@ onBeforeUnmount(() => { run.cancelled = true; });
 .sh-dots { display: inline-flex; gap: 6px }
 .sh-dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--vp-c-divider) }
 .sh-title { font: 500 13px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
+.sh-demo { padding: 2px 8px; border: 1px solid var(--vp-c-divider); border-radius: 999px; font: 11px var(--vp-font-family-mono); color: var(--vp-c-text-3); white-space: nowrap }
+.sh-example { margin-right: 6px; padding: 1px 7px; border-radius: 999px; background: var(--vp-c-bg-alt); font: 11px var(--vp-font-family-mono); color: var(--vp-c-text-3); vertical-align: 1px }
 .sh-meta { margin-left: auto; font: 12px var(--vp-font-family-mono); color: var(--vp-c-text-3) }
 
 .sh-chat { display: flex; flex-direction: column; gap: 14px; min-height: 500px; padding: 20px; background: var(--vp-c-bg-alt) }
@@ -208,6 +211,7 @@ onBeforeUnmount(() => { run.cancelled = true; });
   .sh-chat { min-height: 520px; padding: 14px }
   .sh-scenes { grid-template-columns: minmax(0, 1fr) }
   .sh-reply { margin-left: 0 }
+  .sh-title { display: none }
   .sh-window { box-shadow: 6px 6px 0 var(--ss-shadow) }
 }
 @media (prefers-reduced-motion: reduce) {
