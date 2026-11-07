@@ -394,12 +394,12 @@ describe("the drawing check, for pressable shapes, phones and contrast", () => {
 
   it("finds a label too small to read on a phone", () => {
     expect(review(`scene "A" w=1000 h=400\n  label "Throughput" x=100 y=100 size=14 fill=ink`))
-      .toEqual([expect.stringMatching(/^2: Drawing: the label "Throughput" is only 4.6 px tall on a phone. Make its size at least 25/)]);
+      .toEqual([expect.stringMatching(/^2: Drawing: the label "Throughput" is only 4.6 px tall on a phone. Make every label's size at least 25 at w=1000/)]);
   });
 
   it("finds labels too close in color to what's under them, saying which mode", () => {
     expect(review(`scene "A" w=300 h=100\n  rect x=0 y=0 w=300 h=100 fill="#FFFFFF"\n  label "Faint" x=20 y=50 size=20 fill="#DDDDDD"`))
-      .toEqual([expect.stringMatching(/^3: Drawing: the label "Faint" is hard to read: its color is too close/)]);
+      .toEqual([expect.stringMatching(/^3: Drawing: the label "Faint" is hard to read: the color is too close/)]);
     // ink on a fixed dark box: fine in light mode (dark ink), unreadable in dark mode (light ink on... light? no: dark box).
     expect(review(`scene "A" w=300 h=100\n  rect x=0 y=0 w=300 h=100 fill="#111827"\n  label "Status" x=20 y=50 size=20 fill=ink`))
       .toEqual([expect.stringMatching(/^3: Drawing: the label "Status" is hard to read in light mode/)]);
@@ -630,5 +630,83 @@ scene "Moving" w=400 h=100 duration=2 loop=false
     const mover = all.find((n) => n.name === "Mover")!;
     expect(mover.rect.x).toBeGreaterThan(box.x + (200 * box.w) / 400);
     ui.destroy();
+  });
+});
+
+/** Found by running real models' scenes through the drawing check (docs/plans/interactive-scenes-validation.md). */
+describe("drawing check: what real answers showed", () => {
+  const review = (spec: string) => reviewScenes(parse(spec, on)).map((d) => `${d.line}: ${d.message}`);
+
+  it("says small phone text once, so it can't crowd out the problems that matter more", () => {
+    const labels = Array.from({ length: 12 }, (_, i) => `  label "Unit ${i}" x={${20 + (i % 6) * 95}} y={${40 + Math.floor(i / 6) * 120}} size=12 fill=ink`).join("\n");
+    const spec = `scene "A" w=600 h=300 bg=surface\n${labels}\n  label "Faint" x=300 y=270 size=20 fill="#EEEEEE"`;
+    const got = review(spec);
+    expect(got.filter((d) => /phone/.test(d))).toEqual([expect.stringMatching(/12 labels are too small to read on a phone, the smallest "Unit 0" only 6\.6 px tall. Make every label's size at least 15 at w=600/)]);
+    // The contrast problem used to be cut off behind twelve phone warnings.
+    expect(got).toEqual(expect.arrayContaining([expect.stringMatching(/"Faint" is hard to read in light mode/)]));
+    expect(got.at(-1)).toMatch(/phone/);
+  });
+
+  it("says one contrast problem once when many labels share it", () => {
+    const labels = Array.from({ length: 10 }, (_, i) => `  label "Unit ${i}" x={${20 + (i % 5) * 110}} y={${40 + Math.floor(i / 5) * 120}} size=18 fill=ink`).join("\n");
+    const got = review(`scene "A" w=600 h=300 bg="#FFFFFF"\n${labels}`);
+    expect(got).toEqual([expect.stringMatching(/^2: Drawing: 10 labels, like "Unit 0", are hard to read in dark mode/)]);
+  });
+
+  it("doesn't suggest a smaller w, which makes the scene huge on a wide screen", () => {
+    expect(review(`scene "A" w=900 h=300\n  label "Pump" x=100 y=100 size=12 fill=ink`).join("\n")).not.toMatch(/w smaller/);
+  });
+
+  it("warns when formulas use t but the duration is 0, so the scene never moves", () => {
+    expect(review(`scene "Belt" w=600 h=200\n  rect x={(t * 80) % 600} y=80 w=40 h=40 fill=accent`))
+      .toEqual([expect.stringMatching(/^1: Drawing: this scene's formulas use t, but its duration is 0, so it never moves/)]);
+    // Not when it has a duration, nor when t is an each's own name or text.
+    expect(review(`scene "Belt" w=600 h=200 duration=4\n  rect x={(t * 80) % 600} y=80 w=40 h=40 fill=accent`)).toEqual([]);
+    expect(review(`state rows=[1, 2]\nscene "List" w=600 h=200\n  each items=rows as=t\n    rect x={t * 100} y=80 w=40 h=40 fill=accent`)).toEqual([]);
+    expect(review(`scene "Sign" w=600 h=200\n  label "{'t'} at {round(2)}" x=40 y=100 size=20 fill=ink`)).toEqual([]);
+  });
+
+  it("tells a model that scene math works only inside a scene", () => {
+    const d = parse(`state day=3\nderive u={clamp(day / 12, 0, 1)}\ntext "{u}"`, on).diagnostics.map((x) => x.message).join("\n");
+    expect(d).toMatch(/Unknown function "clamp". Use min\(max\(x, low\), high\) here \(clamp works only on lines inside a scene\)/);
+  });
+
+  // A real answer wrote on="set:sel:{pick(steps, i).id}" on a group inside a scene: the guide
+  // says scene math works on lines inside a scene, but on= ran without it, so pressing did nothing.
+  const STEPS = `state sel='cap' steps=[{id: 'wash', name: 'Wash'}, {id: 'fill', name: 'Fill'}, {id: 'cap', name: 'Cap'}]
+scene "Line" w=400 h=200
+  each items={range(3)} as=i
+    group x={60 + i * 140} y=100 on="set:sel:{pick(steps, i).id}" selected={sel == pick(steps, i).id} tip="{pick(steps, i).name}"
+      rect x=-40 y=-40 w=80 h=80 rx=8 fill=raised
+      label "{pick(steps, i).name}" x=0 y=0 size=16 align=center fill=ink
+text "Selected: {find(steps, 'id', sel).name}"`;
+
+  it("lets a shape's on= call scene math, as its other props can", () => {
+    expect(parse(STEPS, on).diagnostics).toEqual([]);
+    const ui = render(STEPS, { components: ON });
+    const { at } = sceneAt(ui, 400, 200);
+    ui.click(...at(60, 100));
+    expect(ui.state.sel).toBe("wash");
+    ui.click(...at(200, 100));
+    expect(ui.state.sel).toBe("fill");
+    expect(ui.text()).toContain("Selected: Fill");
+    expect(ui.warnings).toEqual([]);
+    ui.destroy();
+  });
+
+  it("runs scene math in every action that reads an expression", () => {
+    const spec = STEPS.replace(`on="set:sel:{pick(steps, i).id}"`, `on="set:sel:{pick(steps, i).id};notify:'{lerp(0, 10, 0.5)} {pick(steps, i).name}'"`);
+    expect(parse(spec, on).diagnostics).toEqual([]);
+    const ui = render(spec, { components: ON });
+    const { at } = sceneAt(ui, 400, 200);
+    ui.click(...at(340, 100));
+    expect(ui.state.sel).toBe("cap");
+    expect(ui.announcements.map((a) => a.text).join(" ")).toContain("5 Cap");
+    ui.destroy();
+  });
+
+  it("still keeps scene math out of on= outside a scene", () => {
+    const d = parse(`state sel=''\nbutton "Go" on="set:sel:{clamp(3, 0, 1)}"`, on).diagnostics.map((x) => x.message).join("\n");
+    expect(d).toMatch(/Unknown function "clamp"/);
   });
 });

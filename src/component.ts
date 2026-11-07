@@ -149,9 +149,10 @@ export interface PressContext {
    * Run an action string such as "inc:count;emit:saved". An element that
    * draws its own copies (a scene's each) passes the scope the pressed copy
    * was drawn with, so the actions see its item (state is read after it),
-   * and where its names live in state, so writes reach the item (m.on).
+   * and where its names live in state, so writes reach the item (m.on),
+   * and the extra functions its lines may call (a scene's).
    */
-  run(actions: string, own?: { scope: Scope; locate?: Locate }): void;
+  run(actions: string, own?: { scope: Scope; locate?: Locate; functions?: ExpressionFunctions }): void;
   /** Open this element's popup (its ComponentDef.popup), with its starting transient state. */
   openPopup(state: PopupState): void;
   /** Whether this element's popup is open. */

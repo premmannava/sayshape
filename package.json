@@ -56,7 +56,9 @@
     "site:dev": "npm run site:docs && npm --prefix site run dev",
     "site:build": "npm run site:docs && npm --prefix site run build",
     "site:preview": "npm --prefix site run preview",
-    "site:check": "node scripts/check-site.mjs"
+    "site:check": "node scripts/check-site.mjs",
+    "scene-eval": "vite-node scripts/scene-eval.ts --",
+    "bench:scene-browser": "node bench/browser/run.mjs"
   },
   "devDependencies": {
     "@a2ui/lit": "0.15.0",

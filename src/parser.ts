@@ -314,7 +314,7 @@ function findCycles(defs: readonly DerivedDef[], diags: Diagnostic[]): Set<strin
 const BARE_NAME = /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)*$/;
 
 /** Every expression a line reads, for checking which names it uses. */
-function expressionsOf(text: string | undefined, props: Record<string, string>, defs: Record<string, PropDef>): string[] {
+function expressionsOf(text: string | undefined, props: Record<string, string>, defs: Record<string, PropDef>, fns?: ExpressionFunctions): string[] {
   const out: string[] = [];
   const template = (s: string) => { for (const p of splitTemplate(s)) if ("expr" in p) out.push(p.expr); };
   if (text !== undefined) template(text);
@@ -323,7 +323,7 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
     if (!def) continue;
     const whole = wholeExpression(raw);
     if (def.type === "action") {
-      const r = parseActions(raw);
+      const r = parseActions(raw, fns);
       if ("actions" in r) out.push(...actionExpressions(r.actions));
     } else if (def.type === "state") {
       if (PATH.test(raw)) out.push(raw);
@@ -416,7 +416,7 @@ function checkProp(name: string, raw: string, def: PropDef, line: number, diags:
       break;
     }
     case "action": {
-      const r = parseActions(raw);
+      const r = parseActions(raw, fns);
       if ("error" in r) warn(r.error);
       break;
     }
@@ -702,7 +702,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     // An each's own items= and key= are read outside and inside it respectively; only check items=.
     const exprs = tok.type === "each"
       ? (tok.props.items === undefined ? [] : [bareExpression(tok.props.items)])
-      : expressionsOf(tok.text, tok.props, def.props);
+      : expressionsOf(tok.text, tok.props, def.props, fns);
     const names = [...new Set(exprs.flatMap((e) => identifiers(e, fns)))].filter((n) => !inScope.has(n));
     if (names.length && !provided.anyNames) outsideUses.push({ line: lineNo, names });
     for (const [name, raw] of Object.entries(tok.props)) {
@@ -710,7 +710,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       const wrote = (n: string) => { written.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
       if (pdef?.type === "state" && PATH.test(raw)) wrote(raw.split(".")[0]!);
       if (pdef?.type === "action") {
-        const r = parseActions(raw);
+        const r = parseActions(raw, fns);
         if ("actions" in r) {
           actionTargets(r.actions).forEach(wrote);
           // set:order:o stores the text "o", never the item o: a silent mistake models make.
