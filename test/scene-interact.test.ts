@@ -14,6 +14,7 @@ import { SayShape } from "../src/engine";
 import { darkTheme, lightTheme } from "../src/theme";
 import { FakeCanvas, render, type Rendered } from "../src/testing";
 import type { Box } from "../src/types";
+import { FACTORY_MONITOR } from "../playground/scene-samples";
 
 const ON = [...coreComponents, ...sceneComponents];
 const on = new Registry(ON);
@@ -212,6 +213,13 @@ text "Selected: {find(machines, 'id', sel).name}"`;
     expect(outlines()).toBeGreaterThan(0);
     ui.set("sel", "nothing");
     expect(outlines()).toBe(0);
+    ui.destroy();
+  });
+
+  it("outlines a selected group once, around its outer shape, not every part and word inside it", () => {
+    const ui = render(LINE, { components: ON });
+    // The selected machine is a rect with a label on it: one outline, stroked twice (a light edge, then the accent).
+    expect(ui.drawOps.filter((o) => o.op === "stroke" && o.strokeStyle === lightTheme.colors.accent)).toHaveLength(1);
     ui.destroy();
   });
 
@@ -421,4 +429,44 @@ describe("the drawing check, for pressable shapes, phones and contrast", () => {
     expect(reviewScenes(parse(spec, on), { theme: lightTheme })).toEqual([]);
     expect(reviewScenes(parse(spec, on), { theme: darkTheme })).toHaveLength(1);
   });
+});
+
+describe("the factory monitor sample", () => {
+  it("parses clean, and the drawing check finds nothing", () => {
+    const p = parse(FACTORY_MONITOR, on);
+    expect(p.diagnostics).toEqual([]);
+    expect(reviewScenes(p)).toEqual([]);
+  });
+
+  it("parses every prefix while streaming, and renders as it arrives", () => {
+    const lines = FACTORY_MONITOR.split("\n");
+    for (let i = 1; i <= lines.length; i++) {
+      expect(parse(lines.slice(0, i).join("\n"), on).diagnostics.filter((d) => d.severity === "error"), `first ${i} lines`).toEqual([]);
+    }
+    const ui = render("", { components: ON });
+    ui.stream(lines.map((l) => l + "\n"));
+    expect(ui.hits.filter((h) => h.box.node.type === "scene")).toHaveLength(4);
+    ui.destroy();
+  });
+
+  for (const [theme, width] of [[lightTheme, 1000], [darkTheme, 1000], [lightTheme, 320], [darkTheme, 320]] as const) {
+    it(`selects a machine, updates the panel and the controls act on it (${theme.name}, ${width} px)`, () => {
+      const ui = render(FACTORY_MONITOR, { components: ON, theme, width });
+      const { at } = sceneAt(ui, 800, 280);
+      ui.click(...at(490, 110));
+      expect(ui.state.sel).toBe("weld");
+      expect(ui.text()).toContain("Robot welder");
+      // The selection outline is drawn in this theme's accent.
+      expect(ui.drawOps.some((o) => o.op === "stroke" && o.strokeStyle === theme.colors.accent)).toBe(true);
+      // The output slider beside it writes to the selected machine in the list.
+      const sliders = ui.findAll({ type: "slider" }).filter((f) => f.box);
+      expect(sliders).toHaveLength(1);
+      const slider = sliders[0]!;
+      ui.drag({ id: slider.node.id }, slider.box!.x + slider.box!.w);
+      expect((ui.state.machines as Array<{ id: string; rate: number }>).find((m) => m.id === "weld")!.rate).toBe(150);
+      ui.press({ type: "switch" });
+      expect(ui.state.running).toBe(false);
+      ui.destroy();
+    });
+  }
 });

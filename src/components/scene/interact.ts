@@ -206,16 +206,22 @@ export function regionHit(scene: SceneLive, key: unknown, x: number, y: number):
  * outline, around the body.
  */
 export function outerGeoms(r: SceneRegion): Geom[] {
-  const shapes = r.geoms.filter((g) => !(g.kind === "rect" && g.text));
-  return shapes.filter((g) => !shapes.some((o) => o !== g && o.kind !== "line" && covers(o, g)));
+  const shapes = r.geoms.filter((g) => !(g.kind === "rect" && g.text)).map((g) => {
+    const pts = outline(g);
+    return { g, pts, b: boundsOf(pts) };
+  });
+  return shapes.filter((inner) => !shapes.some((outer) => outer !== inner && outer.g.kind !== "line" && covers(outer, inner))).map((x) => x.g);
 }
 
+type Outlined = { g: Geom; pts: Array<[number, number]>; b: Rect | null };
+
 /** Whether every point of inner's outline is on outer (and outer is bigger, so two equal shapes don't hide each other). */
-function covers(outer: Geom, inner: Geom): boolean {
-  const pts = outline(inner);
-  const a = boundsOf(outline(outer)), b = boundsOf(pts);
+function covers(outer: Outlined, inner: Outlined): boolean {
+  const a = outer.b, b = inner.b;
   if (!a || !b || a.w * a.h <= b.w * b.h) return false;
-  return pts.every(([x, y]) => geomHit(outer, x, y));
+  // Cheap first: inner's box has to sit inside outer's.
+  if (b.x < a.x - 0.5 || b.y < a.y - 0.5 || b.x + b.w > a.x + a.w + 0.5 || b.y + b.h > a.y + a.h + 0.5) return false;
+  return inner.pts.every(([x, y]) => geomHit(outer.g, x, y));
 }
 
 /** What a screen reader calls a region: its name=, else the words inside it, else its tip. */

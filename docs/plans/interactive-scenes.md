@@ -1,6 +1,6 @@
 # Plan: interactive scenes
 
-**Status:** step 1 (interaction), step 2 (drawing check) done in this branch. Responsive composition and new drawing primitives deferred (see the gate).
+**Status:** interaction and the wider drawing check built (2026-11-07). Responsive composition and new drawing primitives deferred (see the gate).
 **Scope:** experimental, opt-in `sayshape/scene` only. Nothing changes for specs without scenes.
 
 This is the feasibility review written before any code changed, then what was built.
@@ -59,12 +59,35 @@ Hover, keyboard focus and `selected=` are drawn by the engine in theme colors (a
 
 All warnings, with the line to fix and how:
 
-- a pressable shape smaller than 24 px at phone width (360 px);
+- a pressable shape smaller than 24 px both ways at phone width (`PHONE_WIDTH`, 328 px: a 360 px phone less the screen's padding);
 - two pressable shapes drawn mostly on top of each other (a press can't tell them apart);
 - a pressable shape outside the picture;
-- a label smaller than 9 px at phone width;
+- a label smaller than 8 px at phone width;
 - a label whose color is too close to what's under it (contrast under 3:1), checked in light and dark.
+
+Contrast compares plain colors only: a label over a gradient, a see-through fill or a named CSS color isn't judged, and the same words drawn twice (a shadow) are judged by the copy on top. A label with no `fill` is black, so the check now reports it on the dark card behind a scene in dark mode; that's a real problem the old check missed (three older tests gained `fill=ink`).
+
+### Engine changes (both optional, backward compatible)
+
+- `ComponentDef.hitTest(box, x, y, detail?)`: the engine passes the region's `detail`.
+- `PressContext.run(actions, scope?)`: an element that draws its own copies passes the copy's scope; the engine reads it before the element's own, and writes through a scene item (`toggle:m.on`) find the item in state by identity, as `each` items already do.
 
 ### Example
 
-`playground/samples` and the README have the factory operations monitor: a production line from `define`/`use`, machines from a list in state, material moving along the belt, a details panel, a speed control and a run switch outside the scene.
+`playground/scene-samples.ts` (offered with `?scene=1`) has the factory operations monitor: a production line from one `define "machine"` used per machine, machines from a list in state, crates moving along the belt (seamless loop, speed from state), a status light that pulses when health is low, a details panel, and a run switch, a speed control and an output slider outside the scene that change it without a new spec. Light and dark, keyboard, screen reader and reduced motion all come from the engine.
+
+## Measurements (2026-11-07, Node, recording canvas)
+
+**Model generation.** Three first attempts at the factory request from the generated guide only (Claude Sonnet with the full guide, Claude Haiku with the full and the compact guide; not GPT-4.1, which the project usually tests with, since no endpoint was available here): all three parsed with no errors, all made the four machines pressable with `on=set:sel:{…}` and `selected=`, all four reached by Tab, and every press changed the panel. The drawing check found real problems in all three (labels unreadable on a phone; black labels on black boxes in one), and one repair round with those warnings fixed every one. Specs were 436–633 tokens.
+
+**Guide size.** Scene part of the full guide: 11,581 → 14,074 characters (about +620 tokens); compact: 2,764 → 3,151 (about +100). The guide without scenes is unchanged (`test/fixtures/guide-full.txt`).
+
+**Frame cost** (`bench/scene.bench.ts`, means, noisy at ±5–15%): the factory monitor paints in about 1.0 ms with its four pressable machines, one selected, against about 0.85 ms with nothing pressable; 200 pressable circles take about 1.0 ms against about 0.5 ms for 200 plain ones (about 2.5 µs per pressable shape). Finding what's under the pointer among 200 pressable circles takes about 0.5 µs. Heap is flat over 500 frames. The core benchmarks (`bench/engine.bench.ts`) show no change beyond their noise.
+
+## Limits and next steps
+
+- The focus ring is the engine's upright box around a turned shape.
+- Hit regions are the last painted frame's: on a fast-moving shape, a press lands where it was up to one frame ago.
+- Paths are hit by their box, not their outline.
+- A scene's each items can be written to (`toggle:m.on`) only when they come from a list in state, as with `each`.
+- Next, if wanted: arrow keys between pressable shapes; a soft `glow`; a `narrow` name for scenes that recompose on phones; checking a moving label against the edges at a few moments of its animation, for labels meant to stay put.

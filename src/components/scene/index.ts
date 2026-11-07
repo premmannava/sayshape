@@ -95,8 +95,8 @@ const scene: ComponentDef = {
   category: "content",
   description:
     "EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). " +
-    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started. " +
-    "To make a part pressable (a machine, a node, a stop), give its shape, group or use on= with actions; selected= outlines it and tip= labels it while hovered.",
+    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; " +
+    "give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.",
   text: { description: "What the picture shows, in a few words, for screen readers.", required: true },
   props: {
     w: num("Width of the drawing area, in scene pixels. Shapes use these coordinates; the scene is scaled to fit the screen.", 600),
