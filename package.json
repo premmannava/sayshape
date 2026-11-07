@@ -16,6 +16,10 @@
       "types": "./dist/types/components/map/index.d.ts",
       "import": "./dist/map.js"
     },
+    "./scene": {
+      "types": "./dist/types/components/scene/index.d.ts",
+      "import": "./dist/scene.js"
+    },
     "./testing": {
       "types": "./dist/types/testing/index.d.ts",
       "import": "./dist/testing.js"

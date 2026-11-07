@@ -19,7 +19,7 @@ type Node =
   | { k: "un"; op: string; a: Node }
   | { k: "bin"; op: string; a: Node; b: Node }
   | { k: "cond"; c: Node; a: Node; b: Node }
-  | { k: "call"; fn: string; args: Node[] }
+  | { k: "call"; fn: string; args: Node[]; extra?: Fn }
   | { k: "list"; items: Node[] }
   | { k: "rec"; entries: Array<[string, Node]> }
   | { k: "get"; obj: Node; key: Node };
@@ -28,7 +28,25 @@ type Tok = { t: "num" | "str" | "id" | "op" | "end"; v: string; pos: number };
 
 export class ExprError extends Error {}
 
-type Fn = (...a: Value[]) => Value;
+export type Fn = (...a: Value[]) => Value;
+
+/**
+ * Functions an element makes available to the expressions on the lines inside
+ * it, on top of the built-in ones (a scene's sin, cos and random). Pure
+ * functions of their arguments, written in reviewed TypeScript like a component;
+ * a spec can only call them, never add one. Make sets with expressionFunctions(),
+ * which gives them no prototype, so names like constructor can't reach Object.
+ * Built-in names always win: an extra set can't replace one.
+ */
+export type ExpressionFunctions = Readonly<Record<string, Fn>>;
+
+/** A frozen, prototype-free set of extra functions (see ExpressionFunctions). */
+export function expressionFunctions(fns: Record<string, Fn>): ExpressionFunctions {
+  return Object.freeze(Object.assign(Object.create(null) as Record<string, Fn>, fns));
+}
+
+const extraOf = (fns: ExpressionFunctions | undefined, name: string): Fn | undefined =>
+  fns && !Object.hasOwn(FUNCTIONS, name) && Object.hasOwn(fns, name) ? fns[name] : undefined;
 
 /** min(3, 5) or min(list): a single list argument stands for its items. */
 const spread = (a: Value[]): Value[] => (a.length === 1 && isList(a[0]) ? [...a[0]] : a);
@@ -344,13 +362,13 @@ const FUNCTION_HINTS: Record<string, string> = {
   values: "pluck(list, 'field')", column: "pluck(list, 'field')", get: "pluck(list, 'field')",
 };
 
-function unknownFunction(name: string): string {
+function unknownFunction(name: string, fns?: ExpressionFunctions): string {
   const key = name.toLowerCase();
   // hasOwn: names like "constructor" must not find Object's own properties.
   const hint = Object.hasOwn(FUNCTION_HINTS, key) ? FUNCTION_HINTS[key] : undefined;
   const near = EXPRESSION_FUNCTIONS.find((f) => f === key);
   const tip = hint ? ` Use ${hint}.` : near ? ` Did you mean ${near}?` : "";
-  return `Unknown function "${name}".${tip} Functions: ${EXPRESSION_FUNCTIONS.join(", ")}`;
+  return `Unknown function "${name}".${tip} Functions: ${[...EXPRESSION_FUNCTIONS, ...(fns ? Object.keys(fns) : [])].join(", ")}`;
 }
 
 const OPS = ["===", "!==", "==", "!=", "<=", ">=", "&&", "||", "<", ">", "+", "-", "*", "/", "%", "!", "?", ":", "(", ")", ",", "[", "]", "{", "}"];
@@ -394,7 +412,7 @@ const BIN_PREC: Record<string, number> = {
   "*": 7, "/": 7, "%": 7,
 };
 
-function parseExpr(src: string): Node {
+function parseExpr(src: string, fns?: ExpressionFunctions): Node {
   const toks = tokenize(src);
   let p = 0;
   const peek = () => toks[p]!;
@@ -454,7 +472,8 @@ function parseExpr(src: string): Node {
       if (t.v === "false") return { k: "lit", v: false };
       if (t.v === "null") return { k: "lit", v: null };
       if (peek().v === "(") {
-        if (!isFunctionName(t.v)) throw new ExprError(unknownFunction(t.v));
+        const extra = extraOf(fns, t.v);
+        if (!isFunctionName(t.v) && !extra) throw new ExprError(unknownFunction(t.v, fns));
         next();
         const args: Node[] = [];
         if (peek().v !== ")") {
@@ -462,6 +481,10 @@ function parseExpr(src: string): Node {
           while (peek().v === ",") { next(); args.push(ternary()); }
         }
         expect(")");
+        if (extra) {
+          if (args.length > extra.length) throw new ExprError(`${t.v}() takes at most ${extra.length} argument${extra.length === 1 ? "" : "s"}, not ${args.length}`);
+          return { k: "call", fn: t.v, args, extra };
+        }
         if (args.length > MAX_ARGS[t.v]!) throw new ExprError(tooManyArgs(t.v, args.length));
         return { k: "call", fn: t.v, args };
       }
@@ -540,7 +563,7 @@ function run(n: Node, scope: Scope): Value {
     }
     case "call": {
       // Called detached, so `this` is never the function table.
-      const fn = FUNCTIONS[n.fn]!;
+      const fn = n.extra ?? FUNCTIONS[n.fn]!;
       return fn(...n.args.map((a) => run(a, scope)));
     }
     case "bin": {
@@ -563,6 +586,8 @@ function run(n: Node, scope: Scope): Value {
 }
 
 const cache = new Map<string, Node | ExprError>();
+/** Compiled expressions per set of extra functions: the same text can mean different calls in each. */
+const extraCaches = new WeakMap<ExpressionFunctions, Map<string, Node | ExprError>>();
 
 /**
  * An arrow function (x => x.done), outside quoted text: models write them from JavaScript, and the
@@ -583,14 +608,20 @@ export function quotedTemplate(src: string): string | null {
   return m && /\{[^{}]*\}/.test(m[2]!) ? m[2]! : null;
 }
 
-function compile(src: string): Node {
-  let c = cache.get(src);
+function compile(src: string, fns?: ExpressionFunctions): Node {
+  let store = cache;
+  if (fns) {
+    let own = extraCaches.get(fns);
+    if (!own) extraCaches.set(fns, (own = new Map()));
+    store = own;
+  }
+  let c = store.get(src);
   if (!c) {
-    try { c = parseExpr(src); } catch (e) { c = e instanceof ExprError ? e : new ExprError(String(e)); }
+    try { c = parseExpr(src, fns); } catch (e) { c = e instanceof ExprError ? e : new ExprError(String(e)); }
     if (c instanceof ExprError && hasArrow(src)) c = new ExprError(NO_ARROWS);
     else if (c instanceof ExprError && src.includes("`")) c = new ExprError(NO_TEMPLATES);
-    if (cache.size > 2000) cache.clear();
-    cache.set(src, c);
+    if (store.size > 2000) store.clear();
+    store.set(src, c);
   }
   if (c instanceof ExprError) throw c;
   return c;
@@ -598,22 +629,22 @@ function compile(src: string): Node {
 
 export type EvalResult = { ok: true; value: Value } | { ok: false; error: string };
 
-/** Evaluate an expression against a scope. Never throws. */
-export function evaluate(src: string, scope: Scope): EvalResult {
+/** Evaluate an expression against a scope, with an element's extra functions if any. Never throws. */
+export function evaluate(src: string, scope: Scope, fns?: ExpressionFunctions): EvalResult {
   try {
-    return { ok: true, value: run(compile(src), scope) };
+    return { ok: true, value: run(compile(src, fns), scope) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
 /** Check syntax only (used by the parser to report problems early). */
-export function checkSyntax(src: string): string | null {
-  try { compile(src); return null; } catch (e) { return e instanceof Error ? e.message : String(e); }
+export function checkSyntax(src: string, fns?: ExpressionFunctions): string | null {
+  try { compile(src, fns); return null; } catch (e) { return e instanceof Error ? e.message : String(e); }
 }
 
-/** Collect the state names an expression reads. */
-export function identifiers(src: string): string[] {
+/** Collect the state names an expression reads (with an element's extra functions, if it calls them). */
+export function identifiers(src: string, fns?: ExpressionFunctions): string[] {
   try {
     const out = new Set<string>();
     const walk = (n: Node): void => {
@@ -626,7 +657,7 @@ export function identifiers(src: string): string[] {
       else if (n.k === "rec") n.entries.forEach(([, x]) => walk(x));
       else if (n.k === "get") { walk(n.obj); walk(n.key); }
     };
-    walk(compile(src));
+    walk(compile(src, fns));
     return [...out];
   } catch { return []; }
 }
@@ -692,12 +723,12 @@ const CURRENCY_START = /^-?([$€£¥])/;
  * a sign written just before a value that already starts with the same sign
  * is dropped, so it shows once.
  */
-export function interpolate(s: string, scope: Scope): string {
+export function interpolate(s: string, scope: Scope, fns?: ExpressionFunctions): string {
   if (!s.includes("{")) return s;
   let out = "";
   for (const p of splitTemplate(s)) {
     if ("text" in p) { out += p.text; continue; }
-    const r = evaluate(p.expr, scope);
+    const r = evaluate(p.expr, scope, fns);
     const v = r.ok ? formatValue(r.value) : "—";
     const sign = CURRENCY_START.exec(v)?.[1];
     if (sign && out.endsWith(sign)) out = out.slice(0, -1);

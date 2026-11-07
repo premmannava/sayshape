@@ -36,6 +36,7 @@ When neither is on, there's no toolbar at all. Whoever installs the server choos
 | `--theme-picker` | Show the theme selector (off by default) |
 | `--theme teal\|purple\|blue\|neutral\|studio` | The theme interfaces use (default `teal`). `studio` is the Studio look: Inter, rounder corners and an indigo-to-violet accent |
 | `--no-save-image` | Hide Save image (shown by default where the chat app can download) |
+| `--scene` | **Experimental.** Turn on scenes: pictures and animations the model paints from shapes (off by default). Leave it out to turn them off again. |
 
 ```json
 "sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--theme", "blue", "--theme-picker"] }

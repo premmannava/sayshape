@@ -1,5 +1,6 @@
 import { SayShape, coreComponents, languageGuide, type Diagnostic, type SayShapeNode } from "../src";
 import { mapComponents } from "../src/components/map";
+import { sceneComponents } from "../src/components/scene";
 import { setupAppearance } from "./appearance/panel";
 import { setupAsk } from "./ask";
 import { samples } from "./samples";
@@ -12,7 +13,9 @@ const canvas = $<HTMLCanvasElement>("cv");
 
 // The samples use real photos from Unsplash; images from any other host are blocked.
 const imageHosts = ["images.unsplash.com"];
-const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents], imageHosts }).expose("sayshape");
+// Experimental scenes are off unless the address asks for them: /playground/index.html?scene=1
+const scenes = new URLSearchParams(location.search).get("scene") === "1";
+const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : [])], imageHosts }).expose("sayshape");
 // Style presets, light/dark/system and a custom accent, through sayshape.setTheme.
 setupAppearance(sayshape);
 // The same guide a model gets from "Ask a model", so copying it into a chat app works the same way.

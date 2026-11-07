@@ -15,6 +15,7 @@ import { App, applyHostFonts, applyHostStyleVariables, type McpUiHostContext } f
 import { SayShape } from "../../../src/engine";
 import { coreComponents } from "../../../src/components";
 import { mapComponents } from "../../../src/components/map";
+import { sceneComponents } from "../../../src/components/scene";
 import type { Theme } from "../../../src/theme";
 import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
@@ -352,7 +353,7 @@ async function start(): Promise<void> {
     themePicker.setSpec(toolbar);
   }
   sayshape = new SayShape(canvas, {
-    components: [...coreComponents, ...mapComponents],
+    components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
     theme,
     // The view has no network access of its own; the client's sandbox blocks it too.
     imageHosts: [],
