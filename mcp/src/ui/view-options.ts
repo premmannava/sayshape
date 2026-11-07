@@ -3,7 +3,7 @@
  * the model or the person in the chat:
  *
  *   --theme-picker      show a theme selector above the interface (off by default)
- *   --theme <name>      the theme interfaces start in: teal, purple, blue or neutral
+ *   --theme <name>      the theme interfaces start in: teal, purple, blue, neutral or studio
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
  *
  * main.ts reads them from the command line; the server writes them into the

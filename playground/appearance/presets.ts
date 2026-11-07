@@ -1,12 +1,13 @@
 /**
  * The playground's style presets and how a preset, a mode and an optional
  * custom accent become a SayShape Theme. Themes are built with SayShape's own
- * extendTheme from lightTheme and darkTheme, changing color tokens only.
+ * extendTheme from a base pair (SayShape's light and dark themes, or Studio's),
+ * changing color tokens only.
  */
-import { darkTheme, extendTheme, lightTheme, type Theme } from "../../src/theme";
+import { darkTheme, extendTheme, lightTheme, studioDarkTheme, studioLightTheme, type Theme } from "../../src/theme";
 import { contrast, effectiveAccent, mix, over, TEXT_CONTRAST, UI_CONTRAST } from "./color";
 
-export type PresetId = "teal" | "purple" | "blue" | "neutral";
+export type PresetId = "teal" | "purple" | "blue" | "neutral" | "studio";
 export type Mode = "light" | "dark" | "system";
 export type Scheme = "light" | "dark";
 type Colors = Partial<Theme["colors"]>;
@@ -14,7 +15,12 @@ type Colors = Partial<Theme["colors"]>;
 export interface Preset {
   id: PresetId;
   label: string;
-  /** Changes to SayShape's light and dark colors. Teal changes nothing: it is SayShape's default. */
+  /**
+   * The themes it starts from: SayShape's own (lightTheme and darkTheme) unless it says otherwise.
+   * Studio has its own font, corners and colors, so it starts from studioLightTheme and studioDarkTheme.
+   */
+  base?: "studio";
+  /** Changes to the base's light and dark colors. Teal changes nothing: it is SayShape's default. */
   light: Colors;
   dark: Colors;
 }
@@ -40,12 +46,19 @@ export const PRESETS: readonly Preset[] = [
     light: { accent: "#374151", onAccent: "#ffffff", line: "#8c95a3", landHighlight: "#c3c8d0", land: "#dde1e6" },
     dark: { accent: "#d1d5db", onAccent: "#0b0f14", line: "#6b7585", landHighlight: "#4a5361", land: "#2c3443" },
   },
+  // Inter, rounder corners and an indigo-to-violet accent, as its own pair of themes.
+  { id: "studio", label: "Studio", base: "studio", light: {}, dark: {} },
 ];
 
 export const presetById = (id: string): Preset | undefined => PRESETS.find((p) => p.id === id);
 
-/** SayShape's own light or dark theme: the base every preset changes. */
-export const baseTheme = (scheme: Scheme): Theme => (scheme === "dark" ? darkTheme : lightTheme);
+/** The light or dark theme a preset changes: SayShape's own, or Studio's for Studio. */
+export const baseTheme = (scheme: Scheme, preset?: Preset): Theme =>
+  preset?.base === "studio" ? (scheme === "dark" ? studioDarkTheme : studioLightTheme) : scheme === "dark" ? darkTheme : lightTheme;
+
+/** The name sayshape exports a preset's base theme under, for code that sets it up. */
+export const baseThemeName = (scheme: Scheme, preset?: Preset): string =>
+  preset?.base === "studio" ? (scheme === "dark" ? "studioDarkTheme" : "studioLightTheme") : scheme === "dark" ? "darkTheme" : "lightTheme";
 
 export interface Resolved {
   theme: Theme;
@@ -63,7 +76,7 @@ export interface Resolved {
  */
 export function resolveTheme(presetId: PresetId, scheme: Scheme, accent: string | null): Resolved {
   const preset = presetById(presetId) ?? PRESETS[0]!;
-  const base = baseTheme(scheme);
+  const base = baseTheme(scheme, preset);
   const changes: Colors = { ...preset[scheme] };
   let accentAdjusted = false;
   if (accent) {
@@ -117,3 +130,17 @@ export function auditTheme(theme: Theme): ContrastCheck[] {
 
 /** Field and divider lines against the surface: 3:1 makes control boundaries clear. */
 export const lineContrast = (theme: Theme) => contrast(theme.colors.line, theme.colors.surface);
+
+/**
+ * Canvas text doesn't make the browser load a web font, so a theme with another face (Studio's
+ * Inter) draws in a fallback until something asks for it. Ask for its weights, then call
+ * redraw: a no-op once they're loaded, and quick when they already are.
+ */
+export function loadThemeFonts(theme: Theme, redraw: () => void): void {
+  if (typeof document === "undefined" || !document.fonts) return;
+  const family = theme.font.family.split(",")[0]!.trim().replace(/^["']|["']$/g, "");
+  if (!family) return;
+  const faces = [400, 600, 700].map((w) => `${w} 15px "${family}"`);
+  if (faces.every((f) => document.fonts.check(f))) return;
+  Promise.all(faces.map((f) => document.fonts.load(f))).then(redraw, () => undefined);
+}

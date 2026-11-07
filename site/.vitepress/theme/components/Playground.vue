@@ -11,7 +11,7 @@ import { withBase } from "vitepress";
 import type { Diagnostic, SayShapeNode } from "@sayshape/index";
 import { examples, exampleById } from "../../../examples/catalog";
 import { samples } from "../../../../playground/samples";
-import { PRESETS, resolveTheme, type PresetId } from "../../../../playground/appearance/presets";
+import { loadThemeFonts, PRESETS, resolveTheme, type PresetId } from "../../../../playground/appearance/presets";
 import { themeCode } from "../../../../playground/appearance/export";
 import { highlightSpec } from "../sayshape/highlight";
 import { useSayShape } from "../sayshape/useSayShape";
@@ -114,7 +114,9 @@ function applyTheme() {
   const l = sayshape.value;
   if (!l) return;
   const scheme = forcedScheme.value ?? (isSiteDark() ? "dark" : "light");
-  l.setTheme(resolveTheme(preset.value, scheme, null).theme);
+  const theme = resolveTheme(preset.value, scheme, null).theme;
+  l.setTheme(theme);
+  loadThemeFonts(theme, () => l.setTheme(theme));
 }
 watch([mode, preset], () => applyTheme());
 // When following the site with a non-default style, a site switch must re-resolve the preset.

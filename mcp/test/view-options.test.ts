@@ -13,9 +13,9 @@ describe("view options", () => {
   });
 
   it("says which themes exist when --theme names one it doesn't know", () => {
-    expect(() => parseViewArgs(["--theme", "red"])).toThrow(/--theme needs one of teal, purple, blue, neutral; got "red"/);
+    expect(() => parseViewArgs(["--theme", "red"])).toThrow(/--theme needs one of teal, purple, blue, neutral, studio; got "red"/);
     expect(() => parseViewArgs(["--theme"])).toThrow(/--theme needs one of/);
-    expect(() => parseViewArgs(["--theme", "--theme-picker"])).toThrow(/--theme needs one of teal, purple, blue, neutral\.$/);
+    expect(() => parseViewArgs(["--theme", "--theme-picker"])).toThrow(/--theme needs one of teal, purple, blue, neutral, studio\.$/);
   });
 
   it("travels to the view in one meta tag and comes back the same", () => {
