@@ -4,7 +4,7 @@
  * lives in one ComponentDef, so adding a component never touches the engine.
  */
 import { toNumber } from "./data";
-import { bareExpression, evaluate, formatValue, interpolate, wholeExpression, type Scope } from "./expr";
+import { bareExpression, evaluate, formatValue, interpolate, wholeExpression, type ExpressionFunctions, type Scope } from "./expr";
 import { literal } from "./actions";
 import type { EditorSpec } from "./editor";
 import type { ImageState } from "./images";
@@ -218,6 +218,15 @@ export interface ComponentDef {
   props: Record<string, PropDef>;
   /** Which child types are allowed. Omit for leaf components. */
   children?: "any" | readonly string[];
+  /**
+   * What this element gives the expressions on the lines inside it, beyond
+   * state: extra names it fills in (a scene's t), extra functions (a scene's
+   * math), or, with anyNames, names it fills in itself when it draws (the
+   * params a drawing is used with), so the parser doesn't warn that nothing
+   * defines them. Only lines inside the element see these; the element
+   * evaluates those lines itself, with the same functions.
+   */
+  provides?: { names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions };
   /** Restrict where this component may appear. */
   parents?: readonly string[];
   /** A short spec snippet for docs and the model prompt. */

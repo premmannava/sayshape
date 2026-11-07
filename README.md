@@ -1517,6 +1517,28 @@ ui.on("action", ({ name, value }) => {
 });
 ```
 
+### Scenes (experimental, off by default)
+
+A `scene` is a picture or animation the model paints itself from shapes (`rect`, `circle`, `ellipse`, `line`, `path`, `polygon`, `label`, `group`, `define`/`use`, `gradient`), for things no other element shows: a goal celebration, a rabbit hopping, a car on a road. Any prop can be a formula of `t`, the seconds since the scene started, and lines inside a scene can call extra math (`sin`, `cos`, `ease`, `wave`, `random`, `range`, `pick`, …). It is the one place where specs choose their own colors.
+
+Scenes are **off unless you turn them on**, by registering their components from a separate entry point:
+
+```ts
+import { sceneComponents } from "sayshape/scene";
+const ui = new SayShape(canvas, { components: [...coreComponents, ...sceneComponents] });
+```
+
+Leave `sceneComponents` out and scenes are off: `scene` is an unknown element, the scene math isn't available anywhere, and the model guide doesn't mention them. The playground turns them on with `?scene=1` in its address, and the MCP server with `--scene`.
+
+```
+scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
+  circle x=300 y={300 - 160*ease(t, 0, 3)} r=40 fill="#FFD166"
+  each items={range(3)} as=i
+    ellipse x={100 + i*200} y=300 rx=180 ry={70 + 20*i} fill={pick(['#2D6A4F', '#40916C', '#52B788'], i)}
+```
+
+Limits: a scene draws at most 2,000 shapes and works through at most 20,000 lines a frame (`MAX_SCENE_SHAPES`, `MAX_SCENE_STEPS`), `range()` makes at most 500 items, and `use` nests at most 8 deep. With reduced motion (or `animate: false`) a scene shows a still of its last moment. Shapes aren't pressable yet: scenes are pictures and animations, not games.
+
 ### Images
 
 A spec can name any image URL, and a model writes specs, so SayShape only loads images from your own site (the page's origin) and from hosts you list. Anything else, including `data:` and `javascript:` URLs, is blocked: the `image` shows its description instead, and the console says which host to allow.

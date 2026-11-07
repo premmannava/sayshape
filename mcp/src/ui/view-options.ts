@@ -5,6 +5,7 @@
  *   --theme-picker      show a theme selector above the interface (off by default)
  *   --theme <name>      the theme interfaces start in: teal, purple, blue, neutral or studio
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
+ *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
  *
  * main.ts reads them from the command line; the server writes them into the
  * view's HTML as one <meta> tag; the view reads them back. Pure, so the server,
@@ -16,6 +17,8 @@ export interface ViewOptions {
   themePicker: boolean;
   theme: PresetId;
   saveImage: boolean;
+  /** Experimental scenes are registered (the server must agree: setScenes). Absent means off. */
+  scene?: boolean;
 }
 
 export const DEFAULT_VIEW_OPTIONS: Readonly<ViewOptions> = Object.freeze({ themePicker: false, theme: "teal", saveImage: true });
@@ -29,6 +32,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   const out: ViewOptions = { ...DEFAULT_VIEW_OPTIONS };
   if (args.includes("--theme-picker")) out.themePicker = true;
   if (args.includes("--no-save-image")) out.saveImage = false;
+  if (args.includes("--scene")) out.scene = true;
   const at = args.indexOf("--theme");
   if (at >= 0) {
     const name = args[at + 1];
@@ -40,7 +44,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
 
 /** The settings as one short attribute value: "picker=0&theme=teal&save=1". */
 export function encodeViewOptions(o: ViewOptions): string {
-  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}&save=${o.saveImage ? 1 : 0}`;
+  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}&save=${o.saveImage ? 1 : 0}${o.scene ? "&scene=1" : ""}`;
 }
 
 /** The settings from encodeViewOptions; anything missing or unknown keeps its default. */
@@ -50,6 +54,7 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   const p = new URLSearchParams(raw);
   if (p.get("picker") === "1") out.themePicker = true;
   if (p.get("save") === "0") out.saveImage = false;
+  if (p.get("scene") === "1") out.scene = true;
   const theme = p.get("theme");
   if (isPreset(theme)) out.theme = theme;
   return out;

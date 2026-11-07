@@ -7,6 +7,7 @@
  *   sayshape-mcp --theme-picker  show a theme selector above interfaces (off by default)
  *   sayshape-mcp --theme blue    the theme interfaces use: teal (default), purple, blue or neutral
  *   sayshape-mcp --no-save-image hide the Save image button
+ *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
  *   sayshape-mcp --http [port]   Streamable HTTP on /mcp (default port 3001), for
  *                                clients that connect to a URL. Bind it behind
  *                                HTTPS before exposing it beyond localhost.
@@ -17,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { basename } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createServer } from "./server";
+import { createServer, setScenes } from "./server";
 import { parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
@@ -73,15 +74,18 @@ async function main(): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     console.error([
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...] [--http [port]]",
-      "                    [--theme-picker] [--theme teal|purple|blue|neutral] [--no-save-image]",
+      "                    [--theme-picker] [--theme teal|purple|blue|neutral] [--no-save-image] [--scene]",
       "",
       "  --theme-picker   show a theme selector above each interface (off by default)",
       "  --theme <name>   the theme interfaces use (default teal)",
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
+      "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",
     ].join("\n"));
     return;
   }
   const view = parseViewArgs(args);
+  // Experimental scenes: the server's parser and docs and the view must agree.
+  setScenes(view.scene === true);
   const dataAt = args.indexOf("--data");
   let data: DataSource | undefined;
   if (dataAt >= 0) {

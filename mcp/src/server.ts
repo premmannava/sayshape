@@ -38,6 +38,8 @@ import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
+import { sceneComponents } from "../../src/components/scene";
+import type { ComponentDef } from "../../src/component";
 import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PICKS_HEADING } from "../../src/prompt";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
@@ -52,8 +54,18 @@ export const MAX_SPEC_CHARS = 20_000;
 /** How many problems go back to the model; the first few are what it needs to fix. */
 const MAX_REPORTED = 12;
 
-const components = [...coreComponents, ...mapComponents];
-const registry = new Registry(components);
+let components: ComponentDef[] = [...coreComponents, ...mapComponents];
+let registry = new Registry(components);
+
+/**
+ * --scene: turn the experimental scene elements on (off by default). With them
+ * off, "scene" is an unknown element and models aren't told about it. Call
+ * before createServer; main.ts does, from the command line.
+ */
+export function setScenes(on: boolean): void {
+  components = [...coreComponents, ...mapComponents, ...(on ? sceneComponents : [])];
+  registry = new Registry(components);
+}
 
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
 const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.

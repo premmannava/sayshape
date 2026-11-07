@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { ComponentDef } from "../src/component";
 import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
+import { sceneComponents } from "../src/components/scene";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render } from "../src/testing";
@@ -17,7 +18,14 @@ import type { Box } from "../src/types";
 import { exampleSpec as exampleOf } from "./examples";
 import { textOverflows } from "./overflow";
 
-const ALL: ComponentDef[] = [...coreComponents, ...mapComponents];
+const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneComponents];
+
+/**
+ * Experimental scenes are where the model paints: their colors are the spec's,
+ * the one deliberate exception to theme-only colors (CLAUDE.md rule 4), and
+ * they draw through a transform (scaled to fit), which the text check can't follow.
+ */
+const SCENE_TYPES = new Set(sceneComponents.map((c) => c.type));
 const registry = new Registry(ALL);
 const WIDTHS = [320, 600, 1024];
 /** Phone and chat widths, where text is most likely not to fit. */
@@ -150,7 +158,7 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
   });
 
   // The map draws through a transform (it scales the world to fit), which the check can't follow.
-  if (!["map", "pin"].includes(def.type)) {
+  if (!["map", "pin"].includes(def.type) && !SCENE_TYPES.has(def.type)) {
     describe.each(FIT_WIDTHS)("drawn at %ipx", (width) => {
       it("keeps its text inside itself, without squeezing it", () => {
         const ui = render(exampleSpec(def), { components: ALL, width });
@@ -169,7 +177,8 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
       for (const op of ops) {
         if (op.op === "drawImage") continue; // pictures carry their own colors
         const color = op.fillStyle || op.strokeStyle;
-        expect(palette.has(color), `${op.op} used "${color}", which isn't a theme color`).toBe(true);
+        // A scene is painted in the spec's colors; its words still use the theme font.
+        if (!SCENE_TYPES.has(def.type)) expect(palette.has(color), `${op.op} used "${color}", which isn't a theme color`).toBe(true);
         if (op.font) {
           const themed = op.font.includes(theme.font.family) || op.font.includes(theme.font.mono);
           expect(themed, `${op.op} used the font "${op.font}", which isn't a theme font`).toBe(true);

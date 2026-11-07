@@ -15,7 +15,7 @@
 import { actionExpressions, parseActions } from "./actions";
 import { COMMON_PROPS, type ComponentDef, type PropDef } from "./component";
 import { looksLikeData, parseData } from "./data";
-import { bareExpression, checkSyntax, doubledCurrency, identifiers, quotedTemplate, splitTemplate, wholeExpression } from "./expr";
+import { bareExpression, checkSyntax, doubledCurrency, identifiers, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
 import { actionTargets } from "./actions";
 import { loopNames } from "./each";
 import { PATH } from "./paths";
@@ -392,11 +392,11 @@ function currencyMessage(where: string, expr: string): string {
   return `In ${where}: ${expr.trim().split("(")[0]}() already adds the currency sign, so the sign before {${expr}} is extra (it shows once). Write {${expr}} on its own`;
 }
 
-function checkProp(name: string, raw: string, def: PropDef, line: number, diags: Diagnostic[]): void {
+function checkProp(name: string, raw: string, def: PropDef, line: number, diags: Diagnostic[], fns?: ExpressionFunctions): void {
   const warn = (message: string) => diags.push({ line, severity: "warning", message });
   const whole = wholeExpression(raw);
   if (whole !== null) {
-    const err = checkSyntax(whole);
+    const err = checkSyntax(whole, fns);
     if (err) warn(`In ${name}: ${err}`);
     const text = err ? null : quotedTemplate(whole);
     if (text !== null) warn(`In ${name}: {"${text}"} is plain text, so its braces show as they are. To fill in values, put the text in quotes without braces around it: ${name}="${text}"`);
@@ -415,7 +415,7 @@ function checkProp(name: string, raw: string, def: PropDef, line: number, diags:
       break;
     case "condition":
     case "expression": {
-      const err = checkSyntax(raw);
+      const err = checkSyntax(raw, fns);
       if (err) warn(`In ${name}: ${err}`);
       break;
     }
@@ -435,11 +435,29 @@ function checkProp(name: string, raw: string, def: PropDef, line: number, diags:
       break;
     case "string":
       for (const part of splitTemplate(raw)) {
-        if ("expr" in part) { const err = checkSyntax(part.expr); if (err) warn(`In ${name}: ${err}`); }
+        if ("expr" in part) { const err = checkSyntax(part.expr, fns); if (err) warn(`In ${name}: ${err}`); }
       }
       for (const e of doubledCurrency(raw)) warn(currencyMessage(name, e));
       break;
   }
+}
+
+/**
+ * What the open elements around a line give its expressions (ComponentDef.provides):
+ * the names they fill in, whether they fill in any name, and the nearest extra functions.
+ */
+function providedTo(stack: readonly SayShapeNode[], registry: Registry): { names: string[]; anyNames: boolean; functions?: ExpressionFunctions } {
+  const names: string[] = [];
+  let anyNames = false;
+  let functions: ExpressionFunctions | undefined;
+  for (const n of stack) {
+    const p = registry.get(n.type)?.provides;
+    if (!p) continue;
+    if (p.names) names.push(...p.names);
+    if (p.anyNames) anyNames = true;
+    if (p.functions) functions = p.functions;
+  }
+  return functions ? { names, anyNames, functions } : { names, anyNames };
 }
 
 export function parse(src: string, registry: Registry, opts: ParseOptions = {}): ParseResult {
@@ -604,6 +622,9 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     }
     while (stack.length > 1 && stack[stack.length - 1]!.indent >= indent) stack.pop();
     const parent = stack[stack.length - 1]!;
+    // What the elements around this line give its expressions (a scene's t and math); nothing, unless one provides it.
+    const provided = providedTo(stack, registry);
+    const fns = provided.functions;
     // stack holds the root and every open container, so a new element sits at depth stack.length.
     if (stack.length > MAX_DEPTH) {
       diagnostics.push({ line: lineNo, severity: "error", message: `Nested too deeply (more than ${MAX_DEPTH} levels). This line and anything inside it were skipped; flatten the layout` });
@@ -637,7 +658,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     if (tok.text?.includes("{")) {
       for (const part of splitTemplate(tok.text)) {
         if ("expr" in part) {
-          const err = checkSyntax(part.expr);
+          const err = checkSyntax(part.expr, fns);
           if (err) diagnostics.push({ line: lineNo, severity: "warning", message: `In text: ${err}` });
         }
       }
@@ -659,7 +680,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
         diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" has no prop "${name}". Known props: ${known.join(", ")}` });
         continue;
       }
-      checkProp(name, rawValue, pdef, lineNo, diagnostics);
+      checkProp(name, rawValue, pdef, lineNo, diagnostics, fns);
     }
     for (const [name, pdef] of Object.entries(def.props)) {
       if (pdef.required && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs ${name}=` });
@@ -677,14 +698,14 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       diagnostics.push({ line: lineNo, severity: "warning", message: `each uses "${tok.props.as}" for both as= and index=; give them different names` });
     }
 
-    const inScope = new Set<string>();
+    const inScope = new Set<string>(provided.names);
     for (const n of stack) if (n.type === "each") for (const name of loopNames(n)) inScope.add(name);
     // An each's own items= and key= are read outside and inside it respectively; only check items=.
     const exprs = tok.type === "each"
       ? (tok.props.items === undefined ? [] : [bareExpression(tok.props.items)])
       : expressionsOf(tok.text, tok.props, def.props);
-    const names = [...new Set(exprs.flatMap(identifiers))].filter((n) => !inScope.has(n));
-    if (names.length) outsideUses.push({ line: lineNo, names });
+    const names = [...new Set(exprs.flatMap((e) => identifiers(e, fns)))].filter((n) => !inScope.has(n));
+    if (names.length && !provided.anyNames) outsideUses.push({ line: lineNo, names });
     for (const [name, raw] of Object.entries(tok.props)) {
       const pdef = def.props[name] ?? COMMON_PROPS[name];
       const wrote = (n: string) => { written.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
