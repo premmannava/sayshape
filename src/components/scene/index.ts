@@ -31,7 +31,7 @@ import type { Box, Rect } from "../../types";
 import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
 import { paintScene, type Frame } from "./draw";
-import { intersect, liveOf, outline, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
+import { intersect, liveOf, outerGeoms, outline, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
 export { MAX_SCENE_SHAPES, MAX_SCENE_STEPS, MAX_USE_DEPTH, THEME_COLORS } from "./draw";
@@ -58,12 +58,19 @@ const PAINT: Record<string, PropDef> = {
   dash: { type: "string", description: 'A dashed outline: dash and gap lengths, like dash="6 4".' },
 };
 
-/** Props that make a shape, group or use pressable. */
+/** Props that make a group or use pressable, described in full once. */
 const PRESS: Record<string, PropDef> = {
   on: { type: "action", description: "Actions when it's pressed (click, tap, Enter), like a button's on=; makes it pressable and a Tab stop. Inside the scene's each they see the item: on=set:sel:{m.id}." },
   selected: { type: "condition", description: "Draws a selection outline while true, e.g. selected={sel == m.id}." },
   tip: { type: "string", description: "Words shown in a small tag while it's hovered or focused; may hold {formulas}." },
   name: { type: "string", description: "What screen readers call it. Default: the words of its labels, else its tip." },
+};
+/** The same props on single shapes, said briefly: the guide lists them on every shape. */
+const PRESS_SHAPE: Record<string, PropDef> = {
+  on: { type: "action", description: "Makes it pressable, like group's on=." },
+  selected: { type: "condition", description: "Selection outline while true." },
+  tip: { type: "string", description: "Shown while hovered or focused." },
+  name: { type: "string", description: "Screen-reader name." },
 };
 
 const leaf = { layout: (box: Box) => { box.h = 0; }, semantics: () => false as const, parents: IN_SCENE } satisfies Partial<ComponentDef>;
@@ -88,7 +95,8 @@ const scene: ComponentDef = {
   category: "content",
   description:
     "EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). " +
-    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started.",
+    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started. " +
+    "To make a part pressable (a machine, a node, a stop), give its shape, group or use on= with actions; selected= outlines it and tip= labels it while hovered.",
   text: { description: "What the picture shows, in a few words, for screen readers.", required: true },
   props: {
     w: num("Width of the drawing area, in scene pixels. Shapes use these coordinates; the scene is scaled to fit the screen.", 600),
@@ -206,7 +214,7 @@ function paintFeedback(box: Box, ctx: PaintContext, shown: ReadonlyArray<{ r: Sc
     const strong = !!s.r.selected || focused;
     g.save();
     g.globalAlpha = strong ? 1 : 0.7;
-    for (const geom of s.r.geoms) {
+    for (const geom of outerGeoms(s.r)) {
       const pts = outline(geom);
       if (pts.length < 2) continue;
       g.beginPath();
@@ -262,7 +270,7 @@ const rect: ComponentDef = {
   type: "rect",
   category: "content",
   description: "A rectangle in a scene, from its top-left corner.",
-  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...PRESS },
+  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...PRESS_SHAPE },
   example: `rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}`,
 };
 
@@ -271,7 +279,7 @@ const circle: ComponentDef = {
   type: "circle",
   category: "content",
   description: "A circle in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...PRESS },
+  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...PRESS_SHAPE },
   example: `circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"`,
 };
 
@@ -280,7 +288,7 @@ const ellipse: ComponentDef = {
   type: "ellipse",
   category: "content",
   description: "An oval in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...PRESS },
+  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...PRESS_SHAPE },
   example: `ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"`,
 };
 
@@ -289,7 +297,7 @@ const line: ComponentDef = {
   type: "line",
   category: "content",
   description: "A straight line in a scene. Give it a stroke and width.",
-  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...PRESS },
+  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...PRESS_SHAPE },
   example: `line x1=20 y1=200 x2=580 y2=200 stroke="#FFFFFF" width=4 dash="16 12"`,
 };
 
@@ -298,7 +306,7 @@ const path: ComponentDef = {
   type: "path",
   category: "content",
   description: "Any outline, in SVG path commands (M move, L line, H, V, C and S curves, Q and T curves, A arc, Z close). For curved shapes: ears, hills, a car body, a wave.",
-  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...PRESS },
+  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...PRESS_SHAPE },
   example: `path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"`,
 };
 
@@ -307,7 +315,7 @@ const polygon: ComponentDef = {
   type: "polygon",
   category: "content",
   description: "A closed shape through points, for triangles, stars, mountains and roofs.",
-  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...PRESS },
+  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...PRESS_SHAPE },
   example: `polygon points="300,40 380,180 220,180" fill="#E9C46A"`,
 };
 
@@ -324,7 +332,7 @@ const label: ComponentDef = {
     weight: { type: "enum", values: ["regular", "bold"], description: "regular or bold.", default: "regular" },
     align: { type: "enum", values: ["left", "center", "right"], description: "Which end of the words sits at x.", default: "left" },
     ...PAINT,
-    ...PRESS,
+    ...PRESS_SHAPE,
   },
   example: `label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"`,
 };

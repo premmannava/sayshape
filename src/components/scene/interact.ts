@@ -39,7 +39,7 @@ export function invert(m: Matrix): Matrix | null {
 
 /** One drawn outline of a pressable region, in its own coordinates, with the transform to canvas pixels. */
 export type Geom =
-  | { kind: "rect"; m: Matrix; x: number; y: number; w: number; h: number }
+  | { kind: "rect"; m: Matrix; x: number; y: number; w: number; h: number; r?: number; text?: boolean }
   | { kind: "ellipse"; m: Matrix; x: number; y: number; rx: number; ry: number }
   | { kind: "poly"; m: Matrix; pts: ReadonlyArray<readonly [number, number]> }
   | { kind: "line"; m: Matrix; x1: number; y1: number; x2: number; y2: number; width: number };
@@ -66,8 +66,20 @@ export const LINE_SLOP = 6;
 /** The outline of a geometry in canvas pixels; closed unless it's a line. */
 export function outline(g: Geom): Array<[number, number]> {
   switch (g.kind) {
-    case "rect":
-      return [apply(g.m, g.x, g.y), apply(g.m, g.x + g.w, g.y), apply(g.m, g.x + g.w, g.y + g.h), apply(g.m, g.x, g.y + g.h)];
+    case "rect": {
+      const r = Math.max(0, Math.min(g.r ?? 0, g.w / 2, g.h / 2));
+      if (!r) return [apply(g.m, g.x, g.y), apply(g.m, g.x + g.w, g.y), apply(g.m, g.x + g.w, g.y + g.h), apply(g.m, g.x, g.y + g.h)];
+      // Rounded corners, a few points each, so an outline hugs the shape the model drew.
+      const out: Array<[number, number]> = [];
+      const corners: Array<[number, number, number]> = [[g.x + g.w - r, g.y + r, -90], [g.x + g.w - r, g.y + g.h - r, 0], [g.x + r, g.y + g.h - r, 90], [g.x + r, g.y + r, 180]];
+      for (const [cx, cy, start] of corners) {
+        for (let k = 0; k <= 4; k++) {
+          const a = ((start + k * 22.5) * Math.PI) / 180;
+          out.push(apply(g.m, cx + r * Math.cos(a), cy + r * Math.sin(a)));
+        }
+      }
+      return out;
+    }
     case "ellipse": {
       const out: Array<[number, number]> = [];
       for (let k = 0; k < 32; k++) {
@@ -185,6 +197,25 @@ export function regionHit(scene: SceneLive, key: unknown, x: number, y: number):
   if (x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h) return false;
   const r = typeof key === "string" ? scene.regions.get(key) : undefined;
   return !!r && r.geoms.some((g) => geomHit(g, x, y));
+}
+
+/**
+ * The outlines worth drawing around a region when it's hovered, focused or
+ * selected: its shapes that aren't inside another of its shapes, and never
+ * its words. A machine drawn as a body with panels and labels on it gets one
+ * outline, around the body.
+ */
+export function outerGeoms(r: SceneRegion): Geom[] {
+  const shapes = r.geoms.filter((g) => !(g.kind === "rect" && g.text));
+  return shapes.filter((g) => !shapes.some((o) => o !== g && o.kind !== "line" && covers(o, g)));
+}
+
+/** Whether every point of inner's outline is on outer (and outer is bigger, so two equal shapes don't hide each other). */
+function covers(outer: Geom, inner: Geom): boolean {
+  const pts = outline(inner);
+  const a = boundsOf(outline(outer)), b = boundsOf(pts);
+  if (!a || !b || a.w * a.h <= b.w * b.h) return false;
+  return pts.every(([x, y]) => geomHit(outer, x, y));
 }
 
 /** What a screen reader calls a region: its name=, else the words inside it, else its tip. */

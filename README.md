@@ -1537,7 +1537,25 @@ scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
     ellipse x={100 + i*200} y=300 rx=180 ry={70 + 20*i} fill={pick(['#2D6A4F', '#40916C', '#52B788'], i)}
 ```
 
-Limits: a scene draws at most 2,000 shapes and works through at most 20,000 lines a frame (`MAX_SCENE_SHAPES`, `MAX_SCENE_STEPS`), `range()` makes at most 500 items, and `use` nests at most 8 deep. With reduced motion (or `animate: false`) a scene shows a still of its last moment. Shapes aren't pressable yet: scenes are pictures and animations, not games.
+Limits: a scene draws at most 2,000 shapes and works through at most 20,000 lines a frame (`MAX_SCENE_SHAPES`, `MAX_SCENE_STEPS`), `range()` makes at most 500 items, and `use` nests at most 8 deep. With reduced motion (or `animate: false`) a scene shows a still of its last moment.
+
+#### Pressable shapes
+
+Any shape, `group` or `use` with `on=` can be pressed (click, tap, or Tab to it and press Enter or Space), and runs its actions like a button. Inside the scene's `each`, actions see the item (`on=set:sel:{m.id}`, `on=toggle:m.on`). `selected=` draws a selection outline, `tip=` shows a small tag while it's hovered or focused, and `name=` is what screen readers call it (by default, the words of its labels). Hover, focus and selection are drawn by the engine in theme colors, so a spec writes nothing for them. Props bound to state (`fill={sel == m.id ? 'accent' : 'line'}`) repaint when anything changes that state, inside or outside the scene, with no new spec.
+
+```
+state sel='cut' machines=[{id: 'cut', name: 'Cutter', x: 120}, {id: 'weld', name: 'Welder', x: 320}]
+scene "Two machines on a line" w=440 h=200
+  each items=machines as=m
+    group x={m.x} y=100 on=set:sel:{m.id} selected={sel == m.id} tip="{m.name}"
+      rect x=-60 y=-50 w=120 h=100 rx=12 fill=raised stroke=line width=2
+      label "{m.name}" x=0 y=0 size=20 weight=bold align=center fill=ink
+text "Selected: {find(machines, 'id', sel).name}"
+```
+
+Hits are exact through the scene's scaling and every move, turn and scale: rectangles, circles, ovals and polygons by their outline, lines within a few pixels, paths and labels by their box. The last drawn wins, and a pressable shape inside a pressable group wins over the group. Pressable shapes are buttons inside the scene's figure for screen readers, with `selected=` read as pressed. Not built: dragging shapes, arrow keys between shapes, and tooltips outside the scene's box. The playground's "Factory monitor (scene)" sample (`?scene=1`) puts it together; [docs/plans/interactive-scenes.md](docs/plans/interactive-scenes.md) has the design and its limits.
+
+`reviewScenes(parsed)` (the drawing check the MCP server sends back with `--scene`) also warns about labels too small to read and pressable shapes too small to tap on a phone, labels too close in color to what's under them in light or dark mode, and pressable shapes on top of each other or outside the picture.
 
 ### Images
 

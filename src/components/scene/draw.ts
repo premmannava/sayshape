@@ -288,7 +288,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       f.shapes++;
       withLook(node, scope, f, x + w / 2, y + h / 2, () => {
         g.beginPath(); roundRect(g, x, y, w, h, n("rx")); finishShape(node, scope, b, f, "#000000");
-        addGeom(f, { kind: "rect", m: f.m, x, y, w, h });
+        addGeom(f, { kind: "rect", m: f.m, x, y, w, h, r: Math.max(0, n("rx")) });
       });
       return;
     }
@@ -367,7 +367,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
         if (fill) { g.fillStyle = fill; g.fillText(text, x, y); }
         const stroke = paintOf(node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), b, f, scope);
         if (stroke) { g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.strokeText(text, x, y); }
-        addGeom(f, { kind: "rect", m: f.m, ...b });
+        addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
         if (f.press) for (const r of f.press.open) r.words.push(text);
       });
       return;
