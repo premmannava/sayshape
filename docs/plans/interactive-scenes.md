@@ -76,11 +76,22 @@ Contrast compares plain colors only: a label over a gradient, a see-through fill
 
 `playground/scene-samples.ts` (offered with `?scene=1`) has the factory operations monitor: a production line from one `define "machine"` used per machine, machines from a list in state, crates moving along the belt (seamless loop, speed from state), a status light that pulses when health is low, a details panel, and a run switch, a speed control and an output slider outside the scene that change it without a new spec. Light and dark, keyboard, screen reader and reduced motion all come from the engine.
 
+Screenshots (Chrome, from the sample; not the visual-regression baselines):
+
+| | |
+|---|---|
+| ![Welder selected, Packer hovered with its tip](../images/interactive-scenes/factory-light-selected-hover.png) | ![Dark mode, keyboard focus on Press](../images/interactive-scenes/factory-dark-keyboard.png) |
+| Light: Welder pressed and selected, the panel and controls follow it; Packer hovered, with its tip. | Dark: Tab and Enter; the engine's focus ring, the selection outline and the tip. |
+| ![A model's first attempt: black words on black boxes](../images/interactive-scenes/generated-before-repair.png) | ![After one repair round](../images/interactive-scenes/generated-after-repair.png) |
+| A model's first attempt (Haiku, compact guide): the drawing check reports the black labels on black boxes. | The same model after one repair round with those warnings. |
+
+![The sample on a 360 px phone, dark mode](../images/interactive-scenes/factory-dark-phone.png)
+
 ## Measurements (2026-11-07, Node, recording canvas)
 
 **Model generation.** Three first attempts at the factory request from the generated guide only (Claude Sonnet with the full guide, Claude Haiku with the full and the compact guide; not GPT-4.1, which the project usually tests with, since no endpoint was available here): all three parsed with no errors, all made the four machines pressable with `on=set:sel:{…}` and `selected=`, all four reached by Tab, and every press changed the panel. The drawing check found real problems in all three (labels unreadable on a phone; black labels on black boxes in one), and one repair round with those warnings fixed every one. Specs were 436–633 tokens.
 
-**Guide size.** Scene part of the full guide: 11,581 → 14,074 characters (about +620 tokens); compact: 2,764 → 3,151 (about +100). The guide without scenes is unchanged (`test/fixtures/guide-full.txt`).
+**Guide size.** Scene part of the full guide: 11,581 → 14,055 characters (about +620 tokens); compact: 2,764 → 3,151 (about +100). The guide without scenes is unchanged (`test/fixtures/guide-full.txt`).
 
 **Frame cost** (`bench/scene.bench.ts`, means, noisy at ±5–15%): the factory monitor paints in about 1.0 ms with its four pressable machines, one selected, against about 0.85 ms with nothing pressable; 200 pressable circles take about 1.0 ms against about 0.5 ms for 200 plain ones (about 2.5 µs per pressable shape). Finding what's under the pointer among 200 pressable circles takes about 0.5 µs. Heap is flat over 500 frames. The core benchmarks (`bench/engine.bench.ts`) show no change beyond their noise.
 
