@@ -738,22 +738,6 @@ export function interpolate(s: string, scope: Scope, fns?: ExpressionFunctions):
 }
 
 /**
- * Formatting calls written right after their own currency sign, as in
- * "${money(x)}": what the parser warns about, since money() and compact(n, 'USD')
- * add the sign already. Returns each such expression.
- */
-export function doubledCurrency(s: string): string[] {
-  const out: string[] = [];
-  let before = "";
-  for (const p of splitTemplate(s)) {
-    if ("text" in p) { before = p.text; continue; }
-    if (/[$€£¥]$/.test(before) && /^\s*(money\s*\(|compact\s*\([^)]*,)/.test(p.expr)) out.push(p.expr);
-    before = "";
-  }
-  return out;
-}
-
-/**
  * The expression inside a prop value that is one whole {…}, or null.
  * "{a} of {b}" starts with { and ends with } but is text with two
  * expressions in it, so it isn't one expression.

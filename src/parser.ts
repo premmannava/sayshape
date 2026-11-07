@@ -15,7 +15,7 @@
 import { actionExpressions, parseActions } from "./actions";
 import { COMMON_PROPS, type ComponentDef, type PropDef } from "./component";
 import { looksLikeData, parseData } from "./data";
-import { bareExpression, checkSyntax, doubledCurrency, identifiers, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
+import { bareExpression, checkSyntax, identifiers, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
 import { actionTargets } from "./actions";
 import { loopNames } from "./each";
 import { PATH } from "./paths";
@@ -388,10 +388,6 @@ function cantContain(parentName: string, parentType: string, type: string, accep
 }
 
 /** The warning for "${money(x)}": shown once on screen, but the spec should drop its own sign. */
-function currencyMessage(where: string, expr: string): string {
-  return `In ${where}: ${expr.trim().split("(")[0]}() already adds the currency sign, so the sign before {${expr}} is extra (it shows once). Write {${expr}} on its own`;
-}
-
 function checkProp(name: string, raw: string, def: PropDef, line: number, diags: Diagnostic[], fns?: ExpressionFunctions): void {
   const warn = (message: string) => diags.push({ line, severity: "warning", message });
   const whole = wholeExpression(raw);
@@ -437,7 +433,6 @@ function checkProp(name: string, raw: string, def: PropDef, line: number, diags:
       for (const part of splitTemplate(raw)) {
         if ("expr" in part) { const err = checkSyntax(part.expr, fns); if (err) warn(`In ${name}: ${err}`); }
       }
-      for (const e of doubledCurrency(raw)) warn(currencyMessage(name, e));
       break;
   }
 }
@@ -506,18 +501,23 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     }
 
     if (/^derive(\s|$)/.test(body)) {
-      // Top level only: a derived value belongs to the whole screen, not to an element.
+      // A derived value belongs to the whole screen. Written indented, under an element, it's
+      // simply read as if it were at the top (models often put it beside what shows it), except
+      // inside an each, where it would be the same for every item, not one per item.
       if (indent > 0) {
-        diagnostics.push({ line: lineNo, severity: "warning", message: `derive lines go at the top level, unindented, so this one was skipped` });
-        skipDeeperThan = indent;
-        return;
+        if (stack.some((n) => n.type === "each" && n.indent < indent)) {
+          diagnostics.push({ line: lineNo, severity: "warning", message: `derive lines can't go inside each: a derived value is one for the whole screen, not one per item, so this one was skipped. Work it out in the text that shows it, like {item.price * item.qty}` });
+          skipDeeperThan = indent;
+          return;
+        }
       }
       derivedLines.push(...parseDeriveLine(body.slice(6), lineNo, diagnostics));
       return;
     }
 
     if (/^state(\s|$)/.test(body)) {
-      if (indent > 0) diagnostics.push({ line: lineNo, severity: "warning", message: `state lines should not be indented` });
+      // State belongs to the whole screen wherever it's written, so an indented state line is read
+      // as if it were at the top, with nothing to fix.
       state.push(...parseStateLine(body.slice(5), lineNo, diagnostics, skippedState));
       openState = openBrackets(body) > 0 ? { line: lineNo, reported: false } : null;
       return;
@@ -662,7 +662,6 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
           if (err) diagnostics.push({ line: lineNo, severity: "warning", message: `In text: ${err}` });
         }
       }
-      for (const e of doubledCurrency(tok.text)) diagnostics.push({ line: lineNo, severity: "warning", message: currencyMessage("text", e) });
     }
     // style=semibold is a weight written as a style: use it as one rather than cost a retry.
     const styleDef = def.props.style, weightDef = def.props.weight;

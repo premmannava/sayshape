@@ -190,7 +190,7 @@ export function checkSpec(spec: string, hostNames: readonly string[] = []): Spec
  * Every other warning (a bad expression, a value outside a prop's choices, a
  * name nothing defines) leaves part of the interface wrong, so it needs a fix.
  */
-const HARMLESS = /has no prop "|already adds the currency sign|is a weight, not a style|doesn't take quoted text; it was ignored|state lines should not be indented/;
+const HARMLESS = /has no prop "|is a weight, not a style|doesn't take quoted text; it was ignored/;
 export const isHarmless = (d: Diagnostic) => d.severity !== "error" && HARMLESS.test(d.message);
 
 function describeCheck(c: SpecCheck): string {
