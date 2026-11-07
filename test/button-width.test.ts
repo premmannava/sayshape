@@ -105,3 +105,22 @@ button "Add" on=inc:n
     ui.destroy();
   });
 });
+
+describe("button shine", () => {
+  const shines = (theme: import("../src/theme").Theme) => {
+    const ui = render(`button "Save"\n`, { width: 1024, theme });
+    // The shine is the only stroke a primary button draws in its label color.
+    const n = ui.drawOps.filter((o) => o.op === "stroke" && o.strokeStyle === theme.colors.onAccent).length;
+    ui.destroy();
+    return n;
+  };
+
+  it("draws a light line across the top only where the label is light", async () => {
+    const { lightTheme, darkTheme, studioLightTheme, studioDarkTheme } = await import("../src/theme");
+    expect(shines(lightTheme)).toBe(1);
+    expect(shines(studioLightTheme)).toBe(1);
+    // Dark themes put a dark label on a light accent: a dark line there looked like a seam.
+    expect(shines(darkTheme)).toBe(0);
+    expect(shines(studioDarkTheme)).toBe(0);
+  });
+});
