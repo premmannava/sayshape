@@ -13,6 +13,7 @@ import type { TextMeasurer } from "./text";
 import type { PopupSize, PopupState } from "./popup";
 import type { SemanticsContext, SemanticsResult } from "./a11y/semantics";
 import type { Box, HitTarget, SayShapeNode, Rect, Value } from "./types";
+import type { Locate } from "./paths";
 
 /**
  * `name` is a plain identifier (letters, digits, _), like a screen name that go: refers to.
@@ -144,8 +145,13 @@ export interface PressContext {
    * pass its bind= as written (count, or t.done inside each).
    */
   set(path: string, value: Value): void;
-  /** Run an action string such as "inc:count;emit:saved". */
-  run(actions: string): void;
+  /**
+   * Run an action string such as "inc:count;emit:saved". An element that
+   * draws its own copies (a scene's each) passes the scope the pressed copy
+   * was drawn with, so the actions see its item (state is read after it),
+   * and where its names live in state, so writes reach the item (m.on).
+   */
+  run(actions: string, own?: { scope: Scope; locate?: Locate }): void;
   /** Open this element's popup (its ComponentDef.popup), with its starting transient state. */
   openPopup(state: PopupState): void;
   /** Whether this element's popup is open. */
@@ -274,8 +280,12 @@ export interface ComponentDef {
    * no children, and normally otherwise.
    */
   paintLoading?(box: Box, ctx: PaintContext): void;
-  /** Refine a hit inside a registered region. Return null to fall through. */
-  hitTest?(box: Box, x: number, y: number): { detail?: unknown } | null;
+  /**
+   * Refine a hit inside a registered region. Return null to fall through to
+   * the regions painted before it. detail is the one given to addHit for
+   * this region, so an element with many parts can test the part exactly.
+   */
+  hitTest?(box: Box, x: number, y: number, detail?: unknown): { detail?: unknown } | null;
   /** Default: run the `on` prop. */
   press?(ctx: PressContext): void;
   /**

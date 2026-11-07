@@ -12,6 +12,9 @@ import type { Theme } from "../../theme";
 import type { SayShapeNode, Value } from "../../types";
 import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
+import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type SceneRegion } from "./interact";
+import { PATH, placeOf, type Locate } from "../../paths";
+import { isScalar } from "../../data";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -107,6 +110,14 @@ export interface Frame {
   useDepth: number;
   /** Told about each element just before it's drawn (the drawing check uses this to know what drew what). */
   onNode?: (node: SayShapeNode) => void;
+  /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
+  m: Matrix;
+  /**
+   * Set to record pressable shapes (on=) as they're drawn: the regions in the
+   * order they start, the ones open around the line being drawn, and which
+   * each copy and use the drawing is inside (for stable keys).
+   */
+  press?: { regions: SceneRegion[]; open: SceneRegion[]; copy: string[]; alpha?: number; locate: Locate };
 }
 
 /** define and gradient lines anywhere in the scene (not inside a define's own drawing). */
@@ -171,9 +182,53 @@ function withLook(node: SayShapeNode, scope: Scope, f: Frame, cx: number, cy: nu
   g.save();
   if (node.props.opacity !== undefined) g.globalAlpha *= Math.min(1, Math.max(0, numOf(node, "opacity", scope, 1)));
   const deg = node.props.rotate === undefined ? 0 : numOf(node, "rotate", scope, 0);
-  if (deg) { g.translate(cx, cy); g.rotate((deg * Math.PI) / 180); g.translate(-cx, -cy); }
+  const was = f.m;
+  if (deg) {
+    g.translate(cx, cy); g.rotate((deg * Math.PI) / 180); g.translate(-cx, -cy);
+    f.m = translate(rotate(translate(f.m, cx, cy), (deg * Math.PI) / 180), -cx, -cy);
+  }
   draw();
+  f.m = was;
   g.restore();
+}
+
+/** Lines that can be pressed: shapes, groups and uses with on=. */
+const PRESSABLE = new Set(["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use"]);
+
+/** Start recording a pressable line, or null when it isn't one (or nothing's recording). */
+function openRegion(node: SayShapeNode, scope: Scope, f: Frame): SceneRegion | null {
+  const rec = f.press;
+  const on = node.props.on;
+  if (!rec || on === undefined || !on.trim() || !PRESSABLE.has(node.type)) return null;
+  const sel = node.props.selected === undefined ? undefined : read(node, "selected", scope);
+  const r: SceneRegion = {
+    key: rec.copy.length ? `${node.id}#${rec.copy.join(".")}` : node.id,
+    node, scope, on, locate: rec.locate, geoms: [], words: [],
+  };
+  const parent = rec.open[rec.open.length - 1];
+  if (parent) r.parent = parent;
+  const tip = node.props.tip === undefined ? undefined : strOf(node, "tip", scope);
+  const name = node.props.name === undefined ? undefined : strOf(node, "name", scope);
+  if (tip) r.tip = tip;
+  if (name) r.name = name;
+  if (sel !== undefined) r.selected = !!sel && sel !== "false";
+  rec.regions.push(r);
+  rec.open.push(r);
+  return r;
+}
+
+function closeRegion(r: SceneRegion | null, f: Frame): void {
+  if (r && f.press) f.press.open = f.press.open.filter((o) => o !== r);
+}
+
+/**
+ * Give a drawn outline to every pressable line it's inside, unless the scene
+ * faded it out (opacity near 0). Measured against the scene's own opacity, so
+ * the engine fading a new scene in doesn't make it unpressable.
+ */
+function addGeom(f: Frame, geom: Geom): void {
+  if (!f.press?.open.length || f.g.globalAlpha < 0.05 * (f.press.alpha ?? 1)) return;
+  for (const r of f.press.open) r.geoms.push(geom);
 }
 
 function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -208,17 +263,48 @@ export function drawAll(nodes: readonly SayShapeNode[], scope: Scope, f: Frame):
 function drawEach(node: SayShapeNode, scope: Scope, f: Frame): void {
   const raw = node.props.items;
   if (raw === undefined) return;
-  const r = evaluate(wholeExpression(raw) ?? raw, scope, SCENE_FUNCTIONS);
+  const expr = wholeExpression(raw) ?? raw;
+  const r = evaluate(expr, scope, SCENE_FUNCTIONS);
   if (!r.ok || !isList(r.value)) return;
   const as = node.props.as ?? DEFAULT_AS, index = node.props.index;
   const items = r.value;
+  const rec = f.press;
+  // As each does: items of a list that's a path into state (machines, plant.lines) can be written through.
+  const outer = rec?.locate;
+  const listPlace = outer && PATH.test(expr.trim()) ? placeOf(expr.trim(), outer) : null;
+  const keyExpr = node.props.key === undefined ? undefined : wholeExpression(node.props.key) ?? node.props.key;
+  const seen = new Set<string>();
   for (let i = 0; i < items.length && f.steps <= MAX_SCENE_STEPS; i++) {
     const item = items[i]!;
-    drawAll(node.children, (name) => (name === as ? item : name === index ? i : scope(name)), f);
+    const own: Scope = (name) => (name === as ? item : name === index ? i : scope(name));
+    if (rec && outer) {
+      // Keys follow key= when it's given, so focus stays on the same item when the list is reordered.
+      let key = String(i);
+      if (keyExpr !== undefined) {
+        const k = evaluate(keyExpr, own, SCENE_FUNCTIONS);
+        if (k.ok && isScalar(k.value) && k.value !== null && k.value !== "") key = String(k.value);
+      }
+      if (seen.has(key)) key = `${key}@${i}`;
+      seen.add(key);
+      const place = listPlace && { key: listPlace.key, steps: [...listPlace.steps, i] };
+      rec.copy.push(`${node.id}:${key}`);
+      rec.locate = (name) => (name === as ? place : name === index ? null : outer(name));
+      drawAll(node.children, own, f);
+      rec.copy.pop();
+      rec.locate = outer;
+    } else {
+      drawAll(node.children, own, f);
+    }
   }
 }
 
 function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
+  const region = openRegion(node, scope, f);
+  drawShape(node, scope, f);
+  closeRegion(region, f);
+}
+
+function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
   const g = f.g;
   f.onNode?.(node);
   const n = (k: string, d = 0) => numOf(node, k, scope, d);
@@ -227,19 +313,28 @@ function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
       const x = n("x"), y = n("y"), w = Math.max(0, n("w")), h = Math.max(0, n("h"));
       const b = { x, y, w, h };
       f.shapes++;
-      withLook(node, scope, f, x + w / 2, y + h / 2, () => { g.beginPath(); roundRect(g, x, y, w, h, n("rx")); finishShape(node, scope, b, f, "#000000"); });
+      withLook(node, scope, f, x + w / 2, y + h / 2, () => {
+        g.beginPath(); roundRect(g, x, y, w, h, n("rx")); finishShape(node, scope, b, f, "#000000");
+        addGeom(f, { kind: "rect", m: f.m, x, y, w, h, r: Math.max(0, n("rx")) });
+      });
       return;
     }
     case "circle": {
       const x = n("x"), y = n("y"), r = Math.max(0, n("r"));
       f.shapes++;
-      withLook(node, scope, f, x, y, () => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); finishShape(node, scope, { x: x - r, y: y - r, w: 2 * r, h: 2 * r }, f, "#000000"); });
+      withLook(node, scope, f, x, y, () => {
+        g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); finishShape(node, scope, { x: x - r, y: y - r, w: 2 * r, h: 2 * r }, f, "#000000");
+        addGeom(f, { kind: "ellipse", m: f.m, x, y, rx: r, ry: r });
+      });
       return;
     }
     case "ellipse": {
       const x = n("x"), y = n("y"), rx = Math.max(0, n("rx")), ry = Math.max(0, n("ry"));
       f.shapes++;
-      withLook(node, scope, f, x, y, () => { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); finishShape(node, scope, { x: x - rx, y: y - ry, w: 2 * rx, h: 2 * ry }, f, "#000000"); });
+      withLook(node, scope, f, x, y, () => {
+        g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); finishShape(node, scope, { x: x - rx, y: y - ry, w: 2 * rx, h: 2 * ry }, f, "#000000");
+        addGeom(f, { kind: "ellipse", m: f.m, x, y, rx, ry });
+      });
       return;
     }
     case "line": {
@@ -248,7 +343,10 @@ function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
       f.shapes++;
       // A line is all outline: it uses stroke, or black when none is given.
       const lined: SayShapeNode = node.props.stroke === undefined ? { ...node, props: { ...node.props, stroke: '"#000000"' } } : node;
-      withLook(node, scope, f, b.x + b.w / 2, b.y + b.h / 2, () => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); finishShape({ ...lined, props: { ...lined.props, fill: "none" } }, scope, b, f, null); });
+      withLook(node, scope, f, b.x + b.w / 2, b.y + b.h / 2, () => {
+        g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); finishShape({ ...lined, props: { ...lined.props, fill: "none" } }, scope, b, f, null);
+        addGeom(f, { kind: "line", m: f.m, x1, y1, x2, y2, width: Math.max(0, n("width", 1)) });
+      });
       return;
     }
     case "path": {
@@ -259,6 +357,12 @@ function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
         const b = tracePath(d, g) ?? { x: 0, y: 0, w: 0, h: 0 };
         // A path with only an outline isn't filled, as in SVG paths drawn as lines.
         finishShape(node, scope, b, f, node.props.stroke === undefined ? "#000000" : null);
+        if (f.press?.open.length) {
+          const rings = flattenPath(d);
+          const fill = node.props.fill === undefined ? (node.props.stroke === undefined ? "#000000" : undefined) : strOf(node, "fill", scope);
+          if (fill !== undefined && fill.trim() !== "" && fill.trim() !== "none") addGeom(f, { kind: "poly", m: f.m, rings });
+          else for (const pts of rings) addGeom(f, { kind: "polyline", m: f.m, pts, width: Math.max(0, n("width", 1)) });
+        }
       });
       return;
     }
@@ -274,6 +378,7 @@ function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
         for (const [px, py] of pts.slice(1)) g.lineTo(px, py);
         g.closePath();
         finishShape(node, scope, b, f, "#000000");
+        addGeom(f, { kind: "poly", m: f.m, rings: [pts] });
       });
       return;
     }
@@ -294,6 +399,8 @@ function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
         if (fill) { g.fillStyle = fill; g.fillText(text, x, y); }
         const stroke = paintOf(node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), b, f, scope);
         if (stroke) { g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.strokeText(text, x, y); }
+        addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
+        if (f.press) for (const r of f.press.open) r.words.push(text);
       });
       return;
     }
@@ -312,17 +419,30 @@ function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
         }
       }
       const g2 = f.g;
+      const was = f.m;
       g2.save();
-      g2.translate(n("x"), n("y"));
+      const gx = n("x"), gy = n("y");
+      g2.translate(gx, gy);
+      f.m = translate(f.m, gx, gy);
       const deg = n("rotate");
-      if (deg) g2.rotate((deg * Math.PI) / 180);
+      if (deg) { g2.rotate((deg * Math.PI) / 180); f.m = rotate(f.m, (deg * Math.PI) / 180); }
       const s = n("scale", 1);
-      if (s !== 1) g2.scale(s, s);
+      if (s !== 1) { g2.scale(s, s); f.m = scale(f.m, s, s); }
       if (node.props.opacity !== undefined) g2.globalAlpha *= Math.min(1, Math.max(0, n("opacity", 1)));
-      if (node.type === "use") f.useDepth++;
+      const rec = f.press, outer = rec?.locate;
+      if (node.type === "use") {
+        f.useDepth++;
+        if (rec && outer) {
+          rec.copy.push(node.id);
+          // A drawing's args are its own names: reading them is fine, writing them goes nowhere.
+          const args = inner === scope ? undefined : inner;
+          if (args) rec.locate = (name) => (args(name) !== scope(name) ? null : outer(name));
+        }
+      }
       drawAll(kids, inner, f);
-      if (node.type === "use") f.useDepth--;
+      if (node.type === "use") { f.useDepth--; if (rec && outer) { rec.copy.pop(); rec.locate = outer; } }
       g2.restore();
+      f.m = was;
       return;
     }
   }
@@ -332,6 +452,7 @@ function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
 /** Draw a whole scene in its own coordinates: its background, then its lines. */
 export function paintScene(f: Frame, nodes: readonly SayShapeNode[], scope: Scope, w: number, h: number, bg: string | undefined): void {
   collect(nodes, f);
+  if (f.press) f.press.alpha = f.g.globalAlpha;
   const fill = paintOf(bg, { x: 0, y: 0, w, h }, f, scope);
   if (fill) { f.g.fillStyle = fill; f.g.fillRect(0, 0, w, h); }
   drawAll(nodes, scope, f);

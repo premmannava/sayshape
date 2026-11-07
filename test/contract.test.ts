@@ -188,7 +188,8 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
     });
   });
 
-  if (canInteract(def)) {
+  // Scene shapes have no boxes: their scene registers their regions. They're checked below, under "pressable scene shapes".
+  if (canInteract(def) && !SCENE_TYPES.has(def.type)) {
     describe("interaction", () => {
       it("registers a hit region for every instance that uses an action or state", () => {
         const ui = render(exampleSpec(def), { components: ALL });
@@ -262,4 +263,46 @@ describe("element picks", () => {
     const values = chart.props.kind!.values ?? [];
     for (const k of values) if (!["bar", "line", "pie"].includes(k)) expect(kinds, `a pick for kind=${k}`).toContain(k);
   });
+});
+
+/**
+ * Scene shapes are drawn by their scene, which registers a hit region for
+ * each one with on= (keyed by the shape's line), so the box-based checks
+ * above don't apply. The same promises are kept here: pressable, a Tab stop,
+ * and a named node for screen readers.
+ */
+describe("pressable scene shapes", () => {
+  const SHAPE_LINES: Record<string, string> = {
+    rect: `rect x=20 y=20 w=120 h=80 fill=accent`,
+    circle: `circle x=80 y=60 r=40 fill=accent`,
+    ellipse: `ellipse x=80 y=60 rx=60 ry=40 fill=accent`,
+    line: `line x1=20 y1=60 x2=200 y2=60 stroke=accent width=6`,
+    path: `path d="M20 20 L200 20 L200 100 Z" fill=accent`,
+    polygon: `polygon points="20,100 110,20 200,100" fill=accent`,
+    label: `label "Press me" x=40 y=60 size=24 fill=ink`,
+    group: `group x=20 y=20\n    rect x=0 y=0 w=120 h=80 fill=accent`,
+    use: `use "dot" x=80 y=60`,
+  };
+  for (const def of sceneComponents.filter((c) => "on" in c.props)) {
+    it(`${def.type} with on= is pressable, reached by Tab and named`, () => {
+      const first = SHAPE_LINES[def.type];
+      expect(first, `a pressable line for ${def.type}`).toBeDefined();
+      const [head, ...rest] = first!.split("\n");
+      const spec = [`state n=0`, `scene "Shapes" w=300 h=200`, `  define "dot"`, `    circle x=0 y=0 r=30 fill=accent`,
+        `  ${head} on=inc:n name="Thing"`, ...rest].join("\n");
+      const ui = render(spec, { components: ALL, width: 300 });
+      expect(ui.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+      const shape = ui.findAll({ type: def.type }).map((f) => f.node).find((n) => n.props.on);
+      const region = ui.hits.find((h) => h.box.node.type === "scene" && String(h.detail).startsWith(shape!.id));
+      expect(region, "a hit region on the scene for the shape").toBeDefined();
+      ui.tab();
+      expect(ui.focused?.type).toBe("scene");
+      ui.key("Enter");
+      expect(ui.state.n).toBe(1);
+      const tree = ui.accessibility({ full: true });
+      const named = JSON.stringify(tree).includes('"name":"Thing"');
+      expect(named, "a node named Thing").toBe(true);
+      ui.destroy();
+    });
+  }
 });
