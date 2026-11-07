@@ -38,7 +38,7 @@ import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
-import { sceneComponents } from "../../src/components/scene";
+import { sceneComponents, reviewScenes } from "../../src/components/scene";
 import type { ComponentDef } from "../../src/component";
 import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PICKS_HEADING } from "../../src/prompt";
 import type { Diagnostic } from "../../src/types";
@@ -56,6 +56,7 @@ const MAX_REPORTED = 12;
 
 let components: ComponentDef[] = [...coreComponents, ...mapComponents];
 let registry = new Registry(components);
+let scenesOn = false;
 
 /**
  * --scene: turn the experimental scene elements on (off by default). With them
@@ -65,6 +66,7 @@ let registry = new Registry(components);
 export function setScenes(on: boolean): void {
   components = [...coreComponents, ...mapComponents, ...(on ? sceneComponents : [])];
   registry = new Registry(components);
+  scenesOn = on;
 }
 
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
@@ -164,14 +166,22 @@ function elementsOnLines(spec: string, diagnostics: readonly Diagnostic[], max =
 export interface SpecCheck {
   errors: Diagnostic[];
   warnings: Diagnostic[];
+  /**
+   * Problems a person can see in a scene's drawing (a label cut off, a line
+   * hidden under a box). The interface still shows, so these never count as
+   * problems to fix before it appears; the model is asked to tidy them.
+   */
+  drawing: Diagnostic[];
 }
 
 /** Parse a spec with the engine's own parser and components. Never throws. hostNames: state the interface fills in (datasets). */
 export function checkSpec(spec: string, hostNames: readonly string[] = []): SpecCheck {
-  const { diagnostics } = parse(spec, registry, { knownNames: hostNames });
+  const parsed = parse(spec, registry, { knownNames: hostNames });
+  const { diagnostics } = parsed;
   return {
     errors: diagnostics.filter((d) => d.severity === "error"),
     warnings: diagnostics.filter((d) => d.severity !== "error"),
+    drawing: scenesOn ? reviewScenes(parsed) : [],
   };
 }
 
@@ -185,6 +195,10 @@ export const isHarmless = (d: Diagnostic) => d.severity !== "error" && HARMLESS.
 
 function describeCheck(c: SpecCheck): string {
   const all = [...c.errors, ...c.warnings];
+  const drawing = c.drawing.map((d) => `line ${d.line}: ${d.message.replace(/^Drawing: /, "")}`);
+  if (!all.length && drawing.length) {
+    return `The interface is showing, but its drawing has problems the person can see. Fix them and call show_interface again with the whole corrected spec:\n${drawing.join("\n")}`;
+  }
   if (!all.length) return "The interface is showing in the conversation, with no problems. Don't call show_interface again unless the person asks for a change.";
   const fix = all.filter((d) => !isHarmless(d));
   const minor = all.filter(isHarmless);
@@ -194,7 +208,7 @@ function describeCheck(c: SpecCheck): string {
   const lead = fix.length
     ? `${fix.length} problem${fix.length === 1 ? "" : "s"} leave${fix.length === 1 ? "s" : ""} part of this interface wrong or missing, so the person sees a short "being fixed" note in its place. Fix ${fix.length === 1 ? "it" : "them"} and call show_interface again with the whole corrected spec:`
     : "The interface is showing correctly. The parser ignored these small things, which change nothing on screen, so there's no need to call show_interface again:";
-  return `${lead}\n${listed.join("\n")}`;
+  return `${lead}\n${listed.join("\n")}${drawing.length ? `\nAlso tidy the drawing, which the person can see:\n${drawing.join("\n")}` : ""}`;
 }
 
 export interface ServerOptions {

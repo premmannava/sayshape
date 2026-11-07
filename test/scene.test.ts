@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { coreComponents } from "../src/components";
-import { sceneComponents, sceneTime, MAX_SCENE_SHAPES, MAX_RANGE, SCENE_FUNCTIONS } from "../src/components/scene";
+import { sceneComponents, sceneTime, reviewScenes, MAX_SCENE_SHAPES, MAX_RANGE, SCENE_FUNCTIONS } from "../src/components/scene";
+import { darkTheme, lightTheme } from "../src/theme";
 import { points, tracePath, type PathSink } from "../src/components/scene/path";
 import { evaluate, expressionFunctions } from "../src/expr";
 import { languageGuide } from "../src/prompt";
@@ -225,5 +226,80 @@ describe("path data", () => {
 
   it("reads polygon points in pairs", () => {
     expect(points("0,0 10,5 20 10 7")).toEqual([[0, 0], [10, 5], [20, 10]]);
+  });
+});
+
+describe("theme colors in scenes", () => {
+  const fills = (spec: string, theme = lightTheme) => {
+    const ui = render(spec, { components: ON, theme });
+    const out = ui.drawOps.filter((op) => op.op === "fill").map((op) => op.fillStyle);
+    ui.destroy();
+    return out;
+  };
+
+  it("paints theme color names in the theme's colors, and follows the theme", () => {
+    const spec = `scene "Roles" w=100 h=100\n  rect x=0 y=0 w=10 h=10 fill=accent\n  rect x=0 y=0 w=10 h=10 fill=bad`;
+    expect(fills(spec)).toEqual([lightTheme.colors.accent, lightTheme.colors.bad]);
+    expect(fills(spec, darkTheme)).toEqual([darkTheme.colors.accent, darkTheme.colors.bad]);
+  });
+
+  it("fades a theme color with a percentage, and reads text as ink", () => {
+    const [faded, ink] = fills(`scene "Faded" w=100 h=100\n  rect x=0 y=0 w=10 h=10 fill="bad 15%"\n  rect x=0 y=0 w=10 h=10 fill=text`);
+    expect(faded).toMatch(/^rgba\(\d+, \d+, \d+, 0\.15\)$/);
+    expect(ink).toBe(lightTheme.colors.ink);
+  });
+
+  it("still takes literal colors, and ignores theme names it doesn't offer", () => {
+    expect(fills(`scene "Mixed" w=100 h=100\n  rect x=0 y=0 w=10 h=10 fill="#123456"\n  rect x=0 y=0 w=10 h=10 fill=debug`)).toEqual(["#123456"]);
+  });
+});
+
+describe("the drawing check", () => {
+  const review = (spec: string) => reviewScenes(parse(spec, on)).map((d) => `${d.line}: ${d.message}`);
+
+  it("finds a label cut off by the edge", () => {
+    expect(review(`scene "A" w=300 h=100\n  label "OUTLET | FLOW NORMAL" x=200 y=20 size=22 weight=bold fill=ink`))
+      .toEqual([expect.stringMatching(/^2: Drawing: the label "OUTLET \| FLOW NORMAL" is cut off by the right edge/)]);
+  });
+
+  it("finds labels on top of each other, but not a deliberate shadow", () => {
+    expect(review(`scene "A" w=300 h=100\n  label "Delay" x=20 y=50 size=20\n  label "Delay 40 min" x=30 y=52 size=20`))
+      .toEqual([expect.stringMatching(/^3: Drawing: the label "Delay 40 min" is drawn on top of "Delay" \(line 2\)/)]);
+    expect(review(`scene "A" w=300 h=100\n  label "GOAL" x=22 y=52 size=40 fill="#000000"\n  label "GOAL" x=20 y=50 size=40 fill=accent`)).toEqual([]);
+  });
+
+  it("finds a label straddling a box's edge", () => {
+    expect(review(`scene "A" w=300 h=200\n  rect x=50 y=50 w=120 h=60 fill=bad\n  label "BOTTLENECK" x=110 y=110 size=14 align=center fill=ink`))
+      .toEqual([expect.stringMatching(/^3: Drawing: the label "BOTTLENECK" straddles the edge of the rect on line 2/)]);
+  });
+
+  it("finds a line hidden under a box drawn after it", () => {
+    const spec = `scene "Outage" w=600 h=300
+  line x1=230 y1=150 x2=470 y2=150 stroke=line width=3
+  rect x=300 y=125 w=100 h=50 fill=surface
+  rect x=470 y=125 w=100 h=50 fill=surface`;
+    expect(review(spec)).toEqual([expect.stringMatching(/^2: Drawing: this line runs under the rect on line 3/)]);
+  });
+
+  it("says nothing about a tidy scene, a background, or labels inside their boxes", () => {
+    expect(review(`scene "Tidy" w=600 h=300 bg=surface
+  rect x=0 y=0 w=600 h=300 fill=raised
+  line x1=160 y1=150 x2=300 y2=150 stroke=line width=3
+  rect x=40 y=125 w=120 h=50 fill=surface stroke=line
+  rect x=300 y=125 w=120 h=50 fill="bad 15%" stroke=bad
+  label "Web App" x=100 y=150 size=16 align=center fill=ink
+  label "Orders" x=360 y=150 size=16 align=center fill=bad`)).toEqual([]);
+    expect(review(RABBIT)).toEqual([]);
+  });
+
+  it("checks the picture as it rests, at the end of its animation", () => {
+    // At t=0 the label is cut off; by the end it has slid fully inside.
+    expect(review(`scene "Slide" w=300 h=100 duration=2\n  label "Hello there" x={-60 + 40*t} y=50 size=20`)).toEqual([]);
+  });
+
+  it("never throws, whatever the scene", () => {
+    for (const spec of [`scene "Empty"`, `scene "Odd" w=0 h=-5\n  label "{nothing}" x={1/0} y=NaN`, RABBIT.replace(/\d/g, "9")]) {
+      expect(() => reviewScenes(parse(spec, on))).not.toThrow();
+    }
   });
 });
