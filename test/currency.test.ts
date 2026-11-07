@@ -79,22 +79,11 @@ each items=rows as=r
   });
 });
 
-describe("the warning", () => {
-  const warnings = (spec: string) => parse(spec, registry).diagnostics.filter((d) => /currency sign/.test(d.message));
-
-  it("points out a sign before money() in text and props", () => {
-    const w = warnings(`state a=1
+describe("nothing to fix", () => {
+  // The sign shows once (see above), so a sign before money() is accepted as written.
+  it("accepts a sign before money() in text and props, as models often write it", () => {
+    expect(parse(`state a=1
 text "Total \${money(a)}"
-stat label="Rev" value="\${money(a)}"`);
-    expect(w.map((d) => d.line)).toEqual([2, 3]);
-    expect(w[0]!.message).toContain("Write {money(a)} on its own");
-  });
-
-  it("stays quiet for correct specs", () => {
-    expect(warnings(`state a=1
-text "Total {money(a)}"
-text "\${a}"
-text "\${number(a)}"
-stat label="Rev" value={money(a)}`)).toEqual([]);
+stat label="Rev" value="\${money(a)}"`, registry).diagnostics).toEqual([]);
   });
 });

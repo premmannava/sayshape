@@ -58,10 +58,16 @@ describe("derive lines", () => {
     expect(parse(`state a=1\nderive b={a} c={a * 2}\n`, registry).derived.map((d) => d.name)).toEqual(["b", "c"]);
   });
 
-  it("go at the top level only", () => {
-    const r = parse(`state a=1\ncard\n  derive b={a}\n  text "{a}"\n`, registry);
+  it("are read as if at the top when indented under an element, with nothing to fix", () => {
+    const r = parse(`state a=1\ncard\n  derive b={a * 2}\n  text "{b}"\n`, registry);
+    expect(r.derived.map((d) => [d.name, d.expr])).toEqual([["b", "a * 2"]]);
+    expect(r.diagnostics).toEqual([]);
+  });
+
+  it("can't go inside each, where they'd be one value for every item", () => {
+    const r = parse(`state rows=[{p: 1}]\neach items=rows as=row\n  derive d={row.p * 2}\n  text "{row.p}"\n`, registry);
     expect(r.derived).toEqual([]);
-    expect(r.diagnostics.map((d) => d.message)).toContain("derive lines go at the top level, unindented, so this one was skipped");
+    expect(r.diagnostics.map((d) => d.message).join("\n")).toMatch(/derive lines can't go inside each/);
   });
 
   it("report duplicates and names that are already state, keeping the first", () => {
@@ -374,5 +380,20 @@ describe("the Order playground sample", () => {
     expect(derived(ui)).toMatchObject({ subtotal: 700, tax: 56, total: 756 });
     expect((ui.find("chart").box!.data as { slots: Array<{ label: string }> }).slots.map((s) => s.label)).toEqual(["USB-C dock", "Keyboard"]);
     expect(ui.text()).toContain("$756.00");
+  });
+});
+
+describe("what models write", () => {
+  it("accepts state and derive written beside what shows them, as two models did in an eval run", () => {
+    const r = parse(`card
+  state bill=186 tip=18 people=4
+  slider "Tip {tip}%" bind=tip min=0 max=25
+  derive total={bill * (1 + tip / 100)}
+  derive share={total / people}
+  stat label="Each person pays" value={money(share)}
+`, registry);
+    expect(r.diagnostics).toEqual([]);
+    expect(r.state.map((s) => s.key)).toEqual(["bill", "tip", "people"]);
+    expect(r.derived.map((d) => d.name)).toEqual(["total", "share"]);
   });
 });
