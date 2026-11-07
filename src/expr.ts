@@ -360,6 +360,10 @@ const FUNCTION_HINTS: Record<string, string> = {
   format: "number(n) or money(n)", currency: "money(n)", tofixed: "fixed(n, 2)", str: "text in quotes: \"{n} items\"", string: "text in quotes: \"{n} items\"",
   if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes", map: "each, pluck(list, 'field') for one field of every item, or sum/avg/join with a field",
   values: "pluck(list, 'field')", column: "pluck(list, 'field')", get: "pluck(list, 'field')",
+  // Scene math is only for lines inside a scene; models reach for it in derive lines too.
+  clamp: "min(max(x, low), high) here (clamp works only on lines inside a scene)",
+  lerp: "a + (b - a) * u here (lerp works only on lines inside a scene)",
+  pick: "first(slice(list, i, i + 1)) here (pick works only on lines inside a scene)",
 };
 
 function unknownFunction(name: string, fns?: ExpressionFunctions): string {

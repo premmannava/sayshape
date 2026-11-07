@@ -108,14 +108,18 @@ const scene: ComponentDef = {
   },
   children: SHAPES,
   provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS },
-  picks: [{ for: "a picture or animation no other element can show", write: 'scene "A rabbit hopping across a meadow" w=600 h=340 duration=3' }],
+  picks: [
+    { for: "a picture or animation no other element can show", write: 'scene "A rabbit hopping across a meadow" w=600 h=340 duration=3' },
+    { for: "a diagram people press parts of: a floor plan, a network, a production line", write: 'scene "Floor 3: four meeting rooms" w=600 h=360' },
+  ],
   example: `scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
-  # Inside a scene: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
+  # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
   # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
   # range(n) for each, and pick(list, i). Reuse a drawing with define and use.
   # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
   # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
   # and draw connecting lines before the boxes they join, ending at their edges.
+  # A scene shrinks to fit a phone: at w=600, make every label size 15 or more.
   gradient id=sky from="#0B1D3A" to="#F28C38" angle=90
   rect x=0 y=0 w=600 h=300 fill="url(sky)" opacity={ease(t, 0, 3)}
   circle x=300 y={300 - 160*ease(t, 0, 3)} r=40 fill="#FFD166"
@@ -158,7 +162,7 @@ const scene: ComponentDef = {
   },
   press(ctx) {
     const r = liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail));
-    if (r) ctx.run(r.on, { scope: r.scope, locate: r.locate });
+    if (r) ctx.run(r.on, { scope: r.scope, locate: r.locate, functions: SCENE_FUNCTIONS });
   },
   semantics: (box, ctx) => {
     const name = ctx.props(box.node).text() || "Picture";

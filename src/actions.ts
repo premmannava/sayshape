@@ -17,7 +17,7 @@
  * Several actions can run in order, separated by `;`. Targets may be paths
  * into data, like toggle:t.done inside each.
  */
-import { checkSyntax, evaluate, interpolate, splitTemplate, wholeExpression, type Scope } from "./expr";
+import { checkSyntax, evaluate, interpolate, splitTemplate, wholeExpression, type ExpressionFunctions, type Scope } from "./expr";
 import { isList, makeList, toNumber } from "./data";
 import { PATH } from "./paths";
 import type { Value } from "./types";
@@ -59,8 +59,11 @@ function unquote(s: string): string {
   return t.length >= 2 && (t[0] === "'" || t[0] === '"') && t.at(-1) === t[0] ? t.slice(1, -1) : t;
 }
 
-/** Parse an action string. Returns the actions, or an error message. */
-export function parseActions(src: string): { actions: Action[] } | { error: string } {
+/**
+ * Parse an action string. Returns the actions, or an error message. fns are
+ * the extra functions its expressions may call (a scene's, on a line inside one).
+ */
+export function parseActions(src: string, fns?: ExpressionFunctions): { actions: Action[] } | { error: string } {
   const actions: Action[] = [];
   for (const raw of splitTopLevel(src, ";")) {
     const part = raw.trim();
@@ -76,7 +79,7 @@ export function parseActions(src: string): { actions: Action[] } | { error: stri
       const message = unquote(rest);
       if (!message.trim()) return { error: `notify needs a message, like notify:'Saved'` };
       for (const p of splitTemplate(message)) {
-        if ("expr" in p) { const err = checkSyntax(p.expr); if (err) return { error: `In action "${part}": ${err}` }; }
+        if ("expr" in p) { const err = checkSyntax(p.expr, fns); if (err) return { error: `In action "${part}": ${err}` }; }
       }
       actions.push({ op, message });
       continue;
@@ -131,7 +134,7 @@ export function parseActions(src: string): { actions: Action[] } | { error: stri
     }
     const exprArg = arg === undefined ? null : wholeExpression(arg);
     for (const src of exprArg !== null ? [exprArg] : arg?.includes("{") ? splitTemplate(literalText(arg)).flatMap((p) => ("expr" in p ? [p.expr] : [])) : []) {
-      const err = checkSyntax(src);
+      const err = checkSyntax(src, fns);
       if (err) return { error: `In action "${part}": ${err}` };
     }
   }
@@ -168,14 +171,14 @@ export function actionTargets(actions: readonly Action[]): string[] {
  * Resolve an action argument: a whole `{expr}` is evaluated, text with
  * `{expressions}` in it is filled in ('Hi {name}'), anything else is a literal.
  */
-export function resolveArg(arg: string, scope: Scope): Value {
+export function resolveArg(arg: string, scope: Scope, fns?: ExpressionFunctions): Value {
   const whole = wholeExpression(arg);
   if (whole !== null) {
-    const r = evaluate(whole, scope);
+    const r = evaluate(whole, scope, fns);
     return r.ok ? r.value : null;
   }
   const v = literal(arg);
-  return typeof v === "string" && v.includes("{") ? interpolate(v, scope) : v;
+  return typeof v === "string" && v.includes("{") ? interpolate(v, scope, fns) : v;
 }
 
 /** An argument's text without one pair of surrounding quotes. */
@@ -197,6 +200,8 @@ export function literal(s: string): Value {
 
 export interface ActionHost {
   scope: Scope;
+  /** Extra functions the expressions may call: a scene's, for a shape's on= inside one. */
+  functions?: ExpressionFunctions;
   /** Change the value at a state name or path (t.done inside each). */
   set(path: string, value: Value): void;
   /** Remove the list item a path points at (remove:t). Hosts without each can leave it out. */
@@ -212,24 +217,27 @@ export interface ActionHost {
 }
 
 export function runActions(actions: Action[], host: ActionHost): void {
+  const fns = host.functions;
+  const arg = (a: string) => resolveArg(a, host.scope, fns);
+  const read = (path: string) => readPath(path, host.scope, fns);
   for (const a of actions) {
     switch (a.op) {
       case "inc":
       case "dec": {
         // toNumber, not Number: a list or record here must count as 0, not crash.
-        const cur = toNumber(read(a.key, host.scope) ?? 0) || 0;
-        const by = toNumber(resolveArg(a.by, host.scope)) || 0;
+        const cur = toNumber(read(a.key) ?? 0) || 0;
+        const by = toNumber(arg(a.by)) || 0;
         host.set(a.key, a.op === "inc" ? cur + by : Math.max(0, cur - by));
         break;
       }
       case "toggle":
-        host.set(a.key, !read(a.key, host.scope));
+        host.set(a.key, !read(a.key));
         break;
       case "set":
-        host.set(a.key, resolveArg(a.value, host.scope));
+        host.set(a.key, arg(a.value));
         break;
       case "emit":
-        host.emit(a.name, a.value === undefined ? undefined : resolveArg(a.value, host.scope));
+        host.emit(a.name, a.value === undefined ? undefined : arg(a.value));
         break;
       case "go":
         host.go?.(a.screen);
@@ -238,7 +246,7 @@ export function runActions(actions: Action[], host: ActionHost): void {
         host.back?.();
         break;
       case "notify":
-        host.notify?.(interpolate(a.message, host.scope));
+        host.notify?.(interpolate(a.message, host.scope, fns));
         break;
       case "add":
       case "clear":
@@ -247,16 +255,16 @@ export function runActions(actions: Action[], host: ActionHost): void {
           if (host.removeAt) host.removeAt(a.key);
           continue;
         }
-        const cur = read(a.key, host.scope);
+        const cur = read(a.key);
         if (cur !== undefined && cur !== null && !isList(cur)) {
           host.warn?.(`${a.op}:${a.key} needs a list, but ${a.key} isn't one`);
           continue;
         }
         const items = cur ?? [];
         if (a.op === "clear") host.set(a.key, makeList([]));
-        else if (a.op === "add") host.set(a.key, makeList([...items, resolveArg(a.value, host.scope)]));
+        else if (a.op === "add") host.set(a.key, makeList([...items, arg(a.value)]));
         else {
-          const at = toNumber(resolveArg(a.at!, host.scope));
+          const at = toNumber(arg(a.at!));
           if (Number.isInteger(at) && at >= 0 && at < items.length) host.set(a.key, makeList(items.filter((_, i) => i !== at)));
         }
         break;
@@ -266,8 +274,8 @@ export function runActions(actions: Action[], host: ActionHost): void {
 }
 
 /** The current value at a path: a state name, or a path like t.done read through the scope. */
-function read(path: string, scope: Scope): Value | undefined {
-  const r = evaluate(path, scope);
+function readPath(path: string, scope: Scope, fns?: ExpressionFunctions): Value | undefined {
+  const r = evaluate(path, scope, fns);
   return r.ok ? r.value : undefined;
 }
 

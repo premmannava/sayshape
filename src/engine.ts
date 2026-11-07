@@ -34,7 +34,7 @@ import { noAccessibility, type AccessibilityHost, type MirrorEvents, type Mirror
 import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
-import type { Scope } from "./expr";
+import type { ExpressionFunctions, Scope } from "./expr";
 
 export interface Metrics {
   nodes: number;
@@ -1059,11 +1059,12 @@ export class SayShape {
   }
 
   private runActionString(src: string, node: SayShapeNode, own?: OwnCopy): void {
-    const parsed = parseActions(src);
+    const parsed = parseActions(src, own?.functions);
     if ("error" in parsed) return;
     runActions(parsed.actions, {
       // Inside each, actions read the item's loop variables first; an element's own copies before that.
       scope: this.scopeFor(node, own),
+      ...(own?.functions ? { functions: own.functions } : {}),
       set: (path, v) => this.writePath(node, path, v, own),
       removeAt: (path) => this.removeAt(node, path, own),
       warn: (m) => this.warn(m),
@@ -1583,6 +1584,7 @@ export class SayShape {
 interface OwnCopy {
   scope: Scope;
   locate?: Locate;
+  functions?: ExpressionFunctions;
 }
 
 /** Whether a hit region is the one a target refers to (same element, same part). */

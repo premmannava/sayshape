@@ -2,6 +2,7 @@
 
 **Status:** interaction and the wider drawing check built (2026-11-07). Responsive composition and new drawing primitives deferred (see the gate).
 **Scope:** experimental, opt-in `sayshape/scene` only. Nothing changes for specs without scenes.
+**Validation:** real models, a real browser, accessibility and performance, with what was found and fixed: [interactive-scenes-validation.md](interactive-scenes-validation.md).
 
 This is the feasibility review written before any code changed, then what was built.
 

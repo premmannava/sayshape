@@ -10,7 +10,8 @@
  * - labels drawn on top of each other,
  * - a label straddling the edge of a box, half in and half out,
  * - a line that runs under a box drawn after it, so what it connects is hidden,
- * - a label too small to read, or a pressable shape too small to tap, on a phone,
+ * - labels too small to read (one warning for them all), or a pressable shape too small to tap, on a phone,
+ * - a scene whose formulas use t but whose duration is 0, so it never moves,
  * - a label too close in color to what's under it, in light or dark mode,
  * - pressable shapes on top of each other, or outside the picture.
  *
@@ -160,7 +161,12 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
     const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
     const theme = opts.theme ?? lightTheme;
     const drawn = drawAtRest(scene, scope, theme, opts.measure);
-    const out = findProblems(drawn.marks, drawn.regions, w, h);
+    const out: Diagnostic[] = [];
+    // A scene whose formulas read t but that has no duration is a still picture: it never moves.
+    if (!(numOf(scene, "duration", scope, 0) > 0) && readsClock(scene)) {
+      out.push({ line: scene.line, severity: "warning", message: "Drawing: this scene's formulas use t, but its duration is 0, so it never moves. Set duration= to the seconds the motion takes (loop=true, the default, repeats it)" });
+    }
+    out.push(...findProblems(drawn.marks, drawn.regions, w, h));
     // Contrast in both modes when no theme was asked for: theme colors change between them.
     const light = lowContrast(drawn.marks, drawn.under, theme);
     const dark = opts.theme ? [] : (() => {
@@ -168,13 +174,24 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
       return lowContrast(d.marks, d.under, darkTheme);
     })();
     const said = new Set<string>();
+    const contrast: Array<{ c: (typeof light)[number]; mode: string; count: number }> = [];
     for (const c of [...light, ...dark]) {
       if (said.has(c.key)) continue;
       said.add(c.key);
       const both = !opts.theme && light.some((l) => l.key === c.key) && dark.some((d) => d.key === c.key);
       const mode = opts.theme || both ? "" : c.dark ? " in dark mode" : " in light mode";
-      out.push({ line: c.line, severity: "warning", message: `Drawing: the label ${quote(c.text)} is hard to read${mode}: its color is too close to what's under it (contrast ${c.ratio.toFixed(1)}:1, needs ${MIN_CONTRAST}:1). Pick a lighter or darker fill, or a theme color like ink or onAccent` });
+      // Labels failing for the same reason (one fill on one background, one mode) are one problem with one fix.
+      const same = contrast.find((x) => x.mode === mode && x.c.color === c.color && x.c.under === c.under);
+      if (same) same.count++;
+      else contrast.push({ c, mode, count: 1 });
     }
+    for (const { c, mode, count } of contrast) {
+      const who = count === 1 ? `the label ${quote(c.text)} is` : `${count} labels, like ${quote(c.text)}, are`;
+      out.push({ line: c.line, severity: "warning", message: `Drawing: ${who} hard to read${mode}: the color is too close to what's under ${count === 1 ? "it" : "them"} (contrast ${c.ratio.toFixed(1)}:1, needs ${MIN_CONTRAST}:1). Pick a lighter or darker fill, or a theme color like ink or onAccent` });
+    }
+    // Last, and always kept: it's about the whole picture, and it never crowds out a problem that's only in one place.
+    const phone = phoneText(drawn.marks, w);
+    if (phone) return [...out.slice(0, MAX_DRAWING_PROBLEMS - 1), phone];
     return out.slice(0, MAX_DRAWING_PROBLEMS);
   } catch {
     return [];
@@ -253,14 +270,8 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
       }
     }
   }
-  // On a phone the whole picture shrinks to PHONE_WIDTH: words and things to press shrink with it.
+  // On a phone the whole picture shrinks to PHONE_WIDTH, and things to press shrink with it.
   const k = PHONE_WIDTH / w;
-  for (const l of labels) {
-    const px = (l.size ?? l.bounds.h) * k;
-    if (px < MIN_PHONE_TEXT) {
-      warn(l.node.line, `the label ${quote(l.text!)} is only ${px.toFixed(1)} px tall on a phone. Make its size at least ${Math.ceil(MIN_PHONE_TEXT / k)}, or the scene's w smaller`);
-    }
-  }
   const pressable = regions.map((r) => ({ r, b: regionBounds(r) })).filter((x): x is { r: SceneRegion; b: Rect } => !!x.b);
   for (const { r, b } of pressable) {
     if (overlap(b, { x: 0, y: 0, w, h }) <= 0) {
@@ -282,6 +293,42 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
     }
   }
   return out;
+}
+
+/**
+ * Labels too small to read on a phone, as one warning: they're usually most
+ * of a scene's labels at once, and one warning each would crowd out every
+ * other problem. It asks for bigger words, not a smaller w, because a small
+ * w makes the whole scene huge on a wide screen.
+ */
+function phoneText(marks: readonly Mark[], w: number): Diagnostic | null {
+  const k = PHONE_WIDTH / w;
+  const small = marks
+    .filter((m) => m.kind === "label" && m.alpha >= 0.15 && m.text?.trim())
+    .map((l) => ({ l, px: (l.size ?? l.bounds.h) * k }))
+    .filter((x) => x.px < MIN_PHONE_TEXT)
+    .sort((a, b) => a.px - b.px);
+  const first = small[0];
+  if (!first) return null;
+  const need = Math.ceil(MIN_PHONE_TEXT / k);
+  const which = small.length === 1
+    ? `the label ${quote(first.l.text!)} is only ${first.px.toFixed(1)} px tall on a phone`
+    : `${new Set(small.map((x) => x.l.node)).size === 1 ? `${small.length} copies of this label are` : `${small.length} labels are`} too small to read on a phone, the smallest ${quote(first.l.text!)} only ${first.px.toFixed(1)} px tall`;
+  return { line: first.l.node.line, severity: "warning", message: `Drawing: ${which}. Make every label's size at least ${need} at w=${w}` };
+}
+
+/** A name that reads the scene's clock: t inside a {formula}, unless an each or a drawing names something else t. */
+function readsClock(scene: SayShapeNode): boolean {
+  let clock = false, shadowed = false;
+  const walk = (n: SayShapeNode) => {
+    if (n.props.as === "t" || n.props.index === "t") shadowed = true;
+    for (const v of [...Object.values(n.props), n.text ?? ""]) {
+      for (const m of v.matchAll(/\{([^}]*)\}/g)) if (/(^|[^\w.'"])t\b(?!\s*:)/.test(m[1]!)) clock = true;
+    }
+    n.children.forEach(walk);
+  };
+  scene.children.forEach(walk);
+  return clock && !shadowed;
 }
 
 /** Whether inner is drawn inside outer (a pressable shape in a pressable group). */
@@ -342,8 +389,10 @@ const over = (top: Rgba, alpha: number, under: Rgba): Rgba => {
  * compared; a label over a gradient, a see-through shape or a color name
  * isn't judged, so art isn't flagged for what this can't know.
  */
-function lowContrast(marks: readonly Mark[], background: string, theme: Theme): Array<{ key: string; line: number; text: string; ratio: number; dark: boolean }> {
-  const out: Array<{ key: string; line: number; text: string; ratio: number; dark: boolean }> = [];
+interface LowContrast { key: string; line: number; text: string; ratio: number; dark: boolean; color: string; under: string }
+
+function lowContrast(marks: readonly Mark[], background: string, theme: Theme): LowContrast[] {
+  const out: LowContrast[] = [];
   const bg = parseColor(background);
   for (const l of marks) {
     if (l.kind !== "label" || !l.text?.trim() || !l.color || l.alpha < 0.6) continue;
@@ -367,7 +416,7 @@ function lowContrast(marks: readonly Mark[], background: string, theme: Theme): 
     const base = under ?? bg;
     if (!base || base.a < 0.95) continue;
     const ratio = contrast(over(ink, l.alpha, base), base);
-    if (ratio < MIN_CONTRAST) out.push({ key: `${l.node.line}:${l.text}`, line: l.node.line, text: l.text, ratio, dark: theme === darkTheme });
+    if (ratio < MIN_CONTRAST) out.push({ key: `${l.node.line}:${l.text}`, line: l.node.line, text: l.text, ratio, dark: theme === darkTheme, color: l.color, under: base === bg ? "background" : `${base.r},${base.g},${base.b}` });
   }
   return out;
 }

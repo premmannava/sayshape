@@ -12,7 +12,9 @@ import "@fontsource/instrument-sans/700.css";
 import { SayShape } from "../src/engine";
 import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
-import { darkTheme, lightTheme } from "../src/theme";
+import { sceneComponents } from "../src/components/scene";
+import { darkTheme, lightTheme, studioDarkTheme, studioLightTheme } from "../src/theme";
+import { sceneSamples } from "../playground/scene-samples";
 import { fixtureImageLoader } from "./fixture-image";
 import { cases } from "./cases";
 
@@ -23,12 +25,14 @@ declare global {
 async function main(): Promise<void> {
   const params = new URLSearchParams(location.search);
   const name = params.get("case") ?? "";
-  const dark = params.get("theme") === "dark";
   const width = Number(params.get("width") ?? 375);
-  const visual = cases.find((c) => c.name === name);
-  if (!visual) throw new Error(`No visual case named "${name}"`);
+  // Scene interaction tests (scene.spec.ts): ?scene=<sample> turns scenes on and shows that playground sample.
+  const scene = params.get("scene");
+  const visual = scene ? sceneSamples[scene] : cases.find((c) => c.name === name);
+  if (!visual) throw new Error(`No visual case named "${scene ?? name}"`);
 
-  const theme = dark ? darkTheme : lightTheme;
+  const themes = { light: lightTheme, dark: darkTheme, "studio-light": studioLightTheme, "studio-dark": studioDarkTheme };
+  const theme = themes[(params.get("theme") ?? "light") as keyof typeof themes] ?? lightTheme;
   // The root has no surface of its own, so the page shows through: use the theme's.
   document.body.style.background = theme.colors.surface;
   // Canvas text doesn't trigger web font loading, so load every weight first.
@@ -36,10 +40,11 @@ async function main(): Promise<void> {
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
   const sayshape = new SayShape(canvas, {
-    components: [...coreComponents, ...mapComponents],
+    components: [...coreComponents, ...mapComponents, ...(scene ? sceneComponents : [])],
     theme,
     width,
-    animate: false,
+    // Screenshots need stills; ?motion=1 animates (and still follows prefers-reduced-motion).
+    ...(params.get("motion") === "1" ? {} : { animate: false }),
     // The samples' real photo host, so their images are drawn by the fixture
     // instead of downloaded; other hosts stay blocked, as in the playground.
     imageHosts: ["images.unsplash.com"],
