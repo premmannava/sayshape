@@ -7,7 +7,7 @@
 import type { SayShape } from "../../src";
 import { mix, normalizeHex } from "./color";
 import { themeCode } from "./export";
-import { PRESETS, resolveTheme, type Mode, type PresetId, type Scheme } from "./presets";
+import { loadThemeFonts, PRESETS, resolveTheme, type Mode, type PresetId, type Scheme } from "./presets";
 import { DEFAULT_PREFS, isDefault, loadPrefs, savePrefs, type AppearancePrefs, type PrefStore } from "./prefs";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -57,6 +57,7 @@ export function setupAppearance(sayshape: SayShape): void {
       root.style.removeProperty("--hl");
     } else {
       sayshape.setTheme(r.theme);
+      loadThemeFonts(r.theme, () => sayshape.setTheme(r.theme));
       root.style.setProperty("--accent", r.theme.colors.accent);
       root.style.setProperty("--hl", mix(r.theme.colors.accent, r.theme.colors.surface, 0.85));
     }

@@ -25,7 +25,7 @@ function drawnColors(drawOps: ReturnType<typeof render>["drawOps"]): string[] {
 describe("MCP view theme selection", () => {
   it("provides a trusted Teal-default picker from the existing four presets", () => {
     expect(DEFAULT_PRESET).toBe("teal");
-    expect(PRESETS.map(({ id }) => id)).toEqual(["teal", "purple", "blue", "neutral"]);
+    expect(PRESETS.map(({ id }) => id)).toEqual(["teal", "purple", "blue", "neutral", "studio"]);
     expect(parse(PICKER_ONLY, registry).diagnostics).toEqual([]);
     expect(PICKER_ONLY).toContain('state preset="teal"');
     expect(isPresetId("purple")).toBe(true);

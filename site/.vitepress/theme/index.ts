@@ -6,6 +6,10 @@ import type { Theme } from "vitepress";
 import "@fontsource/instrument-sans/400.css";
 import "@fontsource/instrument-sans/600.css";
 import "@fontsource/instrument-sans/700.css";
+// Inter is the Studio theme's face, offered in the playground's style picker.
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "@fontsource/bricolage-grotesque/700.css";

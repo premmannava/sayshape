@@ -34,7 +34,7 @@ When neither is on, there's no toolbar at all. Whoever installs the server choos
 | Flag | Effect |
 |---|---|
 | `--theme-picker` | Show the theme selector (off by default) |
-| `--theme teal\|purple\|blue\|neutral` | The theme interfaces use (default `teal`) |
+| `--theme teal\|purple\|blue\|neutral\|studio` | The theme interfaces use (default `teal`). `studio` is the Studio look: Inter, rounder corners and an indigo-to-violet accent |
 | `--no-save-image` | Hide Save image (shown by default where the chat app can download) |
 
 ```json

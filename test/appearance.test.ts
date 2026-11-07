@@ -4,7 +4,7 @@ import { contrast, effectiveAccent, luminance, mix, normalizeHex, onColor, over 
 import { exportPlan, themeCode } from "../playground/appearance/export";
 import { auditTheme, lineContrast, PRESETS, resolveTheme, type PresetId, type Scheme } from "../playground/appearance/presets";
 import { DEFAULT_PREFS, loadPrefs, parsePrefs, savePrefs, STORAGE_KEY, type AppearancePrefs, type PrefStore } from "../playground/appearance/prefs";
-import { darkTheme, extendTheme, lightTheme } from "../src/theme";
+import { darkTheme, extendTheme, lightTheme, studioDarkTheme, studioLightTheme } from "../src/theme";
 
 const SCHEMES: Scheme[] = ["light", "dark"];
 
@@ -110,6 +110,16 @@ describe("presets", () => {
     const t = resolveTheme("blue", "dark", "#123456").theme;
     expect({ ...t, colors: undefined }).toEqual({ ...darkTheme, colors: undefined });
   });
+
+  it("give Studio its own themes, with a custom accent changing only colors", () => {
+    expect(resolveTheme("studio", "light", null).theme).toEqual(studioLightTheme);
+    expect(resolveTheme("studio", "dark", null).theme).toEqual(studioDarkTheme);
+    expect(resolveTheme("studio", "light", null).changes).toEqual({});
+    const t = resolveTheme("studio", "dark", "#0ea5e9").theme;
+    expect({ ...t, colors: undefined }).toEqual({ ...studioDarkTheme, colors: undefined });
+    // A custom accent replaces the gradient with a flat accent rather than half of Studio's.
+    expect(t.colors.accent2).toBe(t.colors.accent);
+  });
 });
 
 describe("preferences", () => {
@@ -146,7 +156,7 @@ describe("preferences", () => {
 });
 
 describe("theme code", () => {
-  const combos: AppearancePrefs[] = (["teal", "purple", "blue", "neutral"] as PresetId[]).flatMap((preset) =>
+  const combos: AppearancePrefs[] = (["teal", "purple", "blue", "neutral", "studio"] as PresetId[]).flatMap((preset) =>
     (["light", "dark", "system"] as const).flatMap((mode) => [null, "#ffff00", "#1a1a1a"].map((accent) => ({ preset, mode, accent }))),
   );
 
@@ -154,7 +164,8 @@ describe("theme code", () => {
     for (const p of combos) {
       const plan = exportPlan(p);
       const shown = (s: Scheme) => resolveTheme(p.preset, s, p.accent).theme;
-      const built = (s: Scheme, changes: object) => extendTheme(s === "dark" ? darkTheme : lightTheme, { colors: changes });
+      const studio = p.preset === "studio";
+      const built = (s: Scheme, changes: object) => extendTheme(s === "dark" ? (studio ? studioDarkTheme : darkTheme) : (studio ? studioLightTheme : lightTheme), { colors: changes });
       if (plan.mode === "system") {
         expect(built("light", plan.light), JSON.stringify(p)).toEqual(shown("light"));
         expect(built("dark", plan.dark), JSON.stringify(p)).toEqual(shown("dark"));
@@ -177,7 +188,7 @@ describe("theme code", () => {
       const out = ts.transpileModule(code, { reportDiagnostics: true, compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } });
       expect(out.diagnostics ?? [], code).toEqual([]);
       const imports = /import \{ ([^}]+) \} from "sayshape";/.exec(code)![1]!.split(",").map((s) => s.trim().replace(/^type /, ""));
-      for (const name of imports) expect(["extendTheme", "lightTheme", "darkTheme", "SayShape"], name).toContain(name);
+      for (const name of imports) expect(["extendTheme", "lightTheme", "darkTheme", "studioLightTheme", "studioDarkTheme", "SayShape"], name).toContain(name);
       expect(code).not.toMatch(/playground|appearance\//);
     }
   });
@@ -196,5 +207,7 @@ describe("theme code", () => {
   it("is just SayShape's own theme for the defaults", () => {
     expect(themeCode({ preset: "teal", mode: "light", accent: null })).toContain("export const theme = lightTheme;");
     expect(themeCode({ preset: "teal", mode: "light", accent: null })).not.toContain("extendTheme");
+    expect(themeCode({ preset: "studio", mode: "dark", accent: null })).toContain("export const theme = studioDarkTheme;");
+    expect(themeCode({ preset: "studio", mode: "system", accent: null })).toContain(`import { studioDarkTheme, studioLightTheme, type SayShape } from "sayshape";`);
   });
 });
