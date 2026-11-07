@@ -12,7 +12,9 @@ import type { Theme } from "../../theme";
 import type { SayShapeNode, Value } from "../../types";
 import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
-import { rotate, scale, translate, type Geom, type Matrix, type SceneRegion } from "./interact";
+import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type SceneRegion } from "./interact";
+import { PATH, placeOf, type Locate } from "../../paths";
+import { isScalar } from "../../data";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -115,7 +117,7 @@ export interface Frame {
    * order they start, the ones open around the line being drawn, and which
    * each copy and use the drawing is inside (for stable keys).
    */
-  press?: { regions: SceneRegion[]; open: SceneRegion[]; copy: string[]; alpha?: number };
+  press?: { regions: SceneRegion[]; open: SceneRegion[]; copy: string[]; alpha?: number; locate: Locate };
 }
 
 /** define and gradient lines anywhere in the scene (not inside a define's own drawing). */
@@ -201,8 +203,10 @@ function openRegion(node: SayShapeNode, scope: Scope, f: Frame): SceneRegion | n
   const sel = node.props.selected === undefined ? undefined : read(node, "selected", scope);
   const r: SceneRegion = {
     key: rec.copy.length ? `${node.id}#${rec.copy.join(".")}` : node.id,
-    node, scope, on, geoms: [], words: [],
+    node, scope, on, locate: rec.locate, geoms: [], words: [],
   };
+  const parent = rec.open[rec.open.length - 1];
+  if (parent) r.parent = parent;
   const tip = node.props.tip === undefined ? undefined : strOf(node, "tip", scope);
   const name = node.props.name === undefined ? undefined : strOf(node, "name", scope);
   if (tip) r.tip = tip;
@@ -259,15 +263,38 @@ export function drawAll(nodes: readonly SayShapeNode[], scope: Scope, f: Frame):
 function drawEach(node: SayShapeNode, scope: Scope, f: Frame): void {
   const raw = node.props.items;
   if (raw === undefined) return;
-  const r = evaluate(wholeExpression(raw) ?? raw, scope, SCENE_FUNCTIONS);
+  const expr = wholeExpression(raw) ?? raw;
+  const r = evaluate(expr, scope, SCENE_FUNCTIONS);
   if (!r.ok || !isList(r.value)) return;
   const as = node.props.as ?? DEFAULT_AS, index = node.props.index;
   const items = r.value;
+  const rec = f.press;
+  // As each does: items of a list that's a path into state (machines, plant.lines) can be written through.
+  const outer = rec?.locate;
+  const listPlace = outer && PATH.test(expr.trim()) ? placeOf(expr.trim(), outer) : null;
+  const keyExpr = node.props.key === undefined ? undefined : wholeExpression(node.props.key) ?? node.props.key;
+  const seen = new Set<string>();
   for (let i = 0; i < items.length && f.steps <= MAX_SCENE_STEPS; i++) {
     const item = items[i]!;
-    f.press?.copy.push(`${node.id}:${i}`);
-    drawAll(node.children, (name) => (name === as ? item : name === index ? i : scope(name)), f);
-    f.press?.copy.pop();
+    const own: Scope = (name) => (name === as ? item : name === index ? i : scope(name));
+    if (rec && outer) {
+      // Keys follow key= when it's given, so focus stays on the same item when the list is reordered.
+      let key = String(i);
+      if (keyExpr !== undefined) {
+        const k = evaluate(keyExpr, own, SCENE_FUNCTIONS);
+        if (k.ok && isScalar(k.value) && k.value !== null && k.value !== "") key = String(k.value);
+      }
+      if (seen.has(key)) key = `${key}@${i}`;
+      seen.add(key);
+      const place = listPlace && { key: listPlace.key, steps: [...listPlace.steps, i] };
+      rec.copy.push(`${node.id}:${key}`);
+      rec.locate = (name) => (name === as ? place : name === index ? null : outer(name));
+      drawAll(node.children, own, f);
+      rec.copy.pop();
+      rec.locate = outer;
+    } else {
+      drawAll(node.children, own, f);
+    }
   }
 }
 
@@ -330,7 +357,12 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
         const b = tracePath(d, g) ?? { x: 0, y: 0, w: 0, h: 0 };
         // A path with only an outline isn't filled, as in SVG paths drawn as lines.
         finishShape(node, scope, b, f, node.props.stroke === undefined ? "#000000" : null);
-        addGeom(f, { kind: "rect", m: f.m, x: b.x, y: b.y, w: b.w, h: b.h });
+        if (f.press?.open.length) {
+          const rings = flattenPath(d);
+          const fill = node.props.fill === undefined ? (node.props.stroke === undefined ? "#000000" : undefined) : strOf(node, "fill", scope);
+          if (fill !== undefined && fill.trim() !== "" && fill.trim() !== "none") addGeom(f, { kind: "poly", m: f.m, rings });
+          else for (const pts of rings) addGeom(f, { kind: "polyline", m: f.m, pts, width: Math.max(0, n("width", 1)) });
+        }
       });
       return;
     }
@@ -346,7 +378,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
         for (const [px, py] of pts.slice(1)) g.lineTo(px, py);
         g.closePath();
         finishShape(node, scope, b, f, "#000000");
-        addGeom(f, { kind: "poly", m: f.m, pts });
+        addGeom(f, { kind: "poly", m: f.m, rings: [pts] });
       });
       return;
     }
@@ -397,9 +429,18 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       const s = n("scale", 1);
       if (s !== 1) { g2.scale(s, s); f.m = scale(f.m, s, s); }
       if (node.props.opacity !== undefined) g2.globalAlpha *= Math.min(1, Math.max(0, n("opacity", 1)));
-      if (node.type === "use") { f.useDepth++; f.press?.copy.push(node.id); }
+      const rec = f.press, outer = rec?.locate;
+      if (node.type === "use") {
+        f.useDepth++;
+        if (rec && outer) {
+          rec.copy.push(node.id);
+          // A drawing's args are its own names: reading them is fine, writing them goes nowhere.
+          const args = inner === scope ? undefined : inner;
+          if (args) rec.locate = (name) => (args(name) !== scope(name) ? null : outer(name));
+        }
+      }
       drawAll(kids, inner, f);
-      if (node.type === "use") { f.useDepth--; f.press?.copy.pop(); }
+      if (node.type === "use") { f.useDepth--; if (rec && outer) { rec.copy.pop(); rec.locate = outer; } }
       g2.restore();
       f.m = was;
       return;

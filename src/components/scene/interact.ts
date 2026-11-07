@@ -14,6 +14,8 @@
  * touches app state: hover and focus come from the engine.
  */
 import type { Scope } from "../../expr";
+import type { Locate } from "../../paths";
+import { tracePath, type PathSink } from "./path";
 import type { Rect, SayShapeNode } from "../../types";
 
 /** An affine transform [a, b, c, d, e, f], as canvas setTransform takes it. */
@@ -41,8 +43,11 @@ export function invert(m: Matrix): Matrix | null {
 export type Geom =
   | { kind: "rect"; m: Matrix; x: number; y: number; w: number; h: number; r?: number; text?: boolean }
   | { kind: "ellipse"; m: Matrix; x: number; y: number; rx: number; ry: number }
-  | { kind: "poly"; m: Matrix; pts: ReadonlyArray<readonly [number, number]> }
-  | { kind: "line"; m: Matrix; x1: number; y1: number; x2: number; y2: number; width: number };
+  /** A filled outline of one or more rings (a path's subpaths), filled nonzero as the canvas fills it. */
+  | { kind: "poly"; m: Matrix; rings: ReadonlyArray<ReadonlyArray<readonly [number, number]>> }
+  | { kind: "line"; m: Matrix; x1: number; y1: number; x2: number; y2: number; width: number }
+  /** An outline drawn but not filled (a path with only a stroke): pressed near its line. */
+  | { kind: "polyline"; m: Matrix; pts: ReadonlyArray<readonly [number, number]>; width: number };
 
 /** A pressable shape, group or use, as drawn this frame. */
 export interface SceneRegion {
@@ -51,6 +56,10 @@ export interface SceneRegion {
   node: SayShapeNode;
   /** The scope its props were read with (t, the scene's each items, a use's args), for its actions. */
   scope: Scope;
+  /** Where its names live in state, for writes (m.on is item 2 of machines), as each does it. */
+  locate: Locate;
+  /** The pressable line it's drawn inside, if any (a shape in a pressable group). */
+  parent?: SceneRegion;
   on: string;
   tip?: string;
   name?: string;
@@ -89,11 +98,64 @@ export function outline(g: Geom): Array<[number, number]> {
       return out;
     }
     case "poly":
+      return g.rings.flatMap((ring) => ring.map(([x, y]) => apply(g.m, x, y)));
+    case "polyline":
       return g.pts.map(([x, y]) => apply(g.m, x, y));
     case "line":
       return [apply(g.m, g.x1, g.y1), apply(g.m, g.x2, g.y2)];
   }
 }
+
+/** The outlines to stroke around a geometry, in canvas pixels: one per ring; closed unless open is set. */
+export function strokes(g: Geom): Array<{ pts: Array<[number, number]>; open: boolean }> {
+  if (g.kind === "poly") return g.rings.map((ring) => ({ pts: ring.map(([x, y]) => apply(g.m, x, y)), open: false }));
+  return [{ pts: outline(g), open: g.kind === "line" || g.kind === "polyline" }];
+}
+
+/**
+ * A path's subpaths as point lists, curves and arcs flattened to short lines,
+ * the way the canvas will have drawn them. At most MAX_PATH_POINTS points.
+ */
+export function flattenPath(d: string): Array<Array<[number, number]>> {
+  const rings: Array<Array<[number, number]>> = [];
+  let ring: Array<[number, number]> = [];
+  let total = 0;
+  const at = (): [number, number] => ring[ring.length - 1] ?? [0, 0];
+  const add = (x: number, y: number) => { if (total++ < MAX_PATH_POINTS && Number.isFinite(x) && Number.isFinite(y)) ring.push([x, y]); };
+  const STEPS = 8;
+  const sink: PathSink = {
+    moveTo(x, y) { if (ring.length) rings.push(ring); ring = []; add(x, y); },
+    lineTo(x, y) { add(x, y); },
+    quadraticCurveTo(a, b, x, y) {
+      const [x0, y0] = at();
+      for (let k = 1; k <= STEPS; k++) { const u = k / STEPS, v = 1 - u; add(v * v * x0 + 2 * v * u * a + u * u * x, v * v * y0 + 2 * v * u * b + u * u * y); }
+    },
+    bezierCurveTo(a, b, c, d2, x, y) {
+      const [x0, y0] = at();
+      for (let k = 1; k <= STEPS; k++) {
+        const u = k / STEPS, v = 1 - u;
+        add(v * v * v * x0 + 3 * v * v * u * a + 3 * v * u * u * c + u * u * u * x, v * v * v * y0 + 3 * v * v * u * b + 3 * v * u * u * d2 + u * u * u * y);
+      }
+    },
+    ellipse(cx, cy, rx, ry, rot, start, end, ccw) {
+      let sweep = end - start;
+      if (ccw && sweep > 0) sweep -= 2 * Math.PI;
+      if (!ccw && sweep < 0) sweep += 2 * Math.PI;
+      for (let k = 0; k <= STEPS * 2; k++) {
+        const a = start + (sweep * k) / (STEPS * 2);
+        const ex = rx * Math.cos(a), ey = ry * Math.sin(a);
+        add(cx + ex * Math.cos(rot) - ey * Math.sin(rot), cy + ex * Math.sin(rot) + ey * Math.cos(rot));
+      }
+    },
+    closePath() { if (ring.length) { const first = ring[0]!; rings.push(ring); ring = [first]; } },
+  };
+  tracePath(d, sink);
+  if (ring.length > 1) rings.push(ring);
+  return rings.filter((r) => r.length >= 2);
+}
+
+/** The most points a flattened path keeps for pressing. */
+export const MAX_PATH_POINTS = 4000;
 
 export function boundsOf(pts: ReadonlyArray<readonly [number, number]>, pad = 0): Rect | null {
   if (!pts.length) return null;
@@ -110,7 +172,7 @@ export function boundsOf(pts: ReadonlyArray<readonly [number, number]>, pad = 0)
 export function regionBounds(r: SceneRegion): Rect | null {
   let out: Rect | null = null;
   for (const g of r.geoms) {
-    const b = boundsOf(outline(g), g.kind === "line" ? Math.max(LINE_SLOP, lineWidthOnScreen(g) / 2) : 0);
+    const b = boundsOf(outline(g), g.kind === "line" || g.kind === "polyline" ? Math.max(LINE_SLOP, lineWidthOnScreen(g) / 2) : 0);
     if (!b) continue;
     out = out ? union(out, b) : b;
   }
@@ -129,15 +191,19 @@ export const intersect = (a: Rect, b: Rect): Rect | null => {
 };
 
 /** How wide a line is drawn on screen: its width times the transform's average stretch. */
-function lineWidthOnScreen(g: Extract<Geom, { kind: "line" }>): number {
+function lineWidthOnScreen(g: Extract<Geom, { kind: "line" | "polyline" }>): number {
   return g.width * Math.sqrt(Math.abs(g.m[0] * g.m[3] - g.m[1] * g.m[2]));
 }
 
 /** Whether a canvas-pixel point is on this geometry: inside its outline, or near its line. */
 export function geomHit(g: Geom, px: number, py: number): boolean {
-  if (g.kind === "line") {
-    const [[x1, y1], [x2, y2]] = outline(g) as [[number, number], [number, number]];
-    return distToSegment(px, py, x1, y1, x2, y2) <= Math.max(LINE_SLOP, lineWidthOnScreen(g) / 2);
+  if (g.kind === "line" || g.kind === "polyline") {
+    const pts = outline(g), reach = Math.max(LINE_SLOP, lineWidthOnScreen(g) / 2);
+    for (let i = 1; i < pts.length; i++) {
+      const [x1, y1] = pts[i - 1]!, [x2, y2] = pts[i]!;
+      if (distToSegment(px, py, x1, y1, x2, y2) <= reach) return true;
+    }
+    return false;
   }
   const inv = invert(g.m);
   if (!inv) return false;
@@ -151,7 +217,7 @@ export function geomHit(g: Geom, px: number, py: number): boolean {
       return dx * dx + dy * dy <= 1;
     }
     case "poly":
-      return inPolygon(x, y, g.pts);
+      return winding(x, y, g.rings) !== 0;
   }
 }
 
@@ -162,14 +228,22 @@ function distToSegment(px: number, py: number, x1: number, y1: number, x2: numbe
   return Math.hypot(px - (x1 + u * dx), py - (y1 + u * dy));
 }
 
-/** Even-odd: a point is inside when a ray from it crosses the outline an odd number of times. */
-function inPolygon(x: number, y: number, pts: ReadonlyArray<readonly [number, number]>): boolean {
-  let inside = false;
-  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-    const [xi, yi] = pts[i]!, [xj, yj] = pts[j]!;
-    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+/**
+ * Nonzero winding, the canvas's own fill rule: a point is inside when the
+ * outlines wind around it, so the middle of a star drawn in one stroke is
+ * inside, as it looks.
+ */
+function winding(x: number, y: number, rings: ReadonlyArray<ReadonlyArray<readonly [number, number]>>): number {
+  let wn = 0;
+  for (const pts of rings) {
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [x0, y0] = pts[j]!, [x1, y1] = pts[i]!;
+      const side = (x1 - x0) * (y - y0) - (x - x0) * (y1 - y0);
+      if (y0 <= y) { if (y1 > y && side > 0) wn++; }
+      else if (y1 <= y && side < 0) wn--;
+    }
   }
-  return inside;
+  return wn;
 }
 
 /** What a scene drew last frame: its box, and its pressable regions by key, in drawing order. */
@@ -210,7 +284,9 @@ export function outerGeoms(r: SceneRegion): Geom[] {
     const pts = outline(g);
     return { g, pts, b: boundsOf(pts) };
   });
-  return shapes.filter((inner) => !shapes.some((outer) => outer !== inner && outer.g.kind !== "line" && covers(outer, inner))).map((x) => x.g);
+  const outer = shapes.filter((inner) => !shapes.some((o) => o !== inner && o.g.kind !== "line" && o.g.kind !== "polyline" && covers(o, inner))).map((x) => x.g);
+  // A pressable label on its own: outline its words.
+  return outer.length ? outer : r.geoms;
 }
 
 type Outlined = { g: Geom; pts: Array<[number, number]>; b: Rect | null };

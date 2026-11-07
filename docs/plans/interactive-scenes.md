@@ -51,7 +51,7 @@ Any shape, `group` or `use` in a scene takes:
 | `tip=` | Words shown in a small tag above it while it's hovered or focused; may hold `{formulas}`. |
 | `name=` | What screen readers call it. Default: the words of the labels inside it, else its tip. |
 
-A pressed `group` or `use` is pressed anywhere on its shapes. Hit testing is exact under the scene's scaling, groups' moves, turns and scales, and shapes' own turns: rectangles, circles, ovals and polygons by their outline, lines within a few pixels, paths and labels by their own box. The last-drawn pressable shape under the pointer wins; a pressable shape inside a pressable group wins over the group.
+A pressed `group` or `use` is pressed anywhere on its shapes. Hit testing is exact under the scene's scaling, groups' moves, turns and scales, and shapes' own turns: rectangles, circles, ovals, polygons and filled paths by their outline (nonzero, as the canvas fills), lines and unfilled paths within a few pixels, labels by their own box. Writes go where the item was drawn from (`each items=machines` → item 2 of `machines`), as `each` does, including `remove:m`; a drawing's `args` names can be read but not written. The last-drawn pressable shape under the pointer wins; a pressable shape inside a pressable group wins over the group.
 
 Hover, keyboard focus and `selected=` are drawn by the engine in theme colors (an outline that follows the shape), so models write nothing for them, and they look the same in every scene. With reduced motion, the scene is the still it always was, and it stays pressable.
 
@@ -93,12 +93,15 @@ Screenshots (Chrome, from the sample; not the visual-regression baselines):
 
 **Guide size.** Scene part of the full guide: 11,581 → 14,055 characters (about +620 tokens); compact: 2,764 → 3,151 (about +100). The guide without scenes is unchanged (`test/fixtures/guide-full.txt`).
 
-**Frame cost** (`bench/scene.bench.ts`, means, noisy at ±5–15%): the factory monitor paints in about 1.0 ms with its four pressable machines, one selected, against about 0.85 ms with nothing pressable; 200 pressable circles take about 1.0 ms against about 0.5 ms for 200 plain ones (about 2.5 µs per pressable shape). Finding what's under the pointer among 200 pressable circles takes about 0.5 µs. Heap is flat over 500 frames. The core benchmarks (`bench/engine.bench.ts`) show no change beyond their noise.
+**Frame cost** (`bench/scene.bench.ts`, means, noisy at ±5–15%, after the review fixes): the factory monitor paints in about 0.9–1.2 ms with its four pressable machines, one selected, against about 0.8–1.0 ms with nothing pressable; 200 pressable circles take about 1.2 ms against about 0.5 ms for 200 plain ones (about 3 µs per pressable shape: its outline, its region and its tip). Finding what's under the pointer among 200 pressable circles takes under 1 µs. Over 4,000 frames the heap grows about as much with pressable machines as without them (a few hundred KB, levelling off), so no per-frame leak shows. The core benchmarks (`bench/engine.bench.ts`) show no change beyond their noise.
+
+## Independent review
+
+A separate review of the first version found eight defects, all fixed with a test each (`test/scene-interact.test.ts`, "review findings"): chained writes to one scene item failing after the first, a write landing in another list holding the same item, `remove:m` not working, polygons hit with a different fill rule than they're painted with, paths hit by their box, focus jumping to another item when a list was reordered (now keyed by `key=`), the screen-reader mirror not following shapes that appear or move during an animation (the engine now rebuilds it when the set of regions changes, and at most every 250 ms while they only move), and the tap-size check measuring the wrong side and running slowly with deeply nested pressable groups. A pressable label on its own now gets its selection outline too.
 
 ## Limits and next steps
 
 - The focus ring is the engine's upright box around a turned shape.
 - Hit regions are the last painted frame's: on a fast-moving shape, a press lands where it was up to one frame ago.
-- Paths are hit by their box, not their outline.
 - A scene's each items can be written to (`toggle:m.on`) only when they come from a list in state, as with `each`.
 - Next, if wanted: arrow keys between pressable shapes; a soft `glow`; a `narrow` name for scenes that recompose on phones; checking a moving label against the edges at a few moments of its animation, for labels meant to stay put.

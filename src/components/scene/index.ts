@@ -31,7 +31,8 @@ import type { Box, Rect } from "../../types";
 import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
 import { paintScene, type Frame } from "./draw";
-import { intersect, liveOf, outerGeoms, outline, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
+import { locateOf } from "../../each";
+import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
 export { MAX_SCENE_SHAPES, MAX_SCENE_STEPS, MAX_USE_DEPTH, THEME_COLORS } from "./draw";
@@ -136,7 +137,7 @@ const scene: ComponentDef = {
     const sx = box.w / w, sy = box.h / h;
     const f: Frame = {
       g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
-      m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [] },
+      m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
     };
     g.save();
     g.beginPath();
@@ -157,7 +158,7 @@ const scene: ComponentDef = {
   },
   press(ctx) {
     const r = liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail));
-    if (r) ctx.run(r.on, r.scope);
+    if (r) ctx.run(r.on, { scope: r.scope, locate: r.locate });
   },
   semantics: (box, ctx) => {
     const name = ctx.props(box.node).text() || "Picture";
@@ -214,13 +215,12 @@ function paintFeedback(box: Box, ctx: PaintContext, shown: ReadonlyArray<{ r: Sc
     const strong = !!s.r.selected || focused;
     g.save();
     g.globalAlpha = strong ? 1 : 0.7;
-    for (const geom of outerGeoms(s.r)) {
-      const pts = outline(geom);
+    for (const { pts, open } of outerGeoms(s.r).flatMap(strokes)) {
       if (pts.length < 2) continue;
       g.beginPath();
       g.moveTo(pts[0]![0], pts[0]![1]);
       for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
-      if (geom.kind !== "line") g.closePath();
+      if (!open) g.closePath();
       g.lineJoin = "round";
       g.lineCap = "round";
       // A light edge under the accent keeps the outline visible on any color the model chose.

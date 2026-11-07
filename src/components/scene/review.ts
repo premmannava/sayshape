@@ -27,6 +27,7 @@ import { Store } from "../../state";
 import { darkTheme, lightTheme, type Theme } from "../../theme";
 import { colorOf, paintScene, numOf, strOf, type Frame } from "./draw";
 import { IDENTITY, regionBounds, type SceneRegion } from "./interact";
+import { stateLocate } from "../../paths";
 
 /** The most drawing problems reported for one spec; the first few are what a model needs. */
 export const MAX_DRAWING_PROBLEMS = 8;
@@ -192,7 +193,7 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
     g, font: (wt, size) => `${wt} ${size}px sans-serif`, colors: theme.colors,
     defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
     onNode: (n) => { current = n; },
-    m: IDENTITY, press: { regions: [], open: [], copy: [] },
+    m: IDENTITY, press: { regions: [], open: [], copy: [], locate: stateLocate },
   };
   paintScene(f, scene.children, at, w, h, undefined);
   // What a label with nothing under it sits on: the scene's background, or the card it's in.
@@ -266,8 +267,8 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
       warn(r.node.line, `this pressable ${r.node.type} is outside the picture, so it can't be pressed. Move it inside 0..${w} across and 0..${h} down`);
       continue;
     }
-    if (Math.max(b.w, b.h) * k < MIN_PHONE_TARGET) {
-      warn(r.node.line, `this pressable ${r.node.type} is only ${Math.round(Math.max(b.w, b.h) * k)} px across on a phone, too small to tap. Make it at least ${Math.ceil(MIN_PHONE_TARGET / k)} scene pixels across`);
+    if (Math.min(b.w, b.h) * k < MIN_PHONE_TARGET) {
+      warn(r.node.line, `this pressable ${r.node.type} is only ${Math.round(Math.min(b.w, b.h) * k)} px across on a phone, too small to tap. Make it at least ${Math.ceil(MIN_PHONE_TARGET / k)} scene pixels both ways`);
     }
   }
   for (let i = 0; i < pressable.length; i++) {
@@ -283,8 +284,11 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
   return out;
 }
 
-/** Whether every outline of inner is also one of outer's (inner is drawn inside outer). */
-const contains = (outer: SceneRegion, inner: SceneRegion) => inner.geoms.length > 0 && inner.geoms.every((g) => outer.geoms.includes(g));
+/** Whether inner is drawn inside outer (a pressable shape in a pressable group). */
+const contains = (outer: SceneRegion, inner: SceneRegion) => {
+  for (let p = inner.parent; p; p = p.parent) if (p === outer) return true;
+  return false;
+};
 
 // ---------- contrast ----------
 

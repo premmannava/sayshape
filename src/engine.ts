@@ -15,7 +15,7 @@ import { locateOf, scopeOf } from "./each";
 import { domEditorHost } from "./dom-editor";
 import { noEditor, type EditorHost, type EditorSpec } from "./editor";
 import { isList, makeList } from "./data";
-import { findItem, getIn, PATH, placeOf, setIn, type Place } from "./paths";
+import { findItem, getIn, PATH, placeOf, setIn, type Locate, type Place } from "./paths";
 import { createLayoutContext, isVisible, walkBoxes } from "./layout";
 import { Loading, type LoadingView } from "./loading";
 import { MotionValues } from "./motion";
@@ -169,6 +169,9 @@ export class SayShape {
   private a11y: AccessibilityHost;
   /** Set when layout ran, so the mirror is rebuilt after the next paint (not on every hover). */
   private a11yDirty = true;
+  /** The last frame's hit regions, briefly: their keys and a sum of where they are (see noteRegionChanges). */
+  private regionKeys: { keys: string; spot: number } | null = null;
+  private regionsMovedAt = 0;
   /** Whether the last mirror update was busy (streaming or loading), to say "Ready" when it ends. */
   private wasBusy = false;
   /** The field being typed into, if any. */
@@ -439,8 +442,30 @@ export class SayShape {
     this.inspector.paintOverlay(g, this.rootBox, this.hits);
     this.inspector.endCapture();
     this.metrics.paintMs = now() - t;
+    this.noteRegionChanges(t);
     this.syncAccessibility();
     this.events.emit("render", { ...this.metrics });
+  }
+
+  /**
+   * Regions change without layout when an element moves its own parts each
+   * frame (a scene's pressable shapes). The mirror is rebuilt when the set of
+   * regions changes, and at most a few times a second while they only move,
+   * so a screen reader finds them where they are.
+   */
+  private noteRegionChanges(t: number): void {
+    if (!this.a11y.update) return;
+    let keys = "", spot = 0;
+    for (const h of this.hits) {
+      keys += accessibleKey(h.box.node, h.detail) + "|";
+      spot += Math.round(h.box.x) * 3 + Math.round(h.box.y) * 7 + Math.round(h.box.w) + Math.round(h.box.h);
+    }
+    const was = this.regionKeys;
+    this.regionKeys = { keys, spot };
+    // Rebuilt this frame anyway (layout ran): these regions are the mirror's now.
+    if (!was || this.a11yDirty) { this.regionsMovedAt = t; return; }
+    if (was.keys !== keys) { this.a11yDirty = true; this.regionsMovedAt = t; }
+    else if (was.spot !== spot && t - this.regionsMovedAt > REGION_REFRESH_MS) { this.a11yDirty = true; this.regionsMovedAt = t; }
   }
 
   /**
@@ -808,7 +833,7 @@ export class SayShape {
         return r;
       },
       set: (path, v) => this.writePath(target.node, path, v),
-      run: (actions, scope) => this.runActionString(actions, target.node, scope),
+      run: (actions, own) => this.runActionString(actions, target.node, own),
       openPopup: (state) => this.openPopup(target, state),
       popupOpen: !!this.popup && this.popup.owner.node.id === target.node.id,
       today: this.today,
@@ -1033,16 +1058,14 @@ export class SayShape {
     if (typeof v !== "string" || !names.includes(v)) this.state.set(SCREEN_KEY, names[0]!);
   }
 
-  private runActionString(src: string, node: SayShapeNode, extra?: Scope): void {
+  private runActionString(src: string, node: SayShapeNode, own?: OwnCopy): void {
     const parsed = parseActions(src);
     if ("error" in parsed) return;
-    // Inside each, actions read the item's loop variables first; an element's own copies (extra) before that.
-    const own = scopeOf(node, this.state.scope);
-    const scope: Scope = extra ? (name) => { const v = extra(name); return v === undefined ? own(name) : v; } : own;
     runActions(parsed.actions, {
-      scope,
-      set: (path, v) => this.writePath(node, path, v, extra),
-      removeAt: (path) => this.removeAt(node, path),
+      // Inside each, actions read the item's loop variables first; an element's own copies before that.
+      scope: this.scopeFor(node, own),
+      set: (path, v) => this.writePath(node, path, v, own),
+      removeAt: (path) => this.removeAt(node, path, own),
       warn: (m) => this.warn(m),
       emit: (name, value) => this.events.emit("action", { name, value, node }),
       go: (screen) => this.go(screen),
@@ -1051,12 +1074,19 @@ export class SayShape {
     });
   }
 
+  /** What a node's actions read through: its own copy's names (a scene's each item), then its each's, then state. */
+  private scopeFor(node: SayShapeNode, own?: OwnCopy): Scope {
+    const base = scopeOf(node, this.state.scope);
+    if (!own) return base;
+    return (name) => { const v = own.scope(name); return v === undefined ? base(name) : v; };
+  }
+
   /**
    * Write a value at a path as seen from a node: a state name, or inside each
    * a path through the item (t.done), which rebuilds the list it lives in.
    */
-  private writePath(node: SayShapeNode, path: string, value: Value, extra?: Scope): void {
-    const place = this.placeFor(node, path, extra);
+  private writePath(node: SayShapeNode, path: string, value: Value, own?: OwnCopy): void {
+    const place = this.placeFor(node, path, own);
     if (!place) {
       this.warn(`Can't change ${path}: it isn't in state. Inside each, items= must be a list in state (like items=todos) or worked out from one (filter, sort, search, take) for its items to change`);
       return;
@@ -1073,25 +1103,19 @@ export class SayShape {
    * out from state (each items=shown with derive shown={filter(tasks, …)}) is
    * found in state by identity, so ticking a filtered task changes tasks.
    */
-  private placeFor(node: SayShapeNode, path: string, extra?: Scope): Place | null {
-    // An item of an element's own copies (a scene's each item, m.on) is found in state by identity.
-    const [head, ...tail] = path.split(".");
-    const own = extra && tail.length && PATH.test(path) ? extra(head!) : undefined;
-    if (own !== undefined && own !== this.state.scope(head!)) {
-      const found = findItem(own, this.state.entries());
-      return found ? { key: found.key, steps: [...found.steps, ...tail] } : null;
-    }
-    const place = placeOf(path, locateOf(node));
+  private placeFor(node: SayShapeNode, path: string, own?: OwnCopy): Place | null {
+    // An element drawing its own copies says where their names live (a scene's each item is item 2 of machines).
+    const place = placeOf(path, own?.locate ?? locateOf(node));
     // Through a loop variable only (t.done): a derived name written directly still gets derivedWrite's message.
     if ((place && !(place.steps.length && this.state.isDerived(place.key))) || !PATH.test(path)) return place;
     const [first, ...rest] = path.split(".");
-    const found = findItem(scopeOf(node, this.state.scope)(first!), this.state.entries());
+    const found = findItem(this.scopeFor(node, own)(first!), this.state.entries());
     return found ? { key: found.key, steps: [...found.steps, ...rest] } : place;
   }
 
   /** Remove the list item a path points at, like remove:t inside each as=t. */
-  private removeAt(node: SayShapeNode, path: string): void {
-    const place = this.placeFor(node, path);
+  private removeAt(node: SayShapeNode, path: string, own?: OwnCopy): void {
+    const place = this.placeFor(node, path, own);
     const at = place?.steps.at(-1);
     if (!place || typeof at !== "number") {
       this.warn(`remove:${path} needs ${path} to be an item of a list in state, like remove:t inside each items=todos as=t. To remove by position, write remove:list:index`);
@@ -1555,10 +1579,19 @@ export class SayShape {
   }
 }
 
+/** An element's own copy, for actions run from it (PressContext.run): its names, and where they live in state. */
+interface OwnCopy {
+  scope: Scope;
+  locate?: Locate;
+}
+
 /** Whether a hit region is the one a target refers to (same element, same part). */
 function sameRegion(h: HitRegion, t: HitTarget): boolean {
   return h.box.node.id === t.node.id && h.detail === t.detail;
 }
+
+/** How often, at most, the mirror follows regions that move without layout (an animated scene's shapes). */
+const REGION_REFRESH_MS = 250;
 
 /** How long a notify: message stays up, and how long it takes to fade in or out. */
 const TOAST_MS = 3000;

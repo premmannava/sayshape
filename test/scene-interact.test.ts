@@ -48,7 +48,7 @@ describe("transforms", () => {
     const oval = { kind: "ellipse" as const, m: IDENTITY, x: 50, y: 50, rx: 40, ry: 10 };
     expect(geomHit(oval, 85, 50)).toBe(true);
     expect(geomHit(oval, 85, 58)).toBe(false);
-    const tri = { kind: "poly" as const, m: IDENTITY, pts: [[0, 0], [100, 0], [0, 100]] as Array<[number, number]> };
+    const tri = { kind: "poly" as const, m: IDENTITY, rings: [[[0, 0], [100, 0], [0, 100]]] as Array<Array<[number, number]>> };
     expect(geomHit(tri, 20, 20)).toBe(true);
     expect(geomHit(tri, 80, 80)).toBe(false);
     const line = { kind: "line" as const, m: scale(IDENTITY, 2, 2), x1: 0, y1: 10, x2: 100, y2: 10, width: 2 };
@@ -469,4 +469,166 @@ describe("the factory monitor sample", () => {
       ui.destroy();
     });
   }
+});
+
+/** Each of these was found by an independent review of the first version. */
+describe("review findings", () => {
+  const MACHINES = `state picked=[] sel='' machines=[{id: 'cut', on: false, rate: 1}, {id: 'press', on: false, rate: 1}, {id: 'pack', on: false, rate: 1}]`;
+  const lineOf = (action: string, extra = "") => `${MACHINES}
+scene "Line" w=400 h=200
+  each items=machines as=m${extra}
+    rect x={20 + i * 130} y=50 w=100 h=100 fill=accent on=${action}`.replace("as=m", "as=m index=i");
+  const machines = (ui: Rendered) => ui.state.machines as Array<{ id: string; on: boolean; rate: number }>;
+
+  it("writes several fields of the same scene item in one press", () => {
+    const ui = render(lineOf("set:m.on:true;set:m.rate:5"), { components: ON });
+    ui.click(...sceneAt(ui, 400, 200).at(200, 100));
+    expect(machines(ui)[1]).toMatchObject({ on: true, rate: 5 });
+    expect(ui.warnings).toEqual([]);
+    ui.destroy();
+  });
+
+  it("writes to the list the item was drawn from, even when another list holds it too", () => {
+    const ui = render(lineOf("add:picked:{m};toggle:m.on"), { components: ON });
+    const { at } = sceneAt(ui, 400, 200);
+    ui.click(...at(200, 100));
+    ui.click(...at(200, 100));
+    expect(machines(ui)[1]!.on).toBe(false);
+    expect((ui.state.picked as unknown[]).length).toBe(2);
+    ui.destroy();
+  });
+
+  it("removes the item a shape was drawn from (remove:m)", () => {
+    const ui = render(lineOf("remove:m"), { components: ON });
+    ui.click(...sceneAt(ui, 400, 200).at(200, 100));
+    expect(machines(ui).map((m) => m.id)).toEqual(["cut", "pack"]);
+    expect(ui.warnings).toEqual([]);
+    ui.destroy();
+  });
+
+  it("still finds an item of a filtered list in state, as each does", () => {
+    const ui = render(`${MACHINES}
+scene "Line" w=400 h=200
+  each items={filter(machines, 'on', false)} as=m index=i
+    rect x={20 + i * 130} y=50 w=100 h=100 fill=accent on=toggle:m.on`, { components: ON });
+    ui.click(...sceneAt(ui, 400, 200).at(200, 100));
+    expect(machines(ui)[1]!.on).toBe(true);
+    ui.destroy();
+  });
+
+  it("doesn't let a drawing's args be written as if they were state", () => {
+    const ui = render(`state n=1
+scene "Use" w=200 h=200
+  define "btn"
+    rect x=0 y=0 w=100 h=100 fill=accent on=set:n:{n + 1}
+  use "btn" x=50 y=50 args={{n: 40}}`, { components: ON });
+    ui.click(...sceneAt(ui, 200, 200).at(100, 100));
+    // n is the drawing's own arg here, not state: the write is refused with a warning, never sent elsewhere.
+    expect(ui.state.n).toBe(1);
+    expect(ui.warnings.join(" ")).toMatch(/Can't change n/);
+    ui.destroy();
+  });
+
+  it("fills and presses a self-crossing polygon the way the canvas fills it (nonzero)", () => {
+    const ui = render(`state n=0
+scene "Star" w=400 h=400
+  polygon points="200,40 294,330 48,150 352,150 106,330" fill=warn on=inc:n`, { components: ON });
+    ui.click(...sceneAt(ui, 400, 400).at(200, 200));
+    expect(ui.state.n).toBe(1);
+    ui.destroy();
+  });
+
+  it("presses a path by its outline, not its box, and an open stroked path near its line", () => {
+    const ui = render(`state n=0 k=0
+scene "Paths" w=400 h=400
+  path d="M0 0 L300 0 L0 300 Z" fill=accent on=inc:n
+  path d="M200 380 Q300 280 390 380" stroke=ink width=4 on=inc:k`, { components: ON });
+    const { at } = sceneAt(ui, 400, 400);
+    ui.click(...at(280, 280));
+    expect(ui.state.n).toBe(0);
+    ui.click(...at(50, 50));
+    expect(ui.state.n).toBe(1);
+    ui.click(...at(295, 330)); // on the curve's peak
+    expect(ui.state.k).toBe(1);
+    ui.click(...at(295, 370)); // under the curve, away from the line
+    expect(ui.state.k).toBe(1);
+    ui.destroy();
+  });
+
+  it("keeps focus on the same item when the list is reordered, with key=", () => {
+    const spec = `state sel='' machines=[{id: 'cut'}, {id: 'press'}, {id: 'pack'}]
+scene "Line" w=400 h=200
+  each items=machines as=m index=i key={m.id}
+    rect x={20 + i * 130} y=50 w=100 h=100 fill=accent on=set:sel:{m.id}`;
+    const ui = render(spec, { components: ON });
+    ui.tab();
+    ui.tab();
+    ui.set("machines", [{ id: "press" }, { id: "cut" }, { id: "pack" }]);
+    ui.key("Enter");
+    expect(ui.state.sel).toBe("press");
+    ui.destroy();
+  });
+
+  it("outlines a pressable label on its own when it's selected", () => {
+    const ui = render(`scene "L" w=300 h=100
+  label "Pick me" x=20 y=50 size=24 fill=ink on=set:x:1 selected=true`, { components: ON });
+    expect(ui.drawOps.filter((o) => o.op === "stroke" && o.strokeStyle === lightTheme.colors.accent)).toHaveLength(1);
+    ui.destroy();
+  });
+
+  it("warns about a pressable shape thin in one direction, and checks nested groups quickly", () => {
+    expect(reviewScenes(parse(`state n=0
+scene "A" w=400 h=200
+  rect x=20 y=50 w=200 h=2 fill=accent on=inc:n`, on)).map((d) => d.message))
+      .toEqual([expect.stringMatching(/too small to tap/)]);
+    const depth = 60;
+    const lines = [`state n=0`, `scene "Deep" w=1000 h=600`];
+    for (let d = 0; d < depth; d++) lines.push(`${"  ".repeat(d + 1)}group on=inc:n`);
+    lines.push(`${"  ".repeat(depth + 1)}each items={range(1500)} as=i`, `${"  ".repeat(depth + 2)}rect x={i % 50 * 20} y={floor(i / 50) * 20} w=18 h=18 fill=accent`);
+    const parsed = parse(lines.join("\n"), on);
+    const start = performance.now();
+    reviewScenes(parsed);
+    expect(performance.now() - start).toBeLessThan(1500);
+  });
+});
+
+describe("the mirror follows moving pressable shapes", () => {
+  let queue: FrameRequestCallback[] = [];
+  const g = globalThis as { requestAnimationFrame?: unknown; cancelAnimationFrame?: unknown };
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["performance", "setTimeout", "clearTimeout"] });
+    queue = [];
+    g.requestAnimationFrame = (cb: FrameRequestCallback) => { queue.push(cb); return queue.length; };
+    g.cancelAnimationFrame = () => {};
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    delete g.requestAnimationFrame;
+    delete g.cancelAnimationFrame;
+  });
+  const frame = (ms: number) => { vi.advanceTimersByTime(ms); const now = queue; queue = []; for (const cb of now) cb(performance.now()); };
+
+  it("adds a shape that appears mid-animation, and moves one that moves", () => {
+    type Node = { name?: string; rect: { x: number }; children: Node[] };
+    let tree: Node | null = null;
+    const canvas = new FakeCanvas();
+    const ui = new SayShape(canvas as unknown as HTMLCanvasElement, {
+      components: ON, width: 440, padding: 20, animate: true,
+      accessibility: { announce() {}, update: (t) => { tree = t as unknown as Node; }, destroy() {} },
+    });
+    ui.setSpec(`state n=0
+scene "Moving" w=400 h=100 duration=2 loop=false
+  circle x={50 + 100*t} y=50 r=20 fill=accent on=inc:n name="Mover"
+  rect x=300 y=20 w=60 h=60 fill=good on=inc:n name="Go" if={t > 1}`);
+    frame(0);
+    for (let i = 0; i < 20; i++) frame(150);
+    const all: Node[] = [];
+    const walk = (n: Node) => { all.push(n); n.children.forEach(walk); };
+    walk(tree!);
+    expect(all.map((n) => n.name)).toEqual(expect.arrayContaining(["Mover", "Go"]));
+    const box = ui.boxes!.children[0]!;
+    const mover = all.find((n) => n.name === "Mover")!;
+    expect(mover.rect.x).toBeGreaterThan(box.x + (200 * box.w) / 400);
+    ui.destroy();
+  });
 });
