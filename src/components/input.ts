@@ -2,7 +2,7 @@ import { toNumber } from "../data";
 import type { ComponentDef, LayoutContext, PropReader } from "../component";
 import type { Box, SayShapeNode } from "../types";
 import { INPUT_KINDS } from "../editor";
-import { isDarkTheme, mixColors, type Theme } from "../theme";
+import { isDark, isDarkTheme, mixColors, type Theme } from "../theme";
 import { MOTION } from "../design";
 import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
 
@@ -94,7 +94,9 @@ button "Back" variant=secondary on=dec:step`,
     }
     g.fill();
     g.restore();
-    if (!secondary && box.w > 30) {
+    // Only a light label color can be a reflection: on a dark theme's light accent the label is
+    // dark, and a dark line across the top read as a seam, not a shine.
+    if (!secondary && box.w > 30 && !isDark(c.onAccent)) {
       // A restrained top-edge reflection, independent from content and hit geometry.
       g.save();
       g.beginPath();
