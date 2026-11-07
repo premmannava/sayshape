@@ -34,6 +34,7 @@ import { noAccessibility, type AccessibilityHost, type MirrorEvents, type Mirror
 import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
+import type { Scope } from "./expr";
 
 export interface Metrics {
   nodes: number;
@@ -787,7 +788,7 @@ export class SayShape {
       if (x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h) continue;
       const def = this.registry.get(b.node.type);
       if (def?.hitTest) {
-        const r = def.hitTest(b, x, y);
+        const r = def.hitTest(b, x, y, h.detail);
         if (!r) continue;
         return { node: b.node, box: b, detail: r.detail };
       }
@@ -807,7 +808,7 @@ export class SayShape {
         return r;
       },
       set: (path, v) => this.writePath(target.node, path, v),
-      run: (actions) => this.runActionString(actions, target.node),
+      run: (actions, scope) => this.runActionString(actions, target.node, scope),
       openPopup: (state) => this.openPopup(target, state),
       popupOpen: !!this.popup && this.popup.owner.node.id === target.node.id,
       today: this.today,
@@ -1032,13 +1033,15 @@ export class SayShape {
     if (typeof v !== "string" || !names.includes(v)) this.state.set(SCREEN_KEY, names[0]!);
   }
 
-  private runActionString(src: string, node: SayShapeNode): void {
+  private runActionString(src: string, node: SayShapeNode, extra?: Scope): void {
     const parsed = parseActions(src);
     if ("error" in parsed) return;
+    // Inside each, actions read the item's loop variables first; an element's own copies (extra) before that.
+    const own = scopeOf(node, this.state.scope);
+    const scope: Scope = extra ? (name) => { const v = extra(name); return v === undefined ? own(name) : v; } : own;
     runActions(parsed.actions, {
-      // Inside each, actions read the item's loop variables first.
-      scope: scopeOf(node, this.state.scope),
-      set: (path, v) => this.writePath(node, path, v),
+      scope,
+      set: (path, v) => this.writePath(node, path, v, extra),
       removeAt: (path) => this.removeAt(node, path),
       warn: (m) => this.warn(m),
       emit: (name, value) => this.events.emit("action", { name, value, node }),
@@ -1052,8 +1055,8 @@ export class SayShape {
    * Write a value at a path as seen from a node: a state name, or inside each
    * a path through the item (t.done), which rebuilds the list it lives in.
    */
-  private writePath(node: SayShapeNode, path: string, value: Value): void {
-    const place = this.placeFor(node, path);
+  private writePath(node: SayShapeNode, path: string, value: Value, extra?: Scope): void {
+    const place = this.placeFor(node, path, extra);
     if (!place) {
       this.warn(`Can't change ${path}: it isn't in state. Inside each, items= must be a list in state (like items=todos) or worked out from one (filter, sort, search, take) for its items to change`);
       return;
@@ -1070,7 +1073,14 @@ export class SayShape {
    * out from state (each items=shown with derive shown={filter(tasks, …)}) is
    * found in state by identity, so ticking a filtered task changes tasks.
    */
-  private placeFor(node: SayShapeNode, path: string): Place | null {
+  private placeFor(node: SayShapeNode, path: string, extra?: Scope): Place | null {
+    // An item of an element's own copies (a scene's each item, m.on) is found in state by identity.
+    const [head, ...tail] = path.split(".");
+    const own = extra && tail.length && PATH.test(path) ? extra(head!) : undefined;
+    if (own !== undefined && own !== this.state.scope(head!)) {
+      const found = findItem(own, this.state.entries());
+      return found ? { key: found.key, steps: [...found.steps, ...tail] } : null;
+    }
     const place = placeOf(path, locateOf(node));
     // Through a loop variable only (t.done): a derived name written directly still gets derivedWrite's message.
     if ((place && !(place.steps.length && this.state.isDerived(place.key))) || !PATH.test(path)) return place;

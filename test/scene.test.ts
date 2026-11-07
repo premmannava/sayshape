@@ -263,14 +263,15 @@ describe("the drawing check", () => {
   });
 
   it("finds labels on top of each other, but not a deliberate shadow", () => {
-    expect(review(`scene "A" w=300 h=100\n  label "Delay" x=20 y=50 size=20\n  label "Delay 40 min" x=30 y=52 size=20`))
+    expect(review(`scene "A" w=300 h=100\n  label "Delay" x=20 y=50 size=20 fill=ink\n  label "Delay 40 min" x=30 y=52 size=20 fill=ink`))
       .toEqual([expect.stringMatching(/^3: Drawing: the label "Delay 40 min" is drawn on top of "Delay" \(line 2\)/)]);
     expect(review(`scene "A" w=300 h=100\n  label "GOAL" x=22 y=52 size=40 fill="#000000"\n  label "GOAL" x=20 y=50 size=40 fill=accent`)).toEqual([]);
   });
 
   it("finds a label straddling a box's edge", () => {
-    expect(review(`scene "A" w=300 h=200\n  rect x=50 y=50 w=120 h=60 fill=bad\n  label "BOTTLENECK" x=110 y=110 size=14 align=center fill=ink`))
-      .toEqual([expect.stringMatching(/^3: Drawing: the label "BOTTLENECK" straddles the edge of the rect on line 2/)]);
+    // Half on the red box, the dark words are also hard to read there; the straddling is what to fix first.
+    expect(review(`scene "A" w=300 h=200\n  rect x=50 y=50 w=120 h=60 fill=bad\n  label "BOTTLENECK" x=110 y=110 size=14 align=center fill="#1D3557"`)[0])
+      .toMatch(/^3: Drawing: the label "BOTTLENECK" straddles the edge of the rect on line 2/);
   });
 
   it("finds a line hidden under a box drawn after it", () => {
@@ -294,7 +295,7 @@ describe("the drawing check", () => {
 
   it("checks the picture as it rests, at the end of its animation", () => {
     // At t=0 the label is cut off; by the end it has slid fully inside.
-    expect(review(`scene "Slide" w=300 h=100 duration=2\n  label "Hello there" x={-60 + 40*t} y=50 size=20`)).toEqual([]);
+    expect(review(`scene "Slide" w=300 h=100 duration=2\n  label "Hello there" x={-60 + 40*t} y=50 size=20 fill=ink`)).toEqual([]);
   });
 
   it("never throws, whatever the scene", () => {
