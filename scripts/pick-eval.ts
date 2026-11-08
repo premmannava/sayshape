@@ -23,7 +23,7 @@ import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render } from "../src/testing";
 import { generateSpec } from "../src/model";
-import { grade, pickCases, POINTS, signatures, type Grade, type PickCase } from "../eval/picks";
+import { pickCases, scoreSigs, signatures, type Grade, type PickCase } from "../eval/picks";
 import { textOverflows } from "../test/overflow";
 import { readModelEnv } from "./model-env";
 
@@ -45,6 +45,9 @@ export interface PickAnswer {
 export interface PickResult extends Required<Omit<PickAnswer, "spec">> {
   group: string;
   trap: boolean;
+  round: number;
+  /** For a case with several parts, each part's grade. */
+  parts?: Array<{ label: string; grade: Grade }>;
   grade: Grade;
   points: number;
   matched: string[];
@@ -61,8 +64,8 @@ export interface PickResult extends Required<Omit<PickAnswer, "spec">> {
 export function scoreAnswer(c: PickCase, a: PickAnswer): PickResult {
   const parsed = parse(a.spec, registry);
   const sigs = signatures(parsed.root);
-  const g = grade(c, sigs);
-  const named = new Set([...c.best, ...(c.ok ?? []), ...(c.poor ?? [])]);
+  const g = scoreSigs(c, sigs);
+  const named = new Set([...c.best, ...(c.ok ?? []), ...(c.poor ?? []), ...(c.parts ?? []).flatMap((p) => [...p.best, ...(p.ok ?? []), ...(p.poor ?? [])])]);
   let overflows = 0;
   let crashed: string | undefined;
   try {
@@ -79,9 +82,11 @@ export function scoreAnswer(c: PickCase, a: PickAnswer): PickResult {
     run: a.run ?? 1,
     group: c.group,
     trap: !!c.trap,
+    round: c.round ?? 1,
     grade: g.grade,
-    points: POINTS[g.grade],
+    points: g.points,
     matched: g.matched,
+    ...(g.parts ? { parts: g.parts } : {}),
     used: [...sigs].filter((s) => named.has(s) || s.startsWith("chart:")).sort(),
     errors: parsed.diagnostics.filter((d) => d.severity === "error").length,
     warnings: parsed.diagnostics.filter((d) => d.severity === "warning").map((d) => `line ${d.line}: ${d.message}`),
@@ -98,27 +103,33 @@ export function pickReport(results: PickResult[], title: string): string {
   const keys = [...new Set(results.map(keyOf))].sort();
   const out: string[] = [`# ${title}`, ""];
   const score = (rs: PickResult[]) => `${pct(rs.reduce((a, r) => a + r.points, 0), rs.length * 2)} (best ${rs.filter((r) => r.grade === "best").length}/${rs.length})`;
-  out.push("| Model · setup | Score | Charts | Structure | Inputs | Content | Traps | Clean |", "|---|---|---|---|---|---|---|---|");
+  out.push("| Model · setup | Score | Round 1 | Round 2 | Charts | Structure | Inputs | Content | Traps | Clean |", "|---|---|---|---|---|---|---|---|---|---|");
   for (const k of keys) {
     const rs = results.filter((r) => keyOf(r) === k);
     const g = (name: string) => score(rs.filter((r) => r.group === name));
     const clean = rs.filter((r) => !r.errors && !r.crashed && !r.overflows).length;
-    out.push(`| ${k} | ${score(rs)} | ${g("chart")} | ${g("structure")} | ${g("input")} | ${g("content")} | ${score(rs.filter((r) => r.trap))} | ${pct(clean, rs.length)} |`);
+    out.push(`| ${k} | ${score(rs)} | ${score(rs.filter((r) => r.round === 1))} | ${score(rs.filter((r) => r.round === 2))} | ${g("chart")} | ${g("structure")} | ${g("input")} | ${g("content")} | ${score(rs.filter((r) => r.trap))} | ${pct(clean, rs.length)} |`);
   }
   out.push("", "## Each case", "", `| Case | Best | ${keys.join(" | ")} |`, `|---|---|${keys.map(() => "---").join("|")}|`);
   for (const c of pickCases) {
     const cells = keys.map((k) => {
       const rs = results.filter((r) => r.id === c.id && keyOf(r) === k);
-      return rs.map((r) => (r.grade === "best" ? "✓" : `${r.grade === "ok" ? "~" : "✗"} ${r.used.filter((u) => !c.best.includes(u)).slice(0, 3).join(", ") || "—"}`)).join(" / ") || "";
+      return rs.map((r) => {
+        if (r.grade === "best") return "✓";
+        const mark = r.grade === "ok" ? "~" : "✗";
+        if (r.parts) return `${mark} ${r.parts.filter((p) => p.grade !== "best").map((p) => `${p.label}: ${p.grade}`).join(", ")}`;
+        return `${mark} ${r.used.filter((u) => !c.best.includes(u)).slice(0, 3).join(", ") || "—"}`;
+      }).join(" / ") || "";
     });
-    out.push(`| ${c.id}${c.trap ? " (trap)" : ""} | ${c.best.join(", ")} | ${cells.join(" | ")} |`);
+    const best = c.parts ? c.parts.map((p) => `${p.label}: ${p.best.join("/")}`).join("; ") : c.best.join(", ");
+    out.push(`| ${c.id}${c.trap ? " (trap)" : ""}${c.round === 2 ? " ²" : ""} | ${best} | ${cells.join(" | ")} |`);
   }
   const bad = results.filter((r) => r.errors || r.crashed || r.overflows);
   if (bad.length) {
     out.push("", "## Answers that didn't draw cleanly", "");
     for (const r of bad) out.push(`- ${r.id} (${keyOf(r)}, run ${r.run}): ${r.crashed ? `crashed: ${r.crashed}` : ""}${r.errors ? `${r.errors} errors ` : ""}${r.overflows ? `${r.overflows} overflowing text ` : ""}`);
   }
-  out.push("", "✓ best · ~ acceptable (what it used instead) · ✗ poor or something else", "");
+  out.push("", "✓ best · ~ acceptable (what it used instead) · ✗ poor or something else · ² round 2 (harder)", "");
   return out.join("\n");
 }
 

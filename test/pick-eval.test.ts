@@ -9,7 +9,7 @@ import { mapComponents } from "../src/components/map";
 import { KINDS } from "../src/components/chart-kit";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
-import { grade, pickCases, signatures } from "../eval/picks";
+import { grade, pickCases, scoreSigs, signatures } from "../eval/picks";
 import { scoreAnswer } from "../scripts/pick-eval";
 
 const registry = new Registry([...coreComponents, ...mapComponents]);
@@ -32,19 +32,23 @@ describe("representation eval cases", () => {
 
   for (const c of pickCases) {
     it(`${c.id}: names real elements and variants, and keeps best, ok and poor apart`, () => {
-      const all = [...c.best, ...(c.ok ?? []), ...(c.poor ?? [])];
+      const all = [...c.best, ...(c.ok ?? []), ...(c.poor ?? []), ...(c.parts ?? []).flatMap((x) => [...x.best, ...(x.ok ?? []), ...(x.poor ?? [])])];
+      expect(c.best.length || c.parts?.length, "a best answer, or parts with their own").toBeTruthy();
       for (const s of all) {
         if (s === "tip" || s === "if") continue;
         const [type, variant] = s.split(":") as [string, string | undefined];
         expect(registry.get(type), `${s} is an element`).toBeDefined();
         if (variant) expect(VARIANTS[type], `${s} is a variant the grader reads`).toContain(variant);
       }
-      expect(new Set(all).size, "no signature in two grades").toBe(all.length);
+      for (const g of [c, ...(c.parts ?? [])]) {
+        const own = [...g.best, ...(g.ok ?? []), ...(g.poor ?? [])];
+        expect(new Set(own).size, "no signature in two grades").toBe(own.length);
+      }
       expect(c.why.length).toBeGreaterThan(20);
     });
 
     it(`${c.id}: doesn't name its best answer in the request`, () => {
-      for (const s of c.best) {
+      for (const s of [...c.best, ...(c.parts ?? []).flatMap((x) => x.best)]) {
         // The element's name, and a chart's or tree's kind ("funnel", "org"); other variants are
         // everyday words a request has to use ("email", "week").
         const [type, variant] = s.split(":");
@@ -64,12 +68,22 @@ describe("grading an answer", () => {
     for (const x of ["chart", "chart:bar", "tree:org", "input:email", "input:required", "input:lines", "tip"]) expect(s.has(x), x).toBe(true);
   });
 
-  it("gives the best grade any part reaches", () => {
+  it("gives the best grade reached, and only ok when a poor one sits beside the best", () => {
     expect(grade(hbar, sigsOf(`state r=[]\nchart kind=hbar items=r x=a y=b\n`)).grade).toBe("best");
     expect(grade(hbar, sigsOf(`state r=[]\nchart items=r x=a y=b\n`)).grade).toBe("ok");
     expect(grade(hbar, sigsOf(`state r=[]\nchart kind=pie items=r x=a y=b\n`)).grade).toBe("poor");
     expect(grade(hbar, sigsOf(`text "Nothing"\n`)).grade).toBe("other");
-    expect(grade(hbar, sigsOf(`state r=[]\nchart kind=pie items=r x=a y=b\nchart kind=hbar items=r x=a y=b\n`)).grade).toBe("best");
+    expect(grade(hbar, sigsOf(`state r=[]\nchart kind=hbar items=r x=a y=b\ntable items=r\n  table-column "A" field=a\n`)).grade).toBe("best");
+    expect(grade(hbar, sigsOf(`state r=[]\nchart kind=pie items=r x=a y=b\nchart kind=hbar items=r x=a y=b\n`)).grade).toBe("ok");
+  });
+
+  it("averages a case's parts", () => {
+    const dash = pickCases.find((c) => c.id === "dashboard-mix")!;
+    const all = scoreSigs(dash, sigsOf(`state r=[]\nchart kind=bullet items=r x=a y=b target=c\nchart kind=line items=r x=a y=b\nchart kind=donut items=r x=a y=b\n`));
+    expect(all).toMatchObject({ grade: "best", points: 2 });
+    const some = scoreSigs(dash, sigsOf(`state r=[]\nstat label="Revenue" value=1\nchart kind=line items=r x=a y=b\n`));
+    expect(some.points).toBeCloseTo((1 + 2 + 0) / 3);
+    expect(some.parts?.map((p) => p.grade)).toEqual(["ok", "best", "other"]);
   });
 
   it("scores points and checks the answer draws cleanly", () => {

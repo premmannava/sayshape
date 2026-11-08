@@ -31,9 +31,17 @@ export interface PickCase {
   why: string;
   /** The obvious choice isn't the best one. */
   trap?: boolean;
+  /**
+   * 1: the data or the ask points at one representation. 2: harder and closer to real
+   * messages: raw data with a vague ask, several things to show at once (parts), or
+   * a need the picks don't word directly.
+   */
+  round?: 1 | 2;
+  /** Several things to show in one answer, each graded on its own; the case scores their average. */
+  parts?: Array<{ label: string; best: string[]; ok?: string[]; poor?: string[] }>;
 }
 
-export const pickCases: PickCase[] = [
+const round1: PickCase[] = [
   // ---------------------------------------------------------------- charts
   {
     id: "rank-long-names", group: "chart",
@@ -313,6 +321,152 @@ export const pickCases: PickCase[] = [
   },
 ];
 
+const round2: PickCase[] = [
+  {
+    id: "raw-daily", group: "chart", trap: true,
+    request: "Here are our daily orders for the last 60 days, starting Sep 1: 212, 198, 230, 241, 205, 188, 176, 220, 236, 249, 252, 213, 190, 182, 228, 245, 251, 266, 231, 204, 197, 239, 257, 263, 271, 240, 215, 208, 250, 268, 274, 281, 249, 226, 219, 262, 279, 288, 292, 257, 233, 225, 270, 291, 297, 305, 266, 240, 236, 284, 300, 309, 318, 276, 252, 246, 296, 311, 322, 330. What do you make of it?",
+    best: ["chart:line", "chart:area"], ok: ["stat"], poor: ["chart:bar", "chart:hbar", "table"],
+    why: "Sixty days is a series to read as a shape (weekly dips, a rising trend): a line. Sixty bars are crowded and hide the trend.",
+  },
+  {
+    id: "raw-table-vague", group: "chart",
+    request: "Region, 2025, 2026: West 610, 820; East 590, 610; Central 470, 455; South 300, 380; Northeast 260, 290 (in $K). Can you show this?",
+    best: ["chart:bar", "chart:hbar"], ok: ["table", "chart:line"], poor: ["chart:pie", "chart:donut", "chart:stacked"],
+    why: "Two years per region compared side by side: grouped bars (two series). Stacking would add the years together; a pie can't show two years.",
+  },
+  {
+    id: "budget-vs-actual", group: "chart",
+    request: "Budget against actual spend by department this quarter: Engineering $420K budget, $455K actual; Sales $310K, $290K; Marketing $180K, $210K; Support $120K, $118K; Admin $90K, $84K. Who's over?",
+    best: ["chart:bullet", "chart:bar", "chart:hbar"], ok: ["table", "stat"], poor: ["chart:pie", "chart:donut", "chart:stacked", "chart:line"],
+    why: "Actual against a budget per department, lower is better: a bullet chart with good=down, or bars of both side by side.",
+  },
+  {
+    id: "survey", group: "chart",
+    request: "Survey results, share of answers per question (agree / neutral / disagree): Easy to use 72/18/10, Fast 61/25/14, Good value 48/30/22, Would recommend 66/21/13.",
+    best: ["chart:stacked"], ok: ["chart:bar", "chart:hbar", "table"], poor: ["chart:pie", "chart:donut", "chart:line"],
+    why: "Each question's answers make up 100%: stacked bars compare the splits across questions (one pie per question can't be compared).",
+  },
+  {
+    id: "spread", group: "chart", trap: true,
+    request: "How are our order values spread out? Orders by value: under $25: 140, $25–50: 310, $50–100: 420, $100–200: 260, $200–500: 90, over $500: 18.",
+    best: ["chart:bar"], ok: ["chart:hbar", "table"], poor: ["chart:pie", "chart:donut", "chart:line", "chart:area"],
+    why: "A distribution over ordered buckets: bars in bucket order (a histogram); a pie loses the order, a line suggests time.",
+  },
+  {
+    id: "three-regions-trend", group: "chart",
+    request: "Monthly active users by region, Jan to Jun: North America 12, 13, 13, 15, 16, 18 (thousands); Europe 8, 8, 9, 11, 12, 12; Asia 4, 5, 7, 8, 10, 13. Which region is growing fastest?",
+    best: ["chart:line"], ok: ["chart:bar", "chart:area", "table"], poor: ["chart:pie", "chart:donut", "chart:stacked"],
+    why: "Growth of three separate series: lines, one per region; stacking hides each region's slope.",
+  },
+  {
+    id: "two-kpis-vs-last", group: "chart", trap: true,
+    request: "This month vs last month: revenue $212K vs $190K, orders 2,310 vs 2,250, refunds 41 vs 58.",
+    best: ["stat"], ok: ["table", "details"], poor: ["chart:bar", "chart:line", "chart:pie"],
+    why: "Three headline numbers with their change: stats with change= (and good=down for refunds), not a bar chart of mixed units.",
+  },
+  {
+    id: "by-country", group: "chart",
+    request: "Our customers by country: United States 4,200, United Kingdom 1,300, Germany 1,100, Canada 900, Australia 650, France 600, Japan 420, Brazil 380, India 360, Mexico 240. Show me where they are.",
+    best: ["map"], ok: ["chart:hbar", "chart:bar", "table", "chart:treemap"], poor: ["chart:pie", "chart:donut", "chart:line"],
+    why: "Asked where they are: a map shaded by country (kind=choropleth); ranked bars are a fair second.",
+  },
+  {
+    id: "dashboard-mix", group: "chart",
+    request: "Build me a dashboard for this quarter: revenue $1.9M (target $2M), orders 18,400 (target 17,000), monthly revenue Jul $590K, Aug $640K, Sep $670K, and revenue by channel: web $1.1M, retail $520K, wholesale $280K.",
+    best: [], parts: [
+      { label: "targets", best: ["chart:bullet", "progress", "meter"], ok: ["stat"] },
+      { label: "monthly", best: ["chart:line", "chart:area", "chart:bar"], poor: ["chart:pie", "chart:donut"] },
+      { label: "channels", best: ["chart:donut", "chart:pie", "chart:hbar"], ok: ["chart:bar", "chart:treemap"], poor: ["chart:line"] },
+    ],
+    why: "Three kinds of data in one screen: goals (bullet or progress), a trend (line or bars) and a split (donut).",
+  },
+  {
+    id: "team-skills", group: "chart",
+    request: "Skill levels (1 to 5) for our team: Ana: SQL 5, Python 4, Design 2, Writing 3; Ben: SQL 3, Python 5, Design 1, Writing 2; Chloe: SQL 2, Python 2, Design 5, Writing 4; Dev: SQL 4, Python 3, Design 3, Writing 5. Where are we thin?",
+    best: ["chart:heatmap"], ok: ["table", "chart:bar"], poor: ["chart:pie", "chart:donut", "chart:line"],
+    why: "One number across people and skills: a heatmap shows the thin cells at a glance.",
+  },
+  {
+    id: "restaurants", group: "structure",
+    request: "Here are 12 restaurants near our office with cuisine, rating and price level: Juniper & Rye (American, 4.6, $$$), Saffron Lane (Indian, 4.5, $$), Little Kyoto (Japanese, 4.7, $$$), Casa Verde (Mexican, 4.3, $), Olive & Vine (Italian, 4.4, $$), Pho Real (Vietnamese, 4.2, $), The Copper Pot (American, 4.0, $$), Seoul Food (Korean, 4.5, $$), Bread & Salt (Bakery, 4.8, $), Marina Grill (Seafood, 4.1, $$$), Green Bowl (Vegan, 4.3, $$), Smoke & Ash (BBQ, 4.6, $$). Help me pick one for lunch.",
+    best: ["table", "list"], ok: ["card", "grid"], poor: ["chart:bar", "chart:hbar", "chart:scatter"],
+    why: "Choosing among places by several attributes: a sortable table or a list, not a chart of ratings.",
+  },
+  {
+    id: "steps-instructions", group: "structure", trap: true,
+    request: "How do I set up two-factor sign-in on our admin site? Open Settings, choose Security, press Turn on 2FA, scan the code with an authenticator app, then type the 6-digit code to confirm.",
+    best: ["timeline", "list"], ok: ["text"], poor: ["flow", "table", "chart:funnel"],
+    why: "Steps to follow in order with no branches: a numbered list or steps, not a flow chart.",
+  },
+  {
+    id: "approval-branch", group: "structure",
+    request: "What happens to an expense claim? It's submitted, then checked by the manager. Under $500 it's paid straight away; over $500 it goes to finance, who either pay it or send it back to the employee to fix and resubmit.",
+    best: ["flow"], ok: ["timeline", "list"], poor: ["table", "chart:funnel", "tree:org"],
+    why: "A process with a branch and a loop back: a flow with a decision; a list can't show the loop.",
+  },
+  {
+    id: "today-meetings", group: "structure",
+    request: "My meetings today: standup 9:00–9:15, design review 10:00–11:00, lunch with Ana 12:00–13:00, interview 13:30–14:30, planning 15:00–16:30, 1:1 with Ben 16:00–16:30.",
+    best: ["schedule:day", "schedule:week"], ok: ["list", "timeline", "table"], poor: ["chart:bar", "flow"],
+    why: "Blocks at times of day, two of them overlapping: a day schedule shows the clash.",
+  },
+  {
+    id: "folder-structure", group: "structure",
+    request: "Our shared drive's folders: Clients (Acme, Northwind (Contracts, Invoices), Lumen), Internal (HR, Finance (2025, 2026)), Templates. Let me browse it.",
+    best: ["tree:list"], ok: ["accordion", "list"], poor: ["table", "flow", "tree:org"],
+    why: "Folders inside folders to open and close: a tree list, not an org chart.",
+  },
+  {
+    id: "ticket-queue", group: "structure",
+    request: "Our support tickets: 4 new, 6 open, 3 waiting on the customer, 9 solved this week. Each has a subject, customer and priority (make up a few realistic ones). I want to work through them and move them along.",
+    best: ["board"], ok: ["table", "list", "tabs"], poor: ["chart:pie", "chart:donut", "chart:funnel"],
+    why: "Work items by status that move along: a board with move=true.",
+  },
+  {
+    id: "two-options", group: "structure",
+    request: "Should we lease or buy the delivery van? Lease: $480 a month, 3 years, maintenance included, no resale. Buy: $29,000 upfront, maintenance about $900 a year, resale about $12,000 after 3 years.",
+    best: ["compare"], ok: ["table", "details", "grid", "card"], poor: ["chart:bar", "chart:pie"],
+    why: "Two options on the same rows: compare, with the better value per row marked.",
+  },
+  {
+    id: "settings-page", group: "input",
+    request: "A settings screen: display name, email for receipts, whether to get weekly summaries, a theme (light, dark or system), and the number of items per page (10, 25, 50 or 100).",
+    best: [], parts: [
+      { label: "email", best: ["input:email"], ok: ["input"] },
+      { label: "weekly summaries", best: ["switch"], ok: ["check"], poor: ["select", "radio"] },
+      { label: "theme", best: ["segmented", "radio"], ok: ["select"] },
+      { label: "page size", best: ["select", "segmented"], ok: ["radio", "stepper"], poor: ["slider"] },
+    ],
+    why: "Each setting has its own best control: an email field, a switch for on/off, three options in a segmented control, four sizes in a select.",
+  },
+  {
+    id: "quick-filter", group: "input",
+    request: "My 20 tasks (make up realistic ones with due dates and a status of to do, doing or done). Let me quickly show just one status at a time.",
+    best: ["segmented", "tabs"], ok: ["select", "radio"], poor: ["select:multiple"],
+    why: "Switching between three statuses: a segmented control (or tabs).",
+  },
+  {
+    id: "price-range", group: "input",
+    request: "48 tents from $90 to $720. Let me narrow them to my budget and see how many fit.",
+    best: ["slider"], ok: ["input:number", "select", "stepper"], poor: ["date-picker"],
+    why: "A budget limit across a continuous range: a slider.",
+  },
+  {
+    id: "terms-explain", group: "content", trap: true,
+    request: "Our pricing table: Basic $9, Pro $19, Team $49 a month. Some people don't know what 'seats', 'SSO' and 'audit log' mean; Team has all three, Pro has seats only.",
+    best: ["tip"], ok: ["text", "callout", "compare"], poor: [],
+    why: "Unfamiliar terms explained where they appear: a tip= on each, keeping the table clean.",
+  },
+  {
+    id: "long-terms", group: "content",
+    request: "Show our 14-point terms of service (make up short realistic points) on a sign-up card, above an Accept button, without the card getting long.",
+    best: ["scroll"], ok: ["accordion", "pagination"], poor: [],
+    why: "Long text that mustn't stretch the card: a scrolling region above the button.",
+  },
+];
+
+export const pickCases: PickCase[] = [...round1.map((c) => ({ ...c, round: 1 as const })), ...round2.map((c) => ({ ...c, round: 2 as const }))];
+
 /**
  * What an answer is made of, for grading: each element type, and the
  * variants that change what it shows.
@@ -345,10 +499,12 @@ export function signatures(root: SayShapeNode): Set<string> {
 export type Grade = "best" | "ok" | "poor" | "other";
 
 /** How an answer's signatures grade against a case: the best grade any of them reaches. */
-export function grade(c: PickCase, sigs: ReadonlySet<string>): { grade: Grade; matched: string[] } {
+export function grade(c: Pick<PickCase, "best" | "ok" | "poor">, sigs: ReadonlySet<string>, mixed = true): { grade: Grade; matched: string[] } {
   const hit = (list: readonly string[] | undefined) => (list ?? []).filter((s) => sigs.has(s));
   const best = hit(c.best);
-  if (best.length) return { grade: "best", matched: best };
+  // The best one beside a poor one for the same data (a treemap and a 14-slice pie) is a mixed
+  // answer. Not for a case's parts: there a poor pick for one part is another part's best.
+  if (best.length) return mixed && hit(c.poor).length ? { grade: "ok", matched: [...best, ...hit(c.poor)] } : { grade: "best", matched: best };
   const ok = hit(c.ok);
   if (ok.length) return { grade: "ok", matched: ok };
   const poor = hit(c.poor);
@@ -357,3 +513,17 @@ export function grade(c: PickCase, sigs: ReadonlySet<string>): { grade: Grade; m
 }
 
 export const POINTS: Record<Grade, number> = { best: 2, ok: 1, poor: 0, other: 0 };
+
+/** Points out of 2 for an answer: its grade, or the average of its parts' points. */
+export function scoreSigs(c: PickCase, sigs: ReadonlySet<string>): { grade: Grade; points: number; matched: string[]; parts?: Array<{ label: string; grade: Grade }> } {
+  if (!c.parts?.length) {
+    const g = grade(c, sigs);
+    return { ...g, points: POINTS[g.grade] };
+  }
+  // Another part's best can be this part's poor (a line for the trend, a pie for the split), so
+  // parts are graded on best and ok only.
+  const parts = c.parts.map((p) => ({ label: p.label, ...grade({ best: p.best, ok: p.ok }, sigs, false) }));
+  const points = parts.reduce((a, p) => a + POINTS[p.grade], 0) / parts.length;
+  const overall: Grade = points >= 2 ? "best" : points >= 1 ? "ok" : parts.some((p) => p.grade === "poor") ? "poor" : "other";
+  return { grade: overall, points, matched: parts.flatMap((p) => p.matched), parts: parts.map(({ label, grade: g }) => ({ label, grade: g })) };
+}
