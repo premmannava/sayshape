@@ -1146,10 +1146,14 @@ export class SayShape {
   /** Press a target as if clicked. */
   activate(target: HitTarget): void {
     // A tap (or Enter) on an element that has only its tip shows it, and again hides it.
-    if (target.detail === TIP) {
+    // So does a part registered only for its tip ("tip:…", a compare row's label); a part that
+    // does more (a sortable header) presses as usual and shows its tip on hover and focus.
+    const partTip = typeof target.detail === "string" && target.detail.startsWith("tip:") && !!this.registry.get(target.node.type)?.partTip?.(this.boxOf(target.node) ?? target.box, target.detail);
+    if (target.detail === TIP || partTip) {
       const was = this.tipAtDown !== undefined ? this.tipAtDown : this.tipPinned;
       this.tipAtDown = undefined;
-      this.tipPinned = was === target.node.id ? null : target.node.id;
+      const key = this.tipKey(target);
+      this.tipPinned = was === key ? null : key;
       this.tipHidden = null;
       this.invalidate("paint");
       return;
@@ -1371,6 +1375,22 @@ export class SayShape {
     if (this.keyboardMode) this.focusDom();
   }
 
+  /** The tip a target shows: a part's own child's (compare's row label), else its element's. */
+  private tipFor(t: HitTarget): string {
+    if (t.detail !== undefined && t.detail !== TIP) {
+      const def = this.registry.get(t.node.type);
+      const box = def?.partTip && this.boxOf(t.node);
+      const child = box ? def.partTip!(box, t.detail) : undefined;
+      if (child) return this.tipOf(child);
+    }
+    return this.tipOf(t.node);
+  }
+
+  /** A target's key, so a pinned or hidden tip is the one part's, not every part's of its element. */
+  private tipKey(t: HitTarget): string {
+    return accessibleKey(t.node, t.detail === TIP ? undefined : t.detail);
+  }
+
   /** An element's tip= text, filled in from state, or "" without one. */
   private tipOf(node: SayShapeNode): string {
     if (node.props.tip === undefined) return "";
@@ -1386,13 +1406,13 @@ export class SayShape {
     // Moving to something else shows tips again (Escape hid one) and lets go of one a tap or Enter pinned.
     if (fk !== this.tipLastFocus || hk !== this.tipLastHover) {
       this.tipHidden = null;
-      if (fk !== this.tipLastFocus && fk && this.focus?.node.id !== this.tipPinned) this.tipPinned = null;
+      if (fk !== this.tipLastFocus && fk && this.focus && this.tipKey(this.focus) !== this.tipPinned) this.tipPinned = null;
       this.tipLastFocus = fk;
       this.tipLastHover = hk;
     }
     /** The target as it is in this frame, anchored to what's in sight of it, or null when it has no tip or is out of sight. */
     const live = (t: HitTarget | null | undefined): HitTarget | null => {
-      if (!t || !this.tipOf(t.node) || this.tipHidden === t.node.id || t.layer === "popup") return null;
+      if (!t || !this.tipFor(t) || this.tipHidden === this.tipKey(t) || t.layer === "popup") return null;
       const def = this.registry.get(t.node.type);
       if (def?.provides && t.detail !== undefined && t.detail !== TIP) return null;
       const h = this.hits.find((r) => r.box.node.id === t.node.id && (r.detail === t.detail || (t.detail === undefined && r.detail === TIP)))
@@ -1403,7 +1423,7 @@ export class SayShape {
       return { node: h.box.node, box: { ...h.box, ...box }, detail: h.detail };
     };
     if (this.tipPinned) {
-      const h = this.hits.find((r) => r.box.node.id === this.tipPinned);
+      const h = this.hits.find((r) => this.tipKey({ node: r.box.node, box: r.box, detail: r.detail }) === this.tipPinned);
       const t = h ? live({ node: h.box.node, box: h.box, detail: h.detail }) : null;
       if (t) return t;
     }
@@ -1419,7 +1439,7 @@ export class SayShape {
     const t = this.tipTarget();
     this.tipShown = null;
     if (!t) return;
-    const text = this.tipOf(t.node);
+    const text = this.tipFor(t);
     const { colors: c, text: sizes, radius } = this.theme;
     const size = sizes.caption + 1;
     const font = ctx.font(500, size);
@@ -1665,7 +1685,7 @@ export class SayShape {
     // Escape hides a shown tip first, without moving focus (WCAG 1.4.13).
     if (e.key === "Escape" && this.tipShown && !this.popup) {
       e.preventDefault();
-      this.tipHidden = this.tipShown.target.node.id;
+      this.tipHidden = this.tipKey(this.tipShown.target);
       this.tipPinned = null;
       this.invalidate("paint");
       return;
@@ -1789,7 +1809,9 @@ export class SayShape {
       // Pressing inside a popup leaves keyboard focus on its owner.
       if (this.pressed?.layer === "popup") { this.invalidate("paint"); return; }
       if (this.pressed) { this.focus = this.pressed; this.invalidate("paint"); }
-      if (this.pressed && this.registry.get(this.pressed.node.type)?.drag) {
+      // A part there only for its tip (a table header that doesn't sort) is pressed, not dragged.
+      const tipPart = typeof this.pressed?.detail === "string" && this.pressed.detail.startsWith("tip:");
+      if (this.pressed && !tipPart && this.registry.get(this.pressed.node.type)?.drag) {
         // Keep receiving moves when the pointer leaves the canvas mid-drag.
         try { c.setPointerCapture?.(e.pointerId); } catch { /* not capturable; moves outside are missed */ }
         this.dragging = this.pressed;

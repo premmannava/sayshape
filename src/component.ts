@@ -329,6 +329,15 @@ export interface ComponentDef {
    * parser warns that tip= on it isn't shown.
    */
   drawnByParent?: boolean;
+  /**
+   * For an element that draws its children's labels itself (compare's rows, details' rows, a
+   * table's column headers): the child whose tip= a part shows, by the detail the part was
+   * painted with. The element registers a region for each such part, so the pointer, Tab and a
+   * tap reach it. A part whose detail starts with "tip:" is there only for its tip: pressing it
+   * shows the tip (and again hides it). Other parts (a sortable header) press as usual and show
+   * the tip on hover and focus.
+   */
+  partTip?(box: Box, detail: unknown): SayShapeNode | undefined;
   /** Floats above the screen when open, as a modal (see OverlayDef). */
   overlay?: OverlayDef;
   /**

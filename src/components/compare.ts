@@ -18,7 +18,7 @@ import { drawIcon } from "../icons";
 import { fitLines, wrapText } from "../text";
 import type { SayShapeNode, Value } from "../types";
 import { cellText, EMPTY_CELL } from "./table";
-import { fillTint, themeFont } from "./util";
+import { fillTint, partBox, themeFont } from "./util";
 
 export const MAX_COMPARE_OPTIONS = 4;
 const FORMATS = ["text", "number", "money"] as const;
@@ -39,7 +39,8 @@ type CompareLayout = {
   pick: number;
   /** The recommended column's label, as long as fits: RECOMMENDED, TOP PICK or nothing. */
   badge: string;
-  rows: Array<{ label: string[]; cells: Cell[]; y: number; h: number }>;
+  /** Each row, with its element and its tip= (shown from its label). */
+  rows: Array<{ label: string[]; cells: Cell[]; y: number; h: number; node: SayShapeNode; tip: string }>;
   fonts: { title: string; name: string; label: string; cell: string; badge: string };
   lh: number;
   titleLH: number;
@@ -69,6 +70,11 @@ compare items=plans pick="Pro"
   compare-row "Storage (GB)" field=storage format=number best=high
   compare-row "Support" field=support`,
   minWidth: () => 200,
+  partTip(box, detail) {
+    const d = box.data as CompareLayout | undefined;
+    const i = typeof detail === "string" && detail.startsWith("tip:") ? Number(detail.slice(4)) : -1;
+    return d?.rows[i]?.node;
+  },
   semantics(box, ctx) {
     const d = box.data as CompareLayout | undefined;
     const name = ctx.props(box.node).text() || ctx.textBefore() || undefined;
@@ -80,7 +86,8 @@ compare items=plans pick="Pro"
     options.forEach((o, i) => parts.push({ detail: `head:${i}`, within: "head", role: "columnheader", name: o }));
     d.rows.forEach((row, r) => {
       parts.push({ detail: `row:${r}`, role: "row", rect: { x: box.x, y: box.y + row.y, w: box.w, h: row.h } });
-      parts.push({ detail: `row:${r}:label`, within: `row:${r}`, role: "rowheader", name: row.label.join(" ") });
+      // A label with a tip is a part of its own (a region to reach it), read with the tip.
+      parts.push({ detail: row.tip ? `tip:${r}` : `row:${r}:label`, within: `row:${r}`, role: "rowheader", name: row.label.join(" "), ...(row.tip ? { description: row.tip } : {}) });
       row.cells.forEach((cell, i) => {
         const text = cell.check !== undefined ? (cell.check ? "Yes" : "No") : cell.lines.join(" ");
         parts.push({ detail: `cell:${r}:${i}`, within: `row:${r}`, role: "cell", name: `${text}${cell.best ? ", best" : ""}` });
@@ -141,7 +148,7 @@ compare items=plans pick="Pro"
       const label = fitLines(rp.text() || field, stacked ? box.w : labelW - PAD, fonts.label, m, LINES);
       const valueLines = Math.max(...cells.map((c) => c.lines.length || 1));
       const h = (stacked ? label.length + valueLines : Math.max(label.length, valueLines)) * lh + PAD * 2;
-      const row = { label, cells, y, h };
+      const row = { label, cells, y, h, node: r, tip: rp.str("tip", "").trim() };
       y += h;
       return row;
     });
@@ -202,6 +209,17 @@ compare items=plans pick="Pro"
       const labelH = r.label.length * d.lh;
       const ly = d.stacked ? r.y + PAD + d.lh / 2 : r.y + r.h / 2 - ((r.label.length - 1) * d.lh) / 2;
       r.label.forEach((l, j) => g.fillText(l, box.x, ly + j * d.lh));
+      if (r.tip) {
+        // A row with a tip: its label is underlined with dots, and pressable for the tip.
+        const w = Math.max(...r.label.map((l) => g.measureText(l).width));
+        const top = ly - d.lh / 2;
+        g.fillStyle = c.muted;
+        for (let j = 0; j < r.label.length; j++) {
+          const lw = g.measureText(r.label[j]!).width;
+          for (let x = 0; x < lw; x += 4) g.fillRect(box.x + x, ly + j * d.lh + d.lh / 2 - 2, 2, 1);
+        }
+        ctx.addHit(partBox(box, box.x, top, w, r.label.length * d.lh), { detail: `tip:${d.rows.indexOf(r)}` });
+      }
       const valueTop = d.stacked ? r.y + PAD + labelH : r.y;
       const valueH = d.stacked ? r.h - PAD - labelH : r.h;
       r.cells.forEach((cell, i) => {
@@ -221,7 +239,6 @@ compare items=plans pick="Pro"
 };
 
 export const compareRow: ComponentDef = {
-  drawnByParent: true,
   type: "compare-row",
   category: "data",
   description: "One row of a comparison: an attribute and the field each option's value comes from.",

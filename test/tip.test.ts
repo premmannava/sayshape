@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render } from "../src/testing";
 import { lightTheme } from "../src/theme";
+import type { AccessibleNode } from "../src/a11y/semantics";
 
 const SPEC = `state open=3
 card
@@ -175,8 +176,8 @@ describe("tip=", () => {
     });
 
     it("warns that tip= on an element its parent draws isn't shown", () => {
-      const r = render(`state rows=[]\ntable items=rows\n  table-column "Name" field=n tip="Their full name"\n`);
-      expect(r.diagnostics.map((d) => d.message).join(" ")).toMatch(/tip= on a table-column isn't shown/);
+      const r = render(`menu "Actions"\n  menu-item "Duplicate" on=emit:dup tip="Makes a copy"\n`);
+      expect(r.diagnostics.map((d) => d.message).join(" ")).toMatch(/tip= on a menu-item isn't shown/);
     });
 
     it("shows anywhere over an element that has pressable parts of its own", () => {
@@ -205,6 +206,89 @@ describe("tip=", () => {
       ui.setSpec(`text "A" tip="tipZ"\n`);
       move(ui, 590, 300);
       expect(tipText(ui)).toBe("");
+    });
+  });
+
+  describe("on rows and headers their parent draws", () => {
+    const COMPARE = `state plans=[{name: "Basic", up: "99.5%", seats: 5}, {name: "Pro", up: "99.99%", seats: 50}]
+compare items=plans
+  compare-row "Uptime" field=up tip="Share of the month the service is up"
+  compare-row "Seats" field=seats format=number
+`;
+    const DETAILS = `details "Order 1042"
+  detail "Status" value="Shipped" tone=good
+  detail "ETA" value="Jun 3" tip="Estimated time of arrival"
+`;
+    const TABLE = `state rows=[{n: "Ada", r: 4}]
+table items=rows
+  table-column "Name" field=n tip="Their full name"
+  table-column "Rank" field=r format=number
+`;
+    const SORTED = `state rows=[{n: "Ada"}, {n: "Bo"}] by="" dir="asc"
+table items=rows sort=by direction=dir
+  table-column "Name" field=n tip="Their full name"
+`;
+    /** Where a label was drawn, to point at it. */
+    const at = (ui: UI, label: string) => {
+      const op = ui.drawOps.find((o) => o.op === "fillText" && o.args[0] === label && !isTip(o))!;
+      return [Number(op.args[1]) + 4, Number(op.args[2])] as const;
+    };
+    const all = (ui: UI) => {
+      const out: AccessibleNode[] = [];
+      const walk = (n: AccessibleNode) => { out.push(n); n.children.forEach(walk); };
+      walk(ui.accessibility({ full: true }));
+      return out;
+    };
+
+    for (const [name, spec, label, tip] of [
+      ["compare-row", COMPARE, "Uptime", "Share of the month the service is up"],
+      ["detail", DETAILS, "ETA", "Estimated time of arrival"],
+      ["table-column", TABLE, "Name", "Their full name"],
+    ] as const) {
+      it(`a ${name}'s tip shows on hover over its label, on Tab and on a tap`, () => {
+        const ui = render(spec, { width: 600 });
+        expect(ui.diagnostics).toEqual([]);
+        expect(tipText(ui)).toBe("");
+        const [x, y] = at(ui, label);
+        move(ui, x, y);
+        expect(tipText(ui)).toBe(tip);
+        move(ui, 598, 2);
+        expect(tipText(ui)).toBe("");
+        ui.tab();
+        expect(tipText(ui)).toBe(tip);
+        ui.key("Escape");
+        expect(tipText(ui)).toBe("");
+        const fresh = render(spec, { width: 600 });
+        fresh.click(...at(fresh, label));
+        move(fresh, 598, 2);
+        expect(tipText(fresh)).toBe(tip);
+        fresh.click(598, 2);
+        expect(tipText(fresh)).toBe("");
+      });
+
+      it(`a ${name}'s tip is read after its label, on a node Tab reaches`, () => {
+        const ui = render(spec, { width: 600 });
+        const node = all(ui).find((n) => n.description === tip)!;
+        expect(node).toBeTruthy();
+        expect(node.name).toContain(label);
+      });
+    }
+
+    it("only the row with a tip is a Tab stop", () => {
+      const ui = render(COMPARE, { width: 600 });
+      ui.tab();
+      expect(tipText(ui)).toBe("Share of the month the service is up");
+      ui.tab();
+      expect(ui.focused).toBeNull();
+    });
+
+    it("a sortable header still sorts when pressed, and shows its tip on hover", () => {
+      const ui = render(SORTED, { width: 600 });
+      const [x, y] = at(ui, "Name");
+      move(ui, x, y);
+      expect(tipText(ui)).toBe("Their full name");
+      ui.click(x, y);
+      expect(ui.state.by).toBe("n");
     });
   });
 });
