@@ -109,6 +109,43 @@ test("Tab past the last element leaves the interface, and Shift+Tab before the f
   expect(await focused(page)).toMatchObject({ inMirror: false, name: "Before" });
 });
 
+/**
+ * Buttons before and after the interface, and a note of what has DOM focus
+ * once the canvas's own focus event is handled (listening after the engine,
+ * in the same event, so no frame can run in between).
+ */
+async function enterFromOutside(page: Page): Promise<void> {
+  await open(page, `button "First" on=inc:n\nbutton "Middle" on=inc:n\nbutton "Last" on=inc:n`);
+  await page.evaluate(() => {
+    for (const where of ["beforebegin", "afterend"] as const) {
+      const b = document.createElement("button");
+      b.textContent = where === "beforebegin" ? "Before" : "After";
+      document.getElementById("frame")!.insertAdjacentElement(where, b);
+    }
+    const w = window as unknown as { onEntry?: string };
+    document.getElementById("canvas")!.addEventListener("focus", () => { const el = document.activeElement; w.onEntry = el?.getAttribute("aria-label") ?? el?.textContent ?? ""; });
+  });
+}
+const onEntry = (page: Page) => page.evaluate(() => (window as unknown as { onEntry?: string }).onEntry);
+
+test("Tab into the interface lands on its first element at once, never on the bare canvas", async ({ page }) => {
+  await enterFromOutside(page);
+  await page.getByRole("button", { name: "Before" }).focus();
+  await page.keyboard.press("Tab");
+  expect(await onEntry(page)).toBe("First");
+  expect(await focused(page)).toMatchObject({ inMirror: true, name: "First" });
+});
+
+test("Shift+Tab back into the interface lands on its last element", async ({ page }) => {
+  await enterFromOutside(page);
+  await page.getByRole("button", { name: "After" }).focus();
+  await page.keyboard.press("Shift+Tab");
+  expect(await onEntry(page)).toBe("Last");
+  expect(await focused(page)).toMatchObject({ inMirror: true, name: "Last" });
+  await page.keyboard.press("Shift+Tab");
+  expect(await focused(page)).toMatchObject({ inMirror: true, name: "Middle" });
+});
+
 test("a screen reader's activation presses the element", async ({ page }) => {
   await open(page, form);
   await page.evaluate((sel) => (document.querySelector(`${sel} button`) as HTMLButtonElement).click(), MIRROR);
