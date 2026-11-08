@@ -56,7 +56,7 @@ Anything that can't be read (a missing field, an item past the end of a list) sh
 | `sum(list)`, `sum(list, 'price')`, `sum(list, 'price', 'qty')` | Total of the items, of a field, or of two fields multiplied per item |
 | `avg(list, 'field')` | Average of a field |
 | `min(list, 'field')`, `max(list, 'field')` | Smallest or largest value of a field |
-| `filter(list, 'done')`, `filter(list, 'cat', 'Gas')` | The matching items, as a new list |
+| `filter(list, 'done')`, `filter(list, 'cat', 'Gas')`, `filter(list, 'price', {from: 50, to: budget})` | The matching items, as a new list: a field that's true, equals a value, is any value in a list, or is within a range of numbers or dates (leave out an end for no limit) |
 | `find(list, 'id', picked)` | The first item whose field equals a value, or `null` |
 | `search(list, 'name', query)` | Items whose field contains the text, ignoring case; all items for empty text |
 | `sort(list, 'price')`, `sort(list, 'price', 'desc')`, `sort(list)` | A sorted copy, by a field or by value |

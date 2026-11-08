@@ -650,6 +650,7 @@ export const progress: ComponentDef = {
   type: "progress",
   category: "feedback",
   description: "A horizontal bar showing how far a value is toward a maximum.",
+  picks: [{ for: "how much of one total is done, such as 312 of 480 tickets closed", write: "progress value=closed max=total" }],
   props: {
     value: { type: "number", required: true, description: "Current amount, usually an {expression}." },
     max: { type: "number", default: 100, description: "The full amount (default 100)." },
