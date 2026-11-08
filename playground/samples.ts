@@ -463,6 +463,13 @@ flow "Customer onboarding" items=steps edges=edges direction=right
     text "Generally strong" tone=bad align=center
 `,
   },
+  priceRating: {
+    label: "Price vs rating (scatter)",
+    prompt: "Do our pricier headphones get better ratings?",
+    spec: `state products=[{name: "Pulse Mini", price: 39, rating: 3.6, line: "Earbuds"}, {name: "Pulse Air", price: 79, rating: 4.1, line: "Earbuds"}, {name: "Pulse Pro", price: 149, rating: 4.4, line: "Earbuds"}, {name: "Studio One", price: 99, rating: 3.9, line: "Over-ear"}, {name: "Studio Two", price: 189, rating: 4.6, line: "Over-ear"}, {name: "Studio Max", price: 329, rating: 4.5, line: "Over-ear"}, {name: "Trail Sport", price: 59, rating: 4.2, line: "Sport"}, {name: "Trail Run", price: 119, rating: 4.0, line: "Sport"}]
+chart "Price against rating" kind=scatter items=products x=price y=rating label=name group=line labels="Price ($),Rating"
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

@@ -1332,6 +1332,8 @@ export class SayShape {
     if (this.focus && this.keyToFocus(e.key)) {
       e.preventDefault();
       this.keyboardMode = true;
+      // What the key changed may live only in view state (a scatter's focused dot), so draw again.
+      this.invalidate("paint");
       return;
     }
     if ((e.key === "Enter" || e.key === " ") && this.focus) {

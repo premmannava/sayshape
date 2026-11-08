@@ -100,6 +100,13 @@ flow "Purchase" items=s edges=e
     expect(text.split("\n")).toEqual(["4 of clubs", "Fe, 55.85"]);
   });
 
+  it("copies a scatter as a table of its dots, in x order", () => {
+    const text = copy(`state s=[{n: "B", x: 9, y: 2}, {n: "A", x: 1, y: 5}]
+chart "Pairs" kind=scatter items=s x=x y=y label=n
+`);
+    expect(text.split("\n")).toEqual(["Pairs", "2 dots. x from 1 to 9; y from 2 to 5.", "", "n\tx\ty", "A\t1\t5", "B\t9\t2"]);
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password

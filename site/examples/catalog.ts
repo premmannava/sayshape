@@ -438,6 +438,20 @@ card
   button "Book {plural(len(chosen), 'seat')}" on="emit:book:{pluck(chosen, 'id')};notify:'Demo only: nothing was booked'" disabled={len(chosen) == 0}`,
 };
 
-export const examples: readonly Example[] = [tip, sales, pipeline, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator];
+const funds: Example = {
+  id: "fund-risk",
+  title: "Risk and return",
+  prompt: "Compare our funds' risk and return, sized by assets",
+  category: "Dashboards",
+  look: { preset: "blue", scheme: "light" },
+  spec: `state funds=[{name: "Harbor Bond", type: "Bonds", risk: 3.1, ret: 3.4, assets: 820}, {name: "Harbor Short Term", type: "Bonds", risk: 1.8, ret: 2.6, assets: 410}, {name: "Harbor Global Bond", type: "Bonds", risk: 4.6, ret: 3.9, assets: 260}, {name: "Summit Balanced", type: "Mixed", risk: 8.2, ret: 6.1, assets: 1240}, {name: "Summit Income", type: "Mixed", risk: 6.4, ret: 5.2, assets: 530}, {name: "Summit Growth", type: "Mixed", risk: 10.9, ret: 7.4, assets: 690}, {name: "Ridge Large Cap", type: "Stocks", risk: 14.2, ret: 9.8, assets: 2100}, {name: "Ridge Dividend", type: "Stocks", risk: 12.1, ret: 8.1, assets: 880}, {name: "Ridge Small Cap", type: "Stocks", risk: 19.6, ret: 11.2, assets: 450}, {name: "Ridge Emerging", type: "Stocks", risk: 22.4, ret: 8.9, assets: 310}, {name: "Ridge Tech", type: "Stocks", risk: 24.8, ret: 13.5, assets: 760}]
+card
+  text "Northwind funds: risk and return" style=title
+  text "Five-year yearly return against volatility. Bigger dots hold more assets ($M). Hover or focus a dot for its numbers." tone=muted
+  chart kind=scatter items=funds x=risk y=ret label=name size=assets group=type labels="Risk (volatility %),Return" format=percent
+  callout "Ridge Emerging takes more risk than Ridge Small Cap (22.4 against 19.6) for 2.3 points less return" tone=warn icon=true`,
+};
+
+export const examples: readonly Example[] = [tip, sales, pipeline, funds, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);
