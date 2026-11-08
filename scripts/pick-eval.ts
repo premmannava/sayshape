@@ -122,9 +122,23 @@ export function pickReport(results: PickResult[], title: string): string {
   return out.join("\n");
 }
 
+/**
+ * Answers from a file of JSON lines, a folder of them, or a folder of answer folders named
+ * <model>-<setup>-r<run> holding one <id>.sayshape per request (as written by hand-run models).
+ */
 function readAnswers(path: string): PickAnswer[] {
-  const files = statSync(path).isDirectory() ? readdirSync(path).filter((f) => f.endsWith(".jsonl") || f.endsWith(".json")).map((f) => join(path, f)) : [path];
   const out: PickAnswer[] = [];
+  if (statSync(path).isDirectory()) {
+    for (const sub of readdirSync(path)) {
+      const dir = join(path, sub);
+      const tag = /^(.+)-([^-]+)-r(\d+)$/.exec(sub);
+      if (!tag || !statSync(dir).isDirectory()) continue;
+      for (const f of readdirSync(dir).filter((x) => x.endsWith(".sayshape"))) {
+        out.push({ id: f.replace(/\.sayshape$/, ""), spec: readFileSync(join(dir, f), "utf8"), model: tag[1]!, setup: tag[2]!, run: Number(tag[3]) });
+      }
+    }
+  }
+  const files = statSync(path).isDirectory() ? readdirSync(path).filter((f) => f.endsWith(".jsonl") || f.endsWith(".json")).map((f) => join(path, f)) : [path];
   for (const f of files) {
     const text = readFileSync(f, "utf8").trim();
     if (!text) continue;
