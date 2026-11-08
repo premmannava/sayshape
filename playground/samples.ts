@@ -548,6 +548,19 @@ dialog "Cancel {target}?" bind=confirm size=sm
     button "Cancel order" variant=danger on="emit:cancel:{target};set:confirm:false"
 `,
   },
+  kpiTips: {
+    label: "Explained numbers (tip=)",
+    prompt: "Show this week's store numbers, and explain what each one counts.",
+    spec: `state open=14 refunds=3 rate=0.962
+card
+  text "This week" style=title tip="Figures refresh every 5 minutes, in the store's time zone"
+  grid min=140 gap=10
+    stat label="Open orders" value={open} tip="Paid, not yet handed to the carrier"
+    stat label="Refunds" value={refunds} tip="Counted on the day they're approved, not requested"
+    stat label="On time" value="{round(rate * 100)}%" tip="Delivered by the date promised at checkout"
+  button "Ship all open orders" on=set:open:0 tip="Marks all {open} open orders shipped and emails each customer"
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

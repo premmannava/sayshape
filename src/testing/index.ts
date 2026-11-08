@@ -249,7 +249,9 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
       const found = find(query);
       const name = `"${found.node.type}" on line ${found.node.line}`;
       if (!found.box) throw new Error(`${name} is hidden, so it can't be pressed`);
-      const region = sayshape.hitRegions.find((h) => h.box.node.id === found.node.id);
+      // Its own region first: the one a tip= adds under it only shows the tip.
+      const mine = sayshape.hitRegions.filter((h) => h.box.node.id === found.node.id);
+      const region = mine.find((h) => h.detail !== "tip") ?? mine[0];
       if (!region) throw new Error(`${name} isn't pressable right now (it may be disabled or not interactive)`);
       // Click the centre, or the first point in the region that this element
       // receives itself (a button inside a pressable card covers its centre).

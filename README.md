@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 60 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), scrolling regions, dialogs, menus, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Tooltips come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 60 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), scrolling regions, dialogs, menus, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Toasts and sheets come later. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -478,6 +478,16 @@ else
 ```
 
 An `else` with no `if=` line just before it is an error, and it and its lines are skipped.
+
+### Tips
+
+Every element accepts `tip=`: a short explanation shown in a small bubble over it on hover, on keyboard focus, or on a tap on a touch screen, and hidden with Escape. An element that isn't pressable becomes a Tab stop when it has a tip, and screen readers read the tip after the element's name. Tips are for what a label or a number means, not for anything people must read to use the screen.
+
+```
+state open=14
+stat label="Open orders" value={open} tip="Paid, not yet handed to the carrier"
+button "Ship all" on=set:open:0 tip="Marks every open order shipped"
+```
 
 ### Not JavaScript
 
@@ -2296,7 +2306,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 
 - **Multi-line text, and form validation** (required fields, email format). A model can show a hint with `if=` for now.
 - **Text selection and browser find.** To copy, a host can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
-- **Tooltips, toasts or sheets.** Popups serve one element's own panel (a select's list, a date picker's calendar, a menu's actions; a menu has no submenus or separators), and `dialog` is the one overlay: one open at a time, centred, over a dimmed screen. There are no tooltips, toasts or sheets that slide in from an edge. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
+- **Toasts or sheets.** `tip=` on any element shows a short tooltip. Popups serve one element's own panel (a select's list, a date picker's calendar, a menu's actions; a menu has no submenus or separators), and `dialog` is the one overlay: one open at a time, centred, over a dimmed screen. There are no toasts or sheets that slide in from an edge. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
 - **Dates and times beyond the basics.** `date-picker` picks a calendar day (or a range with `range=true`), with no times. `schedule` lays out times as `HH:MM` text and dates as `YYYY-MM-DD`, but has no time zones, recurring events, blocks past midnight, month view, or dragging blocks to move them. Names are in US English with weeks starting on Sunday.
 - **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.
 - **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.

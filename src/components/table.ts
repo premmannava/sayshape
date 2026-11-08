@@ -907,6 +907,7 @@ function pressTable(ctx: PressContext): void {
 }
 
 export const tableColumn: ComponentDef = {
+  drawnByParent: true,
   type: "table-column",
   category: "data",
   description: "One column of a table: its header and the field it shows.",

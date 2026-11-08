@@ -187,6 +187,7 @@ details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
 };
 
 export const detail: ComponentDef = {
+  drawnByParent: true,
   type: "detail",
   category: "data",
   description: "One row of details: a field's name and its value.",

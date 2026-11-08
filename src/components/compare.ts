@@ -221,6 +221,7 @@ compare items=plans pick="Pro"
 };
 
 export const compareRow: ComponentDef = {
+  drawnByParent: true,
   type: "compare-row",
   category: "data",
   description: "One row of a comparison: an attribute and the field each option's value comes from.",

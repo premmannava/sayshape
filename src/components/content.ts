@@ -771,6 +771,8 @@ icon name=check-circle tone=good`,
   },
   layout(box, ctx) {
     box.h = ICON_SIZES[ctx.props(box.node).oneOf("size", ICON_SIZE_NAMES, "md")];
+    // As wide as it's drawn (at its box's left), so a tip= points at it and hovering beside it shows nothing.
+    box.w = Math.min(box.w, box.h);
   },
   minWidth: (node, ctx) => ICON_SIZES[ctx.props(node).oneOf("size", ICON_SIZE_NAMES, "md")],
   paint(box, ctx) {

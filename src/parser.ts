@@ -681,6 +681,10 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       }
       checkProp(name, rawValue, pdef, lineNo, diagnostics, fns);
     }
+    if ("tip" in tok.props && def.drawnByParent && !def.props.tip) {
+      const parent = def.parents?.[0] ?? "its parent";
+      diagnostics.push({ line: lineNo, severity: "warning", message: `tip= on a ${tok.type} isn't shown, since its ${parent} draws it. Put the tip on the ${parent}, or on a text or icon near it` });
+    }
     for (const [name, pdef] of Object.entries(def.props)) {
       const exempt = pdef.unlessProp && pdef.unlessProp.values.includes(tok.props[pdef.unlessProp.name] ?? "");
       if (pdef.required && !exempt && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs ${name}=` });
