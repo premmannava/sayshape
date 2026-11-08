@@ -254,8 +254,11 @@ function readAnswers(path: string): PickAnswer[] {
 /** What a model is shown, without the grades: for running models by hand (or as agents). */
 async function writePrompts(dir: string): Promise<void> {
   mkdirSync(join(dir, "docs"), { recursive: true });
-  // The MCP server's own texts, so a model sees exactly what it sees in a chat app.
-  const mcp = await import("../mcp/src/server");
+  // The MCP server's own texts, so a model sees exactly what it sees in a chat app. The path is a
+  // variable so the library's typecheck doesn't follow it into mcp/, whose packages are installed
+  // separately (npm --prefix mcp install).
+  const server = "../mcp/src/server";
+  const mcp = (await import(server)) as { quickStart(): string; docsText(elements: string[], topics: string[]): string };
   writeFileSync(join(dir, "quickstart.txt"), mcp.quickStart());
   writeFileSync(join(dir, "guide-full.txt"), languageGuide(registry));
   for (const def of [...coreComponents, ...mapComponents]) writeFileSync(join(dir, "docs", `${def.type}.txt`), mcp.docsText([def.type], []));
