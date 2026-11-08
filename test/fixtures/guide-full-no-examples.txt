@@ -102,7 +102,7 @@ EVERY ELEMENT ACCEPTS
 ELEMENTS AT A GLANCE
 - layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel
 - content: text, image, code, badge, avatar, callout, icon
-- data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, map, pin
+- data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
 - navigation: screen, tabs, tab, breadcrumb, pagination
 - feedback: progress, skeleton, empty
@@ -460,6 +460,20 @@ ELEMENTS
     move=<boolean>  true lets people move a card to another stage: drag it to another column, or focus it and press Left or Right. It changes the record's stage field, so items= must be a list in state (or worked out from one).
     on=<action>  Actions to run after a card is pressed or moved, with bind= already set, e.g. emit:changed. Separate several with ;
 
+  tree "<text>"  — A hierarchy from a flat list where each record names its parent: an org chart, folders, a budget by department. kind=list (default) is indented rows that open and close; kind=org is a top-down chart of boxes.
+    "<text>"  The title above the tree, e.g. Org chart.
+    items=<expression, required>  The list of records, e.g. items=people. At most 300.
+    id=<name>  The field that identifies each record, e.g. id=id.
+    parent=<name>  The field with the parent's id, e.g. parent=manager. Empty for the top.
+    label=<name>  The field with what each item says, e.g. label=name.
+    detail=<name>  The field with a quieter line, e.g. detail=role.
+    value=<name>  The field with a number on the right, e.g. value=headcount.
+    format=<text|number|money>  How value= reads: text as is, number (1,200) or money ($1,200, US dollars).
+    kind=<list|org>  list: indented rows that open and close. org: a top-down chart with boxes and lines, which scrolls sideways when wide.
+    open=<number>  How many levels of a list start open; 0 shows only the top.
+    bind=<state>  State that holds the selected item's id. Pressing an item sets it.
+    on=<action>  Actions to run after an item is selected, with bind= already set, e.g. emit:changed. Separate several with ;
+
   map  — Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
     kind=<markers|choropleth|bubble>  markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows.
     items=<expression>  Data rows for kind=choropleth or kind=bubble, e.g. items=sales. Do not embed individual rows in map specs.
@@ -503,6 +517,7 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - one record's fields, such as an order, a customer or a flight: details holding detail
 - shifts, bookings or a project plan (Gantt) on a calendar: schedule view=week|day|timeline
 - a pipeline or task board by stage: board stage=status move=true
+- a nested breakdown, or an org chart (kind=org): tree items=rows parent=parent
 - places on a map: map holding pin
 - steps in order with their status, such as a delivery: timeline holding step status=done|current|upcoming
 - cards to page through, such as photos: carousel bind=page

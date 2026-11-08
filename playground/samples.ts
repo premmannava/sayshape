@@ -421,6 +421,20 @@ card
   board items=candidates stage=step stages="Applied,Screen,Interview,Offer" title=name detail=role tone=flag move=true on="notify:Moved"
 `,
   },
+  orgChart: {
+    label: "Org chart",
+    prompt: "Show the Northwind Mutual operations org chart.",
+    spec: `state picked="e3" people=[{id: "e1", name: "Ana Ruiz", role: "Chief Operating Officer"}, {id: "e2", name: "Ben Okafor", role: "Head of Claims", manager: "e1"}, {id: "e3", name: "Chloe Park", role: "Head of Operations", manager: "e1"}, {id: "e4", name: "Dev Malhotra", role: "Claims lead, North", manager: "e2"}, {id: "e5", name: "Erin Walsh", role: "Claims lead, South", manager: "e2"}, {id: "e6", name: "Femi Adeyemi", role: "Warehouse manager", manager: "e3"}, {id: "e7", name: "Grace Lin", role: "Fleet manager", manager: "e3"}, {id: "e8", name: "Hugo Martin", role: "HR partner", manager: "e1"}]
+tree "Northwind Mutual" items=people parent=manager label=name detail=role kind=org bind=picked
+`,
+  },
+  budgetTree: {
+    label: "Budget tree",
+    prompt: "Break the 2027 operating budget down by department.",
+    spec: `state lines=[{id: "all", name: "Operating budget 2027", amount: 4820000}, {id: "ops", name: "Operations", parent: "all", amount: 2100000}, {id: "fleet", name: "Fleet", parent: "ops", amount: 940000}, {id: "wh", name: "Warehouses", parent: "ops", amount: 1160000}, {id: "claims", name: "Claims", parent: "all", amount: 1650000}, {id: "adj", name: "Adjusters", parent: "claims", amount: 1240000}, {id: "fraud", name: "Fraud review", parent: "claims", amount: 410000}, {id: "hr", name: "People and HR", parent: "all", amount: 610000}, {id: "it", name: "Technology", parent: "all", amount: 460000}]
+tree "Budget by department" items=lines label=name value=amount format=money open=1
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

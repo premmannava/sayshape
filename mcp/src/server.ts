@@ -130,7 +130,9 @@ export function quickStart(withData = false, withMcp = false): string {
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue')`,
     `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
     // The same heading as the guides', in fewer words: this text goes out with every call.
-    `${PICKS_HEADING_SHORT}\n${pickList(components)}`,
+    // Picks without their "such as …" examples: the guides and sayshape_docs keep them, and
+    // this text goes out with every call, so each new element's pick fits.
+    `${PICKS_HEADING_SHORT}\n${pickList(components).replace(/, such as [^:\n]*(?=: )/g, "")}`,
     "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
     `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),

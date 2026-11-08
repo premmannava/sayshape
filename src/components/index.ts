@@ -18,6 +18,7 @@ import { meter } from "./meter";
 import { detail, details } from "./details";
 import { schedule } from "./schedule";
 import { board } from "./board";
+import { tree } from "./tree";
 
 export {
   column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
@@ -28,6 +29,7 @@ export {
   progress, skeleton, empty,
   schedule,
   board,
+  tree,
 };
 
 /** The built-in components (everything except the map, which is a separate entry). */
@@ -40,4 +42,5 @@ export const coreComponents: ComponentDef[] = [
   progress, skeleton, empty,
   schedule,
   board,
+  tree,
 ];

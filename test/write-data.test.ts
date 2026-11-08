@@ -74,6 +74,7 @@ describe("bind= inside each, for every component that binds", () => {
     ["segmented", `segmented bind=r.v options="A,B"`, "v", "A", "last"],
     ["schedule", `schedule items={[{id: "a", start: "09:00", title: "Standup"}]} view=day bind=r.v`, "v", "", "press"],
     ["board", `board items={[{id: "a", stage: "Open", title: "Ticket"}]} stage=stage bind=r.v`, "v", "", "press"],
+    ["tree", `tree items={[{id: "a", name: "Top"}]} bind=r.v`, "v", "", "press"],
     ["carousel", `carousel bind=r.v min=400\n      card\n        text "a"\n      card\n        text "b"`, "v", 0, "last"],
   ];
 

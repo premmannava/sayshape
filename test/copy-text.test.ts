@@ -73,6 +73,13 @@ board "Tickets" items=t stage=s stages="Open,Done"
     expect(text.split("\n")).toEqual(["Tickets", "", "Open (2)", "- Login fails", "- Tax on invoice", "", "Done (1)", "- Export to CSV"]);
   });
 
+  it("copies a tree as an indented outline of what's open, two spaces per level", () => {
+    const text = copy(`state p=[{id: 1, name: "Operations"}, {id: 2, name: "Fleet", parent: 1}, {id: 3, name: "Trucks", parent: 2}, {id: 4, name: "Claims"}]
+tree "Budget" items=p open=1
+`);
+    expect(text.split("\n")).toEqual(["Budget", "Operations", "  Fleet", "Claims"]);
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password

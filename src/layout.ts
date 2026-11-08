@@ -3,7 +3,7 @@
  * TextMeasurer, so it runs (and is tested) without a canvas.
  */
 import { localToday } from "./dates";
-import { PropReader, type LayoutContext } from "./component";
+import { PropReader, type ElementView, type LayoutContext } from "./component";
 import { eachInstances, MAX_EACH_ELEMENTS, scopeOf, type EachBudget } from "./each";
 import { bareExpression, evaluate, type Scope } from "./expr";
 import type { Registry } from "./registry";
@@ -52,6 +52,7 @@ export function shownChildren(node: SayShapeNode, scope: Scope, registry?: Regis
 export function createLayoutContext(
   registry: Registry, theme: Theme, measure: TextMeasurer, scope: Scope, warn?: (message: string) => void, today: () => string = localToday,
   isLoading?: (node: SayShapeNode) => boolean,
+  view?: (node: SayShapeNode) => ElementView,
 ): LayoutContext {
   const readers = new WeakMap<SayShapeNode, PropReader>();
   // Containers may ask more than once per layout; copies must stay the same objects.
@@ -65,6 +66,7 @@ export function createLayoutContext(
     theme,
     measure,
     scope,
+    ...(view ? { view } : {}),
     props(node) {
       let r = readers.get(node);
       if (!r) readers.set(node, (r = new PropReader(node, scopeOf(node, scope))));

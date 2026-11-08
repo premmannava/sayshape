@@ -304,6 +304,24 @@ card
     detail "Risk" value={d.risk == 'bad' ? 'High' : d.risk == 'warn' ? 'Medium' : 'Low'} tone={d.risk == 'bad' ? 'bad' : d.risk == 'warn' ? 'warn' : 'good'}`,
 };
 
+const org: Example = {
+  id: "org-chart",
+  title: "Org chart",
+  prompt: "Who reports to whom in operations?",
+  category: "Plans",
+  look: { preset: "neutral", scheme: "light" },
+  spec: `state picked="e3"
+state people=[{id: "e1", name: "Ana Ruiz", role: "Chief Operating Officer"}, {id: "e2", name: "Ben Okafor", role: "Head of Claims", manager: "e1"}, {id: "e3", name: "Chloe Park", role: "Head of Operations", manager: "e1"}, {id: "e4", name: "Dev Malhotra", role: "Claims lead, North", manager: "e2"}, {id: "e5", name: "Erin Walsh", role: "Claims lead, South", manager: "e2"}, {id: "e6", name: "Femi Adeyemi", role: "Warehouse manager", manager: "e3"}, {id: "e7", name: "Grace Lin", role: "Fleet manager", manager: "e3"}, {id: "e8", name: "Hugo Martin", role: "HR partner", manager: "e1"}]
+derive p={find(people, 'id', picked)}
+card
+  text "Northwind Mutual operations" style=title
+  text "8 people · press someone to see who they report to" tone=muted
+  tree items=people parent=manager label=name detail=role kind=org bind=picked
+  details "{p.name}" subtitle="{p.role}"
+    detail "Reports to" value={p.manager ? find(people, 'id', p.manager).name : 'Board of directors'}
+    detail "Direct reports" value={len(filter(people, 'manager', p.id))}`,
+};
+
 const launch: Example = {
   id: "launch-plan",
   title: "Launch plan",
@@ -376,6 +394,6 @@ card
   button "Next update" variant=secondary disabled={stage >= 4} on=inc:stage`,
 };
 
-export const examples: readonly Example[] = [tip, sales, pipeline, cabin, launch, trip, laptop, coffee, grocery, tracking, budget, configurator];
+export const examples: readonly Example[] = [tip, sales, pipeline, cabin, org, launch, trip, laptop, coffee, grocery, tracking, budget, configurator];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);

@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 53 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 54 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -506,7 +506,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty) |
@@ -1432,6 +1432,30 @@ Columns of cards by stage, from a list: a sales pipeline, a task board, hiring s
 ```
 state picked=0 deals=[{id: 1, name: "Fleet renewal", company: "Harbor Freight Co", status: "Lead", amount: 48000}, {id: 2, name: "Claims portal", company: "Northwind Mutual", status: "Proposal", amount: 125000}, {id: 3, name: "Warehouse sensors", company: "Larkspur Logistics", status: "Qualified", amount: 36500}]
 board "Pipeline" items=deals stage=status stages="Lead,Qualified,Proposal,Won" title=name detail=company value=amount format=money sum=amount bind=picked
+```
+
+### `tree`
+
+A hierarchy from a flat list where each record names its parent: an org chart, folders, a budget by department. kind=list (default) is indented rows that open and close; kind=org is a top-down chart of boxes.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The title above the tree, e.g. Org chart. |
+| `items` | expression, required | The list of records, e.g. items=people. At most 300. |
+| `id` | name | The field that identifies each record, e.g. id=id. |
+| `parent` | name | The field with the parent's id, e.g. parent=manager. Empty for the top. |
+| `label` | name | The field with what each item says, e.g. label=name. |
+| `detail` | name | The field with a quieter line, e.g. detail=role. |
+| `value` | name | The field with a number on the right, e.g. value=headcount. |
+| `format` | `text` / `number` / `money` | How value= reads: text as is, number (1,200) or money ($1,200, US dollars). |
+| `kind` | `list` / `org` | list: indented rows that open and close. org: a top-down chart with boxes and lines, which scrolls sideways when wide. |
+| `open` | number | How many levels of a list start open; 0 shows only the top. |
+| `bind` | state | State that holds the selected item's id. Pressing an item sets it. |
+| `on` | action | Actions to run after an item is selected, with bind= already set, e.g. emit:changed. Separate several with ; |
+
+```
+state picked="" people=[{id: "e1", name: "Ana Ruiz", role: "COO"}, {id: "e2", name: "Ben Okafor", role: "Head of Claims", manager: "e1"}, {id: "e3", name: "Chloe Park", role: "Head of Operations", manager: "e1"}, {id: "e4", name: "Dev Malhotra", role: "Claims lead", manager: "e2"}]
+tree "Northwind Mutual" items=people parent=manager label=name detail=role bind=picked
 ```
 
 ### `map`
