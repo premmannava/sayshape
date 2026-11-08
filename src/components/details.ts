@@ -20,7 +20,7 @@
 import type { ComponentDef, LayoutContext } from "../component";
 import { ellipsize, fitLines, wrapText } from "../text";
 import type { SayShapeNode } from "../types";
-import { fillTint, themeFont, toneColor, TONES, type Tone } from "./util";
+import { fillTint, partBox, themeFont, toneColor, TONES, type Tone } from "./util";
 
 /** Narrower than this, labels go above their values. */
 export const NARROW = 300;
@@ -38,6 +38,9 @@ interface Row {
   h: number;
   /** The whole row as a screen reader reads it, uncut: "Plan: Pro". */
   spoken: string;
+  /** Its element, and its tip= (shown from its label). */
+  node?: SayShapeNode;
+  tip?: string;
 }
 
 type DetailsLayout = {
@@ -86,8 +89,14 @@ details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
       role: "group",
       name: p.text() || undefined,
       description: p.str("subtitle") || undefined,
-      parts: rows.map((r, i) => ({ detail: `row:${i}`, role: "text" as const, name: r.spoken })),
+      // A row with a tip has a region on its label (to reach it), and reads the tip after it.
+      parts: rows.map((r, i) => ({ detail: r.tip ? `tip:${i}` : `row:${i}`, role: "text" as const, name: r.spoken, ...(r.tip ? { description: r.tip } : {}) })),
     };
+  },
+  partTip(box, detail) {
+    const rows = (box.data as DetailsLayout | undefined)?.rows ?? [];
+    const i = typeof detail === "string" && detail.startsWith("tip:") ? Number(detail.slice(4)) : -1;
+    return rows[i]?.node;
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
@@ -126,7 +135,8 @@ details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
       const label = fitLines(labels[i] ?? "", stacked ? box.w : labelW - t.space.lg, fonts.label, m, LABEL_LINES);
       const lines = stacked ? label.length + value.length : Math.max(label.length, value.length);
       const h = lines * lh + pad * 2;
-      const row: Row = { label, value, y, h, spoken: `${labels[i] ?? ""}: ${text}`, ...(badge ? { tone } : {}) };
+      const tip = nodes[i] ? ctx.props(nodes[i]!).str("tip", "").trim() : "";
+      const row: Row = { label, value, y, h, spoken: `${labels[i] ?? ""}: ${text}`, ...(badge ? { tone } : {}), ...(nodes[i] ? { node: nodes[i] } : {}), ...(tip ? { tip } : {}) };
       y += h;
       return row;
     });
@@ -165,6 +175,16 @@ details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
       g.font = d.fonts.label;
       g.fillStyle = c.muted;
       r.label.forEach((l, k) => g.fillText(l, ox, first + k * d.lh));
+      if (r.tip) {
+        // A row with a tip: its label is underlined with dots, and pressable for the tip.
+        let w = 0;
+        r.label.forEach((l, k) => {
+          const lw = g.measureText(l).width;
+          w = Math.max(w, lw);
+          for (let x = 0; x < lw; x += 4) g.fillRect(ox + x, first + k * d.lh + d.lh / 2 - 2, 2, 1);
+        });
+        ctx.addHit(partBox(box, ox, first - d.lh / 2, w, r.label.length * d.lh), { detail: `tip:${i}` });
+      }
       const vx = ox + d.labelW;
       const vy = d.stacked ? first + r.label.length * d.lh : first;
       if (r.tone) {
@@ -187,7 +207,6 @@ details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"
 };
 
 export const detail: ComponentDef = {
-  drawnByParent: true,
   type: "detail",
   category: "data",
   description: "One row of details: a field's name and its value.",

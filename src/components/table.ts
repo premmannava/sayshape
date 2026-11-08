@@ -90,6 +90,9 @@ export interface TableColumn {
   w: number;
   /** The direction shown on this column's header, when the table is sorted by it. */
   sorted: "asc" | "desc" | null;
+  /** Its table-column, and that column's tip= (shown from its header). */
+  node: SayShapeNode;
+  tip?: string;
 }
 
 export interface TableRow {
@@ -272,14 +275,15 @@ export function fitColumns(natural: readonly number[], minimum: readonly number[
   return n && left > 0 ? w.map((x, i) => x + (cut[i] ? left / n : 0)) : w;
 }
 
-interface ColumnSpec { field: string; label: string; format: Format; align: Align }
+interface ColumnSpec { field: string; label: string; format: Format; align: Align; node: SayShapeNode; tip?: string }
 
 function readColumns(node: SayShapeNode, ctx: Pick<LayoutContext, "visibleChildren" | "props">): ColumnSpec[] {
   return ctx.visibleChildren(node).filter((c) => c.type === "table-column").map((c) => {
     const p = ctx.props(c);
     const field = p.str("field");
     const format = p.oneOf("format", FORMATS, "text");
-    return { field, label: p.text(field), format, align: p.oneOf("align", ALIGNS, format === "text" ? "left" : "right") };
+    const tip = p.str("tip", "").trim();
+    return { field, label: p.text(field), format, align: p.oneOf("align", ALIGNS, format === "text" ? "left" : "right"), node: c, ...(tip ? { tip } : {}) };
   });
 }
 
@@ -589,9 +593,10 @@ function paintTable(box: Box, ctx: PaintContext): void {
   function paintHeader(col: TableColumn, ci: number, part: { x: number; w: number }) {
     const cell = tablePart(box, part.x, hy, part.w, d!.headerH);
     const cx = ox + colX(ci);
-    const detail = sortDetail(col.field);
+    // A header that doesn't sort but has a tip is pressable for its tip alone.
+    const detail = d!.sortable ? sortDetail(col.field) : `tip:${ci}`;
     const hovered = d!.sortable && ctx.isHovered(box.node, detail);
-    if (d!.sortable) ctx.addHit(cell, { detail });
+    if (d!.sortable || col.tip) ctx.addHit(cell, { detail });
     // A sorted column says so quietly: its label in ink with a small arrow, no box
     // or underline. Hover previews the same, with the arrow faint.
     const shown = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, MOTION.hover);
@@ -602,15 +607,20 @@ function paintTable(box: Box, ctx: PaintContext): void {
     g.textAlign = right ? "right" : "left";
     const tx = right ? cx + col.w - pad : cx + pad;
     g.fillText(col.shownLabel, tx, hy + d!.headerH / 2);
+    const labelW = g.measureText(col.shownLabel).width;
+    if (col.tip) {
+      // A header with a tip is underlined with dots, like a row label in compare or details.
+      const lx = right ? tx - labelW : tx, ly = hy + d!.headerH / 2 + Math.round(d!.headerH / 4);
+      for (let x = 0; x < labelW; x += 4) g.fillRect(lx + x, ly, 2, 1);
+    }
     if (shown > 0) {
-      const labelW = g.measureText(col.shownLabel).width;
       const ax = right ? tx - labelW - 8 : tx + labelW + 8;
       g.save();
       g.globalAlpha *= col.sorted ? shown : 0.45 * shown;
       chevron(g, ax, hy + d!.headerH / 2, 7, col.sorted === "desc" ? "down" : "up", col.sorted ? c.ink : c.muted);
       g.restore();
     }
-    if (d!.sortable && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
+    if ((d!.sortable || col.tip) && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
   }
   rule(f.y + d.headerH, false);
 
@@ -786,6 +796,12 @@ table items=gear key=id bind=picked sort=by direction=dir
   minWidth: () => 200,
   // Scrolled sideways, it needs as much more room as it can scroll.
   fullWidth: (box) => box.w + ((box.data as TableGeometry | undefined)?.scroll?.max ?? 0),
+  partTip(box, detail) {
+    const cols = (box.data as TableGeometry | undefined)?.columns ?? [];
+    if (typeof detail !== "string") return undefined;
+    if (detail.startsWith("tip:")) return cols[Number(detail.slice(4))]?.node;
+    return detail.startsWith("sort:") ? cols.find((c) => sortDetail(c.field) === detail)?.node : undefined;
+  },
   semantics(box, ctx) {
     const d = box.data as TableGeometry | undefined;
     const name = ctx.props(box.node).text() || ctx.textBefore() || undefined;
@@ -795,10 +811,11 @@ table items=gear key=id bind=picked sort=by direction=dir
     // each placed where it's drawn (before any sideways scrolling).
     const parts: PartSemantics[] = [{ detail: "head", role: "row", rect: { x: box.x + d.frame.x, y: box.y + d.frame.y, w: d.frame.w, h: d.headerH } }];
     d.columns.forEach((col, ci) => parts.push({
-      detail: d.sortable ? sortDetail(col.field) : `col:${ci}`,
+      detail: d.sortable ? sortDetail(col.field) : col.tip ? `tip:${ci}` : `col:${ci}`,
       within: "head",
       role: "columnheader",
       name: col.label,
+      ...(col.tip ? { description: col.tip } : {}),
       sort: col.sorted === "asc" ? "ascending" : col.sorted === "desc" ? "descending" : undefined,
     }));
     if (!d.rows.length && d.empty) {
@@ -907,7 +924,6 @@ function pressTable(ctx: PressContext): void {
 }
 
 export const tableColumn: ComponentDef = {
-  drawnByParent: true,
   type: "table-column",
   category: "data",
   description: "One column of a table: its header and the field it shows.",

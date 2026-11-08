@@ -39,7 +39,8 @@ The pointer can move onto the bubble without it vanishing. Escape hides it witho
 - The bubble stays on the canvas: above, else below, else the side with more room.
 - A tip follows its element as it is in this frame, and goes when the element is scrolled out of sight.
 - A new spec forgets pinned and hidden tips.
-- `tip=` on an element its parent draws (`ComponentDef.drawnByParent`: `table-column`, `detail`, `compare-row`, `menu-item`) is a warning that says where to put it.
+- `tip=` on a row or column its parent draws (`compare-row`, `detail`, `table-column`) shows from that row's label or that column's header: the parent underlines the label with dots, registers a region on it (detail `tip:<i>`, or a sortable header's own `sort:` region) and maps it back to the child with `ComponentDef.partTip`. The engine keys pinned and hidden tips by part (`accessibleKey`), so each row's tip is its own. A `tip:` part is there only for its tip: a tap shows it, and on a scrolling table a drag from it still scrolls (a press that moves less than `TAP_SLOP` is a tap). It doesn't count as the element's own region, so an element's own tip keeps its Tab stop beside its rows'. A sortable header still sorts when pressed and shows its tip on hover and focus; on touch, with no hover, a tap sorts, so its tip can't be reached there (a known limit). A sortable header whose column has no tip shows its table's. Screen readers read the tip as the row header's or column header's description.
+- `tip=` on a `menu-item` (`ComponentDef.drawnByParent`) is still a warning that says where to put it: its popup has no tips.
 - In a dialog, the first Escape hides the focused element's tip and the second closes the dialog (WCAG 1.4.13 asks that a tip be dismissible without moving focus).
 
 ## Tests
