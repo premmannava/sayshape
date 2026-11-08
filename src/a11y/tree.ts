@@ -78,7 +78,8 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
     const result: SemanticsResult = def?.semantics ? def.semantics(box, ctx) : fallback(box, ctx);
     // tip= is read after the element's name; an element pressable only for its tip is the node Tab lands on.
     const tip = node.props.tip !== undefined ? props(node).str("tip", "").trim() : "";
-    const tipRegion = tip ? regions.find((r) => r.detail === TIP_DETAIL) : undefined;
+    // Only a tip-only element's region is a Tab stop (one with its own regions keeps them).
+    const tipRegion = tip ? regions.find((r) => r.detail === TIP_DETAIL && r.focusable) : undefined;
     if (result === false && !tipRegion) return [];
     const inner = result === false ? [] : buildAll(box.children);
     if (result === null || result === false) {

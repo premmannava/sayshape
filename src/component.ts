@@ -324,6 +324,11 @@ export interface ComponentDef {
    * their drawing to it, and the pointer reaches only what's inside it.
    */
   clipChildren?(box: Box): Rect | null;
+  /**
+   * Drawn by its parent, with no box of its own (a table-column, a detail row, a menu-item): the
+   * parser warns that tip= on it isn't shown.
+   */
+  drawnByParent?: boolean;
   /** Floats above the screen when open, as a modal (see OverlayDef). */
   overlay?: OverlayDef;
   /**

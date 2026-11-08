@@ -553,9 +553,7 @@ dialog "Cancel {target}?" bind=confirm size=sm
     prompt: "Show this week's store numbers, and explain what each one counts.",
     spec: `state open=14 refunds=3 rate=0.962
 card
-  row align=center
-    text "This week" style=title
-    icon name=info tip="Figures refresh every 5 minutes, in the store's time zone"
+  text "This week" style=title tip="Figures refresh every 5 minutes, in the store's time zone"
   grid min=140 gap=10
     stat label="Open orders" value={open} tip="Paid, not yet handed to the carrier"
     stat label="Refunds" value={refunds} tip="Counted on the day they're approved, not requested"

@@ -300,6 +300,7 @@ export const menu: ComponentDef = {
 };
 
 export const menuItem: ComponentDef = {
+  drawnByParent: true,
   type: "menu-item",
   category: "input",
   description: "One action in a menu's list.",

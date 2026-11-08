@@ -25,7 +25,7 @@ import { localToday, parseDate } from "./dates";
 import { parse, type ParseResult } from "./parser";
 import { Registry } from "./registry";
 import { Store } from "./state";
-import { CanvasMeasurer, font as fontString, wrapText } from "./text";
+import { CanvasMeasurer, ellipsize, font as fontString, wrapText } from "./text";
 import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
@@ -183,6 +183,11 @@ export class SayShape {
   private tipHidden: string | null = null;
   /** The tip drawn in the last frame: its element and where it was, so the pointer can move onto it. */
   private tipShown: { target: HitTarget; rect: Rect } | null = null;
+  /** What was pinned when the latest pointer press began (undefined outside a press), so a second tap hides it. */
+  private tipAtDown: string | null | undefined = undefined;
+  /** The focus and hover last seen by the tip, so moving to something else resets what Escape hid or a tap pinned. */
+  private tipLastFocus = "";
+  private tipLastHover = "";
   private keyboardMode = false;
   /** Returning focus to the canvas after Escape must not restart the editor. */
   private returningFromEditor = false;
@@ -252,6 +257,9 @@ export class SayShape {
   setSpec(src: string, opts: { resetState?: boolean } = {}): void {
     if (opts.resetState) this.resetState();
     this.closePopup(false);
+    // A new spec starts with no tip pinned or hidden (its elements may share ids with the old one's).
+    this.tipPinned = null;
+    this.tipHidden = null;
     this.source = src;
     this.streaming = false;
     this.invalidate("parse");
@@ -767,12 +775,7 @@ export class SayShape {
     else if (loading && !box.children.length) paintGenericGhost(ctx, box);
     else def?.paint?.(box, ctx);
     ctx.g.restore();
-    // An element with a tip that isn't pressable on its own gets a region, under its children's,
-    // so the pointer, Tab and a tap can reach it and show the tip.
-    if (box.node.props.tip !== undefined && !loading && this.tipOf(box.node) && !this.hits.slice(before).some((h) => h.box.node.id === box.node.id)) {
-      const clip = this.clips[this.clips.length - 1];
-      this.hits.push({ box: atLeastTarget(box), detail: TIP, focusable: true, ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}) });
-    }
+    const clipHere = this.clips[this.clips.length - 1];
     const under = def?.surface?.(box, ctx);
     const inner = under && under !== ctx.theme.colors.raised ? { ...ctx, theme: { ...ctx.theme, colors: { ...ctx.theme.colors, raised: under } } } : ctx;
     // An element that scrolls its children shows them through its own box only.
@@ -793,6 +796,13 @@ export class SayShape {
       ctx.g.globalAlpha = alpha;
       def.paintOver(box, ctx);
       ctx.g.restore();
+    }
+    // An element with a tip gets a region for it under its children's and its own parts, so the
+    // pointer shows the tip anywhere on it. When it isn't pressable on its own, the region is a
+    // Tab stop too, so the keyboard and a tap reach it. (A scene draws its shapes' tips itself.)
+    if (box.node.props.tip !== undefined && !loading && !def?.provides && this.tipOf(box.node)) {
+      const own = this.hits.slice(before).some((h) => h.box.node.id === box.node.id);
+      this.hits.splice(before, 0, { box: own ? box : atLeastTarget(box), detail: TIP, focusable: !own, ...(clipHere ? { clip: clipHere.rect, clipOwner: clipHere.owner } : {}) });
     }
   }
 
@@ -1133,7 +1143,9 @@ export class SayShape {
   activate(target: HitTarget): void {
     // A tap (or Enter) on an element that has only its tip shows it, and again hides it.
     if (target.detail === TIP) {
-      this.tipPinned = this.tipPinned === target.node.id ? null : target.node.id;
+      const was = this.tipAtDown !== undefined ? this.tipAtDown : this.tipPinned;
+      this.tipAtDown = undefined;
+      this.tipPinned = was === target.node.id ? null : target.node.id;
       this.tipHidden = null;
       this.invalidate("paint");
       return;
@@ -1363,21 +1375,39 @@ export class SayShape {
 
   /** Whose tip shows now: what's pinned by a tap, focused from the keyboard, or under the pointer (or its tip). */
   private tipTarget(): HitTarget | null {
-    const has = (t: HitTarget | null): t is HitTarget => !!t && !!this.tipOf(t.node) && this.tipHidden !== t.node.id;
+    // No tip while a popup is open: it would sit over the options being chosen.
+    if (this.popup) return null;
+    const keyOf = (t: HitTarget | null) => (t ? accessibleKey(t.node, t.detail) : "");
+    const fk = this.keyboardMode ? keyOf(this.focus) : "", hk = this.keyboardMode ? "" : keyOf(this.hover);
+    // Moving to something else shows tips again (Escape hid one) and lets go of one a tap or Enter pinned.
+    if (fk !== this.tipLastFocus || hk !== this.tipLastHover) {
+      this.tipHidden = null;
+      if (fk !== this.tipLastFocus && fk && this.focus?.node.id !== this.tipPinned) this.tipPinned = null;
+      this.tipLastFocus = fk;
+      this.tipLastHover = hk;
+    }
+    /** The target as it is in this frame, anchored to what's in sight of it, or null when it has no tip or is out of sight. */
+    const live = (t: HitTarget | null | undefined): HitTarget | null => {
+      if (!t || !this.tipOf(t.node) || this.tipHidden === t.node.id || t.layer === "popup") return null;
+      const def = this.registry.get(t.node.type);
+      if (def?.provides && t.detail !== undefined && t.detail !== TIP) return null;
+      const h = this.hits.find((r) => r.box.node.id === t.node.id && (r.detail === t.detail || (t.detail === undefined && r.detail === TIP)))
+        ?? this.hits.find((r) => r.box.node.id === t.node.id);
+      if (!h) return null;
+      const box = h.clip ? intersectRect(h.box, h.clip) : h.box;
+      if (box.w <= 0 || box.h <= 0) return null;
+      return { node: h.box.node, box: { ...h.box, ...box }, detail: h.detail };
+    };
     if (this.tipPinned) {
       const h = this.hits.find((r) => r.box.node.id === this.tipPinned);
-      const t = h ? { node: h.box.node, box: h.box, detail: h.detail } : null;
-      if (has(t)) return t;
+      const t = h ? live({ node: h.box.node, box: h.box, detail: h.detail }) : null;
+      if (t) return t;
     }
-    if (this.keyboardMode && has(this.focus)) return this.focus;
+    if (this.keyboardMode) return live(this.focus);
     // The pointer on a shown tip keeps it, whatever is under the bubble.
     const was = this.tipShown, p = this.pointer;
-    if (was && p && !this.keyboardMode && inRect(p, was.rect) && has(was.target)) return was.target;
-    if (!this.keyboardMode && has(this.hover)) return this.hover;
-    // Moving to something else lets a tip hidden with Escape show again next time.
-    const now = this.keyboardMode ? this.focus : this.hover;
-    if (this.tipHidden && now?.node.id !== this.tipHidden) this.tipHidden = null;
-    return null;
+    if (was && p && inRect(p, was.rect)) { const t = live(was.target); if (t) return t; }
+    return live(this.hover);
   }
 
   /** The tip bubble: inverse colors from the theme, above its element (below when there's no room), drawn last. */
@@ -1392,13 +1422,18 @@ export class SayShape {
     const lh = Math.round(size * 1.4);
     const W = this.metrics.width;
     const maxW = Math.max(0, Math.min(TIP_MAX_W, W - 2 * TIP_GAP));
-    const lines = wrapText(text, Math.max(0, maxW - 2 * TIP_PAD_X), font, this.measurer).slice(0, 8);
+    const all = wrapText(text, Math.max(0, maxW - 2 * TIP_PAD_X), font, this.measurer);
+    const lines = all.slice(0, TIP_MAX_LINES);
+    if (all.length > TIP_MAX_LINES) lines[TIP_MAX_LINES - 1] = ellipsize(lines[TIP_MAX_LINES - 1]! + "…", maxW - 2 * TIP_PAD_X, font, this.measurer);
     const w = Math.min(maxW, Math.ceil(Math.max(...lines.map((l) => this.measurer.width(l, font)))) + 2 * TIP_PAD_X);
     const h = lines.length * lh + 2 * TIP_PAD_Y;
     const b = t.box;
+    // Above when it fits in sight, else below when that fits, else the side with more room, kept on the canvas.
     const vp = this.viewport();
-    const above = b.y - TIP_GAP - h;
-    const y = above >= Math.max(0, vp.top) ? above : b.y + b.h + TIP_GAP;
+    const top = Math.max(0, vp.top), bottom = Math.min(this.metrics.height, vp.bottom);
+    const above = b.y - TIP_GAP - h, below = b.y + b.h + TIP_GAP;
+    const y0 = above >= top ? above : below + h <= bottom ? below : b.y - top > bottom - (b.y + b.h) ? above : below;
+    const y = Math.max(0, Math.min(y0, this.metrics.height - h));
     const x = Math.max(TIP_GAP, Math.min(b.x + b.w / 2 - w / 2, W - w - TIP_GAP));
     g.save();
     ctx.roundRect(x, y, w, h, radius.sm);
@@ -1600,6 +1635,7 @@ export class SayShape {
    * element gets the rest, and Enter or Space presses it.
    */
   private onKeyDown(e: MirrorKey): void {
+    this.tipAtDown = undefined;
     // A dialog opened from the keyboard goes near what has focus, not the latest press.
     this.lastPressY = null;
     if (e.key === "Escape" && this.inspector.inspecting) { this.inspector.setInspecting(false); return; }
@@ -1697,6 +1733,10 @@ export class SayShape {
     let pressing = false;
     const onDown = (e: PointerEvent) => {
       this.keyboardMode = false;
+      // A press on a shown tip does nothing (the pointer may rest on it); elsewhere it unpins one.
+      const at = local(e);
+      if (this.tipShown && inRect(at, this.tipShown.rect)) { this.swallowRelease = true; this.pressed = null; return; }
+      this.tipAtDown = this.tipPinned;
       if (this.tipPinned) { this.tipPinned = null; this.invalidate("paint"); }
       pressing = true;
       setTimeout(() => { pressing = false; }, 0);
@@ -2035,7 +2075,7 @@ function intersectRect(a: Rect, b: Rect): Rect {
 /** The detail of the region an element with only a tip gets (see paintBox). */
 export const TIP = "tip";
 /** A tip's widest, its padding, and its gap from its element. */
-const TIP_MAX_W = 280, TIP_PAD_X = 10, TIP_PAD_Y = 6, TIP_GAP = 6;
+const TIP_MAX_W = 280, TIP_PAD_X = 10, TIP_PAD_Y = 6, TIP_GAP = 6, TIP_MAX_LINES = 8;
 
 /** Room kept between an overlay and the edges of what's in sight. */
 const OVERLAY_MARGIN = 16;

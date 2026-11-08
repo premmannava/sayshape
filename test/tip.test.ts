@@ -119,4 +119,92 @@ describe("tip=", () => {
     expect(ops.length).toBeGreaterThan(2);
     for (const o of ops) expect(Number(o.args[1])).toBeGreaterThanOrEqual(0);
   });
+
+  describe("review fixes", () => {
+    it("lets go of a tip pinned with Enter when focus moves on", () => {
+      const ui = render(`text "A" tip="tipA"\nbutton "B" on=emit:b tip="tipB"\n`, { width: 600 });
+      ui.tab();
+      ui.key("Enter");
+      ui.tab();
+      expect(tipText(ui)).toBe("tipB");
+    });
+
+    it("keeps the tip on the canvas when there's no room above or below", () => {
+      const ui = render(`text "Top" tip="Explain the top line"\n`, { width: 300 });
+      ui.tab();
+      const op = ui.drawOps.find(isTip)!;
+      expect(Number(op.args[2])).toBeLessThan(ui.sayshape.metrics.height);
+    });
+
+    it("shows no tip while a popup is open", () => {
+      const ui = render(`state s="a"\nselect "Size" bind=s items={["a","b","c","d"]} tip="Pick a size"\n`, { width: 600 });
+      ui.tab();
+      expect(tipText(ui)).toBe("Pick a size");
+      ui.key("ArrowDown");
+      expect(ui.popup).not.toBeNull();
+      expect(tipText(ui)).toBe("");
+    });
+
+    it("hides on a second tap", () => {
+      const ui = render(`text "Target" tip="Shown"\n`, { width: 600 });
+      const [x, y] = center(ui, "text");
+      ui.click(x, y);
+      expect(tipText(ui)).toBe("Shown");
+      ui.click(x, y);
+      move(ui, 2, 300);
+      expect(tipText(ui)).toBe("");
+    });
+
+    it("doesn't press what's under the bubble", () => {
+      const ui = render(`state n=0\nbutton "Under" on=inc:n\ntext "Target" tip="A long explanation that sits over the button above it"\n`, { width: 600 });
+      const [x, y] = center(ui, "text");
+      move(ui, x, y);
+      const op = ui.drawOps.find(isTip)!;
+      ui.click(Number(op.args[1]) + 4, Number(op.args[2]));
+      expect(ui.state.n).toBe(0);
+    });
+
+    it("shows again after Escape once focus has moved away and back", () => {
+      const ui = render(`text "A" tip="tipA"\ntext "B" tip="tipB"\n`, { width: 600 });
+      ui.tab();
+      ui.key("Escape");
+      expect(tipText(ui)).toBe("");
+      ui.tab();
+      ui.tab(true);
+      expect(tipText(ui)).toBe("tipA");
+    });
+
+    it("warns that tip= on an element its parent draws isn't shown", () => {
+      const r = render(`state rows=[]\ntable items=rows\n  table-column "Name" field=n tip="Their full name"\n`);
+      expect(r.diagnostics.map((d) => d.message).join(" ")).toMatch(/tip= on a table-column isn't shown/);
+    });
+
+    it("shows anywhere over an element that has pressable parts of its own", () => {
+      const ui = render(`text "See [the docs](https://northwind.example/docs) for every rule we follow here" rich=true tip="Rules as of June"\n`, { width: 600 });
+      const b = ui.find("text").box!;
+      move(ui, b.x + b.w - 10, b.y + b.h / 2);
+      expect(tipText(ui)).toBe("Rules as of June");
+    });
+
+    it("drops a pinned tip when its element is scrolled out of sight", () => {
+      const rows = Array.from({ length: 30 }, (_, i) => `  text "Row ${i}"${i === 0 ? ' tip="First row"' : ""}`).join("\n");
+      const ui = render(`scroll "Rows" size=sm\n${rows}\n`, { width: 600 });
+      const [x, y] = center(ui, { type: "text", text: "Row 0" });
+      ui.click(x, y);
+      expect(tipText(ui)).toBe("First row");
+      const s = ui.find("scroll").box!;
+      ui.wheel(s.x + 10, s.y + 10, 600);
+      expect(tipText(ui)).toBe("");
+    });
+
+    it("forgets a pinned tip when the spec changes", () => {
+      const ui = render(`text "A" tip="tipA"\n`, { width: 600 });
+      const [x, y] = center(ui, "text");
+      ui.click(x, y);
+      expect(tipText(ui)).toBe("tipA");
+      ui.setSpec(`text "A" tip="tipZ"\n`);
+      move(ui, 590, 300);
+      expect(tipText(ui)).toBe("");
+    });
+  });
 });
