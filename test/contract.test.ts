@@ -145,10 +145,13 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
         expect(b.w, where).toBeGreaterThanOrEqual(0);
         expect(b.h, where).toBeGreaterThanOrEqual(0);
         if (parent) {
+          // A parent that scrolls its children (it clips them to its box) holds them taller than
+          // itself, moved up as it scrolls: across, they still keep inside it.
+          const scrolls = !!registry.get(parent.node.type)?.clipChildren?.(parent);
           expect(b.x, `${where} starts left of its parent`).toBeGreaterThanOrEqual(parent.x - EPS);
-          expect(b.y, `${where} starts above its parent`).toBeGreaterThanOrEqual(parent.y - EPS);
+          if (!scrolls) expect(b.y, `${where} starts above its parent`).toBeGreaterThanOrEqual(parent.y - EPS);
           expect(b.x + b.w, `${where} extends past its parent's right edge`).toBeLessThanOrEqual(parent.x + parent.w + EPS);
-          expect(b.y + b.h, `${where} extends past its parent's bottom edge`).toBeLessThanOrEqual(parent.y + parent.h + EPS);
+          if (!scrolls) expect(b.y + b.h, `${where} extends past its parent's bottom edge`).toBeLessThanOrEqual(parent.y + parent.h + EPS);
         }
         for (const k of b.children) check(k, b);
       };

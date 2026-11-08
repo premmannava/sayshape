@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 56 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 57 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), scrolling regions, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Dialogs come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -507,7 +507,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 <!-- CATEGORIES:START (generated from src/components) -->
 | Category | Components |
 |---|---|
-| Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel) |
+| Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon), [`tile`](#tile) |
 | Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
@@ -1517,6 +1517,27 @@ row gap=8
   tile "B4" shape=square detail="$14" selected=true on=emit:seat
 ```
 
+### `scroll`
+
+A region that shows its children up to a fixed height and scrolls the rest, for a long list inside a card: messages, activity, results. Everything inside is still read and copied.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | What it holds, for screen readers, e.g. Recent activity. Not drawn. |
+| `size` | `sm` / `md` / `lg` | How tall it gets before it scrolls: sm (about 6 rows of controls), md (about 9) or lg (about 12). |
+| `gap` | number | Space between children in pixels (default 8). |
+| `pad` | number | Inner padding in pixels (default 0). |
+
+Children: any elements.
+
+```
+state events=[{title: "Order NW-2041 shipped", when: "09:12"}, {title: "Refund approved", when: "08:40"}, {title: "New review: 5 stars", when: "Yesterday"}, {title: "Stock low: Ridge 28 L", when: "Yesterday"}, {title: "Invoice sent", when: "Mon"}, {title: "Order NW-2038 delivered", when: "Mon"}, {title: "Price change: Summit pack", when: "Sun"}, {title: "New customer: Lumen Cinema", when: "Sat"}]
+scroll "Recent activity" size=sm
+  list
+    each items=events as=e
+      list-item "{e.title}" detail="{e.when}"
+```
+
 ### `map`
 
 Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
@@ -2213,7 +2234,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 
 - **Multi-line text, and form validation** (required fields, email format). A model can show a hint with `if=` for now.
 - **Text selection and browser find.** To copy, a host can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
-- **Scrolling regions, dialogs, menus or tooltips.** The one popup so far is a select's list of options (one open at a time); there's no general overlay element yet.
+- **Dialogs, menus or tooltips.** The one popup so far is a select's list of options (one open at a time); there's no general overlay element yet. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
 - **Dates and times beyond the basics.** `date-picker` picks a calendar day (or a range with `range=true`), with no times. `schedule` lays out times as `HH:MM` text and dates as `YYYY-MM-DD`, but has no time zones, recurring events, blocks past midnight, month view, or dragging blocks to move them. Names are in US English with weeks starting on Sunday.
 - **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.
 - **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.

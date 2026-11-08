@@ -55,6 +55,9 @@ export interface HitRegion {
   /** Extra detail for components with sub-regions (e.g. which country on a map). */
   detail?: unknown;
   focusable: boolean;
+  /** Inside a scrolling element: the part of the screen it shows, and that element's box. The pointer only reaches the region inside it. */
+  clip?: Rect;
+  clipOwner?: Box;
 }
 
 /** What the pointer or keyboard focus is currently on. */
