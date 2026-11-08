@@ -40,7 +40,7 @@ import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { sceneComponents, reviewScenes } from "../../src/components/scene";
 import type { ComponentDef } from "../../src/component";
-import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PICKS_HEADING } from "../../src/prompt";
+import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PICKS_HEADING, PICKS_HEADING_SHORT } from "../../src/prompt";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
@@ -128,12 +128,25 @@ export function quickStart(withData = false, withMcp = false): string {
     "- Text and props show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
     "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue')`,
-    `ELEMENTS\n${elementIndex(components)}`,
-    `${PICKS_HEADING}\n${pickList(components)}`,
+    `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
+    // The same heading as the guides', in fewer words: this text goes out with every call.
+    `${PICKS_HEADING_SHORT}\n${pickList(components)}`,
     "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
     `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");
+}
+
+/**
+ * A child element that only goes inside parents whose docs always bring it
+ * along (table-column with table, tab with tabs): the quick start's element
+ * list leaves it out, since asking sayshape_docs for the parent shows it.
+ */
+function arrivesWithParent(c: ComponentDef): boolean {
+  return !!c.parents?.length && c.parents.every((p) => {
+    const parent = components.find((d) => d.type === p);
+    return Array.isArray(parent?.children) && parent.children.includes(c.type);
+  });
 }
 
 /** Docs for exactly what was asked for, plus what it depends on. */

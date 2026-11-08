@@ -281,6 +281,29 @@ card
   callout "Best day: {top.day}" detail="{money(top.sales)} in sales" tone=good icon=true`,
 };
 
+const pipeline: Example = {
+  id: "sales-pipeline",
+  title: "Sales pipeline",
+  prompt: "Show our Q4 pipeline by stage, with the deal values",
+  category: "Dashboards",
+  look: { preset: "blue", scheme: "light" },
+  spec: `state picked=5
+state deals=[{id: 1, name: "Fleet telematics", company: "Harbor Freight Co", owner: "Maya Chen", status: "Lead", amount: 48000, risk: "good"}, {id: 2, name: "Claims portal rebuild", company: "Northwind Mutual", owner: "Luis Ortega", status: "Proposal", amount: 125000, risk: "warn"}, {id: 3, name: "Warehouse sensors", company: "Larkspur Logistics", owner: "Priya Nair", status: "Qualified", amount: 36500, risk: "good"}, {id: 4, name: "Payroll migration", company: "Cobalt Staffing", owner: "Tom Becker", status: "Lead", amount: 22000, risk: "good"}, {id: 5, name: "Policy admin suite", company: "Bluefin Insurance", owner: "Maya Chen", status: "Negotiation", amount: 310000, risk: "bad"}, {id: 6, name: "Route planner", company: "Granite Haulage", owner: "Ama Mensah", status: "Won", amount: 64000, risk: "good"}, {id: 7, name: "HR analytics", company: "Juniper Health", owner: "Luis Ortega", status: "Qualified", amount: 58000, risk: "warn"}]
+derive d={find(deals, 'id', picked)}
+derive open={filter(deals, 'status', ['Lead', 'Qualified', 'Proposal', 'Negotiation'])}
+card
+  text "Q4 pipeline" style=title
+  grid min=140 gap=10
+    stat label="Open pipeline" value={compact(sum(open, 'amount'), 'USD')}
+    stat label="Open deals" value={len(open)}
+    stat label="Won this quarter" value={compact(sum(filter(deals, 'status', 'Won'), 'amount'), 'USD')}
+  board items=deals stage=status stages="Lead,Qualified,Proposal,Negotiation,Won" title=name detail=company value=amount format=money sum=amount tone=risk bind=picked
+  details "{d.name}" subtitle="{d.company} · {d.owner}"
+    detail "Value" value={money(d.amount)}
+    detail "Stage" value={d.status}
+    detail "Risk" value={d.risk == 'bad' ? 'High' : d.risk == 'warn' ? 'Medium' : 'Low'} tone={d.risk == 'bad' ? 'bad' : d.risk == 'warn' ? 'warn' : 'good'}`,
+};
+
 const launch: Example = {
   id: "launch-plan",
   title: "Launch plan",
@@ -353,6 +376,6 @@ card
   button "Next update" variant=secondary disabled={stage >= 4} on=inc:stage`,
 };
 
-export const examples: readonly Example[] = [tip, sales, cabin, launch, trip, laptop, coffee, grocery, tracking, budget, configurator];
+export const examples: readonly Example[] = [tip, sales, pipeline, cabin, launch, trip, laptop, coffee, grocery, tracking, budget, configurator];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);

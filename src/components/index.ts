@@ -17,6 +17,7 @@ import { compare, compareRow } from "./compare";
 import { meter } from "./meter";
 import { detail, details } from "./details";
 import { schedule } from "./schedule";
+import { board } from "./board";
 
 export {
   column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
@@ -26,6 +27,7 @@ export {
   screen, tabs, tab, breadcrumb, pagination,
   progress, skeleton, empty,
   schedule,
+  board,
 };
 
 /** The built-in components (everything except the map, which is a separate entry). */
@@ -37,4 +39,5 @@ export const coreComponents: ComponentDef[] = [
   screen, tabs, tab, breadcrumb, pagination,
   progress, skeleton, empty,
   schedule,
+  board,
 ];
