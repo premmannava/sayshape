@@ -5,12 +5,18 @@
  *
  * - best: what shows it best (2 points);
  * - ok: works, but loses something (1 point);
- * - anything else, and the poor list in particular, scores 0.
+ * - anything else, and the poor list in particular, scores 0;
+ * - never: wrong even beside the best (a 14-slice pie next to a treemap), so
+ *   the two together are only ok. On traps, the trap pick is a never.
  *
- * An answer is described by its signatures (see `signatures`): element types,
- * plus `chart:<kind>`, `tree:<kind>`, `meter:<kind>`, `schedule:<view>`,
- * `input:required|email|number|lines`, `select:multiple`, `date-picker:range`,
- * `text:rich` and `tip`. The best signature found wins.
+ * An answer is read element by element (see `elementSignatures`): each
+ * element's type, plus `chart:<kind>`, `tree:<kind>`, `meter:<kind>`,
+ * `map:<kind>`, `schedule:<view>`, `input:required|email|number|lines`,
+ * `select:multiple`, `date-picker:range` and `text:rich`, and a `tip` for each
+ * tip=. An element is graded by its most specific signature the case lists
+ * (a multiple select by `select:multiple` when listed, else by `select`), and
+ * the best element found wins. A case with parts gives each part its own
+ * element: one element never counts for two parts.
  *
  * All names and figures are fictional. `why` says why the best is best, so
  * the judgement can be argued with case by case.
@@ -44,7 +50,7 @@ export interface PickCase {
    */
   round?: 1 | 2;
   /** Several things to show in one answer, each graded on its own; the case scores their average. */
-  parts?: Array<{ label: string; best: string[]; ok?: string[]; poor?: string[] }>;
+  parts?: Array<{ label: string; best: string[]; ok?: string[] }>;
 }
 
 const round1: PickCase[] = [
@@ -88,13 +94,13 @@ const round1: PickCase[] = [
   {
     id: "relate", group: "chart",
     request: "Do stores that spend more on ads sell more? Ad spend and monthly sales for 12 stores: Mesa $4K/$61K, Tempe $6K/$70K, Chandler $3K/$52K, Gilbert $8K/$88K, Scottsdale $9K/$97K, Peoria $2K/$41K, Glendale $5K/$66K, Surprise $1K/$33K, Goodyear $7K/$79K, Avondale $3K/$49K, Buckeye $2K/$38K, Queen Creek $6K/$74K.",
-    best: ["chart:scatter"], ok: ["table"], poor: ["chart:line", "chart:bar", "chart:hbar"],
+    best: ["chart:scatter"], ok: ["table"], poor: ["chart:bar", "chart:hbar"], never: ["chart:line"],
     why: "Whether two numbers move together is a scatter: each store a dot at its spend and sales.",
   },
   {
     id: "relate-trap", group: "chart", trap: true,
     request: "Are pricier hotels rated better? Nightly price and guest rating for 10 hotels: Cactus Inn $89/3.9, Saguaro Suites $142/4.4, Desert Rose $118/4.1, Copper Lodge $210/4.5, Palo Verde $96/3.6, Red Rock Retreat $265/4.7, Mesa Motel $72/3.4, Sonoran Spa $310/4.6, Canyon View $155/4.2, Oasis House $128/3.8.",
-    best: ["chart:scatter"], ok: ["table"], poor: ["chart:line", "chart:bar", "chart:hbar"],
+    best: ["chart:scatter"], ok: ["table"], poor: ["chart:bar", "chart:hbar"], never: ["chart:line"],
     why: "Price against rating is a relationship between two numbers, not a ranking: a scatter shows whether they rise together.",
   },
   {
@@ -142,7 +148,7 @@ const round1: PickCase[] = [
   {
     id: "one-kpi-change", group: "chart", trap: true,
     request: "This week's revenue is $84,200, up 12% from last week's $75,180.",
-    best: ["stat"], ok: ["text", "callout"], poor: ["chart:bar", "chart:line", "chart:pie"],
+    best: ["stat"], ok: ["text", "callout"], never: ["chart:bar", "chart:line", "chart:pie"],
     why: "One headline number with its change: a stat with change=, not a two-bar chart.",
   },
   {
@@ -160,13 +166,13 @@ const round1: PickCase[] = [
   {
     id: "share-of-one", group: "chart", trap: true,
     request: "We've closed 312 of our 480 support tickets this month.",
-    best: ["progress", "meter"], ok: ["stat", "chart:donut", "chart:pie"], poor: ["chart:bar", "chart:hbar", "chart:line"],
+    best: ["progress", "meter"], ok: ["stat", "chart:donut", "chart:pie"], never: ["chart:bar", "chart:hbar", "chart:line"],
     why: "One part of one total: a progress bar or ring says 65% done without a chart.",
   },
   {
     id: "kpi-row", group: "chart", trap: true,
     request: "Today's store numbers: revenue $18,420, orders 212, average order $86.90, conversion 3.8%, returns 7, new customers 41.",
-    best: ["stat"], ok: ["details", "table"], poor: ["chart:bar", "chart:hbar", "chart:pie", "chart:donut"],
+    best: ["stat"], ok: ["details", "table"], never: ["chart:bar", "chart:hbar", "chart:pie", "chart:donut"],
     why: "Six headline numbers in different units: a row of stats, since no chart can share a scale between them.",
   },
 
@@ -180,7 +186,7 @@ const round1: PickCase[] = [
   {
     id: "nested-budget", group: "structure",
     request: "Our 2027 budget, broken down: Operations $1.2M (Facilities $500K, IT $400K, Travel $300K); People $2.4M (Salaries $2M, Benefits $300K, Training $100K); Marketing $800K (Ads $500K, Events $200K, Content $100K). I want to open each area to see its lines.",
-    best: ["tree:list"], ok: ["accordion", "table", "chart:treemap"], poor: ["flow", "chart:pie", "chart:donut"],
+    best: ["tree:list"], ok: ["accordion", "table", "chart:treemap", "tree:org"], poor: ["flow", "chart:pie", "chart:donut"],
     why: "Lines nested under areas that open and close: a tree with amounts.",
   },
   {
@@ -216,7 +222,7 @@ const round1: PickCase[] = [
   {
     id: "one-record", group: "structure", trap: true,
     request: "Order NW-2041: placed Nov 3 by Lumen Cinema, paid by card, shipped with UPS, tracking 1Z84, total $412.50, status in transit.",
-    best: ["details"], ok: ["list"], poor: ["table", "chart:bar"],
+    best: ["details"], ok: ["list"], poor: ["table"], never: ["chart:bar"],
     why: "One record's fields: label and value rows (details), not a one-row table.",
   },
   {
@@ -240,7 +246,7 @@ const round1: PickCase[] = [
   {
     id: "confirm", group: "structure",
     request: "A list of 4 saved addresses, each with a Delete button. A deleted address is gone for good, so ask first.",
-    best: ["dialog"], ok: ["callout", "if"], poor: [],
+    best: ["dialog"], ok: ["callout"], poor: [],
     why: "Asking before something that can't be undone: a confirm dialog.",
   },
   {
@@ -272,7 +278,7 @@ const round1: PickCase[] = [
   {
     id: "filter-several", group: "input",
     request: "Sales by region (West $820K, East $610K, Central $455K, South $380K, Northeast $290K). Let me pick which regions count toward the total.",
-    best: ["select:multiple"], ok: ["check"], poor: ["radio", "segmented"],
+    best: ["select:multiple"], ok: ["check", "switch"], poor: ["radio", "segmented"],
     why: "Filtering by several values at once: a select with multiple=true (or checkboxes).",
   },
   {
@@ -331,7 +337,7 @@ const round2: PickCase[] = [
   {
     id: "raw-daily", group: "chart", trap: true,
     request: "Here are our daily orders for the last 60 days, starting Sep 1: 212, 198, 230, 241, 205, 188, 176, 220, 236, 249, 252, 213, 190, 182, 228, 245, 251, 266, 231, 204, 197, 239, 257, 263, 271, 240, 215, 208, 250, 268, 274, 281, 249, 226, 219, 262, 279, 288, 292, 257, 233, 225, 270, 291, 297, 305, 266, 240, 236, 284, 300, 309, 318, 276, 252, 246, 296, 311, 322, 330. What do you make of it?",
-    best: ["chart:line", "chart:area"], ok: ["stat"], poor: ["chart:bar", "chart:hbar", "table"],
+    best: ["chart:line", "chart:area"], ok: ["stat", "chart:bar"], poor: ["chart:hbar", "table"],
     why: "Sixty days is a series to read as a shape (weekly dips, a rising trend): a line. Sixty bars are crowded and hide the trend.",
   },
   {
@@ -355,7 +361,7 @@ const round2: PickCase[] = [
   {
     id: "spread", group: "chart", trap: true,
     request: "How are our order values spread out? Orders by value: under $25: 140, $25–50: 310, $50–100: 420, $100–200: 260, $200–500: 90, over $500: 18.",
-    best: ["chart:bar"], ok: ["chart:hbar", "table"], poor: ["chart:pie", "chart:donut", "chart:line", "chart:area"],
+    best: ["chart:bar"], ok: ["chart:hbar", "table"], poor: ["chart:line", "chart:area"], never: ["chart:pie", "chart:donut"],
     why: "A distribution over ordered buckets: bars in bucket order (a histogram); a pie loses the order, a line suggests time.",
   },
   {
@@ -367,22 +373,22 @@ const round2: PickCase[] = [
   {
     id: "two-kpis-vs-last", group: "chart", trap: true,
     request: "This month vs last month: revenue $212K vs $190K, orders 2,310 vs 2,250, refunds 41 vs 58.",
-    best: ["stat"], ok: ["table", "details"], poor: ["chart:bar", "chart:line", "chart:pie"],
+    best: ["stat"], ok: ["table", "details"], poor: ["chart:bar", "chart:line"], never: ["chart:pie"],
     why: "Three headline numbers with their change: stats with change= (and good=down for refunds), not a bar chart of mixed units.",
   },
   {
     id: "by-country", group: "chart",
     request: "Our customers by country: United States 4,200, United Kingdom 1,300, Germany 1,100, Canada 900, Australia 650, France 600, Japan 420, Brazil 380, India 360, Mexico 240. Show me where they are.",
-    best: ["map"], ok: ["chart:hbar", "chart:bar", "table", "chart:treemap"], poor: ["chart:pie", "chart:donut", "chart:line"],
-    why: "Asked where they are: a map shaded by country (kind=choropleth); ranked bars are a fair second.",
+    best: ["map:choropleth", "map:bubble"], ok: ["map:markers", "chart:hbar", "chart:bar", "table", "chart:treemap"], poor: ["chart:pie", "chart:donut", "chart:line"],
+    why: "Asked where they are, with an amount each: a map shaded by country (kind=choropleth) or sized bubbles; pins or ranked bars are a fair second.",
   },
   {
     id: "dashboard-mix", group: "chart",
     request: "Build me a dashboard for this quarter: revenue $1.9M (target $2M), orders 18,400 (target 17,000), monthly revenue Jul $590K, Aug $640K, Sep $670K, and revenue by channel: web $1.1M, retail $520K, wholesale $280K.",
     best: [], parts: [
       { label: "targets", best: ["chart:bullet", "progress", "meter"], ok: ["stat"] },
-      { label: "monthly", best: ["chart:line", "chart:area", "chart:bar"], poor: ["chart:pie", "chart:donut"] },
-      { label: "channels", best: ["chart:donut", "chart:pie", "chart:hbar"], ok: ["chart:bar", "chart:treemap"], poor: ["chart:line"] },
+      { label: "monthly", best: ["chart:line", "chart:area", "chart:bar"] },
+      { label: "channels", best: ["chart:donut", "chart:pie", "chart:hbar"], ok: ["chart:bar", "chart:treemap"] },
     ],
     why: "Three kinds of data in one screen: goals (bullet or progress), a trend (line or bars) and a split (donut).",
   },
@@ -401,7 +407,7 @@ const round2: PickCase[] = [
   {
     id: "steps-instructions", group: "structure", trap: true,
     request: "How do I set up two-factor sign-in on our admin site? Open Settings, choose Security, press Turn on 2FA, scan the code with an authenticator app, then type the 6-digit code to confirm.",
-    best: ["timeline", "list"], ok: ["text"], poor: ["flow", "table", "chart:funnel"],
+    best: ["timeline", "list"], ok: ["text"], poor: ["flow", "table"], never: ["chart:funnel"],
     why: "Steps to follow in order with no branches: a numbered list or steps, not a flow chart.",
   },
   {
@@ -439,9 +445,9 @@ const round2: PickCase[] = [
     request: "A settings screen: display name, email for receipts, whether to get weekly summaries, a theme (light, dark or system), and the number of items per page (10, 25, 50 or 100).",
     best: [], parts: [
       { label: "email", best: ["input:email"], ok: ["input"] },
-      { label: "weekly summaries", best: ["switch"], ok: ["check"], poor: ["select", "radio"] },
+      { label: "weekly summaries", best: ["switch"], ok: ["check"] },
       { label: "theme", best: ["segmented", "radio"], ok: ["select"] },
-      { label: "page size", best: ["select", "segmented"], ok: ["radio", "stepper"], poor: ["slider"] },
+      { label: "page size", best: ["select", "segmented"], ok: ["radio", "stepper"] },
     ],
     why: "Each setting has its own best control: an email field, a switch for on/off, three options in a segmented control, four sizes in a select.",
   },
@@ -473,63 +479,132 @@ const round2: PickCase[] = [
 
 export const pickCases: PickCase[] = [...round1.map((c) => ({ ...c, round: 1 as const })), ...round2.map((c) => ({ ...c, round: 2 as const }))];
 
+/** Values written as {…} are worked out when shown, so the grader can't read them. */
+const literal = (v: string | undefined): string | undefined => (v === undefined || v.trim().startsWith("{") ? undefined : v);
+const on = (v: string | undefined) => literal(v) !== undefined && v !== "false";
+
+/** A prop's default from the element's own definition, so specs are read as the engine draws them. */
+export type Defaults = (type: string, prop: string) => string | undefined;
+
+/** Which prop picks an element's variant. */
+const VARIANT: Record<string, string> = { chart: "kind", tree: "kind", meter: "kind", map: "kind", schedule: "view" };
+
 /**
- * What an answer is made of, for grading: each element type, and the
- * variants that change what it shows.
+ * What an answer is made of, element by element: each element's signatures, most specific
+ * first ("chart:line" before "chart"), and one ["tip"] for each tip=.
  */
-export function signatures(root: SayShapeNode): Set<string> {
-  const out = new Set<string>();
+export function elementSignatures(root: SayShapeNode, defaults: Defaults = () => undefined): string[][] {
+  const out: string[][] = [];
   const walk = (n: SayShapeNode) => {
     const p = n.props;
-    out.add(n.type);
-    if (p.tip !== undefined) out.add("tip");
-    if (n.type === "chart") out.add(`chart:${p.kind ?? "bar"}`);
-    if (n.type === "tree") out.add(`tree:${p.kind ?? "list"}`);
-    if (n.type === "meter") out.add(`meter:${p.kind ?? "ring"}`);
-    if (n.type === "schedule") out.add(`schedule:${p.view ?? "week"}`);
-    if (n.type === "select" && p.multiple === "true") out.add("select:multiple");
-    if (n.type === "date-picker" && p.range === "true") out.add("date-picker:range");
-    if (n.type === "text" && p.rich === "true") out.add("text:rich");
-    if (n.type === "input") {
-      if (p.required !== undefined && p.required !== "false") out.add("input:required");
-      if (p.kind === "email") out.add("input:email");
-      if (p.kind === "number") out.add("input:number");
-      if (p.lines !== undefined && Number(p.lines) > 1) out.add("input:lines");
+    const sigs: string[] = [];
+    const vp = VARIANT[n.type];
+    if (vp) {
+      // Written as {…}, the variant isn't known: graded as the element alone.
+      const v = p[vp] === undefined ? defaults(n.type, vp) : literal(p[vp]);
+      if (v) sigs.push(`${n.type}:${v}`);
     }
+    if (n.type === "select" && on(p.multiple)) sigs.push("select:multiple");
+    if (n.type === "date-picker" && on(p.range)) sigs.push("date-picker:range");
+    if (n.type === "text" && on(p.rich)) sigs.push("text:rich");
+    if (n.type === "input") {
+      const kind = literal(p.kind);
+      if (kind === "email") sigs.push("input:email");
+      if (kind === "number") sigs.push("input:number");
+      if (on(p.required)) sigs.push("input:required");
+      const lines = literal(p.lines);
+      if (lines !== undefined && Number(lines) > 1) sigs.push("input:lines");
+    }
+    sigs.push(n.type);
+    out.push(sigs);
+    if (p.tip !== undefined) out.push(["tip"]);
     n.children.forEach(walk);
   };
   walk(root);
   return out;
 }
 
-export type Grade = "best" | "ok" | "poor" | "other";
+/** Every signature in an answer, for the report. */
+export function signatures(root: SayShapeNode, defaults?: Defaults): Set<string> {
+  return new Set(elementSignatures(root, defaults).flat());
+}
 
-/** How an answer's signatures grade against a case: the best grade any of them reaches. */
-export function grade(c: Pick<PickCase, "best" | "ok" | "poor" | "never">, sigs: ReadonlySet<string>, mixed = true): { grade: Grade; matched: string[] } {
-  const hit = (list: readonly string[] | undefined) => (list ?? []).filter((s) => sigs.has(s));
-  const best = hit(c.best);
-  // The best one beside a poor one for the same data (a treemap and a 14-slice pie) is a mixed
-  // answer. Not for a case's parts: there a poor pick for one part is another part's best.
-  if (best.length) return mixed && hit(c.never).length ? { grade: "ok", matched: [...best, ...hit(c.never)] } : { grade: "best", matched: best };
-  const ok = hit(c.ok);
-  if (ok.length) return { grade: "ok", matched: ok };
-  const poor = [...hit(c.poor), ...hit(c.never)];
-  if (poor.length) return { grade: "poor", matched: poor };
-  return { grade: "other", matched: [] };
+export type Grade = "best" | "ok" | "poor" | "other";
+type Lists = Pick<PickCase, "best" | "ok" | "poor" | "never">;
+
+/** One element's grade, by its most specific signature the case lists. */
+function elementGrade(c: Lists, sigs: readonly string[]): { grade: Grade; never: boolean; sig?: string } {
+  for (const s of sigs) {
+    if (c.best.includes(s)) return { grade: "best", never: false, sig: s };
+    if (c.ok?.includes(s)) return { grade: "ok", never: false, sig: s };
+    if (c.never?.includes(s)) return { grade: "poor", never: true, sig: s };
+    if (c.poor?.includes(s)) return { grade: "poor", never: false, sig: s };
+  }
+  return { grade: "other", never: false };
+}
+
+const RANK: Record<Grade, number> = { best: 3, ok: 2, poor: 1, other: 0 };
+
+/** How an answer grades against a case: by its best element, made only ok by a never element beside it. */
+export function grade(c: Lists, elements: ReadonlyArray<readonly string[]>): { grade: Grade; matched: string[] } {
+  const graded = elements.map((e) => elementGrade(c, e)).filter((g) => g.sig !== undefined);
+  const top = graded.reduce<Grade>((a, g) => (RANK[g.grade] > RANK[a] ? g.grade : a), "other");
+  const matched = [...new Set(graded.filter((g) => g.grade === top).map((g) => g.sig!))];
+  const never = [...new Set(graded.filter((g) => g.never).map((g) => g.sig!))];
+  if (top === "best" && never.length) return { grade: "ok", matched: [...matched, ...never] };
+  return { grade: top, matched };
 }
 
 export const POINTS: Record<Grade, number> = { best: 2, ok: 1, poor: 0, other: 0 };
 
-/** Points out of 2 for an answer: its grade, or the average of its parts' points. */
-export function scoreSigs(c: PickCase, sigs: ReadonlySet<string>): { grade: Grade; points: number; matched: string[]; parts?: Array<{ label: string; grade: Grade }> } {
+export interface Scored {
+  grade: Grade;
+  points: number;
+  matched: string[];
+  parts?: Array<{ label: string; grade: Grade }>;
+}
+
+/**
+ * Points out of 2 for an answer: its grade, or for a case with parts the average of its parts',
+ * each part taking a different element (whichever assignment scores most).
+ */
+export function scoreElements(c: PickCase, elements: ReadonlyArray<readonly string[]>): Scored {
   if (!c.parts?.length) {
-    const g = grade(c, sigs);
+    const g = grade(c, elements);
     return { ...g, points: POINTS[g.grade] };
   }
-  // Another part's best can be this part's poor (a line for the trend, a pie for the split), so
-  // parts are graded on best and ok only.
-  const parts = c.parts.map((p) => ({ label: p.label, ...grade({ best: p.best, ok: p.ok }, sigs, false) }));
-  const points = parts.reduce((a, p) => a + POINTS[p.grade], 0) / parts.length;
-  const overall: Grade = points >= 2 ? "best" : points >= 1 ? "ok" : parts.some((p) => p.grade === "poor") ? "poor" : "other";
-  return { grade: overall, points, matched: parts.flatMap((p) => p.matched), parts: parts.map(({ label, grade: g }) => ({ label, grade: g })) };
+  const parts = c.parts;
+  // What each element would score for each part; only elements that score for some part matter.
+  const table = elements.map((e) => parts.map((p) => elementGrade({ best: p.best, ok: p.ok }, e)));
+  const useful = table.map((row, i) => ({ row, i })).filter(({ row }) => row.some((g) => g.grade !== "other"));
+  let top = { points: -1, pick: [] as number[] };
+  const pick: number[] = [];
+  const used = new Set<number>();
+  const search = (k: number, points: number) => {
+    if (k === parts.length) {
+      if (points > top.points) top = { points, pick: [...pick] };
+      return;
+    }
+    pick.push(-1);
+    search(k + 1, points);
+    pick.pop();
+    for (const { row, i } of useful) {
+      const g = row[k]!;
+      if (used.has(i) || g.grade === "other") continue;
+      used.add(i);
+      pick.push(i);
+      search(k + 1, points + POINTS[g.grade]);
+      pick.pop();
+      used.delete(i);
+    }
+  };
+  search(0, 0);
+  const graded = parts.map((p, k) => {
+    const i = top.pick[k] ?? -1;
+    const g = i >= 0 ? table[i]![k]! : undefined;
+    return { label: p.label, grade: g?.grade ?? ("other" as Grade), sig: g?.sig };
+  });
+  const points = graded.reduce((a, p) => a + POINTS[p.grade], 0) / parts.length;
+  const overall: Grade = points >= 2 ? "best" : points >= 1 ? "ok" : "other";
+  return { grade: overall, points, matched: graded.flatMap((p) => (p.sig ? [p.sig] : [])), parts: graded.map(({ label, grade: g }) => ({ label, grade: g })) };
 }
