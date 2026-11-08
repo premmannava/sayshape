@@ -185,6 +185,8 @@ export class SayShape {
   private tipShown: { target: HitTarget; rect: Rect } | null = null;
   /** What was pinned when the latest pointer press began (undefined outside a press), so a second tap hides it. */
   private tipAtDown: string | null | undefined = undefined;
+  /** Where the last press went down, to tell a tap from a drag. */
+  private downAt: { x: number; y: number } | null = null;
   /** The focus and hover last seen by the tip, so moving to something else resets what Escape hid or a tap pinned. */
   private tipLastFocus = "";
   private tipLastHover = "";
@@ -805,7 +807,8 @@ export class SayShape {
     // pointer shows the tip anywhere on it. When it isn't pressable on its own, the region is a
     // Tab stop too, so the keyboard and a tap reach it. (A scene draws its shapes' tips itself.)
     if (box.node.props.tip !== undefined && !loading && !def?.provides && this.tipOf(box.node)) {
-      const own = this.hits.slice(before).some((h) => h.box.node.id === box.node.id);
+      // Parts there only for a child's tip ("tip:…") don't count: the element's own tip still needs its stop.
+      const own = this.hits.slice(before).some((h) => h.box.node.id === box.node.id && !isTipPart(h.detail));
       this.hits.splice(before, 0, { box: own ? box : atLeastTarget(box), detail: TIP, focusable: !own, ...(clipHere ? { clip: clipHere.rect, clipOwner: clipHere.owner } : {}) });
     }
   }
@@ -1148,7 +1151,7 @@ export class SayShape {
     // A tap (or Enter) on an element that has only its tip shows it, and again hides it.
     // So does a part registered only for its tip ("tip:…", a compare row's label); a part that
     // does more (a sortable header) presses as usual and shows its tip on hover and focus.
-    const partTip = typeof target.detail === "string" && target.detail.startsWith("tip:") && !!this.registry.get(target.node.type)?.partTip?.(this.boxOf(target.node) ?? target.box, target.detail);
+    const partTip = isTipPart(target.detail) && !!this.registry.get(target.node.type)?.partTip?.(this.boxOf(target.node) ?? target.box, target.detail);
     if (target.detail === TIP || partTip) {
       const was = this.tipAtDown !== undefined ? this.tipAtDown : this.tipPinned;
       this.tipAtDown = undefined;
@@ -1381,7 +1384,9 @@ export class SayShape {
       const def = this.registry.get(t.node.type);
       const box = def?.partTip && this.boxOf(t.node);
       const child = box ? def.partTip!(box, t.detail) : undefined;
-      if (child) return this.tipOf(child);
+      // A part whose child has no tip (a sortable header) shows its element's, if it has one.
+      const own = child ? this.tipOf(child) : "";
+      if (own) return own;
     }
     return this.tipOf(t.node);
   }
@@ -1760,7 +1765,7 @@ export class SayShape {
       if (this.inspector.inspecting) { this.inspector.pointerMove(this.pointer.x, this.pointer.y); return; }
       const t = this.targetAt(this.pointer.x, this.pointer.y);
       const def = t ? this.registry.get(t.node.type) : undefined;
-      c.style.cursor = t ? (t.detail === TIP ? "default" : def?.cursor?.(t) ?? "pointer") : "default";
+      c.style.cursor = t ? (t.detail === TIP || isTipPart(t.detail) ? "default" : def?.cursor?.(t) ?? "pointer") : "default";
       // Moving over a shown tip keeps it (it can be read and selected by eye without vanishing).
       if (this.tipShown) this.invalidate("paint");
       if (!sameTarget(t, this.hover)) { this.hover = t; this.invalidate("paint"); }
@@ -1805,13 +1810,12 @@ export class SayShape {
         return;
       }
       this.lastPressY = p.y;
+      this.downAt = p;
       this.pressed = this.targetAt(p.x, p.y);
       // Pressing inside a popup leaves keyboard focus on its owner.
       if (this.pressed?.layer === "popup") { this.invalidate("paint"); return; }
       if (this.pressed) { this.focus = this.pressed; this.invalidate("paint"); }
-      // A part there only for its tip (a table header that doesn't sort) is pressed, not dragged.
-      const tipPart = typeof this.pressed?.detail === "string" && this.pressed.detail.startsWith("tip:");
-      if (this.pressed && !tipPart && this.registry.get(this.pressed.node.type)?.drag) {
+      if (this.pressed && this.registry.get(this.pressed.node.type)?.drag) {
         // Keep receiving moves when the pointer leaves the canvas mid-drag.
         try { c.setPointerCapture?.(e.pointerId); } catch { /* not capturable; moves outside are missed */ }
         this.dragging = this.pressed;
@@ -1823,7 +1827,11 @@ export class SayShape {
       if (this.swallowRelease) { this.swallowRelease = false; this.pressed = null; this.invalidate("paint"); return; }
       if (this.dragging) {
         this.pressed = null;
+        // A part there only for its tip (a scrolling table's header that doesn't sort) still drags
+        // the element; a press that didn't move shows its tip.
+        const tap = isTipPart(this.dragging.detail) && this.downAt && Math.hypot(p.x - this.downAt.x, p.y - this.downAt.y) < TAP_SLOP ? this.dragging : null;
         this.dragTo("end", p.x, p.y);
+        if (tap) this.activate(tap);
         c.style.cursor = "default";
         return;
       }
@@ -2087,6 +2095,14 @@ export const MIN_TARGET = 24;
  * than that is a sliver cut off by scrolling (a table's column at the edge),
  * and widening it would reach past its element.
  */
+/** How far a press may move and still count as a tap, in CSS pixels. */
+const TAP_SLOP = 4;
+
+/** A part an element registers only for a child's tip (compare's row labels): "tip:<i>". */
+function isTipPart(detail: unknown): boolean {
+  return typeof detail === "string" && detail.startsWith("tip:");
+}
+
 function atLeastTarget(box: Box): Box {
   if (box.h >= MIN_TARGET) return box;
   return { ...box, y: box.y - (MIN_TARGET - box.h) / 2, h: MIN_TARGET };

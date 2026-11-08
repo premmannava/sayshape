@@ -85,7 +85,7 @@ compare items=plans pick="Pro"
     const parts: PartSemantics[] = [{ detail: "head", role: "row" }, { detail: "head:label", within: "head", role: "cell", name: "" }];
     options.forEach((o, i) => parts.push({ detail: `head:${i}`, within: "head", role: "columnheader", name: o }));
     d.rows.forEach((row, r) => {
-      parts.push({ detail: `row:${r}`, role: "row", rect: { x: box.x, y: box.y + row.y, w: box.w, h: row.h } });
+      parts.push({ detail: `row:${r}`, role: "row", rect: { x: box.x, y: row.y, w: box.w, h: row.h } });
       // A label with a tip is a part of its own (a region to reach it), read with the tip.
       parts.push({ detail: row.tip ? `tip:${r}` : `row:${r}:label`, within: `row:${r}`, role: "rowheader", name: row.label.join(" "), ...(row.tip ? { description: row.tip } : {}) });
       row.cells.forEach((cell, i) => {
@@ -199,7 +199,7 @@ compare items=plans pick="Pro"
     g.textAlign = "center";
     d.names.forEach((lines, i) => lines.forEach((l, j) => g.fillText(l, colX(i) + d.colW / 2, nameTop + j * d.lh + d.lh / 2)));
     // Rows: a rule above each, the label on the left, values centred.
-    for (const r of d.rows) {
+    for (const [ri, r] of d.rows.entries()) {
       g.fillStyle = c.line;
       g.fillRect(box.x, Math.round(r.y), box.w, 1);
       g.font = d.fonts.label;
@@ -213,12 +213,11 @@ compare items=plans pick="Pro"
         // A row with a tip: its label is underlined with dots, and pressable for the tip.
         const w = Math.max(...r.label.map((l) => g.measureText(l).width));
         const top = ly - d.lh / 2;
-        g.fillStyle = c.muted;
         for (let j = 0; j < r.label.length; j++) {
           const lw = g.measureText(r.label[j]!).width;
           for (let x = 0; x < lw; x += 4) g.fillRect(box.x + x, ly + j * d.lh + d.lh / 2 - 2, 2, 1);
         }
-        ctx.addHit(partBox(box, box.x, top, w, r.label.length * d.lh), { detail: `tip:${d.rows.indexOf(r)}` });
+        ctx.addHit(partBox(box, box.x, top, w, r.label.length * d.lh), { detail: `tip:${ri}` });
       }
       const valueTop = d.stacked ? r.y + PAD + labelH : r.y;
       const valueH = d.stacked ? r.h - PAD - labelH : r.h;

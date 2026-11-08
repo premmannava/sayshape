@@ -271,6 +271,7 @@ table items=rows sort=by direction=dir
         const node = all(ui).find((n) => n.description === tip)!;
         expect(node).toBeTruthy();
         expect(node.name).toContain(label);
+        expect(node.focusable).toBe(true);
       });
     }
 
@@ -280,6 +281,48 @@ table items=rows sort=by direction=dir
       expect(tipText(ui)).toBe("Share of the month the service is up");
       ui.tab();
       expect(ui.focused).toBeNull();
+    });
+
+    it("the element's own tip still has its Tab stop beside a row's", () => {
+      const ui = render(COMPARE.replace("compare items=plans", 'compare items=plans tip="Plans side by side"'), { width: 600 });
+      const seen: string[] = [];
+      for (let i = 0; i < 3; i++) { ui.tab(); seen.push(tipText(ui)); }
+      expect(seen).toContain("Plans side by side");
+      expect(seen).toContain("Share of the month the service is up");
+    });
+
+    it("a header without a tip of its own shows its table's", () => {
+      const ui = render(SORTED.replace(' tip="Their full name"', "").replace("direction=dir", 'direction=dir tip="The whole team"'), { width: 600 });
+      move(ui, ...at(ui, "Name"));
+      expect(tipText(ui)).toBe("The whole team");
+    });
+
+    it("a sortable header shows its tip on keyboard focus", () => {
+      const ui = render(SORTED, { width: 600 });
+      ui.tab();
+      expect(tipText(ui)).toBe("Their full name");
+      ui.key("Enter");
+      expect(ui.state.by).toBe("n");
+    });
+
+    it("a scrolling table's header shows its tip on a tap, and a drag on it still scrolls", () => {
+      const cols = Array.from({ length: 8 }, (_, i) => `  table-column "Column ${i}" field=f${i}${i === 1 ? ' tip="The second column"' : ""}`).join("\n");
+      const row = Array.from({ length: 8 }, (_, i) => `f${i}: "value number ${i}"`).join(", ");
+      const spec = `state rows=[{${row}}]\ntable items=rows\n${cols}\n`;
+      const ui = render(spec, { width: 360 });
+      const [x, y] = at(ui, "Column 1");
+      ui.click(x, y);
+      move(ui, 359, 300);
+      expect(tipText(ui)).toBe("The second column");
+      ui.click(359, 300);
+      const id = ui.find("table").node.id;
+      expect(ui.sayshape.viewState(id)?.x ?? 0).toBe(0);
+      const p = (type: string, px: number) => ui.canvas.dispatch(type, { clientX: px, clientY: y, pointerId: 1, pointerType: "mouse", button: 0, buttons: type === "pointerup" ? 0 : 1 });
+      p("pointermove", x); p("pointerdown", x);
+      for (const dx of [20, 60, 120]) { p("pointermove", x - dx); ui.sayshape.renderNow(); }
+      p("pointerup", x - 120);
+      ui.sayshape.renderNow();
+      expect(ui.sayshape.viewState(id)?.x ?? 0).toBeGreaterThan(0);
     });
 
     it("a sortable header still sorts when pressed, and shows its tip on hover", () => {
