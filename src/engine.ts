@@ -13,7 +13,7 @@ import { PropReader, type ComponentDef, type DragContext, type ElementView, type
 import { Emitter } from "./emitter";
 import { locateOf, scopeOf } from "./each";
 import { domEditorHost } from "./dom-editor";
-import { noEditor, type EditorHost, type EditorSpec } from "./editor";
+import { noEditor, valueStamp, type EditorHost, type EditorSpec } from "./editor";
 import { isList, makeList } from "./data";
 import { findItem, getIn, PATH, placeOf, setIn, type Locate, type Place } from "./paths";
 import { createLayoutContext, isVisible, walkBoxes } from "./layout";
@@ -205,6 +205,10 @@ export class SayShape {
   editing: HitTarget | null = null;
   /** What was last typed and the value it wrote, so writing "1." (stored as 1) doesn't rewrite the field to "1". */
   private typed: { text: string; value: Value } | null = null;
+  /** In a number field, text typed last that isn't a number (and so wasn't written). */
+  private unparsed: string | null = null;
+  /** Whether anything was typed since the field was opened: only then does leaving it show what's wrong. */
+  private edited = false;
   /** Layout warnings already reported for this spec, so a list problem isn't repeated every frame. */
   private warned = new Set<string>();
   /** The open popup, if any: its owner, its transient state, and where it was placed. */
@@ -1532,6 +1536,8 @@ export class SayShape {
     this.editing = target;
     this.focus = target;
     this.typed = null;
+    this.unparsed = null;
+    this.edited = false;
     const node = () => this.editing?.node ?? target.node;
     this.editorHost.open(spec, {
       input: (text) => this.typeInto(node(), text),
@@ -1544,6 +1550,20 @@ export class SayShape {
   /** Stop typing; the canvas draws the field's value again. */
   endEdit(): void {
     if (!this.editing) return;
+    // A field that's been typed in and left shows what's wrong with it (required, an email's or a
+    // number's form): its view state, which its layout reads, so the message takes room under it.
+    if (this.edited) {
+      const node = this.editing.node;
+      const v = this.viewOf(node);
+      v.touched = 1;
+      v.unparsed = this.unparsed !== null && this.unparsed.trim() !== "" ? 1 : 0;
+      // The value it was left with: its message shows only while that's still the value.
+      const bound = new PropReader(node, scopeOf(node, this.state.scope)).bound();
+      v.stamp = valueStamp(bound === undefined || bound === null || typeof bound === "object" ? "" : String(bound));
+      this.invalidate("layout");
+    }
+    this.unparsed = null;
+    this.edited = false;
     this.editing = null;
     this.typed = null;
     this.editorHost.close();
@@ -1555,20 +1575,23 @@ export class SayShape {
     const bind = node.props.bind;
     const spec = this.editorSpec(node);
     if (!bind || !spec) return;
+    this.edited = true;
     text = text.slice(0, spec.max);
     let value: Value = text;
     if (spec.kind === "number") {
       const t = text.trim();
       if (t === "") value = null;
       else if (isFinite(Number(t))) value = Number(t);
-      else return; // "-" or "1e" on the way to a number: wait for more
+      else { this.unparsed = text; return; } // "-" or "1e" on the way to a number: wait for more
     }
+    this.unparsed = null;
     this.typed = { text, value };
     this.writePath(node, bind, value);
   }
 
-  /** Enter runs on=, Tab moves to the next element, Escape stops typing. */
+  /** Enter runs on= (in a field of several lines it starts a new line), Tab moves on, Escape stops typing. */
   private editorKey(node: SayShapeNode, key: string, shift: boolean): boolean {
+    if (key === "Enter" && (this.editorSpec(node)?.lines ?? 1) > 1) return false;
     if (key === "Enter") {
       if (node.props.on) this.runActionString(node.props.on, node);
       return true;

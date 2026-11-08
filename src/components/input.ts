@@ -1,10 +1,11 @@
 import { toNumber } from "../data";
 import type { ComponentDef, LayoutContext, PropReader } from "../component";
 import type { Box, SayShapeNode } from "../types";
-import { INPUT_KINDS } from "../editor";
+import { INPUT_KINDS, valueStamp } from "../editor";
 import { isDark, isDarkTheme, mixColors, type Theme } from "../theme";
 import { MOTION } from "../design";
 import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
+import { wrapText } from "../text";
 
 const VARIANTS = ["primary", "secondary", "danger"] as const;
 
@@ -735,6 +736,44 @@ export function paintField(g: CanvasRenderingContext2D, c: Theme["colors"], acti
 
 /** 16px keeps phones from zooming in when the typing field opens over it. */
 export const FIELD_TEXT = 16;
+/** The most rows a field of several lines shows. */
+export const MAX_INPUT_LINES = 12;
+/** Padding above and below the text in a field of several lines, and the gap above an error message. */
+const MULTI_PAD = 10;
+const ERROR_GAP = 6;
+const multiLineHeight = () => Math.round(FIELD_TEXT * 1.4);
+const errorLineHeight = (t: Theme) => Math.round(t.text.caption * 1.4);
+/** What a field shows under it once it's been left: its problem (if any), wrapped. */
+interface FieldData {
+  problem: string;
+  lines: string[];
+}
+
+/** Rows shown: lines= for a text field; email, number, password and search are always one line (a password must stay hidden). */
+function linesOf(p: PropReader): number {
+  if (p.oneOf("kind", INPUT_KINDS, "text") !== "text") return 1;
+  return Math.max(1, Math.min(MAX_INPUT_LINES, Math.round(p.num("lines", 1)) || 1));
+}
+
+/** One line high for a field of one line; several lines and their padding otherwise. */
+function fieldHeight(p: PropReader, controlHeight: number): number {
+  const rows = linesOf(p);
+  return rows > 1 ? Math.max(controlHeight, rows * multiLineHeight() + 2 * MULTI_PAD) : controlHeight;
+}
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** What's wrong with a field's value, in plain words, or "": required, an email's or a number's form, then its own error=. */
+export function fieldProblem(p: PropReader, unparsed: boolean): string {
+  const value = fieldValue(p).trim();
+  const kind = p.oneOf("kind", INPUT_KINDS, "text");
+  // Text that wasn't a number is never written; say so only while nothing else is shown in its place.
+  if (kind === "number" && unparsed && !value) return "Enter a number, like 12 or 3.5";
+  if (!value) return p.cond("required") ? "Required" : "";
+  if (kind === "email" && !EMAIL.test(value)) return "Enter an email like name@example.com";
+  return p.str("error", "").trim();
+}
+
 export const FIELD_PAD = 12;
 export const LABEL_SIZE = 13;
 const LABEL_GAP = 6;
@@ -766,25 +805,36 @@ export function fitText(g: CanvasRenderingContext2D, text: string, width: number
 export const input: ComponentDef = {
   type: "input",
   category: "input",
-  description: "A text field people type into, such as a name, an email, a search or a new item. Each keystroke writes its bind= state.",
+  description: "A text field people type into, such as a name, an email, a search, a new item, or with lines= a note or a message. Each keystroke writes its bind= state, and required= and kind=email or number say what's wrong once it's been left.",
   text: { description: "The label above the field. Leave it out only when the screen makes the purpose obvious." },
   props: {
     bind: { type: "state", required: true, description: "The state name or path it reads and writes, like task or t.title." },
     placeholder: { type: "string", description: "A hint shown while the field is empty, like e.g. Sunscreen." },
-    kind: { type: "enum", values: INPUT_KINDS, default: "text", description: "text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty." },
+    kind: { type: "enum", values: INPUT_KINDS, default: "text", description: "text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one." },
+    lines: { type: "number", default: 1, description: `Rows of text, 1 to ${MAX_INPUT_LINES}: more than 1 is a box for a note or a message, where Enter starts a new line (on= then runs only from a button).` },
+    required: { type: "condition", description: "When true, an empty field says Required once it's been left." },
+    error: { type: "string", description: "Your own message, shown under the field once it's been left, while it isn't empty, e.g. error=\"{len(pw) < 8 ? 'At least 8 characters' : ''}\"." },
     on: onProp("when Enter is pressed, after the value is written"),
     disabled: { type: "condition", description: "Expression; when true the field is greyed out and can't be typed in." },
-    max: { type: "number", default: 500, description: "Longest value in characters (at most 10000)." },
+    max: { type: "number", default: 500, description: "Longest value in characters (at most 10000; 2000 when lines= is more than 1)." },
   },
   example: `state task="" todos=[]
 input "New item" bind=task placeholder="e.g. Sunscreen" on="add:todos:{task};set:task:''"
 text "{plural(len(todos), 'item')}" tone=muted`,
+  check(props) {
+    const out: string[] = [];
+    const many = props.lines !== undefined && Number(props.lines) > 1;
+    if (many && props.kind && props.kind !== "text") out.push(`lines= works only on a text field, so this ${props.kind} field stays one line. Remove lines=, or use kind=text`);
+    if (many && props.on) out.push(`on= doesn't run from a field of several lines, since Enter starts a new line there. Run it from a button instead`);
+    return out;
+  },
   minWidth: () => 120,
   semantics(box, ctx) {
     const p = ctx.props(box.node);
     const kind = p.str("kind", "text");
     const placeholder = p.str("placeholder") || undefined;
     const typed = fieldValue(p);
+    const problem = (box.data as unknown as FieldData | undefined)?.problem;
     return {
       role: kind === "search" ? "searchbox" : "textbox",
       name: p.text() || ctx.textBefore() || placeholder,
@@ -792,20 +842,30 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       // A password's characters are never read out.
       value: kind === "password" || !typed ? undefined : { text: typed },
       disabled: p.cond("disabled") || undefined,
+      required: p.cond("required") || undefined,
+      ...(problem ? { invalid: true, description: problem } : {}),
     };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    box.h = fieldBox(box, p, ctx.theme.control.height).y - box.y + ctx.theme.control.height;
+    const field = fieldBox(box, p, fieldHeight(p, ctx.theme.control.height));
+    // What's wrong shows only once the field has been typed in and left.
+    const v = ctx.view?.(box.node);
+    const problem = v?.touched && v.stamp === valueStamp(fieldValue(p)) ? fieldProblem(p, !!v.unparsed) : "";
+    const lines = problem ? wrapText(problem, Math.max(0, box.w), themeFont(ctx.theme, 500, ctx.theme.text.caption), ctx.measure) : [];
+    const data: FieldData = { problem, lines };
+    box.data = data as unknown as Box["data"];
+    box.h = field.y - box.y + field.h + (lines.length ? ERROR_GAP + lines.length * errorLineHeight(ctx.theme) : 0);
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
     const c = theme.colors;
     const disabled = p.cond("disabled");
-    const field = fieldBox(box, p, theme.control.height);
+    const field = fieldBox(box, p, fieldHeight(p, theme.control.height));
     const editing = ctx.isEditing(box.node);
     const hot = !disabled && ctx.isHovered(box.node);
+    const d = box.data as unknown as FieldData | undefined;
     g.save();
     if (disabled) g.globalAlpha *= 0.45;
     const label = p.text();
@@ -820,24 +880,53 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     const focus = ctx.tween(box.node, "field:focus", !disabled && (editing || ctx.isFocused(box.node)) ? 1 : 0, MOTION.selection);
     const hover = ctx.tween(box.node, "field:hover", hot ? 1 : 0, MOTION.hover);
     paintField(g, c, focus, hover);
+    if (d?.problem) {
+      // A field with a problem is outlined in the bad color, with the message under it.
+      ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
+      g.strokeStyle = c.bad;
+      g.lineWidth = 1.5;
+      g.stroke();
+      g.font = ctx.font(500, theme.text.caption);
+      g.fillStyle = c.bad;
+      g.textAlign = "left";
+      g.textBaseline = "top";
+      const lh = errorLineHeight(theme);
+      d.lines.forEach((l, i) => g.fillText(l, box.x, field.y + field.h + ERROR_GAP + i * lh));
+    }
     if (!editing) {
       const value = fieldValue(p);
       const kind = p.oneOf("kind", INPUT_KINDS, "text");
       const shown = value ? (kind === "password" ? "•".repeat(value.length) : value) : p.str("placeholder");
       g.font = ctx.font(400, FIELD_TEXT);
-      g.textBaseline = "middle";
       g.fillStyle = value ? c.ink : c.muted;
       if (!value) g.globalAlpha *= 0.8;
-      g.fillText(fitText(g, shown, field.w - FIELD_PAD * 2), field.x + FIELD_PAD, field.y + field.h / 2 + 1);
+      const rows = linesOf(p);
+      if (rows > 1) {
+        // Several lines: the text wrapped from the top, as many rows as fit, the last cut with an ellipsis.
+        g.textBaseline = "middle";
+        const lh = multiLineHeight();
+        const measure = { width: (t: string) => g.measureText(t).width };
+        const wrapped = shown.split("\n").flatMap((para) => (para ? wrapText(para, field.w - FIELD_PAD * 2, g.font, measure) : [""]));
+        const shownRows = wrapped.slice(0, rows);
+        if (wrapped.length > rows) shownRows[rows - 1] = fitText(g, shownRows[rows - 1]! + " …", field.w - FIELD_PAD * 2);
+        shownRows.forEach((l, i) => g.fillText(l, field.x + FIELD_PAD, field.y + MULTI_PAD + i * lh + lh / 2));
+      } else {
+        g.textBaseline = "middle";
+        g.fillText(fitText(g, shown, field.w - FIELD_PAD * 2), field.x + FIELD_PAD, field.y + field.h / 2 + 1);
+      }
     }
     g.restore();
     if (!disabled) ctx.addHit(field);
   },
   editor(box, p, theme) {
-    const field = fieldBox(box, p, theme.control.height);
-    const max = Math.min(10_000, Math.max(1, Math.round(p.num("max", 500))));
+    const rows = linesOf(p);
+    const field = fieldBox(box, p, fieldHeight(p, theme.control.height));
+    const max = Math.min(10_000, Math.max(1, Math.round(p.num("max", rows > 1 ? 2000 : 500))));
+    const rect = rows > 1
+      ? { x: field.x + FIELD_PAD, y: field.y + MULTI_PAD, w: Math.max(0, field.w - FIELD_PAD * 2), h: field.h - 2 * MULTI_PAD }
+      : { x: field.x + FIELD_PAD, y: field.y + 1, w: Math.max(0, field.w - FIELD_PAD * 2), h: field.h - 2 };
     return {
-      rect: { x: field.x + FIELD_PAD, y: field.y + 1, w: Math.max(0, field.w - FIELD_PAD * 2), h: field.h - 2 },
+      rect,
       font: themeFont(theme, 400, FIELD_TEXT),
       color: theme.colors.ink,
       accent: theme.colors.accent,
@@ -847,6 +936,9 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       placeholder: p.str("placeholder"),
       label: p.text() || p.str("placeholder"),
       max,
+      ...(rows > 1 ? { lines: rows, lineHeight: multiLineHeight() } : {}),
+      ...(p.cond("required") ? { required: true } : {}),
+      ...((box.data as unknown as FieldData | undefined)?.problem ? { problem: (box.data as unknown as FieldData).problem } : {}),
     };
   },
   cursor: () => "text",
