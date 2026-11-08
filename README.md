@@ -84,6 +84,7 @@ npm run dev        # opens the playground
 | `npm run test:visual:docker` | Same, in the Linux image the baselines come from; add `VISUAL_ARGS=--update-snapshots` to update them |
 | `npm run bench` | Benchmarks parse, layout and paint on 1,000- and 5,000-element specs |
 | `npm run eval` | Scores a real model on 60 requests ([Measure it](#measure-it)) |
+| `npm run pick-eval` | Scores whether a model picks the representation that shows the data best ([Check the picks](#check-the-picks)) |
 | `npm run guide:size` | Measures the model guide by section, per mode and profile |
 | `npm run typecheck` | Type-checks everything |
 | `npm run build` | Builds the library into `dist/` |
@@ -1888,6 +1889,24 @@ npm run guide:size                                        # guide size by sectio
 ```
 
 The report starts with a side-by-side table on the requests every variant can build. A request that needs an element a profile doesn't have (by its expected elements) isn't sent for that profile; it's listed as not supported. `results.json` records each result's guide mode, profile, repair guide and context policy.
+
+### Check the picks
+
+A spec can be valid, work when used and still show the data the wrong way: a donut for one number out of a total, bars for two series over time, a table for a grid that's clearer as a heatmap. `npm run pick-eval` asks whether a model picks the representation that shows the data best.
+
+```bash
+npm run pick-eval                         # the model from .env.local, with the full guide
+npm run pick-eval -- --guide compact      # with the compact guide
+npm run pick-eval -- --runs 2             # each request twice
+npm run pick-eval -- --only share-few,relate  # some requests, by id
+npm run pick-eval -- --prompts kit/       # write what a model is given, without the grades
+npm run pick-eval -- --answers kit/answers  # score answers made elsewhere
+npm run pick-eval -- --answers kit/answers --out picks/  # put the report somewhere else
+```
+
+`eval/picks.ts` holds 67 requests that describe data and what someone wants from it, never the element. Round 1 covers each chart kind, structure (trees, flows, boards, schedules), inputs and content: the kinds of data the guide's picks describe, so it measures whether a model follows them. Round 2 is harder: raw numbers, vague requests, and requests that want several things at once, scored part by part, each part by a different element. Each request lists its best answers (2 points), acceptable ones (1), and poor or never-right ones (0); a best answer with a never-right one beside it counts as acceptable. Traps are requests where an obvious pick is wrong, such as a chart for a single number with its change, and there the obvious pick is never-right. A test checks that no pick quotes a request, so the guide never hands a model the answer.
+
+An answer is read element by element: a multiple select is graded as a multiple select when the request lists one, not as a plain select. A request with no answer scores 0, so skipping doesn't help. Every answer is also rendered with the real engine; the report says whether it parsed without errors and drew without text spilling out of its box, and lists warnings separately. `--prompts` writes the quick start, the full guide, each element's docs and the requests to a folder, for running models by hand (it reads the MCP server's texts, so run `npm --prefix mcp install` first). Answers go back in as `answers/<model>-<setup>-r<run>/<id>.sayshape`, with no hyphen in the setup's name, or as `.jsonl` files of `{"id", "spec", "model", "setup", "run"}`. Reports go to `eval/results/picks-<date>/`, or to `--out`.
 
 ### Compare it with HTML
 
