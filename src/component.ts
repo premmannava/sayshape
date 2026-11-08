@@ -180,6 +180,11 @@ export interface PressContext {
    * and the extra functions its lines may call (a scene's).
    */
   run(actions: string, own?: { scope: Scope; locate?: Locate; functions?: ExpressionFunctions }): void;
+  /**
+   * Run actions as if pressed on another element, one this element draws itself (a menu's
+   * menu-item): its names and writes are seen from that element's own line, inside each too.
+   */
+  runAs?(node: SayShapeNode, actions: string): void;
   /** Open this element's popup (its ComponentDef.popup), with its starting transient state. */
   openPopup(state: PopupState): void;
   /** Whether this element's popup is open. */
@@ -220,6 +225,8 @@ export interface PopupDef {
   key(ctx: PopupContext, key: string): boolean;
   /** The wheel turned over it, by dy pixels. */
   wheel?(ctx: PopupContext, dy: number): void;
+  /** A screen reader moved onto one of its regions (by its detail): highlight it, so Enter chooses it. */
+  point?(ctx: PopupContext, detail: unknown): void;
 }
 
 export interface DragContext extends PressContext {

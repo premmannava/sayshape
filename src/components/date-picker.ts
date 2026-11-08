@@ -369,7 +369,7 @@ export const datePicker: ComponentDef = {
     on: onProp("after the date changes, with bind= already set"),
   },
   picks: [
-    { for: "choosing a date, or a period such as the last 30 days (range=true)", write: "date-picker bind=due" },
+    { for: "a date, or a period like the last 30 days (range=true)", write: "date-picker bind=due" },
   ],
   example: `state due=""
 date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,

@@ -218,7 +218,7 @@ describe("picks", () => {
   it("lists only the picks of elements a profile exposes", () => {
     const forms = languageGuide(all, { profile: "forms" });
     expect(forms).not.toContain("kind=bullet");
-    expect(forms).toContain("choosing a date, or a period such as the last 30 days (range=true): date-picker");
+    expect(forms).toContain("a date, or a period like the last 30 days (range=true): date-picker");
   });
 });
 

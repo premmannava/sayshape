@@ -520,6 +520,34 @@ dialog "Cancel your Pro plan?" bind=asking size=sm
     button "Cancel plan" variant=danger on="set:plan:Free;set:asking:false;notify:Your plan moves to Free on 30 November"
 `,
   },
+  orderActions: {
+    label: "Order actions (menu)",
+    prompt: "List today's orders, with the usual actions for each one tucked away.",
+    spec: `state orders=[{id: "NW-2041", customer: "Lumen Cinema", total: 412.5, status: "Open"}, {id: "NW-2042", customer: "Harbor Books", total: 96, status: "Open"}, {id: "NW-2043", customer: "Fieldstone Cafe", total: 1280, status: "Shipped"}] confirm=false target=""
+card
+  row align=center
+    text "Today's orders" style=title
+    menu "Export" align=end
+      menu-item "Copy as CSV" icon=copy on=emit:export:csv
+      menu-item "Download PDF" icon=download on=emit:export:pdf
+      menu-item "Email to finance" icon=mail on=emit:export:email
+  list
+    each items=orders as=o key={o.id}
+      row align=center
+        column gap=2
+          text "{o.id} · {o.customer}" weight=semibold
+          text "{money(o.total)} · {o.status}" tone=muted
+        menu label="Actions for {o.id}"
+          menu-item "Mark shipped" icon=truck on=set:o.status:Shipped disabled={o.status == 'Shipped'}
+          menu-item "Duplicate" icon=copy on=emit:duplicate:{o.id}
+          menu-item "Cancel order" icon=x-circle tone=bad on="set:target:{o.id};set:confirm:true"
+dialog "Cancel {target}?" bind=confirm size=sm
+  text "The customer is emailed and any payment is refunded." tone=muted
+  row
+    button "Keep order" variant=secondary on=set:confirm:false
+    button "Cancel order" variant=danger on="emit:cancel:{target};set:confirm:false"
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

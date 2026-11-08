@@ -41,6 +41,17 @@ const NOT_KEYBOARD_REACHABLE_YET: Record<string, string> = {
   map: "Countries can be clicked but not reached by keyboard. Planned with the accessibility work in Phase 3.",
 };
 
+/**
+ * Elements their parent draws and presses on their behalf, in its popup list
+ * (a menu's menu-item): they have no box or hit region of their own while the
+ * list is closed. Instead of the two checks below, they're checked through the
+ * parent: Tab reaches it, the arrow key opens its list with a region per item,
+ * and Enter runs the first item's own on=.
+ */
+const PRESSED_IN_PARENT_LIST: Record<string, string> = {
+  "menu-item": "menu",
+};
+
 const exampleSpec = (def: ComponentDef) => exampleOf(def, ALL);
 
 /** Components that can be interactive: they take an action or a state to write. */
@@ -192,7 +203,35 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
   });
 
   // Scene shapes have no boxes: their scene registers their regions. They're checked below, under "pressable scene shapes".
-  if (canInteract(def) && !SCENE_TYPES.has(def.type)) {
+  const listParent = PRESSED_IN_PARENT_LIST[def.type];
+  if (listParent) {
+    it(`is reached and pressed through its ${listParent}'s list`, () => {
+      const ui = render(exampleSpec(def), { components: ALL });
+      const items = boxesOf(ui.sayshape.boxes!, def.type).length || ui.findAll(def.type).length;
+      ui.tab();
+      expect(ui.focused?.type, `Tab reaches the ${listParent}`).toBe(listParent);
+      ui.key("ArrowDown");
+      expect(ui.popup?.owner.type, `the arrow key opens the ${listParent}'s list`).toBe(listParent);
+      expect(ALL.find((d) => d.type === listParent)?.popup, `${listParent} draws its items in a popup`).toBeDefined();
+      const regions = ui.popup!.regions;
+      expect(regions.length, "a region per item in the open list").toBe(items);
+      // Each item is a named node a screen reader can reach.
+      const keys = new Map<string, AccessibleNode>();
+      const walk = (n: AccessibleNode) => { keys.set(n.key, n); n.children.forEach(walk); };
+      walk(ui.accessibility({ full: true }));
+      for (const r of regions) expect(keys.get(accessibleKey(r.box.node, r.detail))?.name?.trim(), `item ${String(r.detail)}`).toBeTruthy();
+      const first = ui.findAll(def.type)[0]!;
+      const on = first.node.props.on ?? "";
+      ui.key("Enter");
+      const emitted = /^emit:(\w+)/.exec(on)?.[1];
+      if (emitted) expect(ui.emitted.map((e) => e.name)).toContain(emitted);
+      expect(ui.popup, "choosing closes the list").toBeNull();
+      expect(ui.focused?.type, `focus goes back to the ${listParent}`).toBe(listParent);
+      ui.destroy();
+    });
+  }
+
+  if (canInteract(def) && !SCENE_TYPES.has(def.type) && !listParent) {
     describe("interaction", () => {
       it("registers a hit region for every instance that uses an action or state", () => {
         const ui = render(exampleSpec(def), { components: ALL });

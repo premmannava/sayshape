@@ -441,6 +441,11 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
         default: return false;
       }
     },
+    point(ctx, detail) {
+      const o = readOptions(ctx.props(ctx.target.node));
+      const option = o.options.find((x) => `opt:${x.key}` === detail && x.available);
+      if (option) ctx.popup.highlight = option.key;
+    },
     wheel(ctx, dy) {
       if (!ctx.area || !dy) return;
       const o = readOptions(ctx.props(ctx.target.node));
