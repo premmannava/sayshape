@@ -101,7 +101,7 @@ EVERY ELEMENT ACCEPTS
 
 ELEMENTS AT A GLANCE
 - layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel
-- content: text, image, code, badge, avatar, callout, icon
+- content: text, image, code, badge, avatar, callout, icon, tile
 - data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
 - navigation: screen, tabs, tab, breadcrumb, pagination
@@ -219,7 +219,7 @@ ELEMENTS
     icon=<boolean>  Show a small icon matching the tone: i, a tick, ! or ×.
 
   icon  — A small symbol on its own, like a status mark or a weather sign. To start a line of text or a list row with one, use icon= on text or list-item instead.
-    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, bell, search, filter, download, copy, share, link, sliders.
+    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders.
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     size=<sm|md|lg>  sm, md or lg.
     label=<string>  What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration.
@@ -487,6 +487,19 @@ ELEMENTS
     bind=<state>  State that holds the selected step's id. Pressing a step sets it.
     on=<action>  Actions to run after a step is selected, with bind= already set, e.g. emit:changed. Separate several with ;
 
+  tile "<text>"  — A small fixed-size face with a value, an optional icon and a detail line, for playing cards, seats, dice, keys or lottery numbers. Several in a row keep their size and wrap.
+    "<text>"  The value on its face, e.g. A, 10 or B4. Keep it short.
+    icon=<string>  An icon on its face, by name from icon's list, e.g. icon=club. The suits are club, spade, heart and diamond.
+    shape=<card|square>  card (portrait, like a playing card) or square (a seat, a key, a die).
+    size=<sm|md|lg>  sm, md or lg.
+    detail=<string>  A small line under the value, e.g. a price or an atomic weight. Keep it to a few characters at size=sm.
+    tone=<default|muted|accent|good|warn|bad>  Color of the value and icon: default, muted, accent, good, warn or bad (red suits use bad).
+    variant=<raised|outline>  raised (a lifted face) or outline.
+    selected=<condition>  Expression; when true the tile is marked as chosen, e.g. selected={s.picked}.
+    disabled=<condition>  Expression; when true it's greyed out and can't be pressed, e.g. a seat that's taken.
+    on=<action>  Actions to run when pressed, e.g. emit:changed. Separate several with ;
+    label=<string>  What screen readers and Copy text say for it, e.g. label="Seat B4". Default: its value (with its suit, as in Q of hearts) and detail.
+
   map  — Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
     kind=<markers|choropleth|bubble>  markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows.
     items=<expression>  Data rows for kind=choropleth or kind=bubble, e.g. items=sales. Do not embed individual rows in map specs.
@@ -536,6 +549,7 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - steps in order with their status, such as a delivery: timeline holding step status=done|current|upcoming
 - cards to page through, such as photos: carousel bind=page
 - the one takeaway or warning to notice first: callout tone=warn
+- playing cards, seats, dice or keys: tile "A" icon=spade
 - one choice from a long list: select items=teams bind=team
 - filtering by several values at once, such as regions or statuses: select items=regions bind=shown multiple=true
 - choosing a date, or a period such as the last 30 days (range=true): date-picker bind=due

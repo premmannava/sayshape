@@ -114,16 +114,24 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
 }
 
 /** Elements that take their content's width in a row rather than their whole share. */
-const PACKED = new Set(["button", "badge"]);
+const PACKED = new Set(["button", "badge", "tile"]);
 
 /**
- * Buttons and badges narrower than their share of a row (see their layouts)
+ * Buttons, badges and tiles narrower than their share of a row (see their layouts)
  * would sit apart in the middle of empty slots. Keep them together instead: a
- * row of only these starts at the left, like a form's actions or a set of tags;
+ * row of only these starts at the left, like a form's actions or a set of tags
+ * (a row of only tiles sits in the middle, like a hand of cards);
  * a run of them at the end of a row with other content goes to its right edge,
  * like a price and "Add to cart", or a heading and its status.
  */
 function packButtons(placed: Box[], widths: number[], left: number, innerW: number, gap: number, ctx: LayoutContext): void {
+  // A line of only tiles (a hand of cards, a row of seats, mixed sizes too) sits together in the middle.
+  if (placed.length && placed.every((kb) => kb.node.type === "tile")) {
+    const runW = placed.reduce((t, kb) => t + kb.w, 0) + gap * (placed.length - 1);
+    let x = left + Math.max(0, (innerW - runW) / 2);
+    for (const kb of placed) { ctx.shift(kb, x - kb.x, 0); x += kb.w + gap; }
+    return;
+  }
   const shrunk = placed.map((kb, j) => PACKED.has(kb.node.type) && kb.w < widths[j]! - 1);
   let first = shrunk.length;
   while (first > 0 && shrunk[first - 1]) first--;

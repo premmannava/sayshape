@@ -98,6 +98,16 @@ export const ICONS = {
   chat: ["M4 5.5 C4 4.9 4.4 4.5 5 4.5 H19 C19.6 4.5 20 4.9 20 5.5 V15.5 C20 16.1 19.6 16.5 19 16.5 H9.5 L5.5 20 V16.5 H5 C4.4 16.5 4 16.1 4 15.5 Z"],
   star: [starPath()],
   heart: ["M12 20 C12 20 3.5 15 3.5 9.2 C3.5 6.4 5.6 4.5 8 4.5 C9.7 4.5 11.1 5.4 12 6.8 C12.9 5.4 14.3 4.5 16 4.5 C18.4 4.5 20.5 6.4 20.5 9.2 C20.5 15 12 20 12 20 Z"],
+  // Card suits, with heart above: the same weight of line, each about as big.
+  // A spade is a heart turned over, on a flared stem.
+  spade: [
+    "M12 3.5 C12 3.5 3.5 9.2 3.5 13.8 C3.5 16.3 5.4 18 7.7 18 C9.5 18 11.1 17 12 15.4 C12.9 17 14.5 18 16.3 18 C18.6 18 20.5 16.3 20.5 13.8 C20.5 9.2 12 3.5 12 3.5 Z",
+    "M12 16.5 C11.9 18.4 11.1 19.8 9.7 20.5 H14.3 C12.9 19.8 12.1 18.4 12 16.5",
+  ],
+  // A club is three leaves, drawn as the outer arcs of three circles that overlap, on the same stem.
+  club: ["A 12 7.5 4 153 387", "A 8.1 13.3 4 12.8 274.8", "A 15.9 13.3 4 -94.8 167.2", "M12 14.6 C11.9 17.6 11.1 19.6 9.7 20.5 H14.3 C12.9 19.6 12.1 17.6 12 14.6"],
+  // A diamond's sides curve in a little, as on a card.
+  diamond: ["M12 3 C13.9 6.4 16.2 9.4 19 12 C16.2 14.6 13.9 17.6 12 21 C10.1 17.6 7.8 14.6 5 12 C7.8 9.4 10.1 6.4 12 3 Z"],
   bell: ["M6 16.5 V11 C6 7.7 8.7 5 12 5 C15.3 5 18 7.7 18 11 V16.5 L19.5 18 H4.5 Z", "M10 20.5 C10.4 21.3 11.1 21.7 12 21.7 C12.9 21.7 13.6 21.3 14 20.5", "M12 3 V5"],
   // Actions
   search: ["O 10.5 10.5 6.5", "M15.2 15.2 L20.5 20.5"],
@@ -134,7 +144,7 @@ export function nearestIcon(name: string): IconName | null {
     delivery: "truck", shipping: "truck", chart: "bar-chart", graph: "bar-chart", pie: "pie-chart", label: "tag",
     work: "briefcase", job: "briefcase", document: "file", goal: "target", energy: "bolt", power: "bolt", insight: "idea",
     tip: "idea", security: "lock", person: "user", people: "users", team: "users", date: "calendar", email: "mail",
-    message: "chat", favorite: "star", rating: "star", like: "heart", notification: "bell", find: "search",
+    message: "chat", favorite: "star", rating: "star", like: "heart", hearts: "heart", spades: "spade", clubs: "club", diamonds: "diamond", notification: "bell", find: "search",
     export: "download", duplicate: "copy", clipboard: "copy", settings: "sliders", options: "sliders", reload: "refresh", sync: "refresh",
   };
   if (Object.hasOwn(ALIASES, n)) return ALIASES[n]!;

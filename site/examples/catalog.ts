@@ -412,6 +412,32 @@ card
   button "Next update" variant=secondary disabled={stage >= 4} on=inc:stage`,
 };
 
-export const examples: readonly Example[] = [tip, sales, pipeline, cabin, org, claimFlow, launch, trip, laptop, coffee, grocery, tracking, budget, configurator];
+const cinema: Example = {
+  id: "seat-picker",
+  title: "Pick your seats",
+  prompt: "Let me pick seats for Friday's 8:15 showing",
+  category: "Shopping",
+  look: { preset: "purple", scheme: "dark" },
+  simulated: "Booking shows a message. Nothing is booked.",
+  spec: `state seats=[{id: "A1", row: "A", taken: false, picked: false}, {id: "A2", row: "A", taken: false, picked: false}, {id: "A3", row: "A", taken: true, picked: false}, {id: "A4", row: "A", taken: true, picked: false}, {id: "A5", row: "A", taken: false, picked: false}, {id: "A6", row: "A", taken: false, picked: false}, {id: "B1", row: "B", taken: false, picked: false}, {id: "B2", row: "B", taken: true, picked: false}, {id: "B3", row: "B", taken: false, picked: false}, {id: "B4", row: "B", taken: false, picked: false}, {id: "B5", row: "B", taken: false, picked: false}, {id: "B6", row: "B", taken: false, picked: false}, {id: "C1", row: "C", taken: false, picked: false}, {id: "C2", row: "C", taken: false, picked: true}, {id: "C3", row: "C", taken: true, picked: false}, {id: "C4", row: "C", taken: true, picked: false}, {id: "C5", row: "C", taken: true, picked: false}, {id: "C6", row: "C", taken: false, picked: false}, {id: "D1", row: "D", taken: true, picked: false}, {id: "D2", row: "D", taken: false, picked: false}, {id: "D3", row: "D", taken: false, picked: false}, {id: "D4", row: "D", taken: false, picked: false}, {id: "D5", row: "D", taken: false, picked: false}, {id: "D6", row: "D", taken: false, picked: false}, {id: "E1", row: "E", taken: false, picked: false}, {id: "E2", row: "E", taken: false, picked: false}, {id: "E3", row: "E", taken: false, picked: false}, {id: "E4", row: "E", taken: false, picked: false}, {id: "E5", row: "E", taken: false, picked: false}, {id: "E6", row: "E", taken: true, picked: false}]
+derive chosen={filter(seats, 'picked', true)}
+derive total={len(chosen) * 14}
+card
+  text "Lumen Cinema · Screen 3" style=title
+  text "The Long Field · Friday 8:15 pm · $14 a seat" tone=muted
+  text "Screen" tone=muted align=center
+  each items={['A', 'B', 'C', 'D', 'E']} as=r
+    row gap=6 wrap=false
+      each items={filter(seats, 'row', r)} as=s key={s.id}
+        tile "{s.id}" shape=square size=sm selected={s.picked} disabled={s.taken} on=toggle:s.picked label="Seat {s.id}"
+  text "Grey seats are taken. Press a seat to choose it, again to let it go." tone=muted align=center
+  divider
+  grid min=130 gap=10
+    stat label="Seats" value={len(chosen) > 0 ? join(chosen, 'id') : 'None yet'}
+    stat label="Total" value={money(total)} tone=accent
+  button "Book {plural(len(chosen), 'seat')}" on="emit:book:{pluck(chosen, 'id')};notify:'Demo only: nothing was booked'" disabled={len(chosen) == 0}`,
+};
+
+export const examples: readonly Example[] = [tip, sales, pipeline, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);

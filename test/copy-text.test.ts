@@ -92,6 +92,14 @@ flow "Purchase" items=s edges=e
     expect(copy(`text "Pay **within 30 days**; see [the terms](https://northwind.example/terms)." rich=true\n`)).toBe("Pay within 30 days; see the terms (https://northwind.example/terms).");
   });
 
+  it("copies tiles by their label, or their value and detail", () => {
+    const text = copy(`row
+  tile "4" icon=club label="4 of clubs"
+  tile "Fe" shape=square detail="55.85"
+`);
+    expect(text.split("\n")).toEqual(["4 of clubs", "Fe, 55.85"]);
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password
