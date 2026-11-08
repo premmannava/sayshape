@@ -100,6 +100,17 @@ flow "Purchase" items=s edges=e
     expect(text.split("\n")).toEqual(["4 of clubs", "Fe, 55.85"]);
   });
 
+  it("copies only an open dialog, the screen behind it being inert", () => {
+    const spec = (open: boolean) => `state o=${open}
+text "Orders"
+dialog "Refund NW-2041?" bind=o
+  text "Refunds take 3 days."
+  button "Refund" on=set:o:false
+`;
+    expect(copy(spec(false))).toBe("Orders");
+    expect(copy(spec(true)).split("\n")).toEqual(["Refund NW-2041?", "Refunds take 3 days."]);
+  });
+
   it("copies a scatter as a table of its dots, in x order", () => {
     const text = copy(`state s=[{n: "B", x: 9, y: 2}, {n: "A", x: 1, y: 5}]
 chart "Pairs" kind=scatter items=s x=x y=y label=n

@@ -141,6 +141,13 @@ export class SayShape {
   private hits: HitRegion[] = [];
   /** While painting the children of elements that scroll: what each shows, innermost last. */
   private clips: Array<{ rect: Rect; owner: Box }> = [];
+  /** The open overlay (a dialog), laid out on its own over the screen, or null. */
+  private modal: Box | null = null;
+  /** Where the open overlay's hit regions start in this.hits (only those take presses and Tab). */
+  private modalFrom = -1;
+  /** What had focus before the overlay opened, given back when it closes. */
+  private beforeModal: HitTarget | null = null;
+  private modalKey = "";
   /** The focused region last scrolled into sight, so a person's own scrolling isn't undone. */
   private revealed = "";
   private seen = new Map<string, number>();
@@ -272,8 +279,11 @@ export class SayShape {
     return this.parsed?.root ?? null;
   }
 
+  /** The laid-out boxes; while an overlay is open, it's the root's last child (drawn on top). */
   get boxes(): Box | null {
-    return this.rootBox;
+    const root = this.rootBox, m = this.modal;
+    if (!root || !m) return root;
+    return { ...root, h: Math.max(root.h, m.y + m.h), children: [...root.children, m] };
   }
 
   get diagnostics(): Diagnostic[] {
@@ -291,8 +301,10 @@ export class SayShape {
    */
   accessibilityTree(): AccessibleNode | null {
     if (!this.rootBox) return null;
+    // While an overlay is open, it's all a screen reader (and Copy text) gets: what's behind is inert.
+    const root = this.modal ? { ...this.rootBox, children: [this.modal] } : this.rootBox;
     return buildAccessibilityTree({
-      root: this.rootBox,
+      root,
       hits: this.hits,
       registry: this.registry,
       scope: this.state.scope,
@@ -416,6 +428,21 @@ export class SayShape {
     const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.warnOnce(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
     this.rootBox = ctx.layout(this.parsed.root, 0, 0, width);
     let height = Math.max(this.rootBox.h, this.opts.minHeight ?? 0);
+    // An open overlay floats centred in what's in sight. One at a time: if several are open,
+    // the first written shows, and the next when it closes.
+    this.modal = null;
+    for (const node of ctx.overlays ?? []) {
+      const def = this.registry.get(node.type)?.overlay;
+      if (!def || !def.open(node, ctx)) continue;
+      const w = Math.max(0, Math.min(width, def.width(node, width, ctx)));
+      const box = ctx.layout(node, (width - w) / 2, 0, w);
+      const vp = this.viewport();
+      const top = Math.max(0, vp.top), bottom = Number.isFinite(vp.bottom) ? vp.bottom : Math.max(height, box.h + 2 * OVERLAY_MARGIN);
+      ctx.shift(box, 0, Math.max(top + OVERLAY_MARGIN, top + (bottom - top - box.h) / 2));
+      this.modal = box;
+      break;
+    }
+    if (this.modal) height = Math.max(height, this.modal.y + this.modal.h + OVERLAY_MARGIN);
     // A popup that needs more room than the screen has makes the canvas taller while it's open.
     const area = this.placeOpenPopup(ctx, width);
     if (area) height = Math.max(height, area.y + area.h + POPUP_MARGIN);
@@ -512,6 +539,17 @@ export class SayShape {
     this.clips = [];
     const ctx = this.paintContext(g);
     this.paintBox(this.rootBox, ctx, 1);
+    this.modalFrom = -1;
+    if (this.modal) {
+      // The screen behind is dimmed and inert; only the overlay's regions count from here on.
+      g.fillStyle = this.theme.colors.scrim;
+      g.fillRect(0, 0, this.metrics.width, this.metrics.height);
+      // Nothing behind can be pressed, hovered or reached with Tab while it's open.
+      this.hits.length = 0;
+      this.modalFrom = 0;
+      this.paintBox(this.modal, ctx, 1);
+    }
+    this.trapFocus();
     this.resolveFocus();
     // Bringing the focused element into view lays out again, in this same frame (renderNow):
     // leave the ring, popup and screen reader for that pass, so nothing follows the old place.
@@ -911,7 +949,7 @@ export class SayShape {
       }
       return null;
     }
-    for (let i = this.hits.length - 1; i >= 0; i--) {
+    for (let i = this.hits.length - 1; i >= Math.max(0, this.modalFrom); i--) {
       const h = this.hits[i]!;
       const b = h.box;
       if (x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h) continue;
@@ -1250,7 +1288,36 @@ export class SayShape {
   }
 
   private focusables(): HitRegion[] {
-    return this.hits.filter((h) => h.focusable);
+    return this.hits.filter((h, i) => h.focusable && i >= this.modalFrom);
+  }
+
+  /**
+   * When an overlay opens, focus moves into it (its first stop), and when it closes, back to
+   * what had it before, so the keyboard and screen readers always land where the person is.
+   */
+  private trapFocus(): void {
+    const key = this.modal ? this.modal.node.id : "";
+    if (key === this.modalKey) return;
+    const opening = !!key;
+    this.modalKey = key;
+    if (opening) {
+      this.beforeModal = this.focus;
+      const first = this.focusables()[0];
+      this.focus = first ? { node: first.box.node, box: first.box, detail: first.detail } : null;
+    } else {
+      this.focus = this.beforeModal;
+      this.beforeModal = null;
+    }
+    if (this.keyboardMode) this.focusDom();
+  }
+
+  /** Close the open overlay (Escape, a press on the backdrop). */
+  private closeModal(): void {
+    const m = this.modal;
+    const def = m && this.registry.get(m.node.type)?.overlay;
+    if (!m || !def) return;
+    def.close(this.pressContext({ node: m.node, box: m }));
+    this.invalidate("layout");
   }
 
   /** After layout, point hover/focus at the new boxes for the same nodes. */
@@ -1260,6 +1327,7 @@ export class SayShape {
       let found: Box | null = null;
       const walk = (b: Box) => { if (found) return; if (b.node.id === t.node.id) found = b; else b.children.forEach(walk); };
       walk(this.rootBox);
+      if (this.modal) walk(this.modal);
       if (!found || !this.isShown((found as Box).node)) return null;
       return { node: (found as Box).node, box: found, detail: t.detail };
     };
@@ -1285,6 +1353,7 @@ export class SayShape {
     let found: Box | null = null;
     const walk = (b: Box) => { if (found) return; if (b.node.id === node.id) found = b; else b.children.forEach(walk); };
     if (this.rootBox) walk(this.rootBox);
+    if (this.modal) walk(this.modal);
     return found;
   }
 
@@ -1404,6 +1473,8 @@ export class SayShape {
    */
   private onKeyDown(e: MirrorKey): void {
     if (e.key === "Escape" && this.inspector.inspecting) { this.inspector.setInspecting(false); return; }
+    // Escape closes an open overlay (unless a popup inside it is open: that closes first).
+    if (e.key === "Escape" && this.modal && !this.popup) { e.preventDefault(); this.keyboardMode = true; this.closeModal(); return; }
     // An open popup takes every key. Escape closes it; Tab closes it and moves on as usual.
     if (this.popup) {
       this.keyboardMode = true;
@@ -1499,6 +1570,14 @@ export class SayShape {
           this.closePopup(true);
           return;
         }
+      }
+      const m = this.modal;
+      if (m && (p.x < m.x || p.x > m.x + m.w || p.y < m.y || p.y > m.y + m.h)) {
+        // A press on the backdrop closes the overlay and stops there.
+        this.swallowRelease = true;
+        this.pressed = null;
+        this.closeModal();
+        return;
       }
       this.pressed = this.targetAt(p.x, p.y);
       // Pressing inside a popup leaves keyboard focus on its owner.
@@ -1805,3 +1884,6 @@ function intersectRect(a: Rect, b: Rect): Rect {
   const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
   return { x, y, w: Math.max(0, Math.min(a.x + a.w, b.x + b.w) - x), h: Math.max(0, Math.min(a.y + a.h, b.y + b.h) - y) };
 }
+
+/** Room kept between an overlay and the edges of what's in sight. */
+const OVERLAY_MARGIN = 16;

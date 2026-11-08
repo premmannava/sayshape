@@ -62,10 +62,12 @@ export function createLayoutContext(
   const mins = new WeakMap<SayShapeNode, number>();
   // The first layout call is the whole screen's.
   let screen = -1;
+  const overlays: SayShapeNode[] = [];
   const ctx: LayoutContext = {
     theme,
     measure,
     scope,
+    overlays,
     ...(view ? { view } : {}),
     props(node) {
       let r = readers.get(node);
@@ -81,7 +83,13 @@ export function createLayoutContext(
     },
     visibleChildren(node) {
       let k = kids.get(node);
-      if (!k) kids.set(node, (k = shownChildren(node, scope, registry, warn, budget)));
+      if (!k) {
+        // Overlays (a dialog) take no room where they're written: set aside for the engine.
+        const all = shownChildren(node, scope, registry, warn, budget);
+        k = all.filter((c) => !registry.get(c.type)?.overlay);
+        for (const c of all) if (registry.get(c.type)?.overlay && !overlays.includes(c)) overlays.push(c);
+        kids.set(node, k);
+      }
       return k;
     },
     minWidth(node) {

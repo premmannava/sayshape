@@ -501,6 +501,25 @@ card
     stat label="Needs attention" value="3" tone=warn
 `,
   },
+  cancelPlan: {
+    label: "Confirm before cancelling (dialog)",
+    prompt: "Show my plan and let me cancel it, but check with me first.",
+    spec: `state plan="Pro" asking=true
+card
+  text "Billing" style=title
+  text "Northwind workspace" tone=muted
+  list
+    list-item "Plan" trailing="{plan}"
+    list-item "Projects" trailing="{plan == 'Pro' ? 'Unlimited' : '3'}"
+    list-item "Storage" trailing="{plan == 'Pro' ? '100 GB' : '2 GB'}"
+  button "Cancel Pro plan" variant=danger on=set:asking:true disabled={plan == 'Free'}
+dialog "Cancel your Pro plan?" bind=asking size=sm
+  text "You keep Pro until 30 November. After that the workspace moves to Free: 3 projects and 2 GB of storage." tone=muted
+  row
+    button "Keep Pro" variant=secondary on=set:asking:false
+    button "Cancel plan" variant=danger on="set:plan:Free;set:asking:false;notify:Your plan moves to Free on 30 November"
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

@@ -147,7 +147,7 @@ map bind=selected
   });
 
   it("lists every expression function in the quick start, with the best-row pattern", () => {
-    expect(quickStart()).toMatch(/Functions \(no others exist\): .*\bfirst\b.*\btake\b/);
+    expect(quickStart()).toMatch(/Functions \(only these\): .*\bfirst\b.*\btake\b/);
     expect(quickStart()).toMatch(/first\(sort\(rows, 'revenue', 'desc'\)\)\.month/);
   });
 

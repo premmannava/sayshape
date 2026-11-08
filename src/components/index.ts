@@ -22,6 +22,7 @@ import { tree } from "./tree";
 import { flow } from "./flow";
 import { tile } from "./tile";
 import { scroll } from "./scroll";
+import { dialog } from "./dialog";
 
 export {
   column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
@@ -36,6 +37,7 @@ export {
   flow,
   tile,
   scroll,
+  dialog,
 };
 
 /** The built-in components (everything except the map, which is a separate entry). */
@@ -52,4 +54,5 @@ export const coreComponents: ComponentDef[] = [
   flow,
   tile,
   scroll,
+  dialog,
 ];
