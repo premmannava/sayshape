@@ -99,7 +99,7 @@ const round1: PickCase[] = [
   },
   {
     id: "drop-off", group: "chart",
-    request: "Where do people drop out of our checkout? Viewed cart 8,400, entered shipping 5,100, entered payment 3,300, placed order 2,600.",
+    request: "Where are we losing shoppers in checkout? Viewed cart 8,400, entered shipping 5,100, entered payment 3,300, placed order 2,600.",
     best: ["chart:funnel"], ok: ["chart:bar", "chart:hbar"], poor: ["chart:pie", "chart:donut", "chart:line"],
     why: "Stages people drop out of: a funnel shows each stage and its share of the one before.",
   },
@@ -117,7 +117,7 @@ const round1: PickCase[] = [
   },
   {
     id: "two-dimensions", group: "chart",
-    request: "When do support tickets come in? Ticket counts by weekday and hour: weekdays peak at 10am (about 40) and 2pm (35), quiet after 6pm; weekends are flat at about 8 an hour. Cover 8am to 8pm, Monday to Sunday.",
+    request: "When do support tickets come in? Ticket counts for each day of the week and each hour: weekdays peak at 10am (about 40) and 2pm (35), quiet after 6pm; weekends are flat at about 8 an hour. Cover 8am to 8pm, Monday to Sunday.",
     best: ["chart:heatmap"], ok: ["table", "chart:line"], poor: ["chart:pie", "chart:donut", "chart:bar"],
     why: "One number across two dimensions (day and hour): a heatmap shows the busy cells at once.",
   },
@@ -239,7 +239,7 @@ const round1: PickCase[] = [
   },
   {
     id: "confirm", group: "structure",
-    request: "A list of 4 saved addresses, each with a Delete button. Deleting can't be undone, so ask first.",
+    request: "A list of 4 saved addresses, each with a Delete button. A deleted address is gone for good, so ask first.",
     best: ["dialog"], ok: ["callout", "if"], poor: [],
     why: "Asking before something that can't be undone: a confirm dialog.",
   },

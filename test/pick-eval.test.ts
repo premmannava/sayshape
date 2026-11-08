@@ -24,6 +24,34 @@ const VARIANTS: Record<string, readonly string[]> = {
   text: ["rich"],
 };
 
+/** Lower-case words, without punctuation, so "Jan 820 vs 640," and "jan 820 vs 640" match. */
+const words = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(Boolean);
+/** Every run of n words in a text, joined. */
+const runs = (ws: string[], n: number) => ws.slice(0, Math.max(0, ws.length - n + 1)).map((_, i) => ws.slice(i, i + n).join(" "));
+
+describe("the guide's picks stay held out from the eval", () => {
+  // A pick that quotes a request ("312 of 480 tickets closed") teaches to the test: the eval
+  // would score the model reading its own answer key. Picks say what kind of data they're for.
+  const requests = pickCases.map((c) => ({ id: c.id, ws: words(c.request) }));
+  const picks = registry.all().flatMap((d) => (d.picks ?? []).map((p) => ({ type: d.type, text: p.for })));
+
+  it("share no run of four words with any request", () => {
+    const shared = picks.flatMap((p) => {
+      const mine = new Set(runs(words(p.text), 4));
+      return requests.flatMap((r) => runs(r.ws, 4).filter((x) => mine.has(x)).map((x) => `${p.type} pick "${p.text}" and ${r.id}: "${x}"`));
+    });
+    expect(shared).toEqual([]);
+  });
+
+  it("quote no number of three or more digits from a request", () => {
+    const shared = picks.flatMap((p) => {
+      const nums = words(p.text).filter((w) => /^\d{3,}$/.test(w));
+      return requests.flatMap((r) => nums.filter((n) => r.ws.includes(n)).map((n) => `${p.type} pick "${p.text}" and ${r.id}: ${n}`));
+    });
+    expect(shared).toEqual([]);
+  });
+});
+
 describe("representation eval cases", () => {
   it("have unique ids", () => {
     const ids = pickCases.map((c) => c.id);
