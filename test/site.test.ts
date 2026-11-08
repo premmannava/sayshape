@@ -72,6 +72,16 @@ describe("gallery examples", () => {
     expect(shown(ui)).toContain("$25.80");
   });
 
+  it("sales pipeline: a column per stage with totals, and pressing a deal shows it", () => {
+    const ui = render(exampleById("sales-pipeline")!.spec, { width: 1024 });
+    expect(shown(ui)).toContain("$94.5K");
+    expect(shown(ui)).toContain("Policy admin suite");
+    const deal = ui.hits.find((h) => h.box.node.type === "board" && h.detail === "card:k:number:3")!;
+    ui.click(deal.box.x + deal.box.w / 2, deal.box.y + deal.box.h / 2);
+    expect(ui.state.picked).toBe(3);
+    expect(shown(ui)).toContain("Priya Nair");
+  });
+
   it("launch plan: a bar per task by team, and pressing one shows its details", () => {
     const ui = render(exampleById("launch-plan")!.spec, { width: 1024, today: "2026-10-21" });
     expect(shown(ui)).toContain("Beta with 12 customers");

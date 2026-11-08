@@ -856,6 +856,8 @@ export class SayShape {
       popupOpen: !!this.popup && this.popup.owner.node.id === target.node.id,
       today: this.today,
       view: this.viewOf,
+      inState: (value) => findItem(value, this.state.entries()) !== null,
+      warn: (message) => this.warnOnce(message),
     };
   }
 
@@ -983,14 +985,14 @@ export class SayShape {
   }
 
   /** Send a drag phase to the dragged element, using its region from the latest frame. */
-  private dragTo(phase: DragContext["phase"], x: number, y: number): void {
+  private dragTo(phase: DragContext["phase"], x: number, y: number, cancelled = false): void {
     const t = this.dragging;
     if (!t) return;
     const region = this.hits.find((h) => sameRegion(h, t));
     const target = region ? { node: region.box.node, box: region.box, detail: region.detail } : t;
     this.dragging = phase === "end" ? null : target;
     const def = this.registry.get(target.node.type);
-    const relayout = def?.drag?.({ ...this.pressContext(target), x, y, phase });
+    const relayout = def?.drag?.({ ...this.pressContext(target), x, y, phase, ...(cancelled ? { cancelled } : {}) });
     this.invalidate(relayout ? "layout" : "paint");
   }
 
@@ -1452,7 +1454,7 @@ export class SayShape {
     // The browser took over the gesture (a scroll, say): finish the drag where it was.
     const onCancel = () => {
       this.pressed = null;
-      if (this.dragging) this.dragTo("end", this.pointer?.x ?? 0, this.pointer?.y ?? 0);
+      if (this.dragging) this.dragTo("end", this.pointer?.x ?? 0, this.pointer?.y ?? 0, true);
     };
 
     const onWheel = (e: WheelEvent) => {

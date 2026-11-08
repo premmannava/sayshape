@@ -161,6 +161,10 @@ export interface PressContext {
   today(): string;
   /** An element's view state (a scroll offset); see ElementView. */
   view(node: SayShapeNode): ElementView;
+  /** Whether a list item or record is in state (found by identity, as bind= inside each finds it), so it can be written. */
+  inState?(value: Value): boolean;
+  /** Tell the spec's author about a problem in the spec or its data (shown once, as a warning). */
+  warn?(message: string): void;
 }
 
 /** Pressing or typing in an open popup. ctx.target.node is the popup's owner. */
@@ -193,6 +197,8 @@ export interface DragContext extends PressContext {
   y: number;
   /** start on press, move while held, end on release (or when the browser cancels). */
   phase: "start" | "move" | "end";
+  /** On the end phase: the browser took the gesture over (a page scroll), so it wasn't a release. Put things back. */
+  cancelled?: boolean;
 }
 
 /** A wheel movement over a component, in canvas CSS pixels. Return true when consumed. */

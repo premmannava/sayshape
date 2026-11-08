@@ -411,6 +411,16 @@ card
 schedule "Ledgerly 2.0 launch plan" items=tasks start=from end=to label=task rows=team view=timeline
 `,
   },
+  hiringBoard: {
+    label: "Hiring board",
+    prompt: "Show our open hiring pipeline by stage, and let me move candidates along.",
+    spec: `state candidates=[{id: "c1", name: "Rosa Delgado", role: "Claims adjuster", step: "Applied"}, {id: "c2", name: "Kenji Watanabe", role: "Warehouse lead", step: "Screen"}, {id: "c3", name: "Amara Okoye", role: "Payroll specialist", step: "Interview", flag: "warn"}, {id: "c4", name: "Felix Brandt", role: "Claims adjuster", step: "Applied"}, {id: "c5", name: "Sana Iqbal", role: "Data analyst", step: "Offer", flag: "good"}]
+card
+  text "Hiring" style=title
+  text "Drag a card to another stage, or focus it and press Left or Right" tone=muted
+  board items=candidates stage=step stages="Applied,Screen,Interview,Offer" title=name detail=role tone=flag move=true on="notify:Moved"
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

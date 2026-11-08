@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 52 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 53 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -506,7 +506,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty) |
@@ -1406,6 +1406,32 @@ Blocks laid out on time from a list: a week of shifts, the day's room bookings, 
 ```
 state picked=0 shifts=[{id: 1, day: "2026-11-09", from: "08:00", to: "16:00", name: "Ana Ruiz", tier: "Tier 1"}, {id: 2, day: "2026-11-09", from: "12:00", to: "20:00", name: "Ben Okafor", tier: "Tier 2"}, {id: 3, day: "2026-11-10", from: "08:00", to: "16:00", name: "Chloe Park", tier: "Tier 1"}]
 schedule "Support rota" items=shifts date=day start=from end=to label=name tone=tier view=week bind=picked
+```
+
+### `board`
+
+Columns of cards by stage, from a list: a sales pipeline, a task board, hiring stages, support tickets. Each column shows its count and an optional total; move=true lets people drag a card to another stage.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The title above the board, e.g. Sales pipeline. |
+| `items` | expression, required | The list of records, e.g. items=deals. At most 500. |
+| `stage` | name, required | Field with each record's stage, e.g. stage=status. |
+| `stages` | string | The columns in order, separated by commas, e.g. stages="Lead,Qualified,Proposal,Won". At most 12. Default: the stages in the records, in the order they first appear. |
+| `title` | name | Field with each card's title, e.g. title=name. |
+| `detail` | name | Field with a quieter line under the title, e.g. detail=company. |
+| `value` | name | Field with a short value on the card's right, e.g. value=amount. |
+| `format` | `text` / `number` / `money` | How value= and sum= read: text as is, number (1,200) or money ($1,200, US dollars). |
+| `sum` | name | Field to total in each column's header, e.g. sum=amount, written with format=. |
+| `tone` | name | Field that colors each card's edge: a value good, warn, bad, accent or muted uses that tone; other values each get their own color. |
+| `key` | name | The field that identifies each record, e.g. key=id. Needed for bind=. |
+| `bind` | state | State that holds the selected card's key. Pressing a card sets it. |
+| `move` | boolean | true lets people move a card to another stage: drag it to another column, or focus it and press Left or Right. It changes the record's stage field, so items= must be a list in state (or worked out from one). |
+| `on` | action | Actions to run after a card is pressed or moved, with bind= already set, e.g. emit:changed. Separate several with ; |
+
+```
+state picked=0 deals=[{id: 1, name: "Fleet renewal", company: "Harbor Freight Co", status: "Lead", amount: 48000}, {id: 2, name: "Claims portal", company: "Northwind Mutual", status: "Proposal", amount: 125000}, {id: 3, name: "Warehouse sensors", company: "Larkspur Logistics", status: "Qualified", amount: 36500}]
+board "Pipeline" items=deals stage=status stages="Lead,Qualified,Proposal,Won" title=name detail=company value=amount format=money sum=amount bind=picked
 ```
 
 ### `map`

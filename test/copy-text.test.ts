@@ -66,6 +66,13 @@ schedule "Rooms" items=b rows=room view=day
     expect(text.split("\n")).toEqual(["Rooms", "Time\tWhat\tRoom", "08:30–09:15\tClaims standup\tHarbor", "09:00–10:00\tSales sync\tAtlas"]);
   });
 
+  it("copies a board as each stage with its count, then its cards", () => {
+    const text = copy(`state t=[{id: 1, title: "Login fails", s: "Open"}, {id: 2, title: "Export to CSV", s: "Done"}, {id: 3, title: "Tax on invoice", s: "Open"}]
+board "Tickets" items=t stage=s stages="Open,Done"
+`);
+    expect(text.split("\n")).toEqual(["Tickets", "", "Open (2)", "- Login fails", "- Tax on invoice", "", "Done (1)", "- Export to CSV"]);
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password
