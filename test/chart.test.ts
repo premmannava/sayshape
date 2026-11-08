@@ -27,7 +27,7 @@ describe("chart props", () => {
 
   it("explains bad or missing props", () => {
     const msgs = (spec: string) => parse(`${sales}\n${spec}\n`, registry).diagnostics.map((d) => d.message);
-    expect(msgs(`chart kind=radar items=sales x=month y=revenue`)).toEqual([`kind should be one of bar, hbar, line, area, stacked, pie, donut, funnel, waterfall, bullet, heatmap, scatter; got "radar"`]);
+    expect(msgs(`chart kind=radar items=sales x=month y=revenue`)).toEqual([`kind should be one of bar, hbar, line, area, stacked, pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap; got "radar"`]);
     expect(msgs(`chart items=sales x=month y=revenue format=euro`)).toEqual([`format should be one of number, money, percent; got "euro"`]);
     expect(msgs(`chart items=sales x="the month" y=revenue`)[0]).toMatch(/x should be a plain name/);
     expect(msgs(`chart items=sales x=month`)).toEqual([`"chart" needs y=`]);
@@ -39,10 +39,10 @@ describe("chart props", () => {
   it("is documented in the model guide, generated from its definition", async () => {
     const { languageGuide } = await import("../src/prompt");
     const g = languageGuide(registry);
-    expect(g).toContain(`kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap|scatter>`);
+    expect(g).toContain(`kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap|scatter|treemap>`);
     expect(g).toContain(`y=revenue,last_year`);
     expect(g).toMatch(/shown as gaps, not zero/);
-    expect(languageGuide(registry, { mode: "compact" })).toMatch(/^- chart \["text"\] kind=bar\|hbar\|line\|area\|stacked\|pie\|donut\|funnel\|waterfall\|bullet\|heatmap\|scatter items=expr! x=name! y=name,name! labels=text label=name size=name group=name rows=name target=name good=up\|down total=text format=number\|money\|percent/m);
+    expect(languageGuide(registry, { mode: "compact" })).toMatch(/^- chart \["text"\] kind=bar\|hbar\|line\|area\|stacked\|pie\|donut\|funnel\|waterfall\|bullet\|heatmap\|scatter\|treemap items=expr! x=name! y=name,name! labels=text label=name size=name group=name rows=name target=name good=up\|down total=text format=number\|money\|percent/m);
   });
 });
 

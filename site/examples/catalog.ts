@@ -452,6 +452,22 @@ card
   callout "Ridge Emerging takes more risk than Ridge Small Cap (22.4 against 19.6) for 2.3 points less return" tone=warn icon=true`,
 };
 
-export const examples: readonly Example[] = [tip, sales, pipeline, funds, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator];
+const costs: Example = {
+  id: "where-costs-go",
+  title: "Where costs go",
+  prompt: "Show where Brightline's 2026 operating costs go",
+  category: "Dashboards",
+  look: { preset: "teal", scheme: "light" },
+  spec: `state costs=[{item: "Salaries", area: "People", amount: 1840000}, {item: "Benefits", area: "People", amount: 420000}, {item: "Contractors", area: "People", amount: 310000}, {item: "Office rent", area: "Facilities", amount: 360000}, {item: "Utilities", area: "Facilities", amount: 54000}, {item: "Cleaning", area: "Facilities", amount: 38000}, {item: "Cloud hosting", area: "Technology", amount: 290000}, {item: "Software licences", area: "Technology", amount: 176000}, {item: "Laptops", area: "Technology", amount: 98000}, {item: "Security tools", area: "Technology", amount: 64000}, {item: "Paid search", area: "Marketing", amount: 240000}, {item: "Events", area: "Marketing", amount: 132000}, {item: "Agency", area: "Marketing", amount: 110000}, {item: "Content", area: "Marketing", amount: 46000}, {item: "Travel", area: "Operations", amount: 88000}, {item: "Insurance", area: "Operations", amount: 72000}, {item: "Legal", area: "Operations", amount: 66000}, {item: "Accounting", area: "Operations", amount: 41000}, {item: "Training", area: "People", amount: 58000}, {item: "Recruiting", area: "People", amount: 94000}, {item: "Office supplies", area: "Facilities", amount: 17000}, {item: "Meals", area: "Operations", amount: 23000}, {item: "Phones", area: "Technology", amount: 19000}, {item: "Bank fees", area: "Operations", amount: 9000}]
+state area="All"
+derive shown={area == 'All' ? costs : filter(costs, 'area', area)}
+card
+  text "Brightline operating costs, 2026" style=title
+  text "\${number(sum(shown, 'amount'))} across {plural(len(shown), 'line item')}. Bigger is more." tone=muted
+  select "Area" items={['All', 'People', 'Technology', 'Marketing', 'Operations', 'Facilities']} bind=area
+  chart kind=treemap items=shown x=item y=amount format=money`,
+};
+
+export const examples: readonly Example[] = [tip, sales, pipeline, funds, costs, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);

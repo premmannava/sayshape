@@ -29,7 +29,7 @@ describe("the kind seam", () => {
 
   it("teaches the new kinds in the model guide", () => {
     const guide = languageGuide(registry);
-    expect(guide).toContain("kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap|scatter>");
+    expect(guide).toContain("kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap|scatter|treemap>");
     expect(guide).toContain("funnel shows stages top to bottom");
     expect(guide).toContain("waterfall shows each item as a change");
     expect(guide).toContain("total=");
