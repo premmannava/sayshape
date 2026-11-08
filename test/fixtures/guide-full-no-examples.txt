@@ -524,6 +524,7 @@ ELEMENTS
     label=<string>  What a screen reader calls a ⋯ button with no text, e.g. label="Order actions". Default: More actions.
     variant=<secondary|primary>  secondary (outlined) or primary (filled).
     disabled=<condition>  When true, it can't be opened.
+    align=<start|end>  Where it sits in its room: start, or end (the right). Default: end for a ⋯ menu, start for one with words.
     children: menu-item
 
   menu-item "<text>"  — One action in a menu's list.

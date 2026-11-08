@@ -362,7 +362,7 @@ describe("range=true", () => {
 
   it("parses with a {from, to} record and teaches the pick", () => {
     expect(parse(ranged(), registry).diagnostics).toEqual([]);
-    expect(registry.get("date-picker")!.picks?.map((p) => p.for).join()).toMatch(/a period such as the last 30 days \(range=true\)/);
+    expect(registry.get("date-picker")!.picks?.map((p) => p.for).join()).toMatch(/a period like the last 30 days \(range=true\)/);
   });
 
   it("marks the start with the first press, writes both ends in order with the second, then closes and runs on=", () => {

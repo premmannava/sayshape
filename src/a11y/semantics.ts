@@ -93,6 +93,8 @@ export interface ElementSemantics extends Semantics {
   detail?: unknown;
   /** Its pressable parts, each its own node inside this one. */
   parts?: PartSemantics[];
+  /** The detail of the part that's active while this element has focus (an open menu's highlighted item). */
+  active?: unknown;
   /**
    * Wrap this element and its neighbours with the same group key in one
    * node (radios sharing a bind= become a radiogroup). The name defaults to

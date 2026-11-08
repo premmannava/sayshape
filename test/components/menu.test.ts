@@ -13,9 +13,13 @@ each items=orders as=o
       menu-item "Delete" icon=x-circle tone=bad on="set:last:{o.id};emit:delete:{o.id}"
 `;
 
-const items = (ui: ReturnType<typeof render>) => ui.popup?.regions.map((r) => r.detail) ?? [];
-const pressItem = (ui: ReturnType<typeof render>, detail: string) => {
-  const r = ui.popup!.regions.find((h) => h.detail === detail)!.box;
+type UI = ReturnType<typeof render>;
+/** The open list's items, by their text. */
+const labelOf = (ui: UI, id: unknown) => ui.findAll("menu-item").find((m) => m.node.id === id)?.node.text;
+const items = (ui: UI) => ui.popup?.regions.map((r) => labelOf(ui, String(r.detail).slice(5))) ?? [];
+const highlighted = (ui: UI) => labelOf(ui, ui.popup?.state.highlight);
+const pressItem = (ui: UI, label: string) => {
+  const r = ui.popup!.regions.find((h) => labelOf(ui, String(h.detail).slice(5)) === label)!.box;
   ui.click(r.x + 8, r.y + r.h / 2);
 };
 const firstMenu = (ui: ReturnType<typeof render>) => ({ id: ui.findAll("menu")[0]!.node.id });
@@ -42,13 +46,13 @@ describe("menu", () => {
   it("opens its list on press, and runs the chosen item's on= for its own copy", () => {
     const ui = render(SPEC, { width: 600 });
     ui.press(firstMenu(ui));
-    expect(items(ui)).toEqual(["item:0", "item:1", "item:3"]); // Archive is disabled
-    pressItem(ui, "item:0");
+    expect(items(ui)).toEqual(["Mark shipped", "Star", "Delete"]); // Archive is disabled
+    pressItem(ui, "Mark shipped");
     expect(ui.popup).toBeNull();
     const orders = ui.state.orders as Array<{ status: string }>;
     expect(orders.map((o) => o.status)).toEqual(["Shipped", "Open"]);
     ui.press(firstMenu(ui));
-    pressItem(ui, "item:3");
+    pressItem(ui, "Delete");
     expect(ui.state.last).toBe("NW-2041");
     expect(ui.emitted.at(-1)).toEqual({ name: "delete", value: "NW-2041" });
   });
@@ -58,36 +62,88 @@ describe("menu", () => {
     ui.tab();
     expect(ui.focused?.type).toBe("menu");
     ui.key("ArrowDown");
-    expect(ui.popup?.state.highlight).toBe(0);
+    expect(highlighted(ui)).toBe("Mark shipped");
     ui.key("ArrowDown");
     ui.key("ArrowDown"); // skips the disabled Archive
-    expect(ui.popup?.state.highlight).toBe(3);
+    expect(highlighted(ui)).toBe("Delete");
     ui.key("ArrowDown"); // goes round
-    expect(ui.popup?.state.highlight).toBe(0);
+    expect(highlighted(ui)).toBe("Mark shipped");
     ui.key("End");
-    expect(ui.popup?.state.highlight).toBe(3);
+    expect(highlighted(ui)).toBe("Delete");
     ui.key("s"); // the next item starting with s
-    expect(ui.popup?.state.highlight).toBe(1);
+    expect(highlighted(ui)).toBe("Star");
     ui.key("Enter");
     expect((ui.state.orders as Array<{ stars: number }>)[0]!.stars).toBe(1);
     expect(ui.focused?.type).toBe("menu");
     ui.key("ArrowUp"); // opens on the last item
-    expect(ui.popup?.state.highlight).toBe(3);
+    expect(highlighted(ui)).toBe("Delete");
     ui.key("Escape");
     expect(ui.popup).toBeNull();
     expect(ui.focused?.type).toBe("menu");
   });
 
-  it("is a menu button to screen readers, its list a menu of menuitems while open", () => {
+  it("is a menu button to screen readers; open, the focused node is the menu, pointing at the highlighted item", () => {
     const ui = render(SPEC, { width: 600 });
     let tree = JSON.stringify(ui.accessibility({ full: true }));
     expect(tree).toContain('"role":"button","name":"Actions for NW-2041"');
     expect(tree).toContain('"hasPopup":"menu"');
-    ui.press(firstMenu(ui));
-    tree = JSON.stringify(ui.accessibility({ full: true }));
-    expect(tree).toContain('"role":"menu"');
+    ui.tab();
+    ui.key("ArrowDown");
+    const full = ui.accessibility({ full: true });
+    const find = (n: typeof full, role: string): typeof full | undefined => (n.role === role ? n : n.children.map((k) => find(k, role)).find(Boolean));
+    const open = find(full, "menu")!;
+    expect(open.name).toBe("Actions for NW-2041");
+    expect(open.focusable).toBe(true);
+    expect(open.activeDescendant).toBe(open.children[0]!.key);
+    tree = JSON.stringify(full);
     expect(tree).toContain('"role":"menuitem","name":"Mark shipped"');
     expect(tree).toMatch(/"role":"menuitem","name":"Archive"[^}]*"disabled":true/);
+  });
+
+  it("highlights the item a screen reader moves onto, so Enter chooses it", () => {
+    const ui = render(SPEC, { width: 600 });
+    ui.tab();
+    ui.key("ArrowDown");
+    const del = ui.popup!.regions.find((r) => labelOf(ui, String(r.detail).slice(5)) === "Delete")!;
+    ui.mirror.focus(`${ui.findAll("menu")[0]!.node.id}|${String(del.detail)}`);
+    expect(highlighted(ui)).toBe("Delete");
+    ui.key("Enter");
+    expect(ui.state.last).toBe("NW-2041");
+  });
+
+  it("keeps the highlight on the same item when the list changes while open", () => {
+    const ui = render(`state show=false
+menu "Actions"
+  menu-item "Edit" on=emit:edit
+  menu-item "Star" if={show} on=emit:star
+  menu-item "Delete" on=emit:delete
+`, { width: 600 });
+    ui.tab();
+    ui.key("ArrowUp");
+    expect(highlighted(ui)).toBe("Delete");
+    ui.set("show", true);
+    ui.key("Enter");
+    expect(ui.emitted.map((e) => e.name)).toEqual(["delete"]);
+  });
+
+  it("sits at the start of its room with words, and at the end as a ⋯ (align= changes it)", () => {
+    const ui = render(`row
+  menu "Actions"
+    menu-item "Edit" on=emit:edit
+  button "Save" on=emit:save
+row
+  text "Order"
+  menu
+    menu-item "Edit" on=emit:edit
+row
+  text "Orders"
+  menu "Export" align=end
+    menu-item "CSV" on=emit:csv
+`, { width: 600 });
+    const [words, dots, end] = ui.findAll("menu").map((m) => m.box!);
+    expect(words!.x).toBeLessThan(30);
+    expect(dots!.x + dots!.w).toBeGreaterThan(560);
+    expect(end!.x + end!.w).toBeGreaterThan(560);
   });
 
   it("can't be opened when disabled or when no item can be chosen", () => {

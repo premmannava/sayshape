@@ -225,6 +225,8 @@ export interface PopupDef {
   key(ctx: PopupContext, key: string): boolean;
   /** The wheel turned over it, by dy pixels. */
   wheel?(ctx: PopupContext, dy: number): void;
+  /** A screen reader moved onto one of its regions (by its detail): highlight it, so Enter chooses it. */
+  point?(ctx: PopupContext, detail: unknown): void;
 }
 
 export interface DragContext extends PressContext {

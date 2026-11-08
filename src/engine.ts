@@ -641,6 +641,12 @@ export class SayShape {
         const t = this.targetByKey(key);
         if (!t) return;
         this.keyboardMode = true;
+        // An option or item in an open popup: focus stays on its owner, and the popup highlights it.
+        if (t.layer === "popup") {
+          if (this.popup) this.registry.get(this.popup.owner.node.type)?.popup?.point?.(this.popupContext(this.popup.owner), t.detail);
+          this.invalidate("paint");
+          return;
+        }
         if (this.registry.get(t.node.type)?.editor) this.beginEdit(t);
         else this.focus = t;
         this.invalidate("paint");

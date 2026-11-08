@@ -1571,6 +1571,7 @@ A button that opens a short list of actions, for what can be done to one item (e
 | `label` | string | What a screen reader calls a ⋯ button with no text, e.g. label="Order actions". Default: More actions. |
 | `variant` | `secondary` / `primary` | secondary (outlined) or primary (filled). |
 | `disabled` | condition | When true, it can't be opened. |
+| `align` | `start` / `end` | Where it sits in its room: start, or end (the right). Default: end for a ⋯ menu, start for one with words. |
 
 Children: `menu-item`.
 

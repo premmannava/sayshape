@@ -212,13 +212,21 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
       expect(ui.focused?.type, `Tab reaches the ${listParent}`).toBe(listParent);
       ui.key("ArrowDown");
       expect(ui.popup?.owner.type, `the arrow key opens the ${listParent}'s list`).toBe(listParent);
+      expect(ALL.find((d) => d.type === listParent)?.popup, `${listParent} draws its items in a popup`).toBeDefined();
       const regions = ui.popup!.regions;
       expect(regions.length, "a region per item in the open list").toBe(items);
+      // Each item is a named node a screen reader can reach.
+      const keys = new Map<string, AccessibleNode>();
+      const walk = (n: AccessibleNode) => { keys.set(n.key, n); n.children.forEach(walk); };
+      walk(ui.accessibility({ full: true }));
+      for (const r of regions) expect(keys.get(accessibleKey(r.box.node, r.detail))?.name?.trim(), `item ${String(r.detail)}`).toBeTruthy();
       const first = ui.findAll(def.type)[0]!;
       const on = first.node.props.on ?? "";
       ui.key("Enter");
       const emitted = /^emit:(\w+)/.exec(on)?.[1];
       if (emitted) expect(ui.emitted.map((e) => e.name)).toContain(emitted);
+      expect(ui.popup, "choosing closes the list").toBeNull();
+      expect(ui.focused?.type, `focus goes back to the ${listParent}`).toBe(listParent);
       ui.destroy();
     });
   }

@@ -527,7 +527,7 @@ dialog "Cancel your Pro plan?" bind=asking size=sm
 card
   row align=center
     text "Today's orders" style=title
-    menu "Export"
+    menu "Export" align=end
       menu-item "Copy as CSV" icon=copy on=emit:export:csv
       menu-item "Download PDF" icon=download on=emit:export:pdf
       menu-item "Email to finance" icon=mail on=emit:export:email

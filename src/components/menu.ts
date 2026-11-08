@@ -29,7 +29,6 @@ const PAD = 6;
 const ROW_PAD = 12;
 const ICON = 18;
 const TONES = ["default", "bad"] as const;
-const BUTTON = "menu";
 
 interface Item {
   node: SayShapeNode;
@@ -65,7 +64,20 @@ function readItems(node: SayShapeNode, kids: SayShapeNode[], props: (n: SayShape
   return { items, more: Math.max(0, all.length - MAX_MENU_ITEMS) };
 }
 
-const hiOf = (state: PopupState | Readonly<PopupState> | null): number => (typeof state?.highlight === "number" ? state.highlight : -1);
+/**
+ * The highlighted item's position now. The highlight is kept as the item's
+ * element id, not its position, so it stays on the same item when the list
+ * changes while open (an item shown by if=, items from each); an item that's
+ * gone, or can't be chosen any more, leaves nothing highlighted.
+ */
+function hiOf(items: Item[], state: PopupState | Readonly<PopupState> | null): number {
+  const id = state?.highlight;
+  const i = typeof id === "string" ? items.findIndex((it) => it.node.id === id) : -1;
+  return usable(items[i]) ? i : -1;
+}
+
+const keyOf = (it: Item) => `item:${it.node.id}`;
+const idOfDetail = (d: unknown) => (typeof d === "string" && d.startsWith("item:") ? d.slice(5) : null);
 
 /** The next usable item from i in direction dir, wrapping round. */
 function next(items: Item[], i: number, dir: 1 | -1): number {
@@ -79,6 +91,9 @@ function next(items: Item[], i: number, dir: 1 | -1): number {
 
 const first = (items: Item[]) => next(items, -1, 1);
 const last = (items: Item[]) => next(items, items.length, -1);
+const idAt = (items: Item[], i: number) => items[i]?.node.id ?? null;
+/** Where the menu sits in its room: the ⋯ at the end, a menu with words at the start like a button, unless align= says. */
+const alignOf = (p: PropReader) => p.oneOf("align", ["start", "end"], p.text() ? "start" : "end");
 
 /** Close the list, then run the item's on= as written on its own line. */
 function choose(ctx: PopupContext, item: Item): void {
@@ -98,6 +113,7 @@ export const menu: ComponentDef = {
     label: { type: "string", description: "What a screen reader calls a ⋯ button with no text, e.g. label=\"Order actions\". Default: More actions." },
     variant: { type: "enum", values: ["secondary", "primary"], default: "secondary", description: "secondary (outlined) or primary (filled)." },
     disabled: { type: "condition", description: "When true, it can't be opened." },
+    align: { type: "enum", values: ["start", "end"], description: "Where it sits in its room: start, or end (the right). Default: end for a ⋯ menu, start for one with words." },
   },
   children: ["menu-item"],
   example: `menu "Actions"
@@ -112,10 +128,10 @@ export const menu: ComponentDef = {
     box.h = ctx.theme.control.height;
     const text = p.text();
     const want = text ? Math.ceil(textWidth(ctx, text, 600, 14)) + 2 * 14 + 18 : ctx.theme.control.height;
-    // A menu sits at the end of the room it's given: the trailing ⋯ of a row, or the
-    // actions beside a title.
+    // A ⋯ sits at the end of the room it's given (the trailing ⋯ of a row); one with words at
+    // the start, like a button, unless align= says.
     const w = Math.min(box.w, want);
-    box.x += box.w - w;
+    if (alignOf(p) === "end") box.x += box.w - w;
     box.w = w;
   },
   minWidth(node, ctx) {
@@ -183,35 +199,26 @@ export const menu: ComponentDef = {
   press(ctx) {
     if (ctx.popupOpen) return;
     // From the pointer nothing is highlighted yet; the keys highlight as they move.
-    ctx.openPopup({ highlight: -1 });
+    ctx.openPopup({ highlight: null });
   },
   key(ctx, key) {
     if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "Enter" && key !== " ") return false;
     const items = dataOf(ctx.target.box).items;
     // A menu opened from the keyboard highlights its first item (ArrowUp: its last).
-    ctx.openPopup({ highlight: key === "ArrowUp" ? last(items) : first(items) });
+    ctx.openPopup({ highlight: idAt(items, key === "ArrowUp" ? last(items) : first(items)) });
     return true;
   },
   semantics(box, ctx) {
     const p = ctx.props(box.node);
     const { items } = dataOf(box);
     const open = ctx.popupOpen;
-    const hi = items[hiOf(ctx.popup)];
-    const parts: PartSemantics[] = [{
-      detail: undefined,
-      role: "button",
-      name: name(p),
-      expanded: open,
-      hasPopup: "menu",
-      disabled: p.cond("disabled") || !items.some(usable) || undefined,
-      controls: open ? "list" : undefined,
-      active: open && hi ? `item:${items.indexOf(hi)}` : undefined,
-    }];
-    if (open) {
-      parts.push({ detail: "list", role: "menu", name: name(p) });
-      items.forEach((it, i) => parts.push({ detail: `item:${i}`, within: "list", role: "menuitem", name: it.label, disabled: it.disabled || undefined }));
-    }
-    return { role: "group", detail: BUTTON, parts };
+    const hi = items[hiOf(items, ctx.popup)];
+    const disabled = p.cond("disabled") || !items.some(usable) || undefined;
+    // Closed, a menu button. Open, the same node (it keeps focus) is the menu itself, pointing at
+    // the highlighted item: aria-activedescendant works on a menu, not on a button.
+    if (!open) return { role: "button", name: name(p), expanded: false, hasPopup: "menu", disabled };
+    const parts: PartSemantics[] = items.map((it) => ({ detail: keyOf(it), role: "menuitem", name: it.label, disabled: it.disabled || undefined }));
+    return { role: "menu", name: name(p), parts, ...(hi ? { active: keyOf(hi) } : {}) };
   },
   popup: {
     measure(owner, ctx) {
@@ -220,20 +227,21 @@ export const menu: ComponentDef = {
       const widest = Math.max(...items.map((it) => textWidth(ctx, it.label, 500, 14) + (it.icon ? ICON + 10 : 0)));
       const w = Math.min(320, Math.max(180, Math.ceil(widest) + 2 * ROW_PAD + 2 * PAD));
       const h = items.length * ROW_H + 2 * PAD;
-      return { w, h, minH: Math.min(h, 3 * ROW_H + 2 * PAD), ownWidth: true, alignEnd: true };
+      // Its list lines up with the button's right edge when the button is on the right.
+      return { w, h, minH: Math.min(h, 3 * ROW_H + 2 * PAD), ownWidth: true, alignEnd: owner.x + owner.w / 2 > ctx.screenWidth() / 2 };
     },
     paint(owner, area, ctx, state) {
       const { items } = dataOf(owner);
       const { g, theme } = ctx;
       const c = theme.colors;
-      const hi = hiOf(state);
+      const hi = hiOf(items, state);
       g.textAlign = "left";
       g.textBaseline = "middle";
       items.forEach((it, i) => {
         const y = area.y + PAD + i * ROW_H;
         if (y + ROW_H > area.y + area.h) return;
         const row: Box = { node: owner.node, x: area.x + PAD, y, w: area.w - 2 * PAD, h: ROW_H, children: [], data: owner.data };
-        const detail = `item:${i}`;
+        const detail = keyOf(it);
         if (!it.disabled) ctx.addHit(row, { detail, focusable: false });
         const hover = !it.disabled && ctx.isHovered(owner.node, detail);
         if (i === hi || hover) {
@@ -251,16 +259,19 @@ export const menu: ComponentDef = {
         g.fillText(fitText(g, it.label, row.x + row.w - ROW_PAD - x), x, y + ROW_H / 2 + 1);
       });
     },
+    point(ctx, detail) {
+      const id = idOfDetail(detail);
+      if (id && dataOf(ctx.target.box).items.some((x) => x.node.id === id && usable(x))) ctx.popup.highlight = id;
+    },
     press(ctx) {
-      const d = ctx.target.detail;
-      if (typeof d !== "string" || !d.startsWith("item:")) return;
-      const it = dataOf(ctx.target.box).items[Number(d.slice(5))];
+      const id = idOfDetail(ctx.target.detail);
+      const it = dataOf(ctx.target.box).items.find((x) => x.node.id === id);
       if (usable(it)) choose(ctx, it);
     },
     key(ctx, key) {
       const items = dataOf(ctx.target.box).items;
-      const hi = hiOf(ctx.popup);
-      const go = (i: number) => { ctx.popup.highlight = i; return true; };
+      const hi = hiOf(items, ctx.popup);
+      const go = (i: number) => { ctx.popup.highlight = idAt(items, i); return true; };
       switch (key) {
         case "ArrowDown": return go(next(items, hi, 1));
         case "ArrowUp": return go(next(items, hi < 0 ? items.length : hi, -1));
@@ -277,7 +288,7 @@ export const menu: ComponentDef = {
           if (key.length !== 1 || !/\S/.test(key)) return false;
           const n = items.length;
           for (let k = 1; k <= n; k++) {
-            const j = (hi + k + n) % n;
+            const j = (((hi + k) % n) + n) % n;
             const it = items[j];
             if (usable(it) && it.label.toLowerCase().startsWith(key.toLowerCase())) return go(j);
           }

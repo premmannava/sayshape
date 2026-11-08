@@ -123,7 +123,7 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
 }
 
 function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: readonly HitRegion[]): AccessibleNode {
-  const { parts, detail, group: _group, contentAfter: _after, ...own } = s;
+  const { parts, detail, group: _group, contentAfter: _after, active, ...own } = s;
   const whole = regions.find((r) => sameDetail(r.detail, detail));
   const out: AccessibleNode = {
     ...clean(own),
@@ -134,6 +134,7 @@ function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: read
     children: [],
   };
   if (detail !== undefined) out.detail = detail;
+  if (active !== undefined) out.activeDescendant = accessibleKey(node, active);
   // Parts go inside the element, or inside another part they name with within.
   const made: Array<{ detail: unknown; node: AccessibleNode; within: unknown }> = [];
   for (const part of parts ?? []) {
