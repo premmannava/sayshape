@@ -443,6 +443,26 @@ state edges=[{from: 4, to: 5, label: "Yes"}, {from: 4, to: 3, label: "No, fix"}]
 flow "Customer onboarding" items=steps edges=edges direction=right
 `,
   },
+  blackjackDealer: {
+    label: "Cards (tile)",
+    prompt: "Show which dealer up-cards are weak and which are strong in blackjack.",
+    spec: `row gap=40
+  column gap=10
+    text "Dealer shows 2–6" align=center
+    row gap=8 wrap=false
+      tile "4" icon=club
+      tile "5" icon=club
+      tile "6" icon=club
+    text "Generally weak" tone=good align=center
+  column gap=10
+    text "Dealer shows 7–Ace" align=center
+    row gap=8 wrap=false
+      tile "9" icon=spade
+      tile "10" icon=spade
+      tile "A" icon=spade
+    text "Generally strong" tone=bad align=center
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

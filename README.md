@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 55 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 56 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -505,7 +505,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 | Category | Components |
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel) |
-| Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon) |
+| Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon), [`tile`](#tile) |
 | Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
@@ -852,7 +852,7 @@ A small symbol on its own, like a status mark or a weather sign. To start a line
 
 | Prop | Type | Description |
 |---|---|---|
-| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, bell, search, filter, download, copy, share, link, sliders. |
+| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `size` | `sm` / `md` / `lg` | sm, md or lg. |
 | `label` | string | What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration. |
@@ -1481,6 +1481,32 @@ Boxes joined by arrows, laid out automatically from a list of steps and where ea
 state picked="" steps=[{id: "in", label: "Claim filed", kind: "start", next: "check"}, {id: "check", label: "Under $5,000?", kind: "decision", next: "auto,review"}, {id: "auto", label: "Approve automatically", next: "pay"}, {id: "review", label: "Adjuster review", next: "pay"}, {id: "pay", label: "Pay out", kind: "end"}]
 state edges=[{from: "check", to: "auto", label: "Yes"}, {from: "check", to: "review", label: "No"}]
 flow "Claim approval" items=steps edges=edges bind=picked
+```
+
+### `tile`
+
+A small fixed-size face with a value, an optional icon and a detail line, for playing cards, seats, dice, keys or lottery numbers. Several in a row keep their size and wrap.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The value on its face, e.g. A, 10 or B4. Keep it short. |
+| `icon` | string | An icon on its face, by name from icon's list, e.g. icon=club. The suits are club, spade, heart and diamond. |
+| `shape` | `card` / `square` | card (portrait, like a playing card) or square (a seat, a key, a die). |
+| `size` | `sm` / `md` / `lg` | sm, md or lg. |
+| `detail` | string | A small line under the value, e.g. a price or an atomic weight. Keep it to a few characters at size=sm. |
+| `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color of the value and icon: default, muted, accent, good, warn or bad (red suits use bad). |
+| `variant` | `raised` / `outline` | raised (a lifted face) or outline. |
+| `selected` | condition | Expression; when true the tile is marked as chosen, e.g. selected={s.picked}. |
+| `disabled` | condition | Expression; when true it's greyed out and can't be pressed, e.g. a seat that's taken. |
+| `on` | action | Actions to run when pressed, e.g. emit:changed. Separate several with ; |
+| `label` | string | What screen readers and Copy text say for it, e.g. label="Seat B4". Default: its value (with its suit, as in Q of hearts) and detail. |
+
+```
+row gap=8
+  tile "4" icon=club label="4 of clubs"
+  tile "Q" icon=heart tone=bad label="Queen of hearts"
+  tile "A" icon=spade label="Ace of spades"
+  tile "B4" shape=square detail="$14" selected=true on=emit:seat
 ```
 
 ### `map`
