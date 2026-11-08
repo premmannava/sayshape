@@ -59,6 +59,13 @@ chart "Revenue by day" items=days x=day y=sales format=money
     expect(text).toContain("Tue\t$4,100");
   });
 
+  it("copies a schedule as a row per block: date, time, what and lane", () => {
+    const text = copy(`state b=[{room: "Atlas", start: "09:00", end: "10:00", title: "Sales sync"}, {room: "Harbor", start: "08:30", end: "09:15", title: "Claims standup"}]
+schedule "Rooms" items=b rows=room view=day
+`);
+    expect(text.split("\n")).toEqual(["Rooms", "Time\tWhat\tRoom", "08:30–09:15\tClaims standup\tHarbor", "09:00–10:00\tSales sync\tAtlas"]);
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password

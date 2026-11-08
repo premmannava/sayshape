@@ -16,6 +16,7 @@ import { carousel } from "./carousel";
 import { compare, compareRow } from "./compare";
 import { meter } from "./meter";
 import { detail, details } from "./details";
+import { schedule } from "./schedule";
 
 export {
   column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
@@ -24,6 +25,7 @@ export {
   button, link, check, switchToggle, radio, select, datePicker, stepper, slider, input, segmented,
   screen, tabs, tab, breadcrumb, pagination,
   progress, skeleton, empty,
+  schedule,
 };
 
 /** The built-in components (everything except the map, which is a separate entry). */
@@ -34,4 +36,5 @@ export const coreComponents: ComponentDef[] = [
   button, link, check, switchToggle, radio, select, datePicker, stepper, slider, input, segmented,
   screen, tabs, tab, breadcrumb, pagination,
   progress, skeleton, empty,
+  schedule,
 ];

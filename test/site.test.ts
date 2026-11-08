@@ -72,6 +72,16 @@ describe("gallery examples", () => {
     expect(shown(ui)).toContain("$25.80");
   });
 
+  it("launch plan: a bar per task by team, and pressing one shows its details", () => {
+    const ui = render(exampleById("launch-plan")!.spec, { width: 1024, today: "2026-10-21" });
+    expect(shown(ui)).toContain("Beta with 12 customers");
+    const site = ui.hits.find((h) => h.box.node.type === "schedule" && h.detail === "item:2")!;
+    ui.click(site.box.x + site.box.w / 2, site.box.y + site.box.h / 2);
+    expect(ui.state.picked).toBe(3);
+    expect(shown(ui)).toContain("Luis Ortega");
+    expect(shown(ui)).toContain("At risk");
+  });
+
   it("grocery checklist: check, hide, add, remove and clear", () => {
     const ui = render(ex("grocery-checklist"));
     expect(shown(ui)).toContain("2 of 5 items in the cart");

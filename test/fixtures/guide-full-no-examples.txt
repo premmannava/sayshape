@@ -102,7 +102,7 @@ EVERY ELEMENT ACCEPTS
 ELEMENTS AT A GLANCE
 - layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel
 - content: text, image, code, badge, avatar, callout, icon
-- data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, map, pin
+- data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
 - navigation: screen, tabs, tab, breadcrumb, pagination
 - feedback: progress, skeleton, empty
@@ -430,6 +430,20 @@ ELEMENTS
     action=<string>  Label for a button under the message.
     on=<action>  Actions to run when the button is pressed, e.g. emit:changed. Separate several with ;
 
+  schedule "<text>"  — Blocks laid out on time from a list: a week of shifts, the day's room bookings, an itinerary by hour (times as HH:MM), or a project plan across dates (view=timeline, dates as YYYY-MM-DD). Overlapping blocks sit side by side; it scrolls sideways when wide.
+    "<text>"  The title above it, e.g. Support rota.
+    items=<expression, required>  The list of records, e.g. items=shifts. At most 200.
+    view=<day|week|timeline>  day: one day down a time axis, a column per rows= value. week: a column per day, at most 7. timeline: dates across, a bar per item, with a Today line.
+    date=<name>  Field with each item's day as YYYY-MM-DD. In a timeline, used for an item with no start date (a one-day bar).
+    start=<name>  Field with the start: a time as HH:MM (09:30) in day and week, a date as YYYY-MM-DD in a timeline.
+    end=<name>  Field with the end, written the same way. Missing: an hour after the start, or the same day in a timeline.
+    label=<name>  Field with what each block says, e.g. label=name.
+    rows=<name>  Field that splits blocks into lanes, e.g. rows=room: a column each in day view, a row each in a timeline; shown on the block in week view.
+    tone=<name>  Field that colors each block: a value good, warn, bad, accent or muted uses that tone; other values (a team, a type) each get their own color, with a key.
+    key=<name>  The field that identifies each item, e.g. key=id. Needed for bind=.
+    bind=<state>  State that holds the selected item's key. Pressing a block sets it.
+    on=<action>  Actions to run after a block is pressed, with bind= already set, e.g. emit:changed. Separate several with ;
+
   map  — Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
     kind=<markers|choropleth|bubble>  markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows.
     items=<expression>  Data rows for kind=choropleth or kind=bubble, e.g. items=sales. Do not embed individual rows in map specs.
@@ -469,8 +483,9 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - one number across two dimensions, such as retention by cohort or orders by weekday and hour: chart kind=heatmap rows=day x=hour y=orders
 - one score against its range, such as a health score: meter kind=gauge bands="60,85"
 - many rows with several columns: table items=rows holding table-column field=name
-- 2 to 4 options side by side, such as plans or products: compare items=plans name=name holding compare-row field=price best=low
-- one record's fields, such as an order, a customer or a flight: details "Order #1042" holding detail "Status" value="Shipped"
+- 2 to 4 options side by side, such as plans or products: compare holding compare-row best=low
+- one record's fields, such as an order, a customer or a flight: details holding detail
+- shifts, bookings or a project plan (Gantt) on a calendar: schedule view=week|day|timeline
 - places on a map: map holding pin
 - steps in order with their status, such as a delivery: timeline holding step status=done|current|upcoming
 - cards to page through, such as photos: carousel bind=page
