@@ -102,7 +102,7 @@ EVERY ELEMENT ACCEPTS
 ELEMENTS AT A GLANCE
 - layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel
 - content: text, image, code, badge, avatar, callout, icon
-- data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, map, pin
+- data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
 - navigation: screen, tabs, tab, breadcrumb, pagination
 - feedback: progress, skeleton, empty
@@ -670,6 +670,22 @@ ELEMENTS
       state picked="" people=[{id: "e1", name: "Ana Ruiz", role: "COO"}, {id: "e2", name: "Ben Okafor", role: "Head of Claims", manager: "e1"}, {id: "e3", name: "Chloe Park", role: "Head of Operations", manager: "e1"}, {id: "e4", name: "Dev Malhotra", role: "Claims lead", manager: "e2"}]
       tree "Northwind Mutual" items=people parent=manager label=name detail=role bind=picked
 
+  flow "<text>"  — Boxes joined by arrows, laid out automatically from a list of steps and where each leads: an approval process, a customer journey, a decision tree. Never give positions.
+    "<text>"  The title above the flow, e.g. Claim approval.
+    items=<expression, required>  The list of steps, e.g. items=steps. At most 40.
+    id=<name>  The field that identifies each step.
+    label=<name>  The field with what each box says.
+    next=<name>  The field with where a step leads: one id, a list of ids, or ids separated by commas. Leave it empty on the last step.
+    kind=<name>  The field with each step's shape: step (a box), decision (a diamond), start or end (a pill).
+    edges=<expression>  Labels for arrows, as a list of {from, to, label}, e.g. the Yes and No out of a decision.
+    direction=<down|right>  Which way it runs: down or right. When right doesn't fit its space, it runs down instead.
+    bind=<state>  State that holds the selected step's id. Pressing a step sets it.
+    on=<action>  Actions to run after a step is selected, with bind= already set, e.g. emit:changed. Separate several with ;
+    example:
+      state picked="" steps=[{id: "in", label: "Claim filed", kind: "start", next: "check"}, {id: "check", label: "Under $5,000?", kind: "decision", next: "auto,review"}, {id: "auto", label: "Approve automatically", next: "pay"}, {id: "review", label: "Adjuster review", next: "pay"}, {id: "pay", label: "Pay out", kind: "end"}]
+      state edges=[{from: "check", to: "auto", label: "Yes"}, {from: "check", to: "review", label: "No"}]
+      flow "Claim approval" items=steps edges=edges bind=picked
+
   map  — Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
     kind=<markers|choropleth|bubble>  markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows.
     items=<expression>  Data rows for kind=choropleth or kind=bubble, e.g. items=sales. Do not embed individual rows in map specs.
@@ -720,6 +736,7 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - shifts, bookings or a project plan (Gantt) on a calendar: schedule view=week|day|timeline
 - a pipeline or task board by stage: board stage=status move=true
 - a nested breakdown, or an org chart (kind=org): tree items=rows parent=parent
+- a process, journey or decision tree: flow items=steps next=next kind=kind
 - places on a map: map holding pin
 - steps in order with their status, such as a delivery: timeline holding step status=done|current|upcoming
 - cards to page through, such as photos: carousel bind=page

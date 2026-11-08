@@ -435,6 +435,14 @@ tree "Northwind Mutual" items=people parent=manager label=name detail=role kind=
 tree "Budget by department" items=lines label=name value=amount format=money open=1
 `,
   },
+  onboardingFlow: {
+    label: "Onboarding flow",
+    prompt: "Show our customer onboarding steps as a flow.",
+    spec: `state steps=[{id: 1, label: "Contract signed", kind: "start", next: 2}, {id: 2, label: "Kickoff call", next: 3}, {id: 3, label: "Data import", next: 4}, {id: 4, label: "Data checks pass?", kind: "decision", next: "5,3"}, {id: 5, label: "Team training", next: 6}, {id: 6, label: "Live", kind: "end"}]
+state edges=[{from: 4, to: 5, label: "Yes"}, {from: 4, to: 3, label: "No, fix"}]
+flow "Customer onboarding" items=steps edges=edges direction=right
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

@@ -91,6 +91,16 @@ describe("gallery examples", () => {
     expect(shown(ui)).toContain("Ana Ruiz");
   });
 
+  it("claim approval: a box per step with labelled arrows, and pressing one shows it", () => {
+    const ui = render(exampleById("claim-approval")!.spec, { width: 1024 });
+    expect(shown(ui)).toContain("Fraud signals?");
+    expect(shown(ui)).toContain("Cleared");
+    const r = ui.hits.find((h) => h.box.node.type === "flow" && h.detail === "step:approve")!;
+    ui.click(r.box.x + r.box.w / 2, r.box.y + r.box.h / 2);
+    expect(ui.state.picked).toBe("approve");
+    expect(shown(ui)).toContain("Owned by the claims team");
+  });
+
   it("launch plan: a bar per task by team, and pressing one shows its details", () => {
     const ui = render(exampleById("launch-plan")!.spec, { width: 1024, today: "2026-10-21" });
     expect(shown(ui)).toContain("Beta with 12 customers");

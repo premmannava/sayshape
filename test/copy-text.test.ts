@@ -80,6 +80,14 @@ tree "Budget" items=p open=1
     expect(text.split("\n")).toEqual(["Budget", "Operations", "  Fleet", "Claims"]);
   });
 
+  it("copies a flow as one line per step, saying where it leads", () => {
+    const text = copy(`state s=[{id: "a", label: "Request", kind: "start", next: "b"}, {id: "b", label: "Approved?", kind: "decision", next: "c,a"}, {id: "c", label: "Done", kind: "end"}]
+state e=[{from: "b", to: "c", label: "Yes"}, {from: "b", to: "a", label: "No"}]
+flow "Purchase" items=s edges=e
+`);
+    expect(text.split("\n")).toEqual(["Purchase", "- Request leads to Approved?", "- Approved? leads to Done (Yes), Request (No)", "- Done"]);
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password

@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 54 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 55 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -506,7 +506,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty) |
@@ -1456,6 +1456,29 @@ A hierarchy from a flat list where each record names its parent: an org chart, f
 ```
 state picked="" people=[{id: "e1", name: "Ana Ruiz", role: "COO"}, {id: "e2", name: "Ben Okafor", role: "Head of Claims", manager: "e1"}, {id: "e3", name: "Chloe Park", role: "Head of Operations", manager: "e1"}, {id: "e4", name: "Dev Malhotra", role: "Claims lead", manager: "e2"}]
 tree "Northwind Mutual" items=people parent=manager label=name detail=role bind=picked
+```
+
+### `flow`
+
+Boxes joined by arrows, laid out automatically from a list of steps and where each leads: an approval process, a customer journey, a decision tree. Never give positions.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The title above the flow, e.g. Claim approval. |
+| `items` | expression, required | The list of steps, e.g. items=steps. At most 40. |
+| `id` | name | The field that identifies each step. |
+| `label` | name | The field with what each box says. |
+| `next` | name | The field with where a step leads: one id, a list of ids, or ids separated by commas. Leave it empty on the last step. |
+| `kind` | name | The field with each step's shape: step (a box), decision (a diamond), start or end (a pill). |
+| `edges` | expression | Labels for arrows, as a list of {from, to, label}, e.g. the Yes and No out of a decision. |
+| `direction` | `down` / `right` | Which way it runs: down or right. When right doesn't fit its space, it runs down instead. |
+| `bind` | state | State that holds the selected step's id. Pressing a step sets it. |
+| `on` | action | Actions to run after a step is selected, with bind= already set, e.g. emit:changed. Separate several with ; |
+
+```
+state picked="" steps=[{id: "in", label: "Claim filed", kind: "start", next: "check"}, {id: "check", label: "Under $5,000?", kind: "decision", next: "auto,review"}, {id: "auto", label: "Approve automatically", next: "pay"}, {id: "review", label: "Adjuster review", next: "pay"}, {id: "pay", label: "Pay out", kind: "end"}]
+state edges=[{from: "check", to: "auto", label: "Yes"}, {from: "check", to: "review", label: "No"}]
+flow "Claim approval" items=steps edges=edges bind=picked
 ```
 
 ### `map`
