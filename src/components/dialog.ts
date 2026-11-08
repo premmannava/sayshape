@@ -47,7 +47,7 @@ function close(ctx: PressContext): void {
 export const dialog: ComponentDef = {
   type: "dialog",
   category: "feedback",
-  description: "A panel over the screen for something that needs an answer or attention first: confirm a delete, a short form, one item's details. It opens when bind= is true; its × button, Escape and a press outside it close it.",
+  description: "A panel over the screen for something that needs an answer or attention first: confirm a delete, a short form, one item's details. It opens when bind= is true, so start that state false and open it from a button, unless it should greet people as the screen opens; its × button, Escape and a press outside it close it.",
   text: { description: "The title at its top, e.g. Delete order?" },
   props: {
     bind: { type: "state", required: true, description: "A true/false state: true shows it, e.g. bind=confirm. Open it with on=set:confirm:true; close it from a button inside with on=set:confirm:false." },
@@ -70,11 +70,12 @@ dialog "Delete order NW-2041?" bind=confirm size=sm
   layout(box, ctx) {
     const t = ctx.theme;
     const pad = t.space.lg;
-    const closeSize = t.control.height - 8;
+    // The × is a full control's height to press, so it's easy to hit on a phone.
+    const closeSize = t.control.height;
     const font = themeFont(t, 600, t.text.title);
     const titleLH = Math.round(t.text.title * 1.3);
-    const title = ctx.props(box.node).text() ? wrapText(ctx.props(box.node).text(), Math.max(0, box.w - 2 * pad - closeSize - t.space.sm), font, ctx.measure) : [];
-    let y = box.y + pad + Math.max(title.length * titleLH, closeSize) + t.space.md;
+    const title = ctx.props(box.node).text() ? wrapText(ctx.props(box.node).text(), Math.max(0, box.w - 2 * pad - closeSize + Math.round(closeSize / 4) - t.space.sm), font, ctx.measure) : [];
+    let y = box.y + pad + Math.max(title.length * titleLH, closeSize - Math.round(closeSize / 4)) + t.space.md;
     const kids = ctx.visibleChildren(box.node);
     kids.forEach((k, i) => {
       if (i) y += t.space.md;
@@ -110,10 +111,12 @@ dialog "Delete order NW-2041?" bind=confirm size=sm
     g.textBaseline = "middle";
     d.title.forEach((line, i) => g.fillText(line, box.x + d.pad, box.y + d.pad + i * d.titleLH + d.titleLH / 2));
     // The × in the top corner.
-    const cx = box.x + box.w - d.pad - d.closeSize + 8, cy = box.y + d.pad - 6;
+    // Its pressable square overhangs the padding a little, so the × itself lines up with the text.
+    const nudge = Math.round(d.closeSize / 4);
+    const cx = box.x + box.w - d.pad - d.closeSize + nudge, cy = box.y + d.pad - nudge;
     const hover = ctx.isHovered(box.node, CLOSE);
     if (hover) { ctx.roundRect(cx, cy, d.closeSize, d.closeSize, theme.radius.md); g.fillStyle = c.line; g.fill(); }
-    const icon = Math.round(d.closeSize * 0.55);
+    const icon = Math.round(d.closeSize * 0.45);
     drawIcon(g, "x", cx + (d.closeSize - icon) / 2, cy + (d.closeSize - icon) / 2, icon, c.muted);
     ctx.addHit({ node: box.node, x: cx, y: cy, w: d.closeSize, h: d.closeSize, children: [], data: box.data }, { detail: CLOSE });
   },

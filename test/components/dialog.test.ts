@@ -153,4 +153,112 @@ each items=items as=it
     expect((ui.state.items as Array<{ open: boolean }>)[1]!.open).toBe(false);
     expect(ui.findAll({ type: "dialog" }).every((d) => d.box === null)).toBe(true);
   });
+
+  describe("with what's around it (review fixes)", () => {
+    it("lets a select inside it be used, even when its list reaches past the dialog", () => {
+      const ui = render(`state c="a" open=true closed=0
+dialog "Pick" bind=open on=inc:closed
+  select "Letter" items=["a","b","c","d","e","f","g"] bind=c
+`, { width: 360, viewport: { top: 0, bottom: 700 } });
+      ui.press("select");
+      const option = ui.popup!.regions.find((r) => r.detail === "opt:s:g")!.box;
+      const d = ui.find("dialog").box!;
+      expect(option.y, "this option sits below the dialog").toBeGreaterThan(d.y + d.h);
+      ui.click(option.x + 4, option.y + option.h / 2);
+      expect(ui.state.c).toBe("g");
+      expect(ui.state.open).toBe(true);
+      expect(ui.state.closed).toBe(0);
+    });
+
+    it("doesn't open from inside an unselected tab or a closed accordion", () => {
+      const ui = render(`state t="a" open=true more=false
+row
+  tabs bind=t
+    tab "A" value=a
+      text "a"
+    tab "B" value=b
+      dialog "Hidden in tab B" bind=open
+        text "inside"
+row
+  accordion "More" bind=more
+    dialog "Hidden in the accordion" bind=open
+      text "inside too"
+`, { width: 600 });
+      expect(ui.isShown({ type: "dialog", text: "Hidden in tab B" })).toBe(false);
+      expect(ui.isShown({ type: "dialog", text: "Hidden in the accordion" })).toBe(false);
+      ui.set("t", "b");
+      expect(ui.isShown({ type: "dialog", text: "Hidden in tab B" })).toBe(true);
+    });
+
+    it("ends typing in a field behind it, and closes a popup behind it", () => {
+      const ui = render(`state q="" confirm=false c="a"
+input "Search" bind=q on=set:confirm:true
+select "Letter" items=["a","b"] bind=c
+dialog "Sure?" bind=confirm
+  button "OK" on=set:confirm:false
+`, { width: 600 });
+      ui.type("input", "ab");
+      ui.key("Enter");
+      expect(ui.state.confirm).toBe(true);
+      expect(ui.editor).toBeNull();
+      ui.key("Escape");
+      expect(ui.state.confirm).toBe(false);
+
+      ui.press("select");
+      expect(ui.popup).not.toBeNull();
+      ui.set("confirm", true);
+      expect(ui.popup).toBeNull();
+    });
+
+    it("can always be dismissed, even when bind= can't be written (a derived value)", () => {
+      const ui = render(`state step=2
+derive open={step == 2}
+dialog "Stuck?" bind=open
+  text "No buttons here"
+`, { width: 600 });
+      expect(ui.isShown("dialog")).toBe(true);
+      ui.key("Escape");
+      expect(ui.isShown("dialog")).toBe(false);
+      // It opens again once its value has gone false and come back.
+      ui.set("step", 1);
+      ui.set("step", 2);
+      expect(ui.isShown("dialog")).toBe(true);
+    });
+
+    it("keeps Tab inside it, going round", () => {
+      const ui = open();
+      const seen: string[] = [];
+      for (let i = 0; i < 5; i++) { ui.tab(); seen.push(`${ui.focused?.type}:${ui.focused?.text ?? ""}`); }
+      expect(seen).toEqual(["button:Cancel", "button:Delete", "dialog:Delete order NW-2041?", "button:Cancel", "button:Delete"]);
+    });
+
+    it("gives focus back after one open dialog follows another", () => {
+      const ui = render(`state items=[{n: "A", open: false}, {n: "B", open: false}]
+button "Open both" on="set:items:{[{n: 'A', open: true}, {n: 'B', open: true}]}"
+each items=items as=it
+  dialog "About {it.n}" bind=it.open
+    text "{it.n}"
+`, { width: 600 });
+      ui.tab();
+      ui.key("Enter");
+      expect(ui.text()).toContain("A");
+      ui.key("Escape");
+      expect(ui.text().join(" ")).toContain("About B");
+      ui.key("Escape");
+      expect(ui.focused?.text).toBe("Open both");
+    });
+
+    it("drops hover on what's behind when it opens", () => {
+      const ui = render(SPEC, { width: 600 });
+      ui.press({ type: "button", text: "Delete order" });
+      expect(ui.sayshape.hover).toBeNull();
+    });
+
+    it("opens near what opened it when the host grows to fit (no bounded viewport)", () => {
+      const lines = Array.from({ length: 60 }, (_, i) => `text "Line ${i}"`).join("\n");
+      const ui = render(`state open=false\nbutton "Open" on=set:open:true\n${lines}\ndialog "Hi" bind=open\n  text "x"\n`, { width: 600 });
+      ui.press({ type: "button", text: "Open" });
+      expect(ui.find("dialog").box!.y).toBeLessThan(200);
+    });
+  });
 });

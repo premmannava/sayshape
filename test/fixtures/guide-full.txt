@@ -725,7 +725,7 @@ ELEMENTS
           each items=events as=e
             list-item "{e.title}" detail="{e.when}"
 
-  dialog "<text>"  — A panel over the screen for something that needs an answer or attention first: confirm a delete, a short form, one item's details. It opens when bind= is true; its × button, Escape and a press outside it close it.
+  dialog "<text>"  — A panel over the screen for something that needs an answer or attention first: confirm a delete, a short form, one item's details. It opens when bind= is true, so start that state false and open it from a button, unless it should greet people as the screen opens; its × button, Escape and a press outside it close it.
     "<text>"  The title at its top, e.g. Delete order?
     bind=<state, required>  A true/false state: true shows it, e.g. bind=confirm. Open it with on=set:confirm:true; close it from a button inside with on=set:confirm:false.
     size=<sm|md|lg>  How wide it gets: sm (a question), md (a short form) or lg (details).

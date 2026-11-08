@@ -63,6 +63,10 @@ export function createLayoutContext(
   // The first layout call is the whole screen's.
   let screen = -1;
   const overlays: SayShapeNode[] = [];
+  /** Overlays set aside from each element's children, collected once that element is laid out. */
+  const setAside = new Map<SayShapeNode, SayShapeNode[]>();
+  /** The elements being laid out, innermost last. */
+  const laying: SayShapeNode[] = [];
   const ctx: LayoutContext = {
     theme,
     measure,
@@ -78,7 +82,12 @@ export function createLayoutContext(
       if (screen < 0) screen = Math.max(0, width);
       const box: Box = { node, x, y, w: Math.max(0, width), h: 0, children: [] };
       const def = registry.get(node.type);
-      if (def) def.layout(box, ctx);
+      laying.push(node);
+      try {
+        if (def) def.layout(box, ctx);
+      } finally {
+        laying.pop();
+      }
       return box;
     },
     visibleChildren(node) {
@@ -87,8 +96,17 @@ export function createLayoutContext(
         // Overlays (a dialog) take no room where they're written: set aside for the engine.
         const all = shownChildren(node, scope, registry, warn, budget);
         k = all.filter((c) => !registry.get(c.type)?.overlay);
-        for (const c of all) if (registry.get(c.type)?.overlay && !overlays.includes(c)) overlays.push(c);
+        const aside = all.filter((c) => registry.get(c.type)?.overlay);
+        if (aside.length) setAside.set(node, aside);
         kids.set(node, k);
+      }
+      // Only overlays among children an element's own layout asks for count: not those in a
+      // closed accordion or an unselected tab, which are looked at for widths but never laid out.
+      const aside = laying[laying.length - 1] === node ? setAside.get(node) : undefined;
+      if (aside?.some((c) => !overlays.includes(c))) {
+        for (const c of aside) if (!overlays.includes(c)) overlays.push(c);
+        // Spec order, so "the first open one written" holds however deep each sits.
+        overlays.sort((a, b) => a.line - b.line);
       }
       return k;
     },

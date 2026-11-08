@@ -1540,7 +1540,7 @@ scroll "Recent activity" size=sm
 
 ### `dialog`
 
-A panel over the screen for something that needs an answer or attention first: confirm a delete, a short form, one item's details. It opens when bind= is true; its × button, Escape and a press outside it close it.
+A panel over the screen for something that needs an answer or attention first: confirm a delete, a short form, one item's details. It opens when bind= is true, so start that state false and open it from a button, unless it should greet people as the screen opens; its × button, Escape and a press outside it close it.
 
 | Prop | Type | Description |
 |---|---|---|
