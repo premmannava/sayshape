@@ -19,6 +19,7 @@ import { detail, details } from "./details";
 import { schedule } from "./schedule";
 import { board } from "./board";
 import { tree } from "./tree";
+import { flow } from "./flow";
 
 export {
   column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
@@ -30,6 +31,7 @@ export {
   schedule,
   board,
   tree,
+  flow,
 };
 
 /** The built-in components (everything except the map, which is a separate entry). */
@@ -43,4 +45,5 @@ export const coreComponents: ComponentDef[] = [
   schedule,
   board,
   tree,
+  flow,
 ];

@@ -322,6 +322,23 @@ card
     detail "Direct reports" value={len(filter(people, 'manager', p.id))}`,
 };
 
+const claimFlow: Example = {
+  id: "claim-approval",
+  title: "Claim approval",
+  prompt: "How does a claim get approved?",
+  category: "Plans",
+  look: { preset: "teal", scheme: "light" },
+  spec: `state picked="" steps=[{id: "fnol", label: "Claim filed", kind: "start", next: "triage"}, {id: "triage", label: "Triage and check cover", kind: "step", next: "small"}, {id: "small", label: "Estimate under $5,000?", kind: "decision", next: "auto,adjuster"}, {id: "auto", label: "Approve automatically", kind: "step", next: "pay"}, {id: "adjuster", label: "Adjuster inspects damage", kind: "step", next: "fraud"}, {id: "fraud", label: "Fraud signals?", kind: "decision", next: "siu,approve"}, {id: "siu", label: "Special investigations", kind: "step", next: "adjuster"}, {id: "approve", label: "Manager approves", kind: "step", next: "pay"}, {id: "pay", label: "Pay out", kind: "end"}]
+state edges=[{from: "small", to: "auto", label: "Yes"}, {from: "small", to: "adjuster", label: "No"}, {from: "fraud", to: "siu", label: "Yes"}, {from: "fraud", to: "approve", label: "No"}, {from: "siu", to: "adjuster", label: "Cleared"}]
+derive s={find(steps, 'id', picked)}
+card
+  text "How a claim gets approved" style=title
+  text "Northwind Mutual · press a step for who owns it" tone=muted
+  flow items=steps edges=edges bind=picked
+  if={picked != ''}
+    callout "{s.label}" detail="{s.kind == 'decision' ? 'A decision the claims system makes' : 'Owned by the claims team'}" tone=accent`,
+};
+
 const launch: Example = {
   id: "launch-plan",
   title: "Launch plan",
@@ -394,6 +411,6 @@ card
   button "Next update" variant=secondary disabled={stage >= 4} on=inc:stage`,
 };
 
-export const examples: readonly Example[] = [tip, sales, pipeline, cabin, org, launch, trip, laptop, coffee, grocery, tracking, budget, configurator];
+export const examples: readonly Example[] = [tip, sales, pipeline, cabin, org, claimFlow, launch, trip, laptop, coffee, grocery, tracking, budget, configurator];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);
