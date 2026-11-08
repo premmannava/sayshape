@@ -571,7 +571,7 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - a ranking or a top 10 with long names: chart kind=hbar
 - parts of each total, such as revenue by product per month: chart kind=stacked y=hardware,software
 - an amount over time, such as visitors a week: chart kind=area
-- two or more series over the same time, such as plans month by month: chart kind=line y=basic,pro
+- two or more series over the same time, such as daily users on web and on mobile: chart kind=line y=web,mobile
 - how one whole splits up, such as sales by region: chart kind=donut
 - stages people drop out of, such as leads to won deals: chart kind=funnel
 - changes adding up to a total, such as revenue minus costs: chart kind=waterfall total="Net income"
