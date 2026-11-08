@@ -676,8 +676,8 @@ function paintSchedule(box: Box, ctx: PaintContext): void {
     clipContent(() => {
       for (const tk of d.ticks) {
         const x = cx(tk.at);
-        // A mark's label is drawn only when it starts in sight, so none is cut at the left edge.
-        const labelled = x >= left - 1;
+        // A mark's label is drawn only when it's all in sight, so none is cut at either edge.
+        const labelled = x >= left - 1 && x + (tk.strong ? 6 : 3) + measure.width(tk.label, tk.strong ? d.fonts.head : d.fonts.small) <= right;
         if (tk.strong) {
           vline(x, fy + 4, by + d.bodyH, 0.9);
           if (!labelled) continue;

@@ -6,6 +6,7 @@ import { parse } from "../../src/parser";
 import { languageGuide } from "../../src/prompt";
 import { Registry } from "../../src/registry";
 import { render, type Rendered } from "../../src/testing";
+import { textOverflows } from "../overflow";
 
 // The contract tests (test/contract.test.ts) already check the definition,
 // layout bounds, text that fits at 240, 360 and 600 px, theme-only colors
@@ -316,5 +317,19 @@ describe("schedule, from the review", () => {
     const d = geo(render(`state s=[${items}]\nschedule items=s view=week date=day tone=team`.replace("view=week date=day", "view=day"), { width: 1024 }));
     expect(d.legend.map((l) => l.label)).toEqual(["Team 0", "Team 1", "Team 2", "Team 3", "Team 4", "Other"]);
     expect(new Set(d.blocks.map((b) => b.color)).size).toBe(6);
+  });
+
+  it("never cuts a month or day mark's name at the timeline's right edge", () => {
+    // Found by the representation eval: in a card at 600px, "Dec" started 4px before the edge.
+    const spec = `state plan=[{id: 1, name: "Design", from: "2026-11-02", to: "2026-11-20"}, {id: 2, name: "Build", from: "2026-11-16", to: "2026-12-18"}, {id: 3, name: "Testing", from: "2026-12-10", to: "2027-01-08"}, {id: 4, name: "Marketing", from: "2026-12-01", to: "2027-01-15"}, {id: 5, name: "Launch", from: "2027-01-15", to: "2027-01-15"}]
+card
+  text "App launch plan" style=title
+  schedule view=timeline items=plan start=from end=to label=name rows=name
+`;
+    for (const width of [360, 600, 1024]) {
+      const ui = render(spec, { width });
+      expect(textOverflows(ui.sayshape.boxes!, ui.drawOps), `at ${width}px`).toEqual([]);
+      ui.destroy();
+    }
   });
 });
