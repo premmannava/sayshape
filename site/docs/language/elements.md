@@ -29,7 +29,20 @@ text "Cabin for {guests} guests, {nights} nights"
 text "She said \"see you there\"" tone=muted
 ```
 
-Each component accepts the props listed in the [component reference](../components/), and every element also accepts `if=` ([Conditional visibility](./conditions)). An unknown prop or a value outside a prop's allowed list is a warning: the element still renders and the bad part is ignored.
+Each component accepts the props listed in the [component reference](../components/), and every element also accepts `if=` ([Conditional visibility](./conditions)) and `tip=`. An unknown prop or a value outside a prop's allowed list is a warning: the element still renders and the bad part is ignored.
+
+## Tips
+
+Every element accepts `tip=`, a short explanation shown in a small bubble over it on hover, on keyboard focus, or on a tap on a touch screen. Escape hides it. An element that isn't pressable becomes a Tab stop when it has a tip, so the keyboard can reach it, and screen readers read the tip after the element's name. Use tips for what a label or a number means, not for anything people must read to use the screen.
+
+```sayshape live
+state open=14
+card
+  row
+    stat label="Open orders" value={open} tip="Paid, not yet handed to the carrier"
+    icon name=info tip="Counts refresh every 5 minutes"
+  button "Ship all" on=set:open:0 tip="Marks every open order shipped"
+```
 
 ## Nesting
 

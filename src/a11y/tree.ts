@@ -76,11 +76,25 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
     const popupOpen = input.popupOwner === node.id;
     const ctx: SemanticsContext = { props, text, textWithin, textBefore, regions, popupOpen, popup: popupOpen ? input.popupState ?? null : null, today: input.today };
     const result: SemanticsResult = def?.semantics ? def.semantics(box, ctx) : fallback(box, ctx);
-    if (result === false) return [];
-    const inner = buildAll(box.children);
-    if (result === null) return inner;
+    // tip= is read after the element's name; an element pressable only for its tip is the node Tab lands on.
+    const tip = node.props.tip !== undefined ? props(node).str("tip", "").trim() : "";
+    const tipRegion = tip ? regions.find((r) => r.detail === TIP_DETAIL) : undefined;
+    if (result === false && !tipRegion) return [];
+    const inner = result === false ? [] : buildAll(box.children);
+    if (result === null || result === false) {
+      if (!tipRegion) return inner;
+      // Layout or decoration (an icon) with a tip: a node of its own, named by its words or the tip.
+      const named = textWithin(box);
+      return [{ role: "group", name: named || tip, ...(named ? { description: tip } : {}), key: accessibleKey(node, TIP_DETAIL), rect: { x: box.x, y: box.y, w: box.w, h: box.h }, focusable: true, node, detail: TIP_DETAIL, children: inner }];
+    }
 
     const own = toNode(node, box, result, regions);
+    if (tip) own.description = own.description ? `${own.description}. ${tip}` : tip;
+    if (tipRegion && result.detail === undefined && !own.focusable) {
+      own.key = accessibleKey(node, TIP_DETAIL);
+      own.detail = TIP_DETAIL;
+      own.focusable = true;
+    }
     if (result.group) groups.set(own, { ...result.group, name: result.group.name ?? textBefore() });
     if (NAMED_FROM_CONTENT.has(result.role)) return [own, ...inner.flatMap(focusableWithin)];
     if (result.contentAfter) return [own, ...inner];
@@ -121,6 +135,9 @@ export function buildAccessibilityTree(input: TreeInput): AccessibleNode {
     children: buildAll(root.children),
   };
 }
+
+/** The detail of the region an element gets when it's pressable only for its tip (the engine's TIP). */
+const TIP_DETAIL = "tip";
 
 function toNode(node: SayShapeNode, box: Box, s: ElementSemantics, regions: readonly HitRegion[]): AccessibleNode {
   const { parts, detail, group: _group, contentAfter: _after, active, ...own } = s;
