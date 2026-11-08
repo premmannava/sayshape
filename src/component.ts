@@ -66,6 +66,13 @@ export interface LayoutContext {
    * paintLoading draws a placeholder there until the data arrives.
    */
   isLoading?(node: SayShapeNode): boolean;
+  /**
+   * This element's view state (which branches of a tree are open), for an
+   * element whose size depends on it. It's plain numbers the engine keeps by
+   * element id, so layout stays headless. Change it in press or key, then
+   * call ctx.relayout(). Missing in contexts with no engine (pure layout).
+   */
+  view?(node: SayShapeNode): ElementView;
 }
 
 /**
@@ -165,6 +172,10 @@ export interface PressContext {
   inState?(value: Value): boolean;
   /** Tell the spec's author about a problem in the spec or its data (shown once, as a warning). */
   warn?(message: string): void;
+  /** Lay the screen out again: after changing view state that layout reads (a tree branch opened). */
+  relayout?(): void;
+  /** Move keyboard focus to another part of this element (the row below in a tree), by the detail it was painted with. */
+  focusPart?(detail: unknown): void;
 }
 
 /** Pressing or typing in an open popup. ctx.target.node is the popup's owner. */

@@ -403,7 +403,7 @@ export class SayShape {
     this.width = width;
     const lv = this.loadingView();
     const scope = this.state.scope;
-    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.warnOnce(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)));
+    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.warnOnce(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
     this.rootBox = ctx.layout(this.parsed.root, 0, 0, width);
     let height = Math.max(this.rootBox.h, this.opts.minHeight ?? 0);
     // A popup that needs more room than the screen has makes the canvas taller while it's open.
@@ -858,6 +858,14 @@ export class SayShape {
       view: this.viewOf,
       inState: (value) => findItem(value, this.state.entries()) !== null,
       warn: (message) => this.warnOnce(message),
+      relayout: () => this.invalidate("layout"),
+      focusPart: (detail) => {
+        const h = this.hits.find((r) => r.box.node.id === target.node.id && r.detail === detail);
+        this.focus = { node: target.node, box: h?.box ?? target.box, detail };
+        this.keyboardMode = true;
+        this.invalidate("paint");
+        this.focusDom();
+      },
     };
   }
 

@@ -12,7 +12,7 @@
  *   or Off, and a radio group as its label and the chosen option;
  * - tables, and charts through the data table they describe themselves with,
  *   become tab-separated rows, so they paste into a spreadsheet as cells;
- * - list items start with "- ";
+ * - list items start with "- ", and a tree's items are an outline, two spaces per level;
  * - buttons, links, tabs and page navigation are left out: they're controls,
  *   not content.
  *
@@ -142,6 +142,16 @@ export function plainText(root: AccessibleNode): string {
         table(node, node.name);
         return;
       case "list":
+        node.children.forEach(visit);
+        return;
+      case "tree":
+        // Its name is the title above it; the items follow as an outline.
+        line(node.name);
+        node.children.forEach(visit);
+        return;
+      case "treeitem":
+        // An outline: two spaces per level below the top.
+        if (clean(node.name)) lines.push(`${"  ".repeat(Math.max(0, (node.level ?? 1) - 1))}${clean(node.name)}`);
         node.children.forEach(visit);
         return;
       case "listitem":

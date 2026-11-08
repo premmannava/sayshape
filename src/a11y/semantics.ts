@@ -20,7 +20,7 @@ export const ROLES = [
   "alert", "button", "cell", "checkbox", "code", "columnheader", "combobox", "dialog", "figure", "grid", "gridcell",
   "group", "heading", "img", "link", "list", "listbox", "listitem", "main", "meter", "navigation",
   "note", "option", "progressbar", "radio", "radiogroup", "region", "row", "rowheader", "searchbox",
-  "separator", "slider", "spinbutton", "status", "switch", "tab", "table", "tablist", "tabpanel", "text", "textbox",
+  "separator", "slider", "spinbutton", "status", "switch", "tab", "table", "tablist", "tabpanel", "text", "textbox", "tree", "treeitem",
 ] as const;
 export type Role = (typeof ROLES)[number];
 

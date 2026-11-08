@@ -82,6 +82,15 @@ describe("gallery examples", () => {
     expect(shown(ui)).toContain("Priya Nair");
   });
 
+  it("org chart: a box per person, and pressing one shows who they report to", () => {
+    const ui = render(exampleById("org-chart")!.spec, { width: 1024 });
+    expect(shown(ui)).toContain("Chief Operating Officer");
+    const ben = ui.hits.find((h) => h.box.node.type === "tree" && h.detail === "node:e2")!;
+    ui.click(ben.box.x + ben.box.w / 2, ben.box.y + ben.box.h / 2);
+    expect(ui.state.picked).toBe("e2");
+    expect(shown(ui)).toContain("Ana Ruiz");
+  });
+
   it("launch plan: a bar per task by team, and pressing one shows its details", () => {
     const ui = render(exampleById("launch-plan")!.spec, { width: 1024, today: "2026-10-21" });
     expect(shown(ui)).toContain("Beta with 12 customers");
