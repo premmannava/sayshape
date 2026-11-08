@@ -133,6 +133,17 @@ export function chartHoverAt(d: ChartGeometry, x: number, y: number): ChartHover
     const index = Math.min(d.slots.length - 1, Math.floor((x - p.x) / (p.w / d.slots.length)));
     return d.slots[index]?.values.some((v) => v !== null) ? { kind: "slot", index } : null;
   }
+  if (d.kind === "scatter") {
+    // The nearest dot within reach of the pointer: small dots get a forgiving target.
+    let best = -1, bestD = Infinity;
+    d.slots.forEach((slot, i) => {
+      const pt = slot.point, r = (d.custom as { dots: Array<{ r: number }> }).dots[i]?.r ?? 5;
+      if (!pt) return;
+      const dist = Math.hypot(x - pt.x, y - pt.y);
+      if (dist <= Math.max(r + 3, 10) && dist < bestD) { best = i; bestD = dist; }
+    });
+    return best < 0 ? null : { kind: "slot", index: best };
+  }
   if (d.kind === "bar" || d.kind === "hbar" || d.custom !== undefined) {
     for (let i = 0; i < d.slots.length; i++) {
       for (const b of d.slots[i]!.bars ?? []) {
@@ -715,6 +726,9 @@ function check(props: Readonly<Record<string, string>>): string[] {
   if (props.rows !== undefined && kind !== "heatmap") {
     out.push(`rows= picks each item's row on kind=heatmap only, so it was ignored here; remove it, or use kind=heatmap`);
   }
+  for (const prop of ["label", "size", "group"] as const) {
+    if (props[prop] !== undefined && kind !== "scatter") out.push(`${prop}= is for kind=scatter only, so it was ignored here; remove it, or use kind=scatter`);
+  }
   if (props.good !== undefined && kind !== "bullet") {
     out.push(`good= says which side of the target is good on kind=bullet only, so it was ignored here; remove it, or use kind=bullet`);
   }
@@ -722,7 +736,11 @@ function check(props: Readonly<Record<string, string>>): string[] {
     out.push(`chart draws at most ${MAX_SERIES} series, and y lists ${fields.length}. Keep ${MAX_SERIES} fields or fewer, or make two charts`);
   }
   const labels = props.labels;
-  if (labels !== undefined && !labels.includes("{")) {
+  if (labels !== undefined && !labels.includes("{") && kind === "scatter") {
+    const n = labelsOf(labels).length;
+    if (n === 1) out.push(`labels= names a scatter's two axes, x then y, like labels="Risk,Return". To name each dot, use label=${labels} (no s)`);
+    else if (n !== 2) out.push(`labels= names a scatter's two axes, x then y, like labels="Risk,Return"; it has ${n} names`);
+  } else if (labels !== undefined && !labels.includes("{")) {
     if (isRound(kind as Kind)) out.push(`labels= names the y fields of a bar or line chart; a ${kind}'s slices are named by x=, so labels= was ignored`);
     else if (oneField) out.push(`labels= names the y fields of a bar or line chart; a ${kind}'s items are named by x=, so labels= was ignored`);
     else if (labelsOf(labels).length !== fields.length) {
@@ -736,28 +754,31 @@ export const chart: ComponentDef = {
   type: "chart",
   category: "data",
   description:
-    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, bullet for each KPI against its target, such as quarterly goals, or heatmap for one number across two dimensions, such as retention by cohort. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
+    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, bullet for each KPI against its target, such as quarterly goals, heatmap for one number across two dimensions, such as retention by cohort, or scatter for how two numbers relate, such as price against rating. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
   text: { description: "A title above the chart." },
   props: {
     kind: {
       type: "enum", values: KINDS, default: "bar",
-      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows; heatmap draws a grid with a row per value of rows= and a column per value of x=, each cell shaded by its y number (darker is more), for patterns such as orders by weekday and hour. pie, donut, funnel, waterfall, bullet and heatmap take one y field; pie, donut, funnel and bullet take no negative values.",
+      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows; heatmap draws a grid with a row per value of rows= and a column per value of x=, each cell shaded by its y number (darker is more), for patterns such as orders by weekday and hour; scatter puts a dot per item at its x and y numbers, both on number scales, with label= naming each dot, size= sizing it by a number and group= coloring it by category (at most 6), and labels= naming the axes, e.g. labels=\"Risk,Return\". pie, donut, funnel, waterfall, bullet, heatmap and scatter take one y field; pie, donut, funnel and bullet take no negative values.",
     },
     items: { type: "expression", required: true, description: "The list of records to chart, e.g. items=sales or items={filter(sales, 'open')}." },
-    x: { type: "name", required: true, description: "The field holding each item's label (each slice's name in a pie), e.g. x=month." },
+    x: { type: "name", required: true, description: "The field holding each item's label (each slice's name in a pie), e.g. x=month. For scatter, the field with each item's x number." },
     y: {
       type: "names", required: true,
       description: "The field holding each item's number, e.g. y=revenue. Bar, hbar and line can compare up to 6 fields on one scale, separated by commas with no spaces, e.g. y=revenue,last_year; each gets its own color and a legend. stacked and area take up to 6 fields too. Items without a number are shown as gaps, not zero.",
     },
     labels: {
       type: "string",
-      description: "Bar, hbar, line, area and stacked with several y fields: the legend's names, in the same order, separated by commas, e.g. labels=\"This year,Last year\". Without it the legend shows the field names.",
+      description: "Bar, hbar, line, area and stacked with several y fields: the legend's names, in the same order, separated by commas, e.g. labels=\"This year,Last year\". Without it the legend shows the field names. Scatter: the two axes' names, x then y, e.g. labels=\"Risk,Return\".",
     },
+    label: { type: "name", description: "Scatter only: the field naming each dot, shown in its tip and the data table, e.g. label=name." },
+    size: { type: "name", description: "Scatter only: the field whose number sizes each dot (its area), for bubbles, e.g. size=assets." },
+    group: { type: "name", description: "Scatter only: the field whose category colors each dot, with a legend, at most 6, e.g. group=type." },
     rows: { type: "name", description: "Heatmap only: the field holding each item's row, e.g. rows=day; x= holds its column and y= its number." },
     target: { type: "name", description: "Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal." },
     good: { type: "enum", values: ["up", "down"], default: "up", description: "Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time)." },
     total: { type: "string", description: "Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total=\"Net income\"." },
-    format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5." },
+    format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number." },
   },
   picks: [
     { for: "a ranking or a top 10 with long names", write: "chart kind=hbar" },
@@ -768,6 +789,7 @@ export const chart: ComponentDef = {
     { for: "changes adding up to a total, such as revenue minus costs", write: "chart kind=waterfall total=\"Net income\"" },
     { for: "several KPIs, quotas or budgets against their targets (good=down when under target is good)", write: "chart kind=bullet target=goal" },
     { for: "one number across two dimensions, such as retention by cohort or orders by weekday and hour", write: "chart kind=heatmap rows=day x=hour y=orders" },
+    { for: "how two numbers relate, such as risk against return", write: "chart kind=scatter x=risk y=return label=name" },
   ],
   example: `state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
 chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year labels="This year,Last year" format=money`,
@@ -797,6 +819,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       if (p.has("target")) extra.target = p.str("target");
       if (p.has("rows")) extra.rows = p.str("rows");
       if (p.has("good")) extra.good = p.oneOf("good", ["up", "down"] as const, "up");
+      for (const f of ["label", "size", "group"]) if (p.has(f)) extra[f] = p.str(f);
       out = own.layout(box, { items, x, y: fields[0] ?? "", fields, labels: labelsOf(p.str("labels")), format, title: p.text(), line, extra }, ctx);
     } else if (isRound(kind)) {
       out = roundGeometry(box, pieData(items, x, fields[0] ?? ""), kind, format, p.text(), line, ctx);
@@ -815,12 +838,28 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     box.data = out.g;
     box.h = out.h;
   },
-  hitTest(box, x, y) {
+  hitTest(box, x, y, detail) {
+    // A scatter's dot regions are for the keyboard; the pointer goes to the whole chart's region.
+    if (typeof detail === "string" && detail.startsWith("dot:")) return null;
     const d = box.data as ChartGeometry | undefined;
     const h = d && chartHoverAt(d, x - box.x, y - box.y);
     return h ? { detail: h.kind + ":" + h.index } : null;
   },
   cursor: () => "crosshair",
+  key(ctx, key) {
+    // Scatter only: the arrow keys move from dot to dot in x order, Home and End to the ends.
+    const d = ctx.target.box.data as ChartGeometry | undefined;
+    const detail = ctx.target.detail;
+    if (!d || d.kind !== "scatter" || !d.slots.length || typeof detail !== "string" || !detail.startsWith("dot:")) return false;
+    const v = ctx.view(ctx.target.node);
+    const n = d.slots.length, at = Math.max(0, Math.min(n - 1, Number(detail.slice(4)) || 0));
+    const next = key === "ArrowRight" || key === "ArrowDown" ? at + 1 : key === "ArrowLeft" || key === "ArrowUp" ? at - 1 : key === "Home" ? 0 : key === "End" ? n - 1 : null;
+    if (next === null) return false;
+    v.point = Math.max(0, Math.min(n - 1, next));
+    // Focus moves to the dot itself, so a screen reader reads it out.
+    ctx.focusPart?.(`dot:${v.point}`);
+    return true;
+  },
   paintLoading: paintChartLoading,
   semantics: chartSemantics,
   paint(box, ctx) {
@@ -843,6 +882,8 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
 
     // The engine already tracks chart pointer hover and repaints when the datum changes.
     // This region is mouse-only: charts do not introduce meaningless keyboard tab stops.
+    // A scatter is the exception: its dots have no other way to be read one by one, so they
+    // are keyboard stops of their own (chart-kinds/scatter.ts), one Tab stop for them all.
     ctx.addHit(box, { focusable: false });
 
     // Just after its data arrived: marks grow into place while the rest fades in.
@@ -1083,12 +1124,31 @@ function paintRound(box: Box, ctx: PaintCtx, d: ChartGeometry, ox: number, oy: n
 
 
 
+/** The dot the arrow keys are on while a scatter has focus, or -1. */
+function scatterFocus(box: Box, ctx: PaintCtx, d: ChartGeometry): number {
+  for (let i = 0; i < d.slots.length; i++) if (ctx.isFocused(box.node, `dot:${i}`)) return i;
+  return -1;
+}
+
 /** Draw the active mark and an in-canvas tooltip. This works in sandboxed MCP Apps
  * without a DOM portal, network access, or a second UI layer. */
 function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
-  if (!ctx.pointer || !ctx.isHovered(box.node)) return;
-  const hover = chartHoverAt(d, ctx.pointer.x - box.x, ctx.pointer.y - box.y);
-  if (!hover) return;
+  let hover: ChartHover | null = null;
+  let anchor: { x: number; y: number; gap?: number } | null = null;
+  if (ctx.pointer && ctx.isHovered(box.node)) {
+    hover = chartHoverAt(d, ctx.pointer.x - box.x, ctx.pointer.y - box.y);
+    anchor = ctx.pointer;
+  }
+  // A scatter with keyboard focus shows the tip of the dot the arrow keys are on.
+  const focusedDot = d.kind === "scatter" && d.slots.length ? scatterFocus(box, ctx, d) : -1;
+  if (!hover && focusedDot >= 0) {
+    const pt = d.slots[focusedDot]!.point!;
+    hover = { kind: "slot", index: focusedDot };
+    // Clear of the dot and its ring, so the tip never covers what it describes.
+    const r = ((d.custom as { dots: Array<{ r: number }> }).dots[focusedDot]?.r ?? 5) + 6;
+    anchor = { x: box.x + pt.x + r - 13, y: box.y + pt.y, gap: r };
+  }
+  if (!hover || !anchor) return;
   const { g, theme } = ctx;
   const c = theme.colors, palette = seriesColors(theme);
   const ox = box.x, oy = box.y;
@@ -1170,6 +1230,14 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
         g.strokeStyle = d.series.length > 1 ? palette[k % palette.length]! : c.accent;
         g.stroke();
       });
+    } else if (d.kind === "scatter" && s.point) {
+      // A ring around the dot, clear of it, in ink so it reads on any series color.
+      const r = ((d.custom as { dots: Array<{ r: number }> }).dots[hover.index]?.r ?? 5) + 3.5;
+      g.beginPath();
+      g.arc(ox + s.point.x, oy + s.point.y, r, 0, Math.PI * 2);
+      g.strokeStyle = c.ink;
+      g.lineWidth = 2;
+      g.stroke();
     } else if (!d.noHoverOutline) {
       for (const b of s.bars ?? []) {
         if (!b || b.w <= 0 || b.h <= 0) continue;
@@ -1198,10 +1266,10 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
   const w = Math.min(widthLimit, Math.max(132, Math.ceil(needed) + pad * 2));
   const h = pad * 2 + titleH + rows.length * rowH;
   const minX = box.x + 6, maxX = box.x + box.w - w - 6;
-  const x = Math.max(minX, Math.min(maxX, ctx.pointer.x + 13));
+  const x = Math.max(minX, Math.min(maxX, anchor.x + 13));
   const minY = box.y + 5, maxY = box.y + box.h - h - 5;
-  const above = ctx.pointer.y - h - 10;
-  const y = Math.max(minY, Math.min(maxY, above < minY ? ctx.pointer.y + 12 : above));
+  const above = anchor.y - h - (anchor.gap ?? 10);
+  const y = Math.max(minY, Math.min(maxY, above < minY ? anchor.y + (anchor.gap ?? 12) : above));
   ctx.roundRect(x, y, w, h, theme.radius.md);
   g.shadowColor = c.shadow;
   g.shadowBlur = 14;

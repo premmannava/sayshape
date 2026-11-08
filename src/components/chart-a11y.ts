@@ -11,7 +11,7 @@ import { chartSeries, FORMATS, KINDS, labelOf, MAX_CHART_ITEMS, numberAt, precis
 
 const KIND_NAMES: Record<Kind, string> = {
   bar: "Bar chart", hbar: "Bar chart", line: "Line chart", area: "Area chart", stacked: "Stacked bar chart",
-  pie: "Pie chart", donut: "Donut chart", funnel: "Funnel chart", waterfall: "Waterfall chart", bullet: "Bullet chart", heatmap: "Heatmap",
+  pie: "Pie chart", donut: "Donut chart", funnel: "Funnel chart", waterfall: "Waterfall chart", bullet: "Bullet chart", heatmap: "Heatmap", scatter: "Scatter chart",
 };
 
 /** A table of rows of text, as parts inside a figure: a header row, then a row per item. */
@@ -34,6 +34,25 @@ const extremes = (pairs: Array<{ label: string; value: number }>) => {
   }
   return { hi, lo };
 };
+
+/**
+ * How two numbers go together, in words, from their correlation: the
+ * sentence a person would say looking at the dots. Nothing is claimed when
+ * there are too few dots or no clear pattern.
+ */
+export function relation(dots: ReadonlyArray<{ x: number; y: number }>, xName: string, yName: string): string {
+  const n = dots.length;
+  // Too few dots to call a pattern.
+  if (n < 5) return "";
+  const mx = dots.reduce((a, d) => a + d.x, 0) / n, my = dots.reduce((a, d) => a + d.y, 0) / n;
+  let sxy = 0, sxx = 0, syy = 0;
+  for (const d of dots) { sxy += (d.x - mx) * (d.y - my); sxx += (d.x - mx) ** 2; syy += (d.y - my) ** 2; }
+  if (!(sxx > 0 && syy > 0)) return "";
+  const r = sxy / Math.sqrt(sxx * syy);
+  if (!Number.isFinite(r)) return "";
+  if (Math.abs(r) < 0.4) return `No clear pattern between ${xName} and ${yName}.`;
+  return `${yName} ${Math.abs(r) >= 0.7 ? "mostly" : "tends to"} ${r > 0 ? "rise" : "fall"}${Math.abs(r) >= 0.7 ? "s" : ""} as ${xName} rises.`;
+}
 
 export function chartSemantics(box: Box, ctx: SemanticsContext): ElementSemantics {
   const p = ctx.props(box.node);
@@ -62,6 +81,38 @@ export function chartSemantics(box: Box, ctx: SemanticsContext): ElementSemantic
     const { hi, lo } = extremes(known.map((c) => ({ label: `${c.row}, ${c.col}`, value: c.value })));
     const summary = `${new Set(cells.map((c) => c.row)).size} rows by ${new Set(cells.map((c) => c.col)).size} columns. Highest: ${hi.label}, ${v(hi.value)}. Lowest: ${lo.label}, ${v(lo.value)}.`;
     return figure(summary, tableParts(name, [rowsField, x, y], cells.map((c) => [c.row, c.col, v(c.value)])));
+  }
+
+  if (kind === "scatter") {
+    // Two numbers per item: a row per dot, in x order, as the arrow keys go.
+    const y = ys[0] ?? "", labelF = p.str("label"), sizeF = p.str("size"), groupF = p.str("group");
+    const [xn, yn] = p.str("labels").split(",").map((s) => s.trim());
+    const xName = xn || x, yName = yn || y;
+    const list = isList(items) ? items.slice(0, MAX_CHART_ITEMS) : [];
+    const dots = list.flatMap((it, i) => {
+      const xv = numberAt(it, x), yv = numberAt(it, y);
+      if (xv === null || yv === null) return [];
+      return [{ label: labelF && isRecord(it) ? labelOf(fieldOf(it, labelF)) : `Item ${i + 1}`, x: xv, y: yv, size: sizeF ? numberAt(it, sizeF) : null, group: groupF && isRecord(it) ? labelOf(fieldOf(it, groupF)) : "" }];
+    }).sort((a, b) => a.x - b.x || a.y - b.y);
+    if (!dots.length) return figure("No values to show");
+    const num = (n: number) => preciseText(n, "number");
+    const span = (name_: string, vals: number[], f: (n: number) => string) => {
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      return lo === hi ? `${name_} is ${f(lo)}` : `${name_} from ${f(lo)} to ${f(hi)}`;
+    };
+    const summary = [`${dots.length} ${dots.length === 1 ? "dot" : "dots"}.`, `${span(xName, dots.map((d) => d.x), num)}; ${span(yName, dots.map((d) => d.y), v)}.`, relation(dots, xName, yName)].filter(Boolean).join(" ");
+    const head = [labelF || "Item", xName, yName, ...(sizeF ? [sizeF] : []), ...(groupF ? [groupF] : [])];
+    const rows = dots.map((d) => [d.label, num(d.x), v(d.y), ...(sizeF ? [d.size === null ? "—" : num(d.size)] : []), ...(groupF ? [d.group] : [])]);
+    // The dots as a list of options, the keyboard's way through them (one Tab stop, the arrow
+    // keys between dots); copying skips it, since the table holds the same numbers.
+    const custom = geo?.custom as { dots?: Array<{ name: string; x: number; y: number; r: number }>; active?: number } | undefined;
+    const shown = custom?.dots ?? [];
+    const at = custom?.active ?? 0;
+    const options: PartSemantics[] = shown.length ? [
+      { detail: "dots", role: "listbox", name: `${name}: dots`, description: "Arrow keys move between dots" },
+      ...shown.map((dot, i): PartSemantics => ({ detail: `dot:${i}`, within: "dots", role: "option", name: dot.name, selected: i === at, rect: { x: box.x + dot.x - dot.r, y: box.y + dot.y - dot.r, w: 2 * dot.r, h: 2 * dot.r } })),
+    ] : [];
+    return figure(summary, [...options, ...tableParts(name, head, rows)]);
   }
 
   const target = kind === "bullet" ? p.str("target") : "";
