@@ -468,6 +468,22 @@ card
   chart kind=treemap items=shown x=item y=amount format=money`,
 };
 
-export const examples: readonly Example[] = [tip, sales, pipeline, funds, costs, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator];
+const funding: Example = {
+  id: "where-funding-goes",
+  title: "Where funding goes",
+  prompt: "Show how Riverbend Trust's 2026 income flows to its programs",
+  category: "Dashboards",
+  look: { preset: "purple", scheme: "light" },
+  spec: `state flows=[{source: "Grants", target: "Programs", amount: 820000}, {source: "Grants", target: "Operations", amount: 140000}, {source: "Donations", target: "Programs", amount: 510000}, {source: "Donations", target: "Fundraising", amount: 120000}, {source: "Donations", target: "Operations", amount: 90000}, {source: "Events", target: "Fundraising", amount: 60000}, {source: "Events", target: "Programs", amount: 45000}, {source: "Programs", target: "Clean water", amount: 610000}, {source: "Programs", target: "School meals", amount: 455000}, {source: "Programs", target: "Training", amount: 310000}, {source: "Operations", target: "Staff", amount: 160000}, {source: "Operations", target: "Office", amount: 70000}, {source: "Fundraising", target: "Staff", amount: 110000}, {source: "Fundraising", target: "Campaigns", amount: 70000}]
+card
+  text "Riverbend Trust: where 2026 funding goes" style=title
+  text "Income on the left, what it pays for on the right. Hover a band for its amount." tone=muted
+  chart kind=sankey items=flows from=source to=target y=amount format=money
+  grid min=150 gap=10
+    stat label="Raised" value="$1.79M"
+    stat label="To programs" value="77%" tone=good`,
+};
+
+export const examples: readonly Example[] = [tip, sales, pipeline, funds, costs, funding, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);

@@ -17,7 +17,7 @@ import { fillTint, themeFont } from "./util";
 /** The most items one chart draws. Larger lists show a message instead. */
 export const MAX_CHART_ITEMS = 200;
 
-export const KINDS = ["bar", "hbar", "line", "area", "stacked", "pie", "donut", "funnel", "waterfall", "bullet", "heatmap", "scatter", "treemap"] as const;
+export const KINDS = ["bar", "hbar", "line", "area", "stacked", "pie", "donut", "funnel", "waterfall", "bullet", "heatmap", "scatter", "treemap", "sankey"] as const;
 export const FORMATS = ["number", "money", "percent"] as const;
 export type Kind = (typeof KINDS)[number];
 

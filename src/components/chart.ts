@@ -42,7 +42,7 @@ import { SERIES_COUNT, seriesColors, sliceColors, type Theme } from "../theme";
 import type { Box, Value } from "../types";
 import { easeOut, paintGhost, staggered } from "../ghost";
 import { themeFont } from "./util";
-import { CHART_KINDS } from "./chart-kinds";
+import { CHART_KINDS, paintSankeyHover, sankeyLinkAt, type SankeyGeometry } from "./chart-kinds";
 import {
   barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
   plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
@@ -132,6 +132,14 @@ export function chartHoverAt(d: ChartGeometry, x: number, y: number): ChartHover
     if (x < p.x || x > p.x + p.w || y < p.y || y > p.y + p.h || !d.slots.length || p.w <= 0) return null;
     const index = Math.min(d.slots.length - 1, Math.floor((x - p.x) / (p.w / d.slots.length)));
     return d.slots[index]?.values.some((v) => v !== null) ? { kind: "slot", index } : null;
+  }
+  if (d.kind === "sankey") {
+    // A node (a little wider than drawn, as nodes are thin), else the band under the pointer.
+    const s = d.custom as SankeyGeometry;
+    const node = s.nodes.findIndex((n) => x >= n.rect.x - 3 && x <= n.rect.x + n.rect.w + 3 && y >= n.rect.y && y <= n.rect.y + n.rect.h);
+    if (node >= 0) return { kind: "slot", index: node };
+    const link = sankeyLinkAt(s, x, y);
+    return link < 0 ? null : { kind: "slot", index: s.nodes.length + link };
   }
   if (d.kind === "scatter") {
     // The nearest dot within reach of the pointer: small dots get a forgiving target.
@@ -703,6 +711,12 @@ function check(props: Readonly<Record<string, string>>): string[] {
   const out: string[] = [];
   const kind = props.kind ?? "bar";
   const y = props.y;
+  if (kind === "sankey" && (props.from === undefined || props.to === undefined)) {
+    out.push(`chart kind=sankey needs from= and to= naming the fields with where each flow starts and where it goes, like from=source to=target`);
+  }
+  for (const prop of ["from", "to"] as const) {
+    if (props[prop] !== undefined && kind !== "sankey") out.push(`${prop}= is for kind=sankey only, so it was ignored here; remove it, or use kind=sankey`);
+  }
   // Expressions are worked out later; only what's written can be checked here.
   if (y === undefined || y.startsWith("{")) return out;
   const fields = fieldsOf(y);
@@ -754,15 +768,15 @@ export const chart: ComponentDef = {
   type: "chart",
   category: "data",
   description:
-    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, bullet for each KPI against its target, such as quarterly goals, heatmap for one number across two dimensions, such as retention by cohort, scatter for how two numbers relate, such as price against rating, or treemap for how a total splits across many parts, such as costs by line item. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
+    "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, bullet for each KPI against its target, such as quarterly goals, heatmap for one number across two dimensions, such as retention by cohort, scatter for how two numbers relate, such as price against rating, treemap for how a total splits across many parts, such as costs by line item, or sankey for how amounts flow from sources to where they end up, such as budget to departments to projects. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
   text: { description: "A title above the chart." },
   props: {
     kind: {
       type: "enum", values: KINDS, default: "bar",
-      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows; heatmap draws a grid with a row per value of rows= and a column per value of x=, each cell shaded by its y number (darker is more), for patterns such as orders by weekday and hour; scatter puts a dot per item at its x and y numbers, both on number scales, with label= naming each dot, size= sizing it by a number and group= coloring it by category (at most 6), and labels= naming the axes, e.g. labels=\"Risk,Return\"; treemap splits a rectangle into one per item, its area its share of the total, biggest top left in the strongest color, with names where they fit, for when there are too many parts for a pie (up to 60; the smallest are drawn together as one). pie, donut, funnel, waterfall, bullet, heatmap, scatter and treemap take one y field; pie, donut, funnel, bullet and treemap take no negative values.",
+      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows; heatmap draws a grid with a row per value of rows= and a column per value of x=, each cell shaded by its y number (darker is more), for patterns such as orders by weekday and hour; scatter puts a dot per item at its x and y numbers, both on number scales, with label= naming each dot, size= sizing it by a number and group= coloring it by category (at most 6), and labels= naming the axes, e.g. labels=\"Risk,Return\"; treemap splits a rectangle into one per item, its area its share of the total, biggest top left in the strongest color, with names where they fit, for when there are too many parts for a pie (up to 60; the smallest are drawn together as one). sankey draws bands between columns of places, each as thick as its amount, from one flow per item: from= and to= name the places and y= the amount; columns are worked out from the flows, and flows that go round in a circle show a message (at most 40 places and 120 flows). pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey take one y field; pie, donut, funnel, bullet, treemap and sankey take no negative values.",
     },
     items: { type: "expression", required: true, description: "The list of records to chart, e.g. items=sales or items={filter(sales, 'open')}." },
-    x: { type: "name", required: true, description: "The field holding each item's label (each slice's name in a pie), e.g. x=month. For scatter, the field with each item's x number." },
+    x: { type: "name", required: true, unlessProp: { name: "kind", values: ["sankey"] }, description: "The field holding each item's label (each slice's name in a pie), e.g. x=month. For scatter, the field with each item's x number. Not used by sankey." },
     y: {
       type: "names", required: true,
       description: "The field holding each item's number, e.g. y=revenue. Bar, hbar and line can compare up to 6 fields on one scale, separated by commas with no spaces, e.g. y=revenue,last_year; each gets its own color and a legend. stacked and area take up to 6 fields too. Items without a number are shown as gaps, not zero.",
@@ -774,6 +788,8 @@ export const chart: ComponentDef = {
     label: { type: "name", description: "Scatter only: the field naming each dot, shown in its tip and the data table, e.g. label=name." },
     size: { type: "name", description: "Scatter only: the field whose number sizes each dot (its area), for bubbles, e.g. size=assets." },
     group: { type: "name", description: "Scatter only: the field whose category colors each dot, with a legend, at most 6, e.g. group=type." },
+    from: { type: "name", description: "Sankey only: the field naming where each flow starts, e.g. from=source." },
+    to: { type: "name", description: "Sankey only: the field naming where each flow goes, e.g. to=target." },
     rows: { type: "name", description: "Heatmap only: the field holding each item's row, e.g. rows=day; x= holds its column and y= its number." },
     target: { type: "name", description: "Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal." },
     good: { type: "enum", values: ["up", "down"], default: "up", description: "Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time)." },
@@ -787,10 +803,11 @@ export const chart: ComponentDef = {
     { for: "how one whole splits up, such as sales by region", write: "chart kind=donut" },
     { for: "stages people drop out of, such as leads to won deals", write: "chart kind=funnel" },
     { for: "changes adding up to a total, such as revenue minus costs", write: "chart kind=waterfall total=\"Net income\"" },
-    { for: "several KPIs, quotas or budgets against their targets (good=down when under target is good)", write: "chart kind=bullet target=goal" },
+    { for: "KPIs, quotas or budgets against targets (good=down if under is good)", write: "chart kind=bullet target=goal" },
     { for: "one number across two dimensions, such as retention by cohort or orders by weekday and hour", write: "chart kind=heatmap rows=day x=hour y=orders" },
-    { for: "how two numbers relate, such as risk against return", write: "chart kind=scatter x=risk y=return label=name" },
+    { for: "how two numbers relate, such as risk against return", write: "chart kind=scatter" },
     { for: "parts of a total when there are too many for a pie", write: "chart kind=treemap" },
+    { for: "how amounts flow from sources to where they end up", write: "chart kind=sankey from=source to=target" },
   ],
   example: `state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
 chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year labels="This year,Last year" format=money`,
@@ -820,7 +837,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       if (p.has("target")) extra.target = p.str("target");
       if (p.has("rows")) extra.rows = p.str("rows");
       if (p.has("good")) extra.good = p.oneOf("good", ["up", "down"] as const, "up");
-      for (const f of ["label", "size", "group"]) if (p.has(f)) extra[f] = p.str(f);
+      for (const f of ["label", "size", "group", "from", "to"]) if (p.has(f)) extra[f] = p.str(f);
       out = own.layout(box, { items, x, y: fields[0] ?? "", fields, labels: labelsOf(p.str("labels")), format, title: p.text(), line, extra }, ctx);
     } else if (isRound(kind)) {
       out = roundGeometry(box, pieData(items, x, fields[0] ?? ""), kind, format, p.text(), line, ctx);
@@ -1231,6 +1248,8 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
         g.strokeStyle = d.series.length > 1 ? palette[k % palette.length]! : c.accent;
         g.stroke();
       });
+    } else if (d.kind === "sankey") {
+      paintSankeyHover(ctx, d, hover.index, ox, oy);
     } else if (d.kind === "scatter" && s.point) {
       // A ring around the dot, clear of it, in ink so it reads on any series color.
       const r = ((d.custom as { dots: Array<{ r: number }> }).dots[hover.index]?.r ?? 5) + 3.5;

@@ -46,7 +46,7 @@ describe("SayShape MCP server", () => {
     // Small enough to send with every call: under 1,000 tokens, against about 11,500 for the whole guide.
     // About half is the picks list, which is what lets a model choose kind=bullet or details unprompted.
     expect(quickStart().length).toBeLessThan(4_000);
-    expect(show.description).toMatch(/PICK BY WHAT YOU'RE SHOWING[\s\S]*against their targets[^\n]*: chart kind=bullet target=goal/);
+    expect(show.description).toMatch(/PICK BY WHAT YOU'RE SHOWING[\s\S]*against targets[^\n]*: chart kind=bullet target=goal/);
     expect(guideText().length).toBeGreaterThan(20_000);
   });
 

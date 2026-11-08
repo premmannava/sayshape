@@ -114,6 +114,13 @@ chart "Split" kind=treemap items=s x=n y=v
     expect(text.split("\n")).toEqual(["Split", "2 parts, total 4. Largest: A, 3 (75%); B, 1 (25%).", "", "n\tv", "A\t3", "B\t1"]);
   });
 
+  it("copies a sankey as its summary and a table of its flows", () => {
+    const text = copy(`state s=[{a: "In", b: "Out", v: 3}]
+chart "Moves" kind=sankey items=s from=a to=b y=v
+`);
+    expect(text.split("\n")).toEqual(["Moves", "1 flow between 2 places, 3 in all from In. Largest: In to Out, 3.", "", "a\tb\tv", "In\tOut\t3"]);
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password

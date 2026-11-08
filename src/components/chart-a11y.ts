@@ -11,7 +11,7 @@ import { chartSeries, FORMATS, KINDS, labelOf, MAX_CHART_ITEMS, numberAt, precis
 
 const KIND_NAMES: Record<Kind, string> = {
   bar: "Bar chart", hbar: "Bar chart", line: "Line chart", area: "Area chart", stacked: "Stacked bar chart",
-  pie: "Pie chart", donut: "Donut chart", funnel: "Funnel chart", waterfall: "Waterfall chart", bullet: "Bullet chart", heatmap: "Heatmap", scatter: "Scatter chart", treemap: "Treemap",
+  pie: "Pie chart", donut: "Donut chart", funnel: "Funnel chart", waterfall: "Waterfall chart", bullet: "Bullet chart", heatmap: "Heatmap", scatter: "Scatter chart", treemap: "Treemap", sankey: "Sankey diagram",
 };
 
 /** A table of rows of text, as parts inside a figure: a header row, then a row per item. */
@@ -81,6 +81,23 @@ export function chartSemantics(box: Box, ctx: SemanticsContext): ElementSemantic
     const { hi, lo } = extremes(known.map((c) => ({ label: `${c.row}, ${c.col}`, value: c.value })));
     const summary = `${new Set(cells.map((c) => c.row)).size} rows by ${new Set(cells.map((c) => c.col)).size} columns. Highest: ${hi.label}, ${v(hi.value)}. Lowest: ${lo.label}, ${v(lo.value)}.`;
     return figure(summary, tableParts(name, [rowsField, x, y], cells.map((c) => [c.row, c.col, v(c.value)])));
+  }
+
+  if (kind === "sankey") {
+    // Flows: a row per flow, from, to and how much, as written.
+    const fromF = p.str("from"), toF = p.str("to"), y = ys[0] ?? "";
+    const list = isList(items) ? items.slice(0, MAX_CHART_ITEMS) : [];
+    // A place's name is text, a number or true/false, as the chart reads it.
+    const nameOf = (v: unknown) => (typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? labelOf(v) : "");
+    const flows = list.filter(isRecord).map((it) => ({ from: nameOf(fieldOf(it, fromF)), to: nameOf(fieldOf(it, toF)), value: numberAt(it, y) }));
+    const known = flows.filter((f) => f.value !== null && f.value > 0 && f.from.trim() && f.to.trim()) as Array<{ from: string; to: string; value: number }>;
+    if (!known.length) return figure("No values to show");
+    const nodes = new Set(known.flatMap((f) => [f.from, f.to]));
+    const sources = [...nodes].filter((n) => !known.some((f) => f.to === n));
+    const total = known.filter((f) => sources.includes(f.from)).reduce((a, f) => a + f.value, 0);
+    const big = known.reduce((a, f) => (f.value > a.value ? f : a), known[0]!);
+    const summary = `${known.length} ${known.length === 1 ? "flow" : "flows"} between ${nodes.size} places, ${v(total)} in all from ${sources.slice(0, 4).join(", ")}${sources.length > 4 ? " and more" : ""}. Largest: ${big.from} to ${big.to}, ${v(big.value)}.`;
+    return figure(summary, tableParts(name, [fromF || "from", toF || "to", y], flows.map((f) => [f.from, f.to, v(f.value)])));
   }
 
   if (kind === "scatter") {
