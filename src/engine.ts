@@ -495,6 +495,11 @@ export class SayShape {
     this.a11yDirty = false;
     if (this.wasBusy && !busy) this.a11y.announce("Ready");
     this.wasBusy = busy;
+    this.followFocusInMirror();
+  }
+
+  /** While the keyboard is in use, keep DOM focus on the focused element's mirror node (never taking it from the rest of the page). */
+  private followFocusInMirror(): void {
     if (this.keyboardMode && this.focus && !this.editing) this.a11y.focus?.(accessibleKey(this.focus.node, this.focus.detail));
   }
 
@@ -1418,18 +1423,25 @@ export class SayShape {
       this.invalidate("paint");
     };
     const onKey = (e: KeyboardEvent) => this.onKeyDown(e);
-    const onFocus = () => {
+    const onFocus = (e: FocusEvent) => {
       // Focus that didn't come from a press came from the keyboard (Tab into the canvas).
       if (!pressing && !this.returningFromEditor) this.keyboardMode = true;
       if (!this.focus) {
-        const first = this.focusables()[0];
-        if (first) this.focus = { node: first.box.node, box: first.box, detail: first.detail };
+        // Shift+Tab from something after the interface comes in at its last element, Tab at its first.
+        const list = this.focusables();
+        const pick = !pressing && cameFromAfter(c, e.relatedTarget, this.a11y) ? list[list.length - 1] : list[0];
+        if (pick) this.focus = { node: pick.box.node, box: pick.box, detail: pick.detail };
       }
       // Tabbing onto the canvas when its first element is a field: start typing there.
       if (!pressing && !this.returningFromEditor && !this.editing && this.focus && this.registry.get(this.focus.node.type)?.editor) {
         this.keyboardMode = true;
         this.beginEdit(this.focus);
       }
+      // Tabbing in: move DOM focus onto that element's mirror node now, not on
+      // the next frame, so assistive technology (and anything reading
+      // document.activeElement) never sees the bare canvas in between. When
+      // its node isn't in the mirror yet, the next frame moves it there.
+      this.followFocusInMirror();
       this.invalidate("paint");
     };
     const onBlur = (e: FocusEvent) => {
@@ -1598,6 +1610,16 @@ interface OwnCopy {
   scope: Scope;
   locate?: Locate;
   functions?: ExpressionFunctions;
+}
+
+/**
+ * Whether focus arrived on the canvas from an element after it in the page
+ * (Shift+Tab back into the interface). Not from the interface's own mirror,
+ * which sits right after the canvas.
+ */
+function cameFromAfter(canvas: HTMLCanvasElement, from: EventTarget | null, a11y: AccessibilityHost): boolean {
+  if (typeof Node === "undefined" || !(from instanceof Node) || a11y.owns?.(from)) return false;
+  return (canvas.compareDocumentPosition(from) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 }
 
 /** Whether a hit region is the one a target refers to (same element, same part). */
