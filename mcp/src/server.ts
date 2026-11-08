@@ -126,7 +126,7 @@ export function quickStart(withData = false, withMcp = false): string {
     // Comments are left out too: an answer in a chat has no use for them, and the guide still explains them.
     sectionText("compact", "format").replace(/^FORMAT\n/, "").replace(/^- Not JavaScript:.*\n/m, "").replace(/\n- # starts a comment\.$/m, ""),
     "- Text and props show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
-    "- Any element takes tip=\"…\": a short explanation shown on hover, focus or a tap, for a term or a number some people won't know, instead of more words on screen.",
+    "- Any element takes tip=\"…\": a short explanation shown on hover, focus or a tap: for a term or a number some people won't know, instead of more words on screen.",
     "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue'); within a budget: filter(rows, 'price', {to: budget})`,
     `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
