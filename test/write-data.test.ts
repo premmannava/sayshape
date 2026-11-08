@@ -77,6 +77,7 @@ describe("bind= inside each, for every component that binds", () => {
     ["tree", `tree items={[{id: "a", name: "Top"}]} bind=r.v`, "v", "", "press"],
     ["flow", `flow items={[{id: "a", label: "Start"}]} bind=r.v`, "v", "", "press"],
     ["carousel", `carousel bind=r.v min=400\n      card\n        text "a"\n      card\n        text "b"`, "v", 0, "last"],
+    ["dialog", `dialog "About {r.name}" bind=r.v\n      text "Inside"`, "v", true, "press"],
   ];
 
   it("covers all of them", () => {

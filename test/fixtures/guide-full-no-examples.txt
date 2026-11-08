@@ -105,7 +105,7 @@ ELEMENTS AT A GLANCE
 - data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
 - navigation: screen, tabs, tab, breadcrumb, pagination
-- feedback: progress, skeleton, empty
+- feedback: progress, skeleton, empty, dialog
 
 ELEMENTS
   column  — Stacks its children vertically.
@@ -510,6 +510,13 @@ ELEMENTS
     size=<sm|md|lg>  How tall it gets before it scrolls: sm (about 6 rows of controls), md (about 9) or lg (about 12).
     gap=<number>  Space between children in pixels (default 8).
     pad=<number>  Inner padding in pixels (default 0).
+    children: any elements
+
+  dialog "<text>"  — A panel over the screen for something that needs an answer or attention first: confirm a delete, a short form, one item's details. It opens when bind= is true, so start that state false and open it from a button, unless it should greet people as the screen opens; its × button, Escape and a press outside it close it.
+    "<text>"  The title at its top, e.g. Delete order?
+    bind=<state, required>  A true/false state: true shows it, e.g. bind=confirm. Open it with on=set:confirm:true; close it from a button inside with on=set:confirm:false.
+    size=<sm|md|lg>  How wide it gets: sm (a question), md (a short form) or lg (details).
+    on=<action>  Actions to run when it's closed by its × button, Escape or a press outside it, e.g. emit:changed. Separate several with ;
     children: any elements
 
   map  — Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.

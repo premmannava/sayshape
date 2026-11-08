@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 57 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), scrolling regions, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Dialogs come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 58 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), scrolling regions, dialogs, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Menus and tooltips come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -512,7 +512,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 | Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
-| Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty) |
+| Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty), [`dialog`](#dialog) |
 <!-- CATEGORIES:END -->
 
 All components also accept `if=` ([Conditions](#conditions)). `map` and `pin` ship in a separate entry point, `sayshape/map`, because the country outlines add about 76 KB.
@@ -1538,6 +1538,29 @@ scroll "Recent activity" size=sm
       list-item "{e.title}" detail="{e.when}"
 ```
 
+### `dialog`
+
+A panel over the screen for something that needs an answer or attention first: confirm a delete, a short form, one item's details. It opens when bind= is true, so start that state false and open it from a button, unless it should greet people as the screen opens; its × button, Escape and a press outside it close it.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The title at its top, e.g. Delete order? |
+| `bind` | state, required | A true/false state: true shows it, e.g. bind=confirm. Open it with on=set:confirm:true; close it from a button inside with on=set:confirm:false. |
+| `size` | `sm` / `md` / `lg` | How wide it gets: sm (a question), md (a short form) or lg (details). |
+| `on` | action | Actions to run when it's closed by its × button, Escape or a press outside it, e.g. emit:changed. Separate several with ; |
+
+Children: any elements.
+
+```
+state confirm=true
+button "Delete order" variant=danger on=set:confirm:true
+dialog "Delete order NW-2041?" bind=confirm size=sm
+  text "The order and its invoice are removed. This can't be undone." tone=muted
+  row
+    button "Cancel" variant=secondary on=set:confirm:false
+    button "Delete" variant=danger on="emit:delete;set:confirm:false"
+```
+
 ### `map`
 
 Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
@@ -2145,7 +2168,7 @@ canvas {
 
 Charts color their series and pie slices with six categorical tokens, `series1` to `series6` (`--sayshape-series-1` to `--sayshape-series-6` in CSS). `series1` is the accent: change only the accent and it follows. The defaults are checked against the card surface in both modes, and the first four stay distinguishable with protanopia and deuteranopia.
 
-Cards and buttons sit on a soft shadow in the `shadow` color (`--sayshape-shadow`), a low-opacity color such as `rgba(16, 24, 40, 0.07)`. Set it to `transparent` for a flat look.
+Cards and buttons sit on a soft shadow in the `shadow` color (`--sayshape-shadow`), a low-opacity color such as `rgba(16, 24, 40, 0.07)`. Set it to `transparent` for a flat look. An open dialog dims the screen behind it with `scrim` (`--sayshape-scrim`), dark in every theme.
 
 Or build a theme in code:
 
@@ -2234,7 +2257,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 
 - **Multi-line text, and form validation** (required fields, email format). A model can show a hint with `if=` for now.
 - **Text selection and browser find.** To copy, a host can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
-- **Dialogs, menus or tooltips.** The one popup so far is a select's list of options (one open at a time); there's no general overlay element yet. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
+- **Menus or tooltips.** Popups serve one element's own panel (a select's list, a date picker's calendar), and `dialog` is the one overlay: one open at a time, centred, over a dimmed screen. There are no menus, tooltips, toasts or sheets that slide in from an edge. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
 - **Dates and times beyond the basics.** `date-picker` picks a calendar day (or a range with `range=true`), with no times. `schedule` lays out times as `HH:MM` text and dates as `YYYY-MM-DD`, but has no time zones, recurring events, blocks past midnight, month view, or dragging blocks to move them. Names are in US English with weeks starting on Sunday.
 - **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.
 - **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.

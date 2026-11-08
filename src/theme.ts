@@ -41,6 +41,8 @@ export interface Theme {
     debug: string;
     /** The soft shadow under cards and raised controls, so surfaces sit above the page instead of being outlined on it. */
     shadow: string;
+    /** The dimming over the screen behind an open dialog: dark in every theme, so the dialog stands out. */
+    scrim: string;
     /**
      * Harmonized, low-saturation series for lines and bars. The first uses
      * the accent; steel, sage, stone, blue and moss follow. Keep strokes
@@ -94,6 +96,7 @@ export const lightTheme: Theme = {
     landHover: "#C2CECB",
     debug: "#A86C3A",
     shadow: "rgba(25, 43, 45, 0.065)",
+    scrim: "rgba(16, 26, 29, 0.45)",
     series1: "#176F69",
     series2: "#557887",
     series3: "#638777",
@@ -125,6 +128,7 @@ export const darkTheme: Theme = {
     landHover: "#36494E",
     debug: "#DEA36C",
     shadow: "rgba(0, 0, 0, 0.38)",
+    scrim: "rgba(0, 0, 0, 0.62)",
     series1: "#72C6BB",
     series2: "#9DB8C4",
     series3: "#A6C4B1",
@@ -174,6 +178,7 @@ export const studioLightTheme: Theme = {
     landHover: "#D2D6E2",
     debug: "#B45309",
     shadow: "rgba(22, 27, 61, 0.075)",
+    scrim: "rgba(14, 17, 40, 0.45)",
     series1: "#4F46E5",
     series2: "#0E87A8",
     series3: "#D63A7A",
@@ -205,6 +210,7 @@ export const studioDarkTheme: Theme = {
     landHover: "#282D40",
     debug: "#F5BE4F",
     shadow: "rgba(0, 0, 0, 0.5)",
+    scrim: "rgba(0, 0, 0, 0.62)",
     series1: "#8F8CFF",
     series2: "#3CC8E6",
     series3: "#F27AB4",

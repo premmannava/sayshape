@@ -165,6 +165,8 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
     if (node.level !== undefined) attrs.set("aria-level", String(node.level));
     if (node.roleDescription) attrs.set("aria-roledescription", node.roleDescription);
     if (node.disabled) attrs.set("aria-disabled", "true");
+    // A dialog is modal: while it's open, the engine leaves only it in the tree.
+    if (node.role === "dialog") attrs.set("aria-modal", "true");
     for (const k of ["selected", "expanded", "pressed", "required", "invalid", "multiselectable"] as const) {
       if (node[k] !== undefined) attrs.set(`aria-${k}`, String(node[k]));
     }

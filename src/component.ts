@@ -37,10 +37,28 @@ export type Category = "layout" | "content" | "data" | "input" | "navigation" | 
 /** Categories in the order docs list them. */
 export const CATEGORIES: readonly Category[] = ["layout", "content", "data", "input", "navigation", "feedback"];
 
+/**
+ * An element that floats above the screen when open (dialog): it takes no
+ * room where it's written; the engine lays it out on its own, centred in
+ * what's in sight, paints it over everything with a backdrop, and while it's
+ * open only it can be pressed or reached with Tab. Escape and a press on the
+ * backdrop close it.
+ */
+export interface OverlayDef {
+  /** Whether it's showing now (a dialog: when its bind= is true). */
+  open(node: SayShapeNode, ctx: LayoutContext): boolean;
+  /** How wide it is on a screen this wide. */
+  width(node: SayShapeNode, screen: number, ctx: LayoutContext): number;
+  /** Close it (Escape, a press on the backdrop): a dialog sets its bind= to false. */
+  close(ctx: PressContext): void;
+}
+
 export interface LayoutContext {
   theme: Theme;
   measure: TextMeasurer;
   scope: Scope;
+  /** Overlay elements met while laying out, in spec order (they take no room where they're written). */
+  overlays?: SayShapeNode[];
   props(node: SayShapeNode): PropReader;
   /** Lay out a child at a position with an available width; returns its box. */
   layout(node: SayShapeNode, x: number, y: number, width: number): Box;
@@ -299,6 +317,8 @@ export interface ComponentDef {
    * their drawing to it, and the pointer reaches only what's inside it.
    */
   clipChildren?(box: Box): Rect | null;
+  /** Floats above the screen when open, as a modal (see OverlayDef). */
+  overlay?: OverlayDef;
   /**
    * For an element that clips its children: scroll so `rect` (a child the
    * keyboard just moved to) is in sight, by changing its view state.
