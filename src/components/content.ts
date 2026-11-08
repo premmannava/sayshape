@@ -1,14 +1,16 @@
 import type { ComponentDef, LayoutContext, PaintContext } from "../component";
 import type { TextMeasurer } from "../text";
 import type { Theme } from "../theme";
-import type { Box, Value } from "../types";
+import type { Box, Rect, Value } from "../types";
 import { isList, isRecord } from "../data";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
 import { easeOut, paintGhost } from "../ghost";
 import { traceSmoothLine } from "./chart";
-import { fillTint, iconProblems, iconProp, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, WEIGHTS } from "./util";
+import { fillTint, iconProblems, iconProp, partBox, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, WEIGHTS } from "./util";
 import { drawIcon, ICON_NAMES, isIconName, type IconName } from "../icons";
+import { looksRich, parseRich, plainOf, wrapRich, type RichLine, type RichStyle, type Run } from "../rich";
+import type { PartSemantics } from "../a11y/semantics";
 
 const ALIGN = ["left", "center", "right"] as const;
 
@@ -24,29 +26,56 @@ export const text: ComponentDef = {
     align: { type: "enum", values: ALIGN, default: "left", description: "left, center or right." },
     strike: { type: "boolean", default: false, description: "Draw a line through the text, e.g. for an old price." },
     icon: iconProp,
+    rich: { type: "boolean", default: false, description: "true reads inline formatting in the words: **bold**, *italic*, `code` and links [words](https://…). A link is pressed by the person and sent to you as emit:link with its address; SayShape never opens it. One paragraph per text line." },
   },
   example: `state guests=2 nights=3
 text "Weekend in Yosemite" style=title
 text "{guests} guests, {nights} nights" tone=muted
 text "$160" tone=muted strike=true
-text "Payment received" icon=check-circle tone=good`,
+text "Payment received" icon=check-circle tone=good
+text "**Free** cancellation until *2 days* before; see [the terms](https://northwind.example/terms)." rich=true`,
   check: (props) => iconProblems(props.icon, "icon"),
   semantics(box, ctx) {
     const p = ctx.props(box.node);
-    const name = p.text();
-    if (!name.trim()) return false;
+    const rich = box.data && (box.data as { rich?: RichText }).rich;
     // display and title are what a page's headings look like.
     const style = p.oneOf("style", TEXT_STYLES, "body");
-    if (style === "display") return { role: "heading", level: 1, name };
-    if (style === "title") return { role: "heading", level: 2, name };
-    return { role: "text", name };
+    const role = style === "display" || style === "title" ? ("heading" as const) : ("text" as const);
+    const level = style === "display" ? 1 : style === "title" ? 2 : undefined;
+    if (rich?.links.length) {
+      // Text with links is its stretches of words and its links, in reading order, so a screen
+      // reader reads the whole sentence and can still reach and press each link. Copy text gets
+      // the words with each link's address after it.
+      const parts: PartSemantics[] = richSegments(rich.runs).map((seg) => ({
+        detail: seg.key, role: seg.key.startsWith("link:") ? "link" : "text", name: seg.text,
+        rect: rich.rects?.[seg.key] ?? { x: box.x, y: box.y, w: box.w, h: box.h },
+      }));
+      return { role, level, copyText: plainOf(rich.runs), parts };
+    }
+    const name = rich ? plainOf(rich.runs) : p.text();
+    if (!name.trim()) return false;
+    return level ? { role, level, name } : { role, name };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", WEIGHTS, "regular") : undefined);
     const f = `${m.weight} ${m.size}px ${ctx.theme.font.family}`;
     const icon = textIcon(p.str("icon"), m.size);
-    const lines = wrapText(p.text(), Math.max(0, box.w - (icon ? icon.indent : 0)), f, ctx.measure);
+    const width = Math.max(0, box.w - (icon ? icon.indent : 0));
+    if (p.bool("rich")) {
+      // Markers come from the spec's own words; values from state are filled in as plain words.
+      const runs = parseRich(p.template(), (t) => p.fill(t));
+      const fontOf = richFont(ctx.theme, m.weight, m.size);
+      const lines = wrapRich(runs, width, fontOf, ctx.measure);
+      const links: RichText["links"] = [];
+      for (const r of runs) if (r.link !== undefined && !links.some((l) => l.index === r.link)) links.push({ index: r.link, text: runs.filter((x) => x.link === r.link).map((x) => x.text).join(""), href: r.href! });
+      const rich: RichText = { runs, lines: lines, links };
+      box.data = { lines: [], font: f, lineHeight: m.lineHeight, icon, rich, weight: m.weight, size: m.size };
+      box.h = Math.max(1, lines.length) * m.lineHeight;
+      return;
+    }
+    if (looksRich(p.template())) ctx.warn?.(`text on line ${box.node.line} has formatting marks (**bold**, \`code\` or [a](link)) that show as written. Add rich=true to format them`);
+    const lines = wrapText(p.text(), width, f, ctx.measure);
     box.data = { lines, font: f, lineHeight: m.lineHeight, icon };
     box.h = lines.length * m.lineHeight;
   },
@@ -54,11 +83,22 @@ text "Payment received" icon=check-circle tone=good`,
     // Text wraps, so it needs only its longest word (up to a point: long words break).
     const p = ctx.props(node);
     const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", WEIGHTS, "regular") : undefined);
-    const words = p.text().split(/\s+/).filter(Boolean);
+    // Rich text needs its longest word as shown, without markers or link addresses.
+    const shown = p.bool("rich") ? parseRich(p.template(), (t) => p.fill(t)).map((r) => r.text).join("") : p.text();
+    const words = shown.split(/\s+/).filter(Boolean);
     return Math.min(100, Math.max(0, ...words.map((w) => textWidth(ctx, w, m.weight, m.size))));
+  },
+  press(ctx) {
+    // A link in rich text: sent to the host as emit:link with its address. SayShape never opens it.
+    const detail = ctx.target.detail;
+    const rich = (ctx.target.box.data as { rich?: RichText } | undefined)?.rich;
+    if (typeof detail !== "string" || !detail.startsWith("link:") || !rich) return;
+    const link = rich.links.find((l) => `link:${l.index}` === detail);
+    if (link) ctx.run("emit:link:{__href}", { scope: (n) => (n === "__href" ? link.href : undefined) });
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
+    if ((box.data as { rich?: RichText }).rich) { paintRich(box, ctx); return; }
     const { lines, font, lineHeight, icon } = box.data as { lines: string[]; font: string; lineHeight: number; icon: TextIcon | null };
     const align = p.oneOf("align", ALIGN, "left");
     const g = ctx.g;
@@ -83,6 +123,100 @@ text "Payment received" icon=check-circle tone=good`,
 };
 
 interface TextIcon { name: IconName; size: number; indent: number }
+
+interface RichText {
+  runs: ReturnType<typeof parseRich>;
+  lines: RichLine[];
+  links: Array<{ index: number; text: string; href: string }>;
+  /** Where each stretch of words and each link was drawn, by segment key, for screen readers. Set in paint. */
+  rects?: Record<string, Rect>;
+}
+
+/** Rich text as stretches of plain words and links, in reading order, keyed like their pieces ("seg:n", "link:n"). */
+function richSegments(runs: readonly Run[]): Array<{ key: string; text: string }> {
+  const out: Array<{ key: string; text: string }> = [];
+  let lastLink = -1;
+  for (const r of runs) {
+    if (r.link !== undefined) lastLink = r.link;
+    const key = r.link !== undefined ? `link:${r.link}` : `seg:${lastLink + 1}`;
+    const prev = out[out.length - 1];
+    if (prev && prev.key === key) prev.text += r.text;
+    else out.push({ key, text: r.text });
+  }
+  return out.filter((s) => s.text.trim()).map((s) => ({ key: s.key, text: s.text.trim() }));
+}
+
+/** The font for a styled stretch of rich text, from the text's own weight and size. */
+function richFont(theme: Theme, weight: number, size: number): (s: RichStyle) => string {
+  return (s) => s.code
+    ? `${s.bold ? 700 : 500} ${Math.max(10, size - 1)}px ${theme.font.mono}`
+    : `${s.italic ? "italic " : ""}${s.bold ? Math.max(700, weight) : weight} ${size}px ${theme.font.family}`;
+}
+
+/** Rich text: each stretch in its own font, code on a faint pill, links in the accent and underlined. */
+function paintRich(box: Box, ctx: PaintContext): void {
+  const p = ctx.props(box.node);
+  const d = box.data as { rich: RichText; lineHeight: number; icon: TextIcon | null; weight: number; size: number };
+  const { g, theme } = ctx;
+  const c = theme.colors;
+  const color = toneColor(theme, p.oneOf("tone", TONES, "default"));
+  const align = p.oneOf("align", ALIGN, "left");
+  const left = box.x + (d.icon ? d.icon.indent : 0);
+  if (d.icon) drawIcon(g, d.icon.name, box.x, box.y + (d.lineHeight - d.icon.size) / 2, d.icon.size, color);
+  const fontOf = richFont(theme, d.weight, d.size);
+  g.textBaseline = "middle";
+  g.textAlign = "left";
+  const linkSeen = new Set<number>();
+  const rects: Record<string, Rect> = {};
+  const focusRings: Rect[] = [];
+  let lastLink = -1;
+  d.rich.lines.forEach((line, i) => {
+    const room = box.x + box.w - left;
+    const x0 = align === "left" ? left : align === "center" ? left + (room - line.w) / 2 : box.x + box.w - line.w;
+    const y = box.y + d.lineHeight * i + d.lineHeight / 2 + 1;
+    for (const piece of line.pieces) {
+      const x = x0 + piece.x;
+      if (piece.link !== undefined) lastLink = piece.link;
+      const key = piece.link !== undefined ? `link:${piece.link}` : `seg:${lastLink + 1}`;
+      const r = rects[key];
+      const top = y - d.lineHeight / 2;
+      rects[key] = r ? union(r, { x, y: top, w: piece.w, h: d.lineHeight }) : { x, y: top, w: piece.w, h: d.lineHeight };
+      if (piece.code) {
+        // Never taller than a line, so pills on lines next to each other don't touch.
+        const h = Math.min(d.size * 1.3, d.lineHeight - 2);
+        ctx.roundRect(x - 2, y - h / 2, piece.w + 4, h, theme.radius.sm / 2);
+        fillTint(g, c.ink, 0.07);
+      }
+      g.font = fontOf(piece);
+      const hovered = piece.link !== undefined && ctx.isHovered(box.node, `link:${piece.link}`);
+      g.fillStyle = piece.link !== undefined ? c.accent : color;
+      g.fillText(piece.text, x, y);
+      if (piece.link !== undefined) {
+        g.fillRect(x, y + d.size * 0.55, piece.w, hovered ? 1.5 : 1);
+        // A link wrapped over two lines is one Tab stop: its first piece; the rest still take a press.
+        const first = !linkSeen.has(piece.link);
+        linkSeen.add(piece.link);
+        // The part carries the text's layout, so press can find which link it is.
+        ctx.addHit({ ...partBox(box, x, y - d.lineHeight / 2, piece.w, d.lineHeight), data: box.data }, { detail: `link:${piece.link}`, focusable: first });
+        // Focused, every piece of the link is outlined, on each line it covers.
+        if (ctx.isFocused(box.node, `link:${piece.link}`)) focusRings.push({ x: x - 3, y: top, w: piece.w + 6, h: d.lineHeight });
+      }
+      if (p.bool("strike")) { g.fillStyle = color; g.fillRect(x, y - 1, piece.w, Math.max(1, Math.round(d.lineHeight / 16))); }
+    }
+  });
+  for (const r of focusRings) {
+    ctx.roundRect(r.x, r.y, r.w, r.h, theme.radius.sm);
+    g.strokeStyle = c.focus;
+    g.lineWidth = 2;
+    g.stroke();
+  }
+  d.rich.rects = rects;
+}
+
+function union(a: Rect, b: Rect): Rect {
+  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+}
 
 /** An icon a little larger than the text it starts, and the room it takes. */
 function textIcon(name: string, fontSize: number): TextIcon | null {

@@ -458,4 +458,14 @@ export class PropReader {
   text(fallback = ""): string {
     return this.node.text === undefined ? fallback : interpolate(this.node.text, this.scope);
   }
+
+  /** The positional text as written in the spec, `{expressions}` and all (rich text reads its markers from it). */
+  template(): string {
+    return this.node.text ?? "";
+  }
+
+  /** Words written with `{expressions}`, filled in from this element's scope. */
+  fill(template: string): string {
+    return interpolate(template, this.scope);
+  }
 }

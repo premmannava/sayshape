@@ -334,6 +334,7 @@ derive s={find(steps, 'id', picked)}
 card
   text "How a claim gets approved" style=title
   text "Northwind Mutual · press a step for who owns it" tone=muted
+  text "Claims under **$5,000** are paid *automatically*, usually within 2 days. Anything flagged for fraud goes to \`SIU\` first; see [the claims policy](https://northwind.example/claims-policy)." rich=true
   flow items=steps edges=edges bind=picked
   if={picked != ''}
     callout "{s.label}" detail="{s.kind == 'decision' ? 'A decision the claims system makes' : 'Owned by the claims team'}" tone=accent`,

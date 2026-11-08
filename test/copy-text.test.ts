@@ -88,6 +88,10 @@ flow "Purchase" items=s edges=e
     expect(text.split("\n")).toEqual(["Purchase", "- Request leads to Approved?", "- Approved? leads to Done (Yes), Request (No)", "- Done"]);
   });
 
+  it("copies rich text as plain words, with each link's address in brackets", () => {
+    expect(copy(`text "Pay **within 30 days**; see [the terms](https://northwind.example/terms)." rich=true\n`)).toBe("Pay within 30 days; see the terms (https://northwind.example/terms).");
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password

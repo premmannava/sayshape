@@ -57,6 +57,11 @@ export interface Semantics {
   placeholder?: string;
   /** Replaces the role's spoken name, e.g. "carousel" for a region. Use sparingly. */
   roleDescription?: string;
+  /**
+   * What Copy text prints for it, instead of its name and what's inside: rich text with links
+   * is read as its words and links, and copied as one line with each link's address.
+   */
+  copyText?: string;
 }
 
 /**

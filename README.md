@@ -764,6 +764,7 @@ A paragraph or heading that wraps to the available width. Use {expressions} to s
 | `align` | `left` / `center` / `right` | left, center or right. |
 | `strike` | boolean | Draw a line through the text, e.g. for an old price. |
 | `icon` | string | An icon before the text, by name from icon's list, e.g. icon=check-circle. |
+| `rich` | boolean | true reads inline formatting in the words: **bold**, *italic*, `code` and links [words](https://…). A link is pressed by the person and sent to you as emit:link with its address; SayShape never opens it. One paragraph per text line. |
 
 ```
 state guests=2 nights=3
@@ -771,6 +772,7 @@ text "Weekend in Yosemite" style=title
 text "{guests} guests, {nights} nights" tone=muted
 text "$160" tone=muted strike=true
 text "Payment received" icon=check-circle tone=good
+text "**Free** cancellation until *2 days* before; see [the terms](https://northwind.example/terms)." rich=true
 ```
 
 ### `image`
