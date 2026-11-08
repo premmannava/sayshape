@@ -107,6 +107,13 @@ chart "Pairs" kind=scatter items=s x=x y=y label=n
     expect(text.split("\n")).toEqual(["Pairs", "2 dots. x from 1 to 9; y from 2 to 5.", "", "n\tx\ty", "A\t1\t5", "B\t9\t2"]);
   });
 
+  it("copies a treemap as its summary and a table of its parts", () => {
+    const text = copy(`state s=[{n: "A", v: 3}, {n: "B", v: 1}]
+chart "Split" kind=treemap items=s x=n y=v
+`);
+    expect(text.split("\n")).toEqual(["Split", "2 parts, total 4. Largest: A, 3 (75%); B, 1 (25%).", "", "n\tv", "A\t3", "B\t1"]);
+  });
+
   it("never copies a password", () => {
     const text = copy(`state pw="hunter2"
 input "Password" bind=pw kind=password

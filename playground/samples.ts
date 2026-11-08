@@ -470,6 +470,13 @@ flow "Customer onboarding" items=steps edges=edges direction=right
 chart "Price against rating" kind=scatter items=products x=price y=rating label=name group=line labels="Price ($),Rating"
 `,
   },
+  storageTreemap: {
+    label: "Storage (treemap)",
+    prompt: "What's taking up space on the team drive?",
+    spec: `state folders=[{name: "Video", gb: 412}, {name: "Design files", gb: 188}, {name: "Photos", gb: 143}, {name: "Backups", gb: 121}, {name: "Recordings", gb: 76}, {name: "Datasets", gb: 64}, {name: "Docs", gb: 18}, {name: "Slides", gb: 15}, {name: "Audio", gb: 11}, {name: "Archive 2023", gb: 9}, {name: "Fonts", gb: 2}, {name: "Templates", gb: 1}]
+chart "Team drive by folder (GB)" kind=treemap items=folders x=name y=gb
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

@@ -11,7 +11,7 @@ import { chartSeries, FORMATS, KINDS, labelOf, MAX_CHART_ITEMS, numberAt, precis
 
 const KIND_NAMES: Record<Kind, string> = {
   bar: "Bar chart", hbar: "Bar chart", line: "Line chart", area: "Area chart", stacked: "Stacked bar chart",
-  pie: "Pie chart", donut: "Donut chart", funnel: "Funnel chart", waterfall: "Waterfall chart", bullet: "Bullet chart", heatmap: "Heatmap", scatter: "Scatter chart",
+  pie: "Pie chart", donut: "Donut chart", funnel: "Funnel chart", waterfall: "Waterfall chart", bullet: "Bullet chart", heatmap: "Heatmap", scatter: "Scatter chart", treemap: "Treemap",
 };
 
 /** A table of rows of text, as parts inside a figure: a header row, then a row per item. */
@@ -116,7 +116,7 @@ export function chartSemantics(box: Box, ctx: SemanticsContext): ElementSemantic
   }
 
   const target = kind === "bullet" ? p.str("target") : "";
-  const fields = target ? [ys[0] ?? "", target] : kind === "pie" || kind === "donut" || kind === "funnel" || kind === "waterfall" ? ys.slice(0, 1) : ys;
+  const fields = target ? [ys[0] ?? "", target] : kind === "pie" || kind === "donut" || kind === "funnel" || kind === "waterfall" || kind === "treemap" ? ys.slice(0, 1) : ys;
   const labels = p.str("labels").split(",").map((s) => s.trim());
   const seriesNames = fields.map((f, k) => (f === target ? "Target" : labels[k] || f));
   const d = chartSeries(items, x, fields);
@@ -129,7 +129,14 @@ export function chartSemantics(box: Box, ctx: SemanticsContext): ElementSemantic
   let summary = items_ + ".";
   if (known.length) {
     const { hi, lo } = extremes(known);
-    if (kind === "pie" || kind === "donut") {
+    if (kind === "treemap") {
+      // Largest first, as drawn, with each one's share.
+      const positive = known.filter((s) => s.value > 0);
+      const total = positive.reduce((a, s) => a + s.value, 0);
+      const top = [...positive].sort((a, b) => b.value - a.value).slice(0, 3);
+      const folded = (geo?.custom as { folded?: number } | undefined)?.folded ?? 0;
+      summary = `${positive.length} ${positive.length === 1 ? "part" : "parts"}, total ${v(total)}. Largest: ${top.map((s) => `${s.label}, ${v(s.value)} (${shareText(total ? s.value / total : 0)})`).join("; ")}.${folded ? ` The smallest ${folded} are drawn together as one.` : ""}`;
+    } else if (kind === "pie" || kind === "donut") {
       const total = known.reduce((a, s) => a + Math.max(0, s.value), 0);
       summary = `${items_}, total ${v(total)}. Largest: ${hi.label}, ${v(hi.value)} (${shareText(total ? hi.value / total : 0)}).`;
     } else if (kind === "funnel") {
