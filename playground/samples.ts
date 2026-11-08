@@ -477,6 +477,13 @@ chart "Price against rating" kind=scatter items=products x=price y=rating label=
 chart "Team drive by folder (GB)" kind=treemap items=folders x=name y=gb
 `,
   },
+  signupFlow: {
+    label: "Sign-up flow (sankey)",
+    prompt: "Where do our trial sign-ups come from, and how many become paying?",
+    spec: `state flows=[{from: "Search", to: "Trial", n: 1200}, {from: "Referral", to: "Trial", n: 640}, {from: "Ads", to: "Trial", n: 860}, {from: "Trial", to: "Paying", n: 610}, {from: "Trial", to: "Lapsed", n: 2090}, {from: "Paying", to: "Annual plan", n: 240}, {from: "Paying", to: "Monthly plan", n: 370}]
+chart "Trials to paying customers" kind=sankey items=flows from=from to=to y=n
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

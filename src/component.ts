@@ -28,6 +28,8 @@ export interface PropDef {
   values?: readonly string[];
   default?: Value;
   required?: boolean;
+  /** A required prop that isn't needed when another prop has one of these values (chart's x= with kind=sankey). */
+  unlessProp?: { name: string; values: readonly string[] };
 }
 
 export type Category = "layout" | "content" | "data" | "input" | "navigation" | "feedback";

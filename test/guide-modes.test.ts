@@ -205,7 +205,7 @@ describe("picks", () => {
     for (const mode of ["full", "compact"] as const) {
       const guide = languageGuide(all, { mode });
       expect(guide).toContain("PICK BY WHAT YOU'RE SHOWING");
-      expect(guide).toContain("- several KPIs, quotas or budgets against their targets (good=down when under target is good): chart kind=bullet target=goal");
+      expect(guide).toContain("- KPIs, quotas or budgets against targets (good=down if under is good): chart kind=bullet target=goal");
       expect(guide).toContain("- one record's fields, such as an order, a customer or a flight: details");
     }
   });

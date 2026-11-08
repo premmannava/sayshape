@@ -18,7 +18,7 @@ const dots = (d: ChartGeometry) => (d.custom as ScatterGeometry).dots;
 
 describe("chart kind=scatter", () => {
   it("is in the guide as the pick for how two numbers relate", () => {
-    expect(languageGuide(registry)).toContain("chart kind=scatter x=risk y=return label=name");
+    expect(languageGuide(registry)).toContain("how two numbers relate, such as risk against return: chart kind=scatter");
   });
 
   it("puts each dot at its x and y numbers, on number scales, in x order", () => {

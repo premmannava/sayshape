@@ -682,7 +682,8 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       checkProp(name, rawValue, pdef, lineNo, diagnostics, fns);
     }
     for (const [name, pdef] of Object.entries(def.props)) {
-      if (pdef.required && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs ${name}=` });
+      const exempt = pdef.unlessProp && pdef.unlessProp.values.includes(tok.props[pdef.unlessProp.name] ?? "");
+      if (pdef.required && !exempt && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs ${name}=` });
     }
     if (def.check) {
       // A component's own check must never stop parsing (rule 2).
