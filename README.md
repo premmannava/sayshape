@@ -263,7 +263,7 @@ List functions, for computing instead of typing numbers:
 | `includes(list, value)` | Whether a value is in the list |
 | `min(list)`, `max(list)`, `min(list, 'price')`, `max(list, 'price')` | Smallest and largest, of the items or of a field |
 | `count(list, 'cat', 'Gas')` | Items whose field equals a value, or any value in a list: `count(list, 'region', shown)` |
-| `filter(list, 'done')`, `filter(list, 'cat', 'Gas')`, `filter(list, 'region', shown)`, `filter(list, 'date', period)` | The items whose field is true, equals a value, is any value in a list (a multi-select's; an empty list keeps none), or is within a `{from, to}` range (a date range's, or numbers; both ends included, an empty end open), as a list |
+| `filter(list, 'done')`, `filter(list, 'cat', 'Gas')`, `filter(list, 'region', shown)`, `filter(list, 'date', period)`, `filter(list, 'price', {to: budget})` | The items whose field is true, equals a value, is any value in a list (a multi-select's; an empty list keeps none), or is within a `{from, to}` range (a date range's, or numbers; both ends included, an empty end open), as a list |
 | `find(list, 'id', picked)` | The first item whose field equals a value, or `null`: `{find(rooms, 'id', room).rate}` |
 | `search(list, 'name', query)` | Items whose field contains some text, ignoring case (all of them for empty text) |
 | `sort(list, 'price')`, `sort(list, 'price', 'desc')`, `sort(list)` | The list in order, by a field or by value |

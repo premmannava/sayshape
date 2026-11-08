@@ -402,7 +402,7 @@ export interface ComponentDef {
 /** Props every component accepts. */
 export const COMMON_PROPS: Record<string, PropDef> = {
   if: { type: "condition", description: "Show only when this expression is true, e.g. if=done or if={count>0}." },
-  tip: { type: "string", description: "A short explanation shown on hover, keyboard focus or a tap, e.g. tip=\"Orders not yet shipped\". It makes the element a Tab stop if it isn't one." },
+  tip: { type: "string", description: "A short explanation shown on hover, keyboard focus or a tap, e.g. tip=\"Orders not yet shipped\": for a term or a number some people won't know, instead of more words on screen. It makes the element a Tab stop if it isn't one." },
 };
 
 /**

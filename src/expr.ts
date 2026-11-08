@@ -327,7 +327,7 @@ const MAX_ARGS: Readonly<Record<string, number>> = Object.freeze(Object.assign(
 /** How to call the functions models most often give too many arguments. */
 const SIGNATURES: Record<string, string> = {
   take: "take(list, n) keeps the first n; for a page or an offset use slice(list, start, end)",
-  filter: "filter(list, 'field', value) keeps the items whose field is value (or any value in a list of them)",
+  filter: "filter(list, 'field', value) keeps the items whose field is value (or any value in a list of them, or within {from, to}: numbers or YYYY-MM-DD dates, either end left open)",
   find: "find(list, 'field', value)", search: "search(list, 'field', text)", sort: "sort(list, 'field', 'desc')",
   count: "count(list, 'field', value)", sum: "sum(list, 'field', 'qty')", avg: "avg(list, 'field')",
   group: "group(list, 'field', 'amount', 'avg')", first: "first(list)", last: "last(list)", pluck: "pluck(list, 'field')",

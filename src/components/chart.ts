@@ -800,6 +800,7 @@ export const chart: ComponentDef = {
     { for: "a ranking or a top 10 with long names", write: "chart kind=hbar" },
     { for: "parts of each total, such as revenue by product per month", write: "chart kind=stacked y=hardware,software" },
     { for: "an amount over time, such as visitors a week", write: "chart kind=area" },
+    { for: "series compared over time, such as this year against last", write: "chart kind=line y=this_year,last_year" },
     { for: "how one whole splits up, such as sales by region", write: "chart kind=donut" },
     { for: "stages people drop out of, such as leads to won deals", write: "chart kind=funnel" },
     { for: "changes adding up to a total, such as revenue minus costs", write: "chart kind=waterfall total=\"Net income\"" },
