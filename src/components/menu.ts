@@ -116,6 +116,7 @@ export const menu: ComponentDef = {
     align: { type: "enum", values: ["start", "end"], description: "Where it sits in its room: start, or end (the right). Default: end for a ⋯ menu, start for one with words." },
   },
   children: ["menu-item"],
+  picks: [{ for: "several actions on one item without a row of buttons", write: "menu holding menu-item" }],
   example: `menu "Actions"
   menu-item "Edit" icon=file on=emit:edit
   menu-item "Duplicate" icon=copy on=emit:duplicate

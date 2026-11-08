@@ -818,6 +818,7 @@ export const input: ComponentDef = {
     disabled: { type: "condition", description: "Expression; when true the field is greyed out and can't be typed in." },
     max: { type: "number", default: 500, description: "Longest value in characters (at most 10000; 2000 when lines= is more than 1)." },
   },
+  picks: [{ for: "a form that says what's missing or wrong", write: "input required=true kind=email" }],
   example: `state task="" todos=[]
 input "New item" bind=task placeholder="e.g. Sunscreen" on="add:todos:{task};set:task:''"
 text "{plural(len(todos), 'item')}" tone=muted`,
