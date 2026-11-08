@@ -100,7 +100,7 @@ EVERY ELEMENT ACCEPTS
     if=<condition>  Show only when this expression is true, e.g. if=done or if={count>0}.
 
 ELEMENTS AT A GLANCE
-- layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel
+- layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll
 - content: text, image, code, badge, avatar, callout, icon, tile
 - data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
@@ -711,6 +711,19 @@ ELEMENTS
         tile "Q" icon=heart tone=bad label="Queen of hearts"
         tile "A" icon=spade label="Ace of spades"
         tile "B4" shape=square detail="$14" selected=true on=emit:seat
+
+  scroll "<text>"  — A region that shows its children up to a fixed height and scrolls the rest, for a long list inside a card: messages, activity, results. Everything inside is still read and copied.
+    "<text>"  What it holds, for screen readers, e.g. Recent activity. Not drawn.
+    size=<sm|md|lg>  How tall it gets before it scrolls: sm (about 6 rows of controls), md (about 9) or lg (about 12).
+    gap=<number>  Space between children in pixels (default 8).
+    pad=<number>  Inner padding in pixels (default 0).
+    children: any elements
+    example:
+      state events=[{title: "Order NW-2041 shipped", when: "09:12"}, {title: "Refund approved", when: "08:40"}, {title: "New review: 5 stars", when: "Yesterday"}, {title: "Stock low: Ridge 28 L", when: "Yesterday"}, {title: "Invoice sent", when: "Mon"}, {title: "Order NW-2038 delivered", when: "Mon"}, {title: "Price change: Summit pack", when: "Sun"}, {title: "New customer: Lumen Cinema", when: "Sat"}]
+      scroll "Recent activity" size=sm
+        list
+          each items=events as=e
+            list-item "{e.title}" detail="{e.when}"
 
   map  — Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
     kind=<markers|choropleth|bubble>  markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows.

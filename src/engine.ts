@@ -139,6 +139,10 @@ export class SayShape {
   private parsed: ParseResult | null = null;
   private rootBox: Box | null = null;
   private hits: HitRegion[] = [];
+  /** While painting the children of elements that scroll: what each shows, innermost last. */
+  private clips: Array<{ rect: Rect; owner: Box }> = [];
+  /** The focused region last scrolled into sight, so a person's own scrolling isn't undone. */
+  private revealed = "";
   private seen = new Map<string, number>();
   private transitions = new MotionValues();
   /** Per-element view state (a table's scroll offset), by element id; see ElementView. */
@@ -374,6 +378,12 @@ export class SayShape {
     if (this.dirty.parse) this.runParse();
     if (this.dirty.layout) this.runLayout();
     if (this.dirty.paint) this.runPaint();
+    // Painting can ask for layout once (a scrolling element bringing the focused element into
+    // view): do it in the same frame, so the screen never shows the step before.
+    for (let pass = 0; pass < 3 && this.dirty.layout && !this.dirty.parse; pass++) {
+      this.runLayout();
+      this.runPaint();
+    }
   }
 
   private runParse(): void {
@@ -421,6 +431,59 @@ export class SayShape {
     this.refreshTargets();
   }
 
+  /**
+   * When the keyboard moves to something scrolled out of sight inside a
+   * scrolling element, have that element bring it into view (once per move,
+   * so scrolling away from the focused element afterwards isn't undone).
+   */
+  private revealFocus(): boolean {
+    const f = this.focus;
+    if (!f || !this.keyboardMode) { this.revealed = ""; return false; }
+    const key = accessibleKey(f.node, f.detail);
+    if (key === this.revealed) return false;
+    const h = this.hits.find((r) => r.box.node.id === f.node.id && r.detail === f.detail);
+    // From the innermost scrolling element out: each brings the part of it in sight into its own view.
+    let rect: Rect = h ? { x: h.box.x, y: h.box.y, w: h.box.w, h: h.box.h } : { x: 0, y: 0, w: 0, h: 0 };
+    let region = h;
+    for (let depth = 0; region?.clip && region.clipOwner && depth < 20; depth++) {
+      const c = region.clip, owner = region.clipOwner;
+      if (rect.y < c.y - 0.5 || rect.y + rect.h > c.y + c.h + 0.5) {
+        const def = this.registry.get(owner.node.type);
+        if (def?.revealChild?.(owner, this.viewOf(owner.node), rect)) { this.invalidate("layout"); return true; }
+      }
+      // The owner itself, as its own parent sees it.
+      rect = intersectRect(rect, c);
+      if (rect.h <= 0) rect = { x: owner.x, y: owner.y, w: owner.w, h: Math.min(owner.h, h?.box.h ?? owner.h) };
+      region = this.hits.find((r) => r.box.node.id === owner.node.id);
+    }
+    this.revealed = key;
+    return false;
+  }
+
+  /**
+   * Scroll whatever is at (x, y): the element under the point first, then each element under
+   * it in turn (a scrolling element under a button inside it), until one uses the movement.
+   */
+  private scrollAt(x: number, y: number, deltaX: number, deltaY: number, mods: { ctrlKey: boolean; shiftKey: boolean }): boolean {
+    const first = this.targetAt(x, y);
+    const targets: HitTarget[] = first ? [first] : [];
+    for (let i = this.hits.length - 1; i >= 0; i--) {
+      const h = this.hits[i]!, b = h.box;
+      if (x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h) continue;
+      if (h.clip && (x < h.clip.x || x > h.clip.x + h.clip.w || y < h.clip.y || y > h.clip.y + h.clip.h)) continue;
+      if (!targets.some((t) => t.node.id === b.node.id)) targets.push({ node: b.node, box: b, detail: h.detail });
+    }
+    for (const target of targets) {
+      const wheel = this.registry.get(target.node.type)?.wheel;
+      if (!wheel) continue;
+      if (wheel({ ...this.pressContext(target), x, y, deltaY, deltaX, ...mods })) {
+        this.invalidate("layout");
+        return true;
+      }
+    }
+    return false;
+  }
+
   /** Report a problem once per spec, however often layout runs into it. */
   private warnOnce(m: string): void {
     if (!this.warned.has(m)) { this.warned.add(m); this.warn(m); }
@@ -446,10 +509,20 @@ export class SayShape {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, this.metrics.width, this.metrics.height);
     this.hits = [];
+    this.clips = [];
     const ctx = this.paintContext(g);
     this.paintBox(this.rootBox, ctx, 1);
     this.resolveFocus();
-    if (this.focus && this.keyboardMode && !this.inspector.inspecting) this.paintFocusRing(g, this.focus.box);
+    // Bringing the focused element into view lays out again, in this same frame (renderNow):
+    // leave the ring, popup and screen reader for that pass, so nothing follows the old place.
+    if (this.revealFocus()) return;
+    if (this.focus && this.keyboardMode && !this.inspector.inspecting) {
+      const f = this.focus;
+      const clip = this.hits.find((h) => h.box.node.id === f.node.id && h.detail === f.detail)?.clip;
+      if (clip) { g.save(); g.beginPath(); g.rect(clip.x - 4, clip.y - 4, clip.w + 8, clip.h + 8); g.clip(); }
+      this.paintFocusRing(g, f.box);
+      if (clip) g.restore();
+    }
     this.paintPopup(g, ctx);
     this.paintToast(g);
     this.inspector.paintOverlay(g, this.rootBox, this.hits);
@@ -592,7 +665,8 @@ export class SayShape {
       roundRect: (x, y, w, h, r) => roundRectPath(g, x, y, w, h, r),
       addHit: (box, o = {}) => {
         const focusable = o.focusable ?? true;
-        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable });
+        const clip = this.clips[this.clips.length - 1];
+        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}) });
       },
       isHovered: (n, d) => same(this.hover, n, d),
       isFocused: (n, d) => this.keyboardMode && same(this.focus, n, d),
@@ -639,7 +713,19 @@ export class SayShape {
     ctx.g.restore();
     const under = def?.surface?.(box, ctx);
     const inner = under && under !== ctx.theme.colors.raised ? { ...ctx, theme: { ...ctx.theme, colors: { ...ctx.theme.colors, raised: under } } } : ctx;
+    // An element that scrolls its children shows them through its own box only.
+    const clip = def?.clipChildren?.(box) ?? null;
+    if (clip) {
+      const outer = this.clips[this.clips.length - 1]?.rect;
+      const rect = outer ? intersectRect(clip, outer) : clip;
+      ctx.g.save();
+      ctx.g.beginPath();
+      ctx.g.rect(rect.x, rect.y, rect.w, rect.h);
+      ctx.g.clip();
+      this.clips.push({ rect, owner: box });
+    }
     for (const k of box.children) this.paintBox(k, inner, alpha);
+    if (clip) { this.clips.pop(); ctx.g.restore(); }
     if (def?.paintOver && !(loading && (def.paintLoading || !box.children.length))) {
       ctx.g.save();
       ctx.g.globalAlpha = alpha;
@@ -829,6 +915,8 @@ export class SayShape {
       const h = this.hits[i]!;
       const b = h.box;
       if (x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h) continue;
+      // Scrolled out of its element's sight: not there for the pointer.
+      if (h.clip && (x < h.clip.x || x > h.clip.x + h.clip.w || y < h.clip.y || y > h.clip.y + h.clip.h)) continue;
       const def = this.registry.get(b.node.type);
       if (def?.hitTest) {
         const r = def.hitTest(b, x, y, h.detail);
@@ -1180,7 +1268,12 @@ export class SayShape {
     if (this.editing) {
       const t = find(this.editing);
       const spec = t && this.editorSpec(t.node);
-      if (!t || !spec) this.endEdit();
+      // A field scrolled out of its scrolling element's sight stops being typed in, so the
+      // text box never floats over something else.
+      const was = this.editing;
+      const clip = this.hits.find((h) => h.box.node.id === was.node.id)?.clip;
+      const hidden = !!(t && clip && (t.box.y + t.box.h < clip.y + 2 || t.box.y > clip.y + clip.h - 2));
+      if (!t || !spec || hidden) this.endEdit();
       else { this.editing = t; this.editorHost.update(spec); }
     }
   }
@@ -1480,24 +1573,44 @@ export class SayShape {
         return;
       }
       if (this.inspector.inspecting) return;
-      const target = this.targetAt(at.x, at.y);
-      const wheel = target && this.registry.get(target.node.type)?.wheel;
-      if (!target || !wheel) return;
       // WheelEvent deltaMode may be lines or pages rather than CSS pixels.
       const factor = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.metrics.height : 1;
-      const handled = wheel({
-        ...this.pressContext(target),
-        x: at.x, y: at.y,
-        deltaY: e.deltaY * factor,
-        deltaX: (e.deltaX || 0) * factor,
-        ctrlKey: !!e.ctrlKey,
-        shiftKey: !!e.shiftKey,
-      });
-      if (handled) {
+      if (this.scrollAt(at.x, at.y, (e.deltaX || 0) * factor, e.deltaY * factor, { ctrlKey: !!e.ctrlKey, shiftKey: !!e.shiftKey })) {
         e.preventDefault();
-        this.invalidate("layout");
+        // What's under the pointer has moved: hover follows it once the frame is laid out.
+        this.renderNow();
+        this.hover = this.targetAt(at.x, at.y);
+        this.invalidate("paint");
       }
     };
+    // Touch: a vertical swipe over a scrolling element scrolls it (the page's own touch-action
+    // would otherwise take it), and the press it started on doesn't fire.
+    let touch: { x: number; y: number; lastY: number; scrolled: boolean } | null = null;
+    const onTouchStart = (e: TouchEvent) => {
+      const t = e.touches.length === 1 ? e.touches[0] : undefined;
+      if (!t || this.popup) { touch = null; return; }
+      const r = c.getBoundingClientRect();
+      const x = t.clientX - r.left, y = t.clientY - r.top;
+      touch = { x, y, lastY: y, scrolled: false };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const t = e.touches.length === 1 ? e.touches[0] : undefined;
+      if (!touch || !t || this.dragging) return;
+      const y = t.clientY - c.getBoundingClientRect().top;
+      if (!touch.scrolled && Math.abs(y - touch.y) < 6) return;
+      if (this.scrollAt(touch.x, touch.y, 0, touch.lastY - y, { ctrlKey: false, shiftKey: false })) {
+        e.preventDefault();
+        touch.scrolled = true;
+        touch.lastY = y;
+        // The finger is scrolling, not pressing: the release mustn't press what it started on.
+        this.pressed = null;
+        this.swallowRelease = true;
+      }
+    };
+    const onTouchEnd = () => { touch = null; };
+    c.addEventListener("touchstart", onTouchStart as EventListener, { passive: true });
+    c.addEventListener("touchmove", onTouchMove as EventListener, { passive: false });
+    c.addEventListener("touchend", onTouchEnd as EventListener);
     c.addEventListener("wheel", onWheel as EventListener, { passive: false });
     c.addEventListener("pointermove", onMove);
     c.addEventListener("pointerleave", onLeave);
@@ -1509,6 +1622,9 @@ export class SayShape {
     c.addEventListener("blur", onBlur as EventListener);
     this.cleanup.push(() => {
       c.removeEventListener("wheel", onWheel as EventListener);
+      c.removeEventListener("touchstart", onTouchStart as EventListener);
+      c.removeEventListener("touchmove", onTouchMove as EventListener);
+      c.removeEventListener("touchend", onTouchEnd as EventListener);
       c.removeEventListener("pointermove", onMove);
       c.removeEventListener("pointerleave", onLeave);
       c.removeEventListener("pointerdown", onDown);
@@ -1682,4 +1798,10 @@ export function roundRectPath(g: CanvasRenderingContext2D, x: number, y: number,
   g.arcTo(x, y + h, x, y, rr);
   g.arcTo(x, y, x + w, y, rr);
   g.closePath();
+}
+
+/** The overlap of two rectangles (empty, not negative, when they don't meet). */
+function intersectRect(a: Rect, b: Rect): Rect {
+  const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
+  return { x, y, w: Math.max(0, Math.min(a.x + a.w, b.x + b.w) - x), h: Math.max(0, Math.min(a.y + a.h, b.y + b.h) - y) };
 }

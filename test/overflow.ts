@@ -26,6 +26,8 @@ export function textOverflows(root: Box, ops: readonly DrawOp[]): Overflow[] {
     const [raw, x, y, maxWidth] = op.args as [unknown, number, number, number | undefined];
     const text = String(raw);
     if (!text.trim()) continue;
+    // Clipped out of sight (inside a scrolling element): not on screen.
+    if (op.clip && (y < op.clip.y || y > op.clip.y + op.clip.h || x < op.clip.x - SLACK || x > op.clip.x + op.clip.w + SLACK)) continue;
     const natural = monoWidth(text, op.font);
     const owner = boxAt(root, x, y);
     const element = owner ? `${owner.node.type} (line ${owner.node.line})` : "nothing";

@@ -294,6 +294,18 @@ export interface ComponentDef {
    */
   surface?(box: Box, ctx: PaintContext): string | undefined;
   /**
+   * For an element that scrolls its children (scroll): the part of the
+   * screen they show through, or null when everything fits. The engine clips
+   * their drawing to it, and the pointer reaches only what's inside it.
+   */
+  clipChildren?(box: Box): Rect | null;
+  /**
+   * For an element that clips its children: scroll so `rect` (a child the
+   * keyboard just moved to) is in sight, by changing its view state.
+   * Returns true when it moved (the engine lays out again).
+   */
+  revealChild?(box: Box, view: ElementView, rect: Rect): boolean;
+  /**
    * Paint a placeholder shaped like this element while the data it reads is
    * loading (ctx.isLoading), instead of paint. Use paintGhost from src/ghost.ts.
    * Elements without it are drawn as a plain shimmering block when they have

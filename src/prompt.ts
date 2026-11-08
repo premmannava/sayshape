@@ -121,7 +121,7 @@ export function elementGuide(registry: Registry, names: readonly string[]): { te
 /** The heading of the picks section, everywhere it's shown. */
 export const PICKS_HEADING = "PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)";
 /** The same heading in fewer words, for the MCP quick start, which goes out with every call. */
-export const PICKS_HEADING_SHORT = "PICK BY WHAT YOU'RE SHOWING (don't rebuild these)";
+export const PICKS_HEADING_SHORT = "PICK BY WHAT YOU'RE SHOWING (don't rebuild)";
 
 /**
  * Every exposed element's picks, one line each: what the answer shows, then

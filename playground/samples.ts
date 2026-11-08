@@ -484,6 +484,23 @@ chart "Team drive by folder (GB)" kind=treemap items=folders x=name y=gb
 chart "Trials to paying customers" kind=sankey items=flows from=from to=to y=n
 `,
   },
+  activityFeed: {
+    label: "Activity feed (scroll)",
+    prompt: "Show today's store activity in a card that doesn't take over the page.",
+    spec: `state events=[{title: "Order NW-2041 shipped", when: "09:12", tone: "good"}, {title: "Refund approved: NW-2033", when: "08:40", tone: "default"}, {title: "New review: 5 stars on Ridge 28 L", when: "08:05", tone: "good"}, {title: "Stock low: Ridge 28 L, Slate", when: "07:58", tone: "warn"}, {title: "Invoice INV-1188 sent", when: "07:30", tone: "default"}, {title: "Order NW-2038 delivered", when: "Yesterday", tone: "good"}, {title: "Payment failed: NW-2036", when: "Yesterday", tone: "bad"}, {title: "Price change: Summit pack", when: "Yesterday", tone: "default"}, {title: "New customer: Lumen Cinema", when: "Mon", tone: "good"}, {title: "Return requested: NW-2029", when: "Mon", tone: "warn"}, {title: "Order NW-2027 shipped", when: "Sun", tone: "good"}, {title: "Coupon SPRING10 expired", when: "Sun", tone: "default"}]
+card
+  text "Store activity" style=title
+  text "{len(events)} events. Scroll the list; the totals stay put." tone=muted
+  scroll "Store activity" size=sm
+    list
+      each items=events as=e
+        list-item "{e.title}" detail="{e.when}"
+  divider
+  grid min=120 gap=10
+    stat label="Orders shipped" value="2"
+    stat label="Needs attention" value="3" tone=warn
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

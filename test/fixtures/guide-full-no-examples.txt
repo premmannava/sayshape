@@ -100,7 +100,7 @@ EVERY ELEMENT ACCEPTS
     if=<condition>  Show only when this expression is true, e.g. if=done or if={count>0}.
 
 ELEMENTS AT A GLANCE
-- layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel
+- layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll
 - content: text, image, code, badge, avatar, callout, icon, tile
 - data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
@@ -504,6 +504,13 @@ ELEMENTS
     disabled=<condition>  Expression; when true it's greyed out and can't be pressed, e.g. a seat that's taken.
     on=<action>  Actions to run when pressed, e.g. emit:changed. Separate several with ;
     label=<string>  What screen readers and Copy text say for it, e.g. label="Seat B4". Default: its value (with its suit, as in Q of hearts) and detail.
+
+  scroll "<text>"  — A region that shows its children up to a fixed height and scrolls the rest, for a long list inside a card: messages, activity, results. Everything inside is still read and copied.
+    "<text>"  What it holds, for screen readers, e.g. Recent activity. Not drawn.
+    size=<sm|md|lg>  How tall it gets before it scrolls: sm (about 6 rows of controls), md (about 9) or lg (about 12).
+    gap=<number>  Space between children in pixels (default 8).
+    pad=<number>  Inner padding in pixels (default 0).
+    children: any elements
 
   map  — Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
     kind=<markers|choropleth|bubble>  markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows.

@@ -17,6 +17,8 @@ export interface DrawOp {
   gradientStops?: Array<{ offset: number; color: string }>;
   /** For text: where x is on the text (left, center, right, start or end). */
   textAlign: string;
+  /** The rectangle drawing was clipped to (canvas clip() with a rect path), if any. */
+  clip?: { x: number; y: number; w: number; h: number };
 }
 
 /** Calls that mark pixels. Everything else (paths, transforms, state) only prepares. */
@@ -52,6 +54,9 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
   let style = initialStyle();
   const stack: Style[] = [];
   let log: DrawOp[] = [];
+  // The current path when it's a single rectangle, so clip() can be recorded.
+  let pathRect: { x: number; y: number; w: number; h: number } | null = null;
+  let pathParts = 0;
 
   const createGradient = (): FakeGradient => {
     const stops: FakeGradient["stops"] = [];
@@ -59,6 +64,16 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
   };
   const methods: Record<string, (...args: unknown[]) => unknown> = {
     save: () => { stack.push({ ...style }); },
+    beginPath: () => { pathRect = null; pathParts = 0; },
+    rect: (x, y, w, h) => { pathParts++; pathRect = pathParts === 1 ? { x: Number(x), y: Number(y), w: Number(w), h: Number(h) } : null; },
+    clip: () => {
+      if (!pathRect) return;
+      const c = style.clip as DrawOp["clip"] | undefined;
+      const r = pathRect;
+      if (!c) { style.clip = r; return; }
+      const x = Math.max(c.x, r.x), y = Math.max(c.y, r.y);
+      style.clip = { x, y, w: Math.max(0, Math.min(c.x + c.w, r.x + r.w) - x), h: Math.max(0, Math.min(c.y + c.h, r.y + r.h) - y) };
+    },
     restore: () => { style = stack.pop() ?? style; },
     measureText: (text) => ({ width: monoWidth(String(text), style.font) }),
     isPointInPath: () => false,
@@ -77,6 +92,7 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
       if (prop in style) return style[prop];
       if (prop === "canvas") return undefined;
       return (...args: unknown[]) => {
+        if (["moveTo", "lineTo", "arc", "arcTo", "bezierCurveTo", "quadraticCurveTo", "ellipse", "roundRect"].includes(prop)) { pathParts++; pathRect = null; }
         if (!DRAWING_OPS.has(prop)) return undefined;
         const fill = USES_FILL.has(prop);
         const colored = prop !== "drawImage";
@@ -92,6 +108,7 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
           font: prop.endsWith("Text") ? style.font : "",
           globalAlpha: style.globalAlpha,
           textAlign: prop.endsWith("Text") ? String(style.textAlign ?? "start") : "",
+          ...(style.clip ? { clip: style.clip as DrawOp["clip"] } : {}),
         });
         return undefined;
       };

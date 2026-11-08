@@ -148,6 +148,9 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
     entry.node = node;
     const el = entry.el;
     place(el, node.rect, parentRect);
+    // A region holds what may be scrolled out of its sight: its mirror keeps those nodes inside
+    // its own rectangle (still read by screen readers), so they never stretch the page.
+    if (node.role === "region") el.style.overflow = "hidden";
     const attrs = new Map<string, string>();
     const leaf = node.children.length === 0;
     const native = NATIVE[node.role];
