@@ -17,6 +17,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { languageGuide, type GuideMode } from "../src/prompt";
@@ -257,8 +258,8 @@ async function writePrompts(dir: string): Promise<void> {
   // The MCP server's own texts, so a model sees exactly what it sees in a chat app. The path is a
   // variable so the library's typecheck doesn't follow it into mcp/, whose packages are installed
   // separately (npm --prefix mcp install).
-  const server = "../mcp/src/server";
-  const mcp = (await import(server)) as { quickStart(): string; docsText(elements: string[], topics: string[]): string };
+  const server = fileURLToPath(new URL("../mcp/src/server.ts", import.meta.url));
+  const mcp = (await import(/* @vite-ignore */ server)) as { quickStart(): string; docsText(elements: string[], topics: string[]): string };
   writeFileSync(join(dir, "quickstart.txt"), mcp.quickStart());
   writeFileSync(join(dir, "guide-full.txt"), languageGuide(registry));
   for (const def of [...coreComponents, ...mapComponents]) writeFileSync(join(dir, "docs", `${def.type}.txt`), mcp.docsText([def.type], []));
