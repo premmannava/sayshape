@@ -33,6 +33,7 @@ import { domAccessibilityHost } from "./a11y/dom";
 import { noAccessibility, type AccessibilityHost, type MirrorEvents, type MirrorKey } from "./a11y/host";
 import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
+import { plainText } from "./a11y/text";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
 import type { ExpressionFunctions, Scope } from "./expr";
 
@@ -296,6 +297,18 @@ export class SayShape {
       popupState: this.popup?.state,
       today: this.today,
     });
+  }
+
+  /**
+   * The screen as plain text, for copying, since nothing on a canvas can be
+   * selected: headings, text and values as shown, fields as "Label: value",
+   * and tables and chart data as tab-separated rows that paste into a
+   * spreadsheet as cells (src/a11y/text.ts). Buttons and other controls are
+   * left out, and a password is never included. Empty before the first frame.
+   */
+  copyText(): string {
+    const tree = this.accessibilityTree();
+    return tree ? plainText(tree) : "";
   }
 
   on<K extends keyof SayShapeEvents>(name: K, fn: (p: SayShapeEvents[K]) => void): () => void {

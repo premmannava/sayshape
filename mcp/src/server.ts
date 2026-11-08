@@ -214,7 +214,7 @@ function describeCheck(c: SpecCheck): string {
 export interface ServerOptions {
   /** The view's HTML: dist/ui.html, built by `npm run build`. */
   uiHtml: () => string | Promise<string>;
-  /** The view's own settings: --theme-picker, --theme, --no-save-image (main.ts). Default: no picker, teal, Save image on. */
+  /** The view's own settings: --theme-picker, --theme, --no-save-image, --no-copy-text (main.ts). Default: no picker, teal, Save image and Copy text on. */
   view?: ViewOptions;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;
@@ -438,7 +438,8 @@ export function createServer(opts: ServerOptions): McpServer {
         mimeType: RESOURCE_MIME_TYPE,
         text: withViewOptions(await opts.uiHtml(), opts.view ?? DEFAULT_VIEW_OPTIONS),
         // Everything is inline: no scripts, styles, fonts or images from anywhere else.
-        _meta: { ui: { prefersBorder: true } },
+        // Clipboard write is asked for so Copy text works; chat apps may still say no, and the view falls back.
+        _meta: { ui: { prefersBorder: true, permissions: { clipboardWrite: {} } } },
       },
     ],
   }));

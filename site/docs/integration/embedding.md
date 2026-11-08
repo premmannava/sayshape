@@ -55,6 +55,7 @@ The canvas fills its parent's width, follows it when the parent resizes, and gro
 | `screens`, `currentScreen`, `canGoBack` | The spec's screen names, the visible one, and whether `back()` can move |
 | `notify(text)` | Show a short message, as `notify:` does |
 | `imagesLoaded()` | Resolves once every requested image has loaded or failed |
+| `copyText()` | The screen as plain text, for a Copy button: fields as `Label: value`, tables and chart data as tab-separated rows that paste into a spreadsheet. Buttons are left out and passwords never included |
 | `setTheme(theme)` | Switch themes |
 | `find(type)` | All nodes of a type, e.g. `ui.find("button")` |
 | `diagnostics`, `spec`, `tree` | The current problems, source text and parsed tree |
