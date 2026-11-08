@@ -9,7 +9,7 @@ import { mapComponents } from "../src/components/map";
 import { KINDS } from "../src/components/chart-kit";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
-import { elementSignatures, grade, pickCases, scoreElements, signatures, type Defaults } from "../eval/picks";
+import { elementSignatures, grade, pickCases, registryDefaults, scoreElements, signatures } from "../eval/picks";
 import { completeResults, scoreAnswer } from "../scripts/pick-eval";
 
 const registry = new Registry([...coreComponents, ...mapComponents]);
@@ -90,10 +90,7 @@ describe("representation eval cases", () => {
 
 describe("grading an answer", () => {
   const hbar = pickCases.find((c) => c.id === "rank-long-names")!;
-  const defaults: Defaults = (type, prop) => {
-    const d = registry.get(type)?.props?.[prop]?.default;
-    return d === undefined ? undefined : String(d);
-  };
+  const defaults = registryDefaults(registry);
   const els = (spec: string) => elementSignatures(parse(spec, registry).root, defaults);
   const sigsOf = (spec: string) => signatures(parse(spec, registry).root, defaults);
   const caseOf = (id: string) => pickCases.find((c) => c.id === id)!;

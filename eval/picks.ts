@@ -379,8 +379,8 @@ const round2: PickCase[] = [
   {
     id: "by-country", group: "chart",
     request: "Our customers by country: United States 4,200, United Kingdom 1,300, Germany 1,100, Canada 900, Australia 650, France 600, Japan 420, Brazil 380, India 360, Mexico 240. Show me where they are.",
-    best: ["map:choropleth", "map:bubble"], ok: ["map:markers", "chart:hbar", "chart:bar", "table", "chart:treemap"], poor: ["chart:pie", "chart:donut", "chart:line"],
-    why: "Asked where they are, with an amount each: a map shaded by country (kind=choropleth) or sized bubbles; pins or ranked bars are a fair second.",
+    best: ["map:choropleth", "map:bubble", "map:markers"], ok: ["chart:hbar", "chart:bar", "table", "chart:treemap"], poor: ["chart:pie", "chart:donut", "chart:line"],
+    why: "Asked where they are: a map, shaded by country (kind=choropleth), sized bubbles or pins (the map's docs keep rows out of specs, so pins are fine); ranked bars are a fair second.",
   },
   {
     id: "dashboard-mix", group: "chart",
@@ -486,6 +486,14 @@ const on = (v: string | undefined) => literal(v) !== undefined && v !== "false";
 /** A prop's default from the element's own definition, so specs are read as the engine draws them. */
 export type Defaults = (type: string, prop: string) => string | undefined;
 
+/** Defaults from a registry's component definitions. */
+export function registryDefaults(registry: { get(type: string): { props?: Record<string, { default?: unknown }> } | undefined }): Defaults {
+  return (type, prop) => {
+    const d = registry.get(type)?.props?.[prop]?.default;
+    return d === undefined ? undefined : String(d);
+  };
+}
+
 /** Which prop picks an element's variant. */
 const VARIANT: Record<string, string> = { chart: "kind", tree: "kind", meter: "kind", map: "kind", schedule: "view" };
 
@@ -493,7 +501,7 @@ const VARIANT: Record<string, string> = { chart: "kind", tree: "kind", meter: "k
  * What an answer is made of, element by element: each element's signatures, most specific
  * first ("chart:line" before "chart"), and one ["tip"] for each tip=.
  */
-export function elementSignatures(root: SayShapeNode, defaults: Defaults = () => undefined): string[][] {
+export function elementSignatures(root: SayShapeNode, defaults: Defaults): string[][] {
   const out: string[][] = [];
   const walk = (n: SayShapeNode) => {
     const p = n.props;
@@ -525,7 +533,7 @@ export function elementSignatures(root: SayShapeNode, defaults: Defaults = () =>
 }
 
 /** Every signature in an answer, for the report. */
-export function signatures(root: SayShapeNode, defaults?: Defaults): Set<string> {
+export function signatures(root: SayShapeNode, defaults: Defaults): Set<string> {
   return new Set(elementSignatures(root, defaults).flat());
 }
 

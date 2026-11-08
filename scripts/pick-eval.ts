@@ -24,16 +24,13 @@ import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render } from "../src/testing";
 import { generateSpec } from "../src/model";
-import { elementSignatures, pickCases, scoreElements, type Defaults, type Grade, type PickCase } from "../eval/picks";
+import { elementSignatures, pickCases, registryDefaults, scoreElements, type Grade, type PickCase } from "../eval/picks";
 import { textOverflows } from "../test/overflow";
 import { readModelEnv } from "./model-env";
 
 const registry = new Registry([...coreComponents, ...mapComponents]);
 /** Props left out take the element's own default (a chart without kind= is a bar chart). */
-const defaults: Defaults = (type, prop) => {
-  const d = registry.get(type)?.props?.[prop]?.default;
-  return d === undefined ? undefined : String(d);
-};
+const defaults = registryDefaults(registry);
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(`--${name}`);
@@ -199,6 +196,9 @@ function answerFrom(value: unknown, where: string): PickAnswer {
   if (!v || typeof v !== "object" || typeof v.id !== "string" || typeof v.spec !== "string") {
     throw new Error(`${where}: an answer needs "id" and "spec" as text, e.g. {"id": "share-few", "spec": "chart kind=pie …"}`);
   }
+  if (v.run !== undefined && !(typeof v.run === "number" && Number.isInteger(v.run) && v.run >= 1)) {
+    throw new Error(`${where}: "run" is a whole number from 1, not ${JSON.stringify(v.run)}`);
+  }
   return {
     id: v.id, spec: v.spec,
     ...(typeof v.model === "string" ? { model: v.model } : {}),
@@ -228,6 +228,7 @@ function readJsonLines(file: string): PickAnswer[] {
  * Anything else in the folder is skipped, with a warning.
  */
 function readAnswers(path: string): PickAnswer[] {
+  if (!existsSync(path)) throw new Error(`No answers at ${path}: give a .jsonl file or a folder of answers`);
   if (!statSync(path).isDirectory()) return readJsonLines(path);
   const out: PickAnswer[] = [];
   for (const name of readdirSync(path)) {
@@ -276,7 +277,10 @@ async function main(): Promise<void> {
   const byId = new Map(cases.map((c) => [c.id, c] as const));
   let answers: PickAnswer[];
   const from = arg("answers");
-  if (from) answers = readAnswers(resolve(from));
+  if (from) {
+    answers = readAnswers(resolve(from));
+    if (!answers.length) throw new Error(`No answers found in ${from}: answers are .jsonl files or <model>-<setup>-r<run> folders of <id>.sayshape files`);
+  }
   else {
     const env = readModelEnv();
     if (!env.model) throw new Error("Set SAYSHAPE_MODEL (and SAYSHAPE_MODEL_URL, SAYSHAPE_API_KEY) in .env.local, or score answers with --answers");
