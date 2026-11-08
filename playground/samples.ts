@@ -392,6 +392,25 @@ card
   callout "Easy Listening lost money after refunds" detail="Check its returns before restocking" tone=warn icon=true
 `,
   },
+  roomBookings: {
+    label: "Room bookings",
+    prompt: "Show today's meeting room bookings by room.",
+    spec: `state bookings=[{id: "b1", room: "Atlas", from: "09:00", to: "10:00", title: "Weekly sales sync"}, {id: "b2", room: "Atlas", from: "09:30", to: "11:00", title: "Pipeline review", status: "warn"}, {id: "b3", room: "Harbor", from: "10:00", to: "12:30", title: "Claims training"}, {id: "b4", room: "Summit", from: "13:00", to: "14:00", title: "Vendor call: Fernwood Freight"}, {id: "b5", room: "Harbor", from: "14:00", to: "15:30", title: "Interviews: ops lead"}, {id: "b6", room: "Atlas", from: "15:00", to: "16:00", title: "Board prep", status: "bad"}] picked=""
+card
+  text "Rooms, Tuesday" style=title
+  text "Overlapping bookings sit side by side; amber needs a bigger room, red is unconfirmed" tone=muted
+  schedule items=bookings start=from end=to label=title rows=room tone=status view=day bind=picked
+  if={picked != ''}
+    text "{find(bookings, 'id', picked).title}: {find(bookings, 'id', picked).room}, {find(bookings, 'id', picked).from} to {find(bookings, 'id', picked).to}" weight=semibold
+`,
+  },
+  launchPlan: {
+    label: "Launch plan",
+    prompt: "Plan the Ledgerly 2.0 launch by team, as a Gantt chart.",
+    spec: `state tasks=[{id: 1, task: "Pricing research", team: "Product", from: "2026-10-05", to: "2026-10-16"}, {id: 2, task: "Beta with 12 customers", team: "Product", from: "2026-10-19", to: "2026-11-06"}, {id: 3, task: "Launch site", team: "Marketing", from: "2026-10-12", to: "2026-10-30"}, {id: 4, task: "Press kit", team: "Marketing", from: "2026-10-26", to: "2026-11-06"}, {id: 5, task: "Support playbook", team: "Support", from: "2026-10-20", to: "2026-11-10"}, {id: 6, task: "Sales training", team: "Sales", from: "2026-10-28", to: "2026-11-10"}, {id: 7, task: "Launch day", team: "Sales", date: "2026-11-12"}]
+schedule "Ledgerly 2.0 launch plan" items=tasks start=from end=to label=task rows=team view=timeline
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

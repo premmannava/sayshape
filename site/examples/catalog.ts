@@ -281,6 +281,25 @@ card
   callout "Best day: {top.day}" detail="{money(top.sales)} in sales" tone=good icon=true`,
 };
 
+const launch: Example = {
+  id: "launch-plan",
+  title: "Launch plan",
+  prompt: "Plan our product launch by team, and show me what's due when",
+  category: "Plans",
+  look: { preset: "teal", scheme: "light" },
+  spec: `state picked=2
+state tasks=[{id: 1, task: "Pricing research", team: "Product", owner: "Maya Chen", from: "2026-10-05", to: "2026-10-16", status: "Done"}, {id: 2, task: "Beta with 12 customers", team: "Product", owner: "Maya Chen", from: "2026-10-19", to: "2026-11-06", status: "On track"}, {id: 3, task: "Launch site", team: "Marketing", owner: "Luis Ortega", from: "2026-10-12", to: "2026-10-30", status: "At risk"}, {id: 4, task: "Press kit", team: "Marketing", owner: "Priya Nair", from: "2026-10-26", to: "2026-11-06", status: "Not started"}, {id: 5, task: "Support playbook", team: "Support", owner: "Tom Becker", from: "2026-10-20", to: "2026-11-10", status: "On track"}, {id: 6, task: "Sales training", team: "Sales", owner: "Ama Mensah", from: "2026-10-28", to: "2026-11-10", status: "Not started"}, {id: 7, task: "Launch day", team: "Sales", owner: "Ama Mensah", from: "2026-11-12", to: "2026-11-12", status: "Not started"}]
+derive t={find(tasks, 'id', picked)}
+card
+  text "Ledgerly 2.0 launch" style=title
+  text "7 tasks across 4 teams · launch on Thu, Nov 12" tone=muted
+  schedule items=tasks start=from end=to label=task rows=team view=timeline bind=picked
+  details "{t.task}" subtitle="{t.team} · {t.owner}"
+    detail "From" value={t.from}
+    detail "To" value={t.to}
+    detail "Status" value={t.status} tone={t.status == 'At risk' ? 'bad' : t.status == 'Done' ? 'good' : 'default'}`,
+};
+
 const trip: Example = {
   id: "trip-planner",
   title: "Trip planner",
@@ -334,6 +353,6 @@ card
   button "Next update" variant=secondary disabled={stage >= 4} on=inc:stage`,
 };
 
-export const examples: readonly Example[] = [tip, sales, cabin, trip, laptop, coffee, grocery, tracking, budget, configurator];
+export const examples: readonly Example[] = [tip, sales, cabin, launch, trip, laptop, coffee, grocery, tracking, budget, configurator];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);

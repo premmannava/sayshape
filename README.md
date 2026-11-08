@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 51 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 52 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet and heatmap), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Scrolling and dialogs come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -506,7 +506,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty) |
@@ -1384,6 +1384,30 @@ A friendly message for when there is nothing to show, with an optional button to
 empty "No results" detail="Try a wider price range." action="Clear filters" on=emit:clear_filters
 ```
 
+### `schedule`
+
+Blocks laid out on time from a list: a week of shifts, the day's room bookings, an itinerary by hour (times as HH:MM), or a project plan across dates (view=timeline, dates as YYYY-MM-DD). Overlapping blocks sit side by side; it scrolls sideways when wide.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The title above it, e.g. Support rota. |
+| `items` | expression, required | The list of records, e.g. items=shifts. At most 200. |
+| `view` | `day` / `week` / `timeline` | day: one day down a time axis, a column per rows= value. week: a column per day, at most 7. timeline: dates across, a bar per item, with a Today line. |
+| `date` | name | Field with each item's day as YYYY-MM-DD. In a timeline, used for an item with no start date (a one-day bar). |
+| `start` | name | Field with the start: a time as HH:MM (09:30) in day and week, a date as YYYY-MM-DD in a timeline. |
+| `end` | name | Field with the end, written the same way. Missing: an hour after the start, or the same day in a timeline. |
+| `label` | name | Field with what each block says, e.g. label=name. |
+| `rows` | name | Field that splits blocks into lanes, e.g. rows=room: a column each in day view, a row each in a timeline; shown on the block in week view. |
+| `tone` | name | Field that colors each block: a value good, warn, bad, accent or muted uses that tone; other values (a team, a type) each get their own color, with a key. |
+| `key` | name | The field that identifies each item, e.g. key=id. Needed for bind=. |
+| `bind` | state | State that holds the selected item's key. Pressing a block sets it. |
+| `on` | action | Actions to run after a block is pressed, with bind= already set, e.g. emit:changed. Separate several with ; |
+
+```
+state picked=0 shifts=[{id: 1, day: "2026-11-09", from: "08:00", to: "16:00", name: "Ana Ruiz", tier: "Tier 1"}, {id: 2, day: "2026-11-09", from: "12:00", to: "20:00", name: "Ben Okafor", tier: "Tier 2"}, {id: 3, day: "2026-11-10", from: "08:00", to: "16:00", name: "Chloe Park", tier: "Tier 1"}]
+schedule "Support rota" items=shifts date=day start=from end=to label=name tone=tier view=week bind=picked
+```
+
 ### `map`
 
 Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
@@ -2081,7 +2105,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 - **Multi-line text, and form validation** (required fields, email format). A model can show a hint with `if=` for now.
 - **Text selection and browser find.** To copy, a host can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
 - **Scrolling regions, dialogs, menus or tooltips.** The one popup so far is a select's list of options (one open at a time); there's no general overlay element yet.
-- **Dates beyond one day.** `date-picker` picks a single calendar day: no ranges, times, recurring dates or time zones, and names are in US English with weeks starting on Sunday.
+- **Dates and times beyond the basics.** `date-picker` picks a calendar day (or a range with `range=true`), with no times. `schedule` lays out times as `HH:MM` text and dates as `YYYY-MM-DD`, but has no time zones, recurring events, blocks past midnight, month view, or dragging blocks to move them. Names are in US English with weeks starting on Sunday.
 - **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.
 - **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.
 - **Charts beyond the basics.** `chart` draws bars (up or across, `kind=hbar`, or stacked), lines or areas of up to 6 series on one shared scale (with a legend), or a pie or donut of one field (at most 6 slices; smaller ones are summed into Other), from at most 200 items with labels evenly spaced in list order. Horizontal bars stop at 1200 px of rows and ask for `take()`. A stat's sparkline takes a list of numbers; `pluck()` takes one from a list of records. No series from different lists, zoom, time or numeric x-axes, or pressing a bar.

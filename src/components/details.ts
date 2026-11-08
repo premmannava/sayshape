@@ -70,7 +70,7 @@ export const details: ComponentDef = {
   },
   children: ["detail"],
   picks: [
-    { for: "one record's fields, such as an order, a customer or a flight", write: "details \"Order #1042\" holding detail \"Status\" value=\"Shipped\"" },
+    { for: "one record's fields, such as an order, a customer or a flight", write: "details holding detail" },
   ],
   example: `state renewal="Jan 14, 2027"
 details "Ada Lovelace" subtitle="Analytical Engines Ltd · London"

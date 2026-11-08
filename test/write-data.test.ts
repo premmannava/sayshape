@@ -72,6 +72,7 @@ describe("bind= inside each, for every component that binds", () => {
     ["date-picker", `date-picker bind=r.v`, "v", "", "pick"],
     ["table", `table items=rows key=name bind=r.v\n      table-column "Name" field=name`, "v", "", "press"],
     ["segmented", `segmented bind=r.v options="A,B"`, "v", "A", "last"],
+    ["schedule", `schedule items={[{id: "a", start: "09:00", title: "Standup"}]} view=day bind=r.v`, "v", "", "press"],
     ["carousel", `carousel bind=r.v min=400\n      card\n        text "a"\n      card\n        text "b"`, "v", 0, "last"],
   ];
 

@@ -123,14 +123,15 @@ export function quickStart(withData = false, withMcp = false): string {
     "QUICK START",
     // The guide's "not JavaScript" line is left out to keep this short: show_interface returns
     // each code line's diagnostic, which says what to write instead.
-    sectionText("compact", "format").replace(/^FORMAT\n/, "").replace(/^- Not JavaScript:.*\n/m, ""),
+    // Comments are left out too: an answer in a chat has no use for them, and the guide still explains them.
+    sectionText("compact", "format").replace(/^FORMAT\n/, "").replace(/^- Not JavaScript:.*\n/m, "").replace(/\n- # starts a comment\.$/m, ""),
     "- Text and props show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
     "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue')`,
     `ELEMENTS\n${elementIndex(components)}`,
     `${PICKS_HEADING}\n${pickList(components)}`,
     "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
-    `BEFORE YOU USE AN ELEMENT for the first time in a conversation, get its props and an example with sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp)).join(", ")}.`,
+    `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");
 }
