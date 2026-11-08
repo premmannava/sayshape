@@ -103,7 +103,7 @@ ELEMENTS AT A GLANCE
 - layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll
 - content: text, image, code, badge, avatar, callout, icon, tile
 - data: stat, rating, chart, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
-- input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented
+- input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
 - navigation: screen, tabs, tab, breadcrumb, pagination
 - feedback: progress, skeleton, empty, dialog
 
@@ -740,6 +740,28 @@ ELEMENTS
           button "Cancel" variant=secondary on=set:confirm:false
           button "Delete" variant=danger on="emit:delete;set:confirm:false"
 
+  menu "<text>"  — A button that opens a short list of actions, for what can be done to one item (edit, duplicate, delete) without a row of buttons. Each menu-item runs its own on=.
+    "<text>"  The button's words, e.g. Actions. Leave it out for a small ⋯ button.
+    label=<string>  What a screen reader calls a ⋯ button with no text, e.g. label="Order actions". Default: More actions.
+    variant=<secondary|primary>  secondary (outlined) or primary (filled).
+    disabled=<condition>  When true, it can't be opened.
+    children: menu-item
+    example:
+      menu "Actions"
+        menu-item "Edit" icon=file on=emit:edit
+        menu-item "Duplicate" icon=copy on=emit:duplicate
+        menu-item "Delete" icon=x-circle tone=bad on=emit:delete
+
+  menu-item "<text>"  — One action in a menu's list.
+    "<text>" (required)  What it does, e.g. Duplicate.
+    on=<action, required>  What happens when it's chosen, e.g. emit:duplicate or set:confirm:true. Separate several with ;
+    icon=<string>  An icon before the text, by name from icon's list, e.g. icon=check-circle.
+    tone=<default|bad>  bad for an action that removes or can't be undone, drawn in the bad color.
+    disabled=<condition>  When true, it's shown but can't be chosen.
+    only inside: menu
+    example:
+      menu-item "Duplicate" icon=copy on=emit:duplicate
+
   map  — Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
     kind=<markers|choropleth|bubble>  markers uses pin children; choropleth colors countries from dataset rows; bubble plots sized locations from dataset rows.
     items=<expression>  Data rows for kind=choropleth or kind=bubble, e.g. items=sales. Do not embed individual rows in map specs.
@@ -801,7 +823,7 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - playing cards, seats, dice or keys: tile "A" icon=spade
 - one choice from a long list: select items=teams bind=team
 - filtering by several values at once, such as regions or statuses: select items=regions bind=shown multiple=true
-- choosing a date, or a period such as the last 30 days (range=true): date-picker bind=due
+- a date, or a period like the last 30 days (range=true): date-picker bind=due
 - switching a view between 2 to 6 options: segmented bind=view options="Week,Month,Year"
 - nothing to show yet, or no results: empty "No results"
 

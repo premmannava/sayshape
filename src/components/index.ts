@@ -23,6 +23,7 @@ import { flow } from "./flow";
 import { tile } from "./tile";
 import { scroll } from "./scroll";
 import { dialog } from "./dialog";
+import { menu, menuItem } from "./menu";
 
 export {
   column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
@@ -38,6 +39,8 @@ export {
   tile,
   scroll,
   dialog,
+  menu,
+  menuItem,
 };
 
 /** The built-in components (everything except the map, which is a separate entry). */
@@ -55,4 +58,6 @@ export const coreComponents: ComponentDef[] = [
   tile,
   scroll,
   dialog,
+  menu,
+  menuItem,
 ];

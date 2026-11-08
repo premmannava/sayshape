@@ -982,6 +982,7 @@ export class SayShape {
       },
       set: (path, v) => this.writePath(target.node, path, v),
       run: (actions, own) => this.runActionString(actions, target.node, own),
+      runAs: (node, actions) => this.runActionString(actions, node),
       openPopup: (state) => this.openPopup(target, state),
       popupOpen: !!this.popup && this.popup.owner.node.id === target.node.id,
       today: this.today,

@@ -170,6 +170,7 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
     for (const k of ["selected", "expanded", "pressed", "required", "invalid", "multiselectable"] as const) {
       if (node[k] !== undefined) attrs.set(`aria-${k}`, String(node[k]));
     }
+    if (node.hasPopup) attrs.set("aria-haspopup", node.hasPopup);
     if (node.current) attrs.set("aria-current", node.current === true ? "true" : node.current);
     if (node.sort) attrs.set("aria-sort", node.sort);
     if (node.checked !== undefined) {

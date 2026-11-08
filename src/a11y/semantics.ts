@@ -18,7 +18,7 @@ import type { Box, HitRegion, Rect, SayShapeNode } from "../types";
 /** The ARIA roles SayShape elements use. */
 export const ROLES = [
   "alert", "button", "cell", "checkbox", "code", "columnheader", "combobox", "dialog", "figure", "grid", "gridcell",
-  "group", "heading", "img", "link", "list", "listbox", "listitem", "main", "meter", "navigation",
+  "group", "heading", "img", "link", "list", "listbox", "listitem", "main", "menu", "menuitem", "meter", "navigation",
   "note", "option", "progressbar", "radio", "radiogroup", "region", "row", "rowheader", "searchbox",
   "separator", "slider", "spinbutton", "status", "switch", "tab", "table", "tablist", "tabpanel", "text", "textbox", "tree", "treeitem",
 ] as const;
@@ -46,6 +46,8 @@ export interface Semantics {
   checked?: boolean | "mixed";
   selected?: boolean;
   expanded?: boolean;
+  /** It opens a popup of this kind (aria-haspopup): a menu button's list. */
+  hasPopup?: "menu" | "listbox" | "dialog";
   disabled?: boolean;
   pressed?: boolean;
   current?: boolean | "page" | "step" | "date";

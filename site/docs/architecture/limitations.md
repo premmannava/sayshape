@@ -10,7 +10,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 ## Built
 
 - The engine: parser, expressions, actions, layout, painting, hit testing, keyboard focus (including parts of elements), popups and the inspector.
-- 58 elements ([reference](../components/)): layout, content (including callout, tiles for cards, seats and keys, scrolling regions and dialogs), data (stat with a change and sparkline, rating, details for one record, charts: multi-series bar, horizontal bar and line, stacked bars, area, pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey, meters as a ring or a gauge, tables with sorting and selection, schedules of shifts, bookings and Gantt-style plans, boards of cards by stage, trees (lists that open and close, and org charts), flows laid out automatically, the world map), input (buttons, checks, switches, radios, select, date picker, stepper, slider, text input), navigation (screens, tabs, breadcrumb, pagination) and feedback (progress, skeleton, empty).
+- 60 elements ([reference](../components/)): layout, content (including callout, tiles for cards, seats and keys, scrolling regions, dialogs and menus), data (stat with a change and sparkline, rating, details for one record, charts: multi-series bar, horizontal bar and line, stacked bars, area, pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey, meters as a ring or a gauge, tables with sorting and selection, schedules of shifts, bookings and Gantt-style plans, boards of cards by stage, trees (lists that open and close, and org charts), flows laid out automatically, the world map), input (buttons, checks, switches, radios, select, date picker, stepper, slider, text input), navigation (screens, tabs, breadcrumb, pagination) and feedback (progress, skeleton, empty).
 - State with lists and records, host data, `each` with keys and nesting, `bind=` and actions on paths, `add`, `remove` and `clear`, `if` blocks, `derive` lines, list and formatting functions, screens with `go:` and `back`, `notify:` messages, and images from allowed hosts.
 - The model guide (full and compact, with profiles), `sayshape/model` (streaming, cleaning, checking, one repair, bounded refinement), an evaluation script, and `sayshape/testing`.
 - Accessibility: a hidden mirror of the canvas for screen readers, keyboard focus that follows it, chart and map text alternatives, contrast, high-contrast mode and reduced motion ([Accessibility](./accessibility)).
@@ -20,7 +20,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 
 - **Data sources and host commands.** Your app fetches data and sets state; a spec can't declare where data comes from.
 - **Multi-line text and form validation** (required fields, email format). A spec can show a hint with `if=` for now.
-- **Overlays beyond dialogs.** No menus, tooltips or toasts. The popup layer serves a component's own popup, and `dialog` is the one overlay, one open at a time. (`scroll` gives a scrolling area inside a screen, up and down only, without virtualization.)
+- **Overlays beyond dialogs and menus.** No tooltips or toasts. The popup layer serves a component's own popup (a select's list, a menu's actions), and `dialog` is the one overlay, one open at a time. (`scroll` gives a scrolling area inside a screen, up and down only, without virtualization.)
 - **Typing to search** in a select, and option groups. (A select picks several with `multiple=true`.)
 - **Larger tables**: more than 200 rows, vertical scrolling, sticky headers, editable cells, multi-row selection. (Wide tables already scroll sideways.)
 - **More charts**: series from different lists and time axes. Only `kind=scatter` has a numeric x-axis.
@@ -49,4 +49,4 @@ SayShape hasn't been benchmarked against other UI approaches, so nothing here sa
 
 ## Roadmap
 
-The phase plan is in [`docs/PLAN.md`](https://github.com/premmannava/sayshape/blob/main/docs/PLAN.md) in the repository: menus and tooltips next, then the model server and an app built on top.
+The phase plan is in [`docs/PLAN.md`](https://github.com/premmannava/sayshape/blob/main/docs/PLAN.md) in the repository: tooltips next, then the model server and an app built on top.

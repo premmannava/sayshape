@@ -34,6 +34,8 @@ export interface PopupSize {
   snap?: { base: number; step: number };
   /** Use w as it is, rather than at least the owner's width (a calendar, not a list). Default false. */
   ownWidth?: boolean;
+  /** Line its right edge up with the owner's (a menu at the end of a row), rather than its left. Default false. */
+  alignEnd?: boolean;
 }
 
 /** Space between the owner and the popup, and between the popup and the viewport's edge. */
@@ -49,7 +51,7 @@ export const POPUP_MARGIN = 8;
  */
 export function placePopup(anchor: Rect, size: PopupSize, view: Viewport, canvasWidth: number): Rect & { side: "below" | "above" } {
   const w = Math.max(0, Math.min(size.ownWidth ? size.w : Math.max(size.w, anchor.w), canvasWidth));
-  const x = Math.max(0, Math.min(anchor.x, canvasWidth - w));
+  const x = Math.max(0, Math.min(size.alignEnd ? anchor.x + anchor.w - w : anchor.x, canvasWidth - w));
   const want = Math.max(0, size.h);
   const least = Math.min(want, Math.max(0, size.minH));
   const top = Math.max(0, view.top);

@@ -18,7 +18,7 @@ card
 
 **Website:** [premmannava.github.io/sayshape](https://premmannava.github.io/sayshape/) has a playground, interactive examples and the documentation, all rendered by this engine.
 
-> **Status: 0.1, early foundation.** The engine, derived values, 58 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), scrolling regions, dialogs, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Menus and tooltips come next. See [Limitations](#limitations) before using it for anything real.
+> **Status: 0.1, early foundation.** The engine, derived values, 60 components including text input, selects, a date picker, lists and data, charts (bar, horizontal bar and line with up to 6 series, pie, donut, stacked, area, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey), meters (a ring or a gauge), details (one record as label and value rows), stats with a change and sparkline, callouts, its own icons, timelines, schedules (shifts, bookings and Gantt-style plans), boards (columns of cards by stage, with cards you can move), trees (org charts and breakdowns that open and close), flows (boxes and arrows laid out automatically), tiles (playing cards, seats and keys), scrolling regions, dialogs, menus, carousels, segmented toggles, comparisons, tables, a model connection, tests, debugging tools, screen reader and keyboard accessibility and the docs site are in place. Tooltips come next. See [Limitations](#limitations) before using it for anything real.
 
 ---
 
@@ -510,7 +510,7 @@ L7   variant should be one of primary, secondary, danger; got "huge"
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon), [`tile`](#tile) |
 | Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
-| Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented) |
+| Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented), [`menu`](#menu), [`menu-item`](#menu-item) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty), [`dialog`](#dialog) |
 <!-- CATEGORIES:END -->
@@ -1561,6 +1561,44 @@ dialog "Delete order NW-2041?" bind=confirm size=sm
     button "Delete" variant=danger on="emit:delete;set:confirm:false"
 ```
 
+### `menu`
+
+A button that opens a short list of actions, for what can be done to one item (edit, duplicate, delete) without a row of buttons. Each menu-item runs its own on=.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The button's words, e.g. Actions. Leave it out for a small ⋯ button. |
+| `label` | string | What a screen reader calls a ⋯ button with no text, e.g. label="Order actions". Default: More actions. |
+| `variant` | `secondary` / `primary` | secondary (outlined) or primary (filled). |
+| `disabled` | condition | When true, it can't be opened. |
+
+Children: `menu-item`.
+
+```
+menu "Actions"
+  menu-item "Edit" icon=file on=emit:edit
+  menu-item "Duplicate" icon=copy on=emit:duplicate
+  menu-item "Delete" icon=x-circle tone=bad on=emit:delete
+```
+
+### `menu-item`
+
+One action in a menu's list.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text, required | What it does, e.g. Duplicate. |
+| `on` | action, required | What happens when it's chosen, e.g. emit:duplicate or set:confirm:true. Separate several with ; |
+| `icon` | string | An icon before the text, by name from icon's list, e.g. icon=check-circle. |
+| `tone` | `default` / `bad` | bad for an action that removes or can't be undone, drawn in the bad color. |
+| `disabled` | condition | When true, it's shown but can't be chosen. |
+
+Only inside: `menu`.
+
+```
+menu-item "Duplicate" icon=copy on=emit:duplicate
+```
+
 ### `map`
 
 Canvas map with pin markers, data-driven country choropleths and proportional bubble maps. For data maps, give items plus geographic and numeric field names; Canvas handles colors, sizing and legends.
@@ -2257,7 +2295,7 @@ SayShape draws everything itself, so it gives up what the browser normally provi
 
 - **Multi-line text, and form validation** (required fields, email format). A model can show a hint with `if=` for now.
 - **Text selection and browser find.** To copy, a host can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
-- **Menus or tooltips.** Popups serve one element's own panel (a select's list, a date picker's calendar), and `dialog` is the one overlay: one open at a time, centred, over a dimmed screen. There are no menus, tooltips, toasts or sheets that slide in from an edge. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
+- **Tooltips, toasts or sheets.** Popups serve one element's own panel (a select's list, a date picker's calendar, a menu's actions; a menu has no submenus or separators), and `dialog` is the one overlay: one open at a time, centred, over a dimmed screen. There are no tooltips, toasts or sheets that slide in from an edge. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
 - **Dates and times beyond the basics.** `date-picker` picks a calendar day (or a range with `range=true`), with no times. `schedule` lays out times as `HH:MM` text and dates as `YYYY-MM-DD`, but has no time zones, recurring events, blocks past midnight, month view, or dragging blocks to move them. Names are in US English with weeks starting on Sunday.
 - **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.
 - **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.
