@@ -60,6 +60,7 @@ export const scroll: ComponentDef = {
     pad: padProp(0),
   },
   children: "any",
+  picks: [{ for: "a long list inside a card, such as messages or activity", write: "scroll size=md" }],
   example: `state events=[{title: "Order NW-2041 shipped", when: "09:12"}, {title: "Refund approved", when: "08:40"}, {title: "New review: 5 stars", when: "Yesterday"}, {title: "Stock low: Ridge 28 L", when: "Yesterday"}, {title: "Invoice sent", when: "Mon"}, {title: "Order NW-2038 delivered", when: "Mon"}, {title: "Price change: Summit pack", when: "Sun"}, {title: "New customer: Lumen Cinema", when: "Sat"}]
 scroll "Recent activity" size=sm
   list

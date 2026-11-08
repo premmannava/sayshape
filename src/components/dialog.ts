@@ -55,6 +55,7 @@ export const dialog: ComponentDef = {
     on: onProp("when it's closed by its × button, Escape or a press outside it"),
   },
   children: "any",
+  picks: [{ for: "checking before something that can't be undone", write: "dialog bind=confirm size=sm" }],
   example: `state confirm=true
 button "Delete order" variant=danger on=set:confirm:true
 dialog "Delete order NW-2041?" bind=confirm size=sm
