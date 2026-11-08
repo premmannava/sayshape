@@ -63,6 +63,11 @@ export function plainText(root: AccessibleNode): string {
   const visit = (node: AccessibleNode): void => {
     const role = node.role;
     if (SKIP.has(role)) return;
+    if (node.copyText !== undefined) {
+      if (role === "heading") blank();
+      line(node.copyText);
+      return;
+    }
     switch (role) {
       case "heading":
         if (clean(node.name) === last()) return;
