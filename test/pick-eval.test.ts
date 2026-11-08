@@ -32,7 +32,7 @@ describe("representation eval cases", () => {
 
   for (const c of pickCases) {
     it(`${c.id}: names real elements and variants, and keeps best, ok and poor apart`, () => {
-      const all = [...c.best, ...(c.ok ?? []), ...(c.poor ?? []), ...(c.parts ?? []).flatMap((x) => [...x.best, ...(x.ok ?? []), ...(x.poor ?? [])])];
+      const all = [...c.best, ...(c.ok ?? []), ...(c.poor ?? []), ...(c.never ?? []), ...(c.parts ?? []).flatMap((x) => [...x.best, ...(x.ok ?? []), ...(x.poor ?? [])])];
       expect(c.best.length || c.parts?.length, "a best answer, or parts with their own").toBeTruthy();
       for (const s of all) {
         if (s === "tip" || s === "if") continue;
@@ -41,7 +41,7 @@ describe("representation eval cases", () => {
         if (variant) expect(VARIANTS[type], `${s} is a variant the grader reads`).toContain(variant);
       }
       for (const g of [c, ...(c.parts ?? [])]) {
-        const own = [...g.best, ...(g.ok ?? []), ...(g.poor ?? [])];
+        const own = [...g.best, ...(g.ok ?? []), ...(g.poor ?? []), ...("never" in g ? g.never ?? [] : [])];
         expect(new Set(own).size, "no signature in two grades").toBe(own.length);
       }
       expect(c.why.length).toBeGreaterThan(20);
@@ -68,13 +68,15 @@ describe("grading an answer", () => {
     for (const x of ["chart", "chart:bar", "tree:org", "input:email", "input:required", "input:lines", "tip"]) expect(s.has(x), x).toBe(true);
   });
 
-  it("gives the best grade reached, and only ok when a poor one sits beside the best", () => {
+  it("gives the best grade reached, and only ok when a never-right one sits beside the best", () => {
     expect(grade(hbar, sigsOf(`state r=[]\nchart kind=hbar items=r x=a y=b\n`)).grade).toBe("best");
     expect(grade(hbar, sigsOf(`state r=[]\nchart items=r x=a y=b\n`)).grade).toBe("ok");
     expect(grade(hbar, sigsOf(`state r=[]\nchart kind=pie items=r x=a y=b\n`)).grade).toBe("poor");
     expect(grade(hbar, sigsOf(`text "Nothing"\n`)).grade).toBe("other");
     expect(grade(hbar, sigsOf(`state r=[]\nchart kind=hbar items=r x=a y=b\ntable items=r\n  table-column "A" field=a\n`)).grade).toBe("best");
-    expect(grade(hbar, sigsOf(`state r=[]\nchart kind=pie items=r x=a y=b\nchart kind=hbar items=r x=a y=b\n`)).grade).toBe("ok");
+    expect(grade(hbar, sigsOf(`state r=[]\nchart kind=pie items=r x=a y=b\nchart kind=hbar items=r x=a y=b\n`)).grade).toBe("best");
+    const many = pickCases.find((c) => c.id === "share-many")!;
+    expect(grade(many, sigsOf(`state r=[]\nchart kind=pie items=r x=a y=b\nchart kind=treemap items=r x=a y=b\n`)).grade).toBe("ok");
   });
 
   it("averages a case's parts", () => {

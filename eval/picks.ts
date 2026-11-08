@@ -28,6 +28,12 @@ export interface PickCase {
   ok?: string[];
   /** Answers that work against the data (a pie of 14 slices); reported by name. */
   poor?: string[];
+  /**
+   * Poor answers that stay wrong even beside the best one (a 14-slice pie next to a treemap), so
+   * having both is only ok. Other poor kinds beside the best are taken as another view of the data
+   * (bars of weekday averages next to a line of the days).
+   */
+  never?: string[];
   why: string;
   /** The obvious choice isn't the best one. */
   trap?: boolean;
@@ -58,7 +64,7 @@ const round1: PickCase[] = [
   {
     id: "share-many", group: "chart", trap: true,
     request: "What share of revenue does each of our 14 product lines bring in? Tents $412K, Packs $388K, Boots $301K, Jackets $276K, Sleeping bags $190K, Stoves $122K, Lamps $98K, Poles $86K, Water filters $71K, Gloves $64K, Hats $52K, Socks $47K, Maps $21K, Gift cards $18K.",
-    best: ["chart:treemap", "chart:hbar"], ok: ["chart:bar", "table"], poor: ["chart:pie", "chart:donut"],
+    best: ["chart:treemap", "chart:hbar"], ok: ["chart:bar", "table"], poor: [], never: ["chart:pie", "chart:donut"],
     why: "Fourteen parts are too many for a pie (it shows 6 slices, the rest as Other); a treemap or ranked bars keep every line visible.",
   },
   {
@@ -124,7 +130,7 @@ const round1: PickCase[] = [
   {
     id: "storage", group: "chart", trap: true,
     request: "What's taking up space on our shared drive? Folders: Video 412 GB, Photos 268 GB, Backups 190 GB, Design 133 GB, Music 74 GB, Archive 61 GB, Datasets 58 GB, Email 22 GB, Docs 19 GB, Builds 17 GB, Fonts 6 GB, Logs 4 GB, Temp 3 GB, Other 2 GB, Configs 1 GB.",
-    best: ["chart:treemap", "chart:hbar"], ok: ["chart:bar", "table"], poor: ["chart:pie", "chart:donut", "chart:line"],
+    best: ["chart:treemap", "chart:hbar"], ok: ["chart:bar", "table"], poor: ["chart:line"], never: ["chart:pie", "chart:donut"],
     why: "Fifteen parts of a whole, sizes that differ a lot: a treemap shows what dominates, and no pie can hold them.",
   },
   {
@@ -448,7 +454,7 @@ const round2: PickCase[] = [
   {
     id: "price-range", group: "input",
     request: "48 tents from $90 to $720. Let me narrow them to my budget and see how many fit.",
-    best: ["slider"], ok: ["input:number", "select", "stepper"], poor: ["date-picker"],
+    best: ["slider"], ok: ["input:number", "select", "stepper", "segmented"], poor: ["date-picker"],
     why: "A budget limit across a continuous range: a slider.",
   },
   {
@@ -499,15 +505,15 @@ export function signatures(root: SayShapeNode): Set<string> {
 export type Grade = "best" | "ok" | "poor" | "other";
 
 /** How an answer's signatures grade against a case: the best grade any of them reaches. */
-export function grade(c: Pick<PickCase, "best" | "ok" | "poor">, sigs: ReadonlySet<string>, mixed = true): { grade: Grade; matched: string[] } {
+export function grade(c: Pick<PickCase, "best" | "ok" | "poor" | "never">, sigs: ReadonlySet<string>, mixed = true): { grade: Grade; matched: string[] } {
   const hit = (list: readonly string[] | undefined) => (list ?? []).filter((s) => sigs.has(s));
   const best = hit(c.best);
   // The best one beside a poor one for the same data (a treemap and a 14-slice pie) is a mixed
   // answer. Not for a case's parts: there a poor pick for one part is another part's best.
-  if (best.length) return mixed && hit(c.poor).length ? { grade: "ok", matched: [...best, ...hit(c.poor)] } : { grade: "best", matched: best };
+  if (best.length) return mixed && hit(c.never).length ? { grade: "ok", matched: [...best, ...hit(c.never)] } : { grade: "best", matched: best };
   const ok = hit(c.ok);
   if (ok.length) return { grade: "ok", matched: ok };
-  const poor = hit(c.poor);
+  const poor = [...hit(c.poor), ...hit(c.never)];
   if (poor.length) return { grade: "poor", matched: poor };
   return { grade: "other", matched: [] };
 }
