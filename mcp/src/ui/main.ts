@@ -394,8 +394,9 @@ async function start(): Promise<void> {
   sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
     theme,
-    // The view has no network access of its own; the client's sandbox blocks it too.
-    imageHosts: [],
+    // Only the hosts the server was started with (--image-hosts). The view has no origin of
+    // its own to load from, and the server asks the chat app's sandbox to allow just these.
+    imageHosts: viewOptions.imageHosts ?? [],
     onWarning: () => {},
   });
   sayshape.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {

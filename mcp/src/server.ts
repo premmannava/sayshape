@@ -57,6 +57,7 @@ const MAX_REPORTED = 12;
 let components: ComponentDef[] = [...coreComponents, ...mapComponents];
 let registry = new Registry(components);
 let scenesOn = false;
+let imageHosts: readonly string[] = [];
 
 /**
  * --scene: turn the experimental scene elements on (off by default). With them
@@ -67,6 +68,21 @@ export function setScenes(on: boolean): void {
   components = [...coreComponents, ...mapComponents, ...(on ? sceneComponents : [])];
   registry = new Registry(components);
   scenesOn = on;
+}
+
+/**
+ * --image-hosts: the hosts images may load from (none by default). The model
+ * is told them, and the view resource asks the chat app to allow them in its
+ * CSP; the view's engine gets the same list through the view options. Call
+ * before createServer; main.ts does, from the command line.
+ */
+export function setImageHosts(hosts: readonly string[]): void {
+  imageHosts = [...hosts];
+}
+
+/** The view resource's CSP: images from the allowed hosts, nothing else (MCP Apps resourceDomains). */
+export function imageCsp(hosts: readonly string[]): { resourceDomains: string[] } | undefined {
+  return hosts.length ? { resourceDomains: hosts.map((h) => `https://${h}`) } : undefined;
 }
 
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
@@ -91,11 +107,11 @@ const MCP_NOTES = `MCP RESULTS FROM A TRUSTED INTEGRATION
 
 /** The whole guide in one piece (the guide modes' full text plus these notes); kept for measuring and for clients that want it all. */
 export function guideText(withData = false): string {
-  return languageGuide(registry, { mode: "full", imageHosts: [], notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES });
+  return languageGuide(registry, { mode: "full", imageHosts, notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES });
 }
 
 const sectionText = (mode: "full" | "compact", name: string) =>
-  guideSections(registry, { mode, imageHosts: [] }).find((sec) => sec.name === name)?.text ?? "";
+  guideSections(registry, { mode, imageHosts }).find((sec) => sec.name === name)?.text ?? "";
 
 /** Parts of the guide a model can ask for by name, all generated (DATA_NOTES only with a database). */
 function topics(withData: boolean, withMcp = false): Record<string, string> {
@@ -160,6 +176,8 @@ export function docsText(elements: readonly string[], topicNames: readonly strin
   if (elements.length) {
     const { text, unknown } = elementGuide(registry, elements);
     if (text) parts.push(`ELEMENTS\n${text}`);
+    // Which hosts work, so a model asking about image doesn't write URLs the view can't load.
+    if (imageHosts.length && elements.includes("image")) parts.push(sectionText("compact", "images"));
     if (unknown.length) parts.push(`No element called ${unknown.join(", ")}. The elements are:\n${elementIndex(components)}`);
   }
   for (const name of topicNames) {
@@ -232,7 +250,7 @@ function describeCheck(c: SpecCheck): string {
 export interface ServerOptions {
   /** The view's HTML: dist/ui.html, built by `npm run build`. */
   uiHtml: () => string | Promise<string>;
-  /** The view's own settings: --theme-picker, --theme, --no-save-image, --no-copy-text (main.ts). Default: no picker, teal, Save image and Copy text on. */
+  /** The view's own settings: --theme-picker, --theme, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
   view?: ViewOptions;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;
@@ -449,15 +467,17 @@ export function createServer(opts: ServerOptions): McpServer {
     );
   }
 
+  const csp = imageCsp(opts.view?.imageHosts ?? []);
   registerAppResource(server, "SayShape interface", UI_URI, { mimeType: RESOURCE_MIME_TYPE, description: "Draws a SayShape spec with the SayShape engine." }, async () => ({
     contents: [
       {
         uri: UI_URI,
         mimeType: RESOURCE_MIME_TYPE,
         text: withViewOptions(await opts.uiHtml(), opts.view ?? DEFAULT_VIEW_OPTIONS),
-        // Everything is inline: no scripts, styles, fonts or images from anywhere else.
-        // Clipboard write is asked for so Copy text works; chat apps may still say no, and the view falls back.
-        _meta: { ui: { prefersBorder: true, permissions: { clipboardWrite: {} } } },
+        // Everything is inline: no scripts, styles or fonts from anywhere else, and images only
+        // from --image-hosts. Clipboard write is asked for so Copy text works; chat apps may
+        // still say no, and the view falls back.
+        _meta: { ui: { prefersBorder: true, permissions: { clipboardWrite: {} }, ...(csp ? { csp } : {}) } },
       },
     ],
   }));

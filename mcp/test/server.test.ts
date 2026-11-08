@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { createServer, checkSpec, guideText, interfaceKey, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, UI_URI, MAX_SPEC_CHARS } from "../src/server";
+import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
 
 async function connect(now?: () => number) {
   const server = createServer({ uiHtml: () => "<!doctype html><title>view</title>", now });
@@ -173,6 +173,8 @@ map bind=selected
     // It asks for clipboard writes, for Copy text; nothing else.
     expect(contents[0]?._meta).toMatchObject({ ui: { permissions: { clipboardWrite: {} } } });
     expect(Object.keys((contents[0]?._meta as { ui: { permissions: object } }).ui.permissions)).toEqual(["clipboardWrite"]);
+    // No image hosts, so no CSP domains: the chat app's sandbox stays closed.
+    expect((contents[0]?._meta as { ui: Record<string, unknown> }).ui.csp).toBeUndefined();
   });
 
   it("passes the view the flags it was started with", async () => {
@@ -182,6 +184,35 @@ map bind=selected
     await Promise.all([server.connect(a), client.connect(b)]);
     const { contents } = await client.readResource({ uri: UI_URI });
     expect((contents[0] as { text: string }).text).toContain('content="picker=1&theme=neutral&save=0&copy=0"');
+  });
+
+  describe("--image-hosts", () => {
+    const HOSTS = ["images.unsplash.com", "*.img.example.com"];
+
+    it("asks the chat app to allow images from just those hosts, and tells the view", async () => {
+      const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: false, theme: "teal", saveImage: true, copyText: true, imageHosts: HOSTS } });
+      const client = new Client({ name: "test", version: "1.0.0" });
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await Promise.all([server.connect(a), client.connect(b)]);
+      const { contents } = await client.readResource({ uri: UI_URI });
+      expect((contents[0] as { text: string }).text).toContain("&images=images.unsplash.com,*.img.example.com");
+      expect((contents[0]?._meta as { ui: Record<string, unknown> }).ui.csp).toEqual({ resourceDomains: ["https://images.unsplash.com", "https://*.img.example.com"] });
+      expect(imageCsp([])).toBeUndefined();
+    });
+
+    it("tells the model which hosts work, only once they're set", () => {
+      try {
+        expect(guideText()).not.toMatch(/Images only load from these hosts/);
+        expect(docsText(["image"], [])).not.toMatch(/^IMAGES/m);
+        setImageHosts(HOSTS);
+        expect(guideText()).toMatch(/Images only load from these hosts: images\.unsplash\.com, \*\.img\.example\.com\./);
+        expect(docsText(["image"], [])).toMatch(/^IMAGES\n- Images only load from these hosts: images\.unsplash\.com/m);
+        // Docs for other elements stay as they were.
+        expect(docsText(["chart"], [])).not.toMatch(/^IMAGES/m);
+      } finally {
+        setImageHosts([]);
+      }
+    });
   });
 
   it("never throws on hostile input", () => {

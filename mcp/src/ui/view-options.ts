@@ -7,6 +7,7 @@
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
  *   --no-copy-text      hide the "Copy text" button (shown by default)
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
+ *   --image-hosts <list>  hosts images may load from, comma-separated: cdn.example.com,*.images.example.com (none by default)
  *
  * main.ts reads them from the command line; the server writes them into the
  * view's HTML as one <meta> tag; the view reads them back. Pure, so the server,
@@ -22,6 +23,12 @@ export interface ViewOptions {
   copyText: boolean;
   /** Experimental scenes are registered (the server must agree: setScenes). Absent means off. */
   scene?: boolean;
+  /**
+   * Hosts images may load from (the engine's imageHosts; the server must agree:
+   * setImageHosts, and the view resource's CSP). Absent means none: the view has
+   * no origin of its own to load from, so no images show.
+   */
+  imageHosts?: string[];
 }
 
 export const DEFAULT_VIEW_OPTIONS: Readonly<ViewOptions> = Object.freeze({ themePicker: false, theme: "teal", saveImage: true, copyText: true });
@@ -29,6 +36,17 @@ export const DEFAULT_VIEW_OPTIONS: Readonly<ViewOptions> = Object.freeze({ theme
 const META = "sayshape-view";
 const PRESET_IDS = PRESETS.map((p) => p.id) as readonly string[];
 const isPreset = (v: string | null | undefined): v is PresetId => !!v && PRESET_IDS.includes(v);
+
+/** A host name, or "*.example.com" for its subdomains: no scheme, port, path or bare "*". */
+const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+/** More would make the CSP and the guide long for no real use. */
+export const MAX_IMAGE_HOSTS = 20;
+
+/** The hosts in a comma-separated list, lower-cased, without repeats; null if any isn't a host name. */
+function hostList(raw: string): string[] | null {
+  const hosts = [...new Set(raw.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean))];
+  return hosts.length && hosts.length <= MAX_IMAGE_HOSTS && hosts.every((h) => HOST.test(h)) ? hosts : null;
+}
 
 /** Read the view's flags from the server's command line. Throws, in plain words, on a theme it doesn't know. */
 export function parseViewArgs(args: readonly string[]): ViewOptions {
@@ -43,12 +61,22 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
     if (!isPreset(name)) throw new Error(`--theme needs one of ${PRESET_IDS.join(", ")}${name && !name.startsWith("--") ? `; got "${name}"` : ""}.`);
     out.theme = name;
   }
+  const hostsAt = args.indexOf("--image-hosts");
+  if (hostsAt >= 0) {
+    const raw = args[hostsAt + 1];
+    const hosts = raw && !raw.startsWith("--") ? hostList(raw) : null;
+    if (!hosts) {
+      throw new Error(`--image-hosts needs up to ${MAX_IMAGE_HOSTS} host names separated by commas, without https:// or a path, such as cdn.example.com,*.images.example.com${raw && !raw.startsWith("--") ? `; got "${raw}"` : ""}.`);
+    }
+    out.imageHosts = hosts;
+  }
   return out;
 }
 
-/** The settings as one short attribute value: "picker=0&theme=teal&save=1&copy=1". */
+/** The settings as one short attribute value: "picker=0&theme=teal&save=1&copy=1". Host names need no escaping. */
 export function encodeViewOptions(o: ViewOptions): string {
-  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.scene ? "&scene=1" : ""}`;
+  const images = o.imageHosts?.length ? `&images=${o.imageHosts.join(",")}` : "";
+  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.scene ? "&scene=1" : ""}${images}`;
 }
 
 /** The settings from encodeViewOptions; anything missing or unknown keeps its default. */
@@ -60,6 +88,9 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   if (p.get("save") === "0") out.saveImage = false;
   if (p.get("copy") === "0") out.copyText = false;
   if (p.get("scene") === "1") out.scene = true;
+  const images = p.get("images");
+  const hosts = images ? hostList(images) : null;
+  if (hosts) out.imageHosts = hosts;
   const theme = p.get("theme");
   if (isPreset(theme)) out.theme = theme;
   return out;
