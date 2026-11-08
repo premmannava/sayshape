@@ -26,7 +26,7 @@ function ensureSheet(): void {
 const TYPES: Record<InputKind, string> = { text: "text", email: "email", number: "text", password: "password", search: "search" };
 
 export function domEditorHost(canvas: HTMLCanvasElement): EditorHost {
-  let el: HTMLInputElement | null = null;
+  let el: HTMLInputElement | HTMLTextAreaElement | null = null;
   let events: EditorEvents | null = null;
   let spec: EditorSpec | null = null;
   let composing = false;
@@ -55,13 +55,20 @@ export function domEditorHost(canvas: HTMLCanvasElement): EditorHost {
     Object.assign(el.style, {
       position: "fixed", zIndex: "2147483000", margin: "0", padding: "0", border: "0", outline: "none",
       background: "transparent", boxShadow: "none", boxSizing: "border-box", appearance: "none",
-      font: s.font, lineHeight: "normal", color: s.color, caretColor: s.accent, textAlign: "left",
+      font: s.font, lineHeight: (s.lines ?? 1) > 1 && s.lineHeight ? `${s.lineHeight}px` : "normal", color: s.color, caretColor: s.accent, textAlign: "left",
+      // Several lines: no resize handle (the field's size is the canvas's), scrolling inside when longer.
+      // The scrollbar is hidden so the text wraps exactly as the canvas draws it; the wheel and the caret still scroll it.
+      resize: "none", overflow: (s.lines ?? 1) > 1 ? "auto" : "", scrollbarWidth: (s.lines ?? 1) > 1 ? "none" : "",
     });
     el.style.setProperty("--sayshape-editor-placeholder", s.muted);
     el.style.setProperty("-webkit-appearance", "none");
     el.placeholder = s.placeholder;
     el.maxLength = s.max;
     el.setAttribute("aria-label", s.label);
+    // The field's required and problem, as screen readers hear them on the canvas's mirror.
+    if (s.required) el.setAttribute("aria-required", "true"); else el.removeAttribute("aria-required");
+    if (s.problem) { el.setAttribute("aria-invalid", "true"); el.setAttribute("aria-description", s.problem); }
+    else { el.removeAttribute("aria-invalid"); el.removeAttribute("aria-description"); }
   };
 
   const close = (): void => {
@@ -81,12 +88,16 @@ export function domEditorHost(canvas: HTMLCanvasElement): EditorHost {
       ensureSheet();
       spec = s;
       events = ev;
-      const input = (el = document.createElement("input"));
+      // Several lines are a <textarea>, where Enter starts a new line; one line is an <input>.
+      const multi = (s.lines ?? 1) > 1;
+      const input = (el = multi ? document.createElement("textarea") : document.createElement("input"));
       input.setAttribute(MARK, "");
-      input.type = TYPES[s.kind];
-      if (s.kind === "number") input.inputMode = "decimal";
-      if (s.kind === "email") input.autocomplete = "email";
-      if (s.kind === "password") input.autocomplete = "current-password";
+      if (input instanceof HTMLInputElement) {
+        input.type = TYPES[s.kind];
+        if (s.kind === "number") input.inputMode = "decimal";
+        if (s.kind === "email") input.autocomplete = "email";
+        if (s.kind === "password") input.autocomplete = "current-password";
+      } else input.rows = s.lines ?? 2;
       input.spellcheck = s.kind === "text";
       style(s);
       input.value = s.value;

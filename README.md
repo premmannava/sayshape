@@ -1231,17 +1231,20 @@ slider "Up to ${maxPrice}" bind=maxPrice min=20 max=300 step=10
 
 ### `input`
 
-A text field people type into, such as a name, an email, a search or a new item. Each keystroke writes its bind= state.
+A text field people type into, such as a name, an email, a search, a new item, or with lines= a note or a message. Each keystroke writes its bind= state, and required= and kind=email or number say what's wrong once it's been left.
 
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text | The label above the field. Leave it out only when the screen makes the purpose obvious. |
 | `bind` | state, required | The state name or path it reads and writes, like task or t.title. |
 | `placeholder` | string | A hint shown while the field is empty, like e.g. Sunscreen. |
-| `kind` | `text` / `email` / `number` / `password` / `search` | text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. |
+| `kind` | `text` / `email` / `number` / `password` / `search` | text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one. |
+| `lines` | number | Rows of text, 1 to 12: more than 1 is a box for a note or a message, where Enter starts a new line (on= then runs only from a button). |
+| `required` | condition | When true, an empty field says Required once it's been left. |
+| `error` | string | Your own message, shown under the field once it's been left, while it isn't empty, e.g. error="{len(pw) < 8 ? 'At least 8 characters' : ''}". |
 | `on` | action | Actions to run when Enter is pressed, after the value is written, e.g. emit:changed. Separate several with ; |
 | `disabled` | condition | Expression; when true the field is greyed out and can't be typed in. |
-| `max` | number | Longest value in characters (at most 10000). |
+| `max` | number | Longest value in characters (at most 10000; 2000 when lines= is more than 1). |
 
 ```
 state task="" todos=[]
@@ -2304,7 +2307,7 @@ docs/images/        README images
 
 SayShape draws everything itself, so it gives up what the browser normally provides for free. Today it does **not** have:
 
-- **Multi-line text, and form validation** (required fields, email format). A model can show a hint with `if=` for now.
+- **Forms beyond the basics.** `input` takes several lines (`lines=`) and says what's wrong once a field has been left (`required=`, `kind=email`, `kind=number`, or its own `error=`), but there's no form element that checks every field at once on submit, no rich text editing, and no pattern or length checks beyond `error=` and `max=`. A submit button can be held back with `disabled={…}`.
 - **Text selection and browser find.** To copy, a host can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
 - **Toasts or sheets.** `tip=` on any element shows a short tooltip. Popups serve one element's own panel (a select's list, a date picker's calendar, a menu's actions; a menu has no submenus or separators), and `dialog` is the one overlay: one open at a time, centred, over a dimmed screen. There are no toasts or sheets that slide in from an edge. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
 - **Dates and times beyond the basics.** `date-picker` picks a calendar day (or a range with `range=true`), with no times. `schedule` lays out times as `HH:MM` text and dates as `YYYY-MM-DD`, but has no time zones, recurring events, blocks past midnight, month view, or dragging blocks to move them. Names are in US English with weeks starting on Sunday.

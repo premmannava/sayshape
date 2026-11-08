@@ -484,6 +484,62 @@ card
     stat label="To programs" value="77%" tone=good`,
 };
 
-export const examples: readonly Example[] = [tip, sales, pipeline, funds, costs, funding, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator];
+const booking: Example = {
+  id: "book-a-table",
+  title: "Book a table",
+  prompt: "A booking form for our restaurant that tells people what's missing",
+  category: "Plans",
+  look: { preset: "neutral", scheme: "light", accent: "#8a4b2f" },
+  simulated: "The booking request is simulated.",
+  spec: `state name="" email="" guests=2 note="" booked=false
+card
+  text "Book a table at Juniper & Rye" style=title tip="Open Tuesday to Sunday, 5 pm to 11 pm"
+  text "We'll email to confirm within the hour." tone=muted
+  input "Name" bind=name required=true placeholder="e.g. Ana Ruiz"
+  input "Email" bind=email kind=email required=true placeholder="name@example.com"
+  input "Guests" bind=guests kind=number tip="Up to 8 online; call us for larger groups" error="{guests > 8 ? 'For more than 8, please call us' : ''}"
+  input "Anything we should know?" bind=note lines=3 placeholder="Allergies, a high chair, a birthday…"
+  button "Request a table" on="set:booked:true;emit:book" disabled={trim(name) == '' || trim(email) == '' || guests > 8}
+  callout "Thanks, {name}! We'll email {email} shortly." tone=good if=booked`,
+};
+
+const storeOrders: Example = {
+  id: "store-orders",
+  title: "Store orders",
+  prompt: "Today's orders, with the usual actions for each one and the activity log",
+  category: "Shopping",
+  look: { preset: "teal", scheme: "light" },
+  simulated: "Exports and cancellations are simulated.",
+  spec: `state orders=[{id: "NW-2041", customer: "Lumen Cinema", total: 412.5, status: "Open"}, {id: "NW-2042", customer: "Harbor Books", total: 96, status: "Open"}, {id: "NW-2043", customer: "Fieldstone Cafe", total: 1280, status: "Shipped"}] events=[{title: "NW-2043 shipped", when: "09:12"}, {title: "Refund approved: NW-2033", when: "08:40"}, {title: "New review: 5 stars", when: "08:05"}, {title: "Stock low: Ridge 28 L", when: "07:58"}, {title: "Invoice INV-1188 sent", when: "07:30"}, {title: "NW-2038 delivered", when: "Yesterday"}, {title: "Payment failed: NW-2036", when: "Yesterday"}, {title: "New customer: Lumen Cinema", when: "Mon"}] confirm=false target=""
+derive open={count(orders, 'status', 'Open')}
+card
+  row align=center
+    text "Today's orders" style=title
+    menu "Export" align=end
+      menu-item "Copy as CSV" icon=copy on=emit:export:csv
+      menu-item "Download PDF" icon=download on=emit:export:pdf
+  stat label="Waiting to ship" value={open} tip="Paid, not yet handed to the carrier"
+  list
+    each items=orders as=o key={o.id}
+      row align=center
+        column gap=2
+          text "{o.id} · {o.customer}" weight=semibold
+          text "{money(o.total)} · {o.status}" tone=muted
+        menu label="Actions for {o.id}"
+          menu-item "Mark shipped" icon=truck on=set:o.status:Shipped disabled={o.status == 'Shipped'}
+          menu-item "Cancel order" icon=x-circle tone=bad on="set:target:{o.id};set:confirm:true"
+  text "Activity" weight=semibold
+  scroll "Activity" size=sm
+    list
+      each items=events as=e
+        list-item "{e.title}" detail="{e.when}"
+dialog "Cancel {target}?" bind=confirm size=sm
+  text "The customer is emailed and any payment is refunded." tone=muted
+  row
+    button "Keep order" variant=secondary on=set:confirm:false
+    button "Cancel order" variant=danger on="emit:cancel:{target};set:confirm:false"`,
+};
+
+export const examples: readonly Example[] = [tip, sales, pipeline, funds, costs, funding, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator, booking, storeOrders];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);

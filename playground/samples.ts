@@ -561,6 +561,21 @@ card
   button "Ship all open orders" on=set:open:0 tip="Marks all {open} open orders shipped and emails each customer"
 `,
   },
+  bookTable: {
+    label: "Book a table (form checks)",
+    prompt: "A booking form for our restaurant that tells people what's missing.",
+    spec: `state name="" email="" guests=2 note="" booked=false
+card
+  text "Book a table at Juniper & Rye" style=title
+  text "We'll email to confirm within the hour." tone=muted
+  input "Name" bind=name required=true placeholder="e.g. Ana Ruiz"
+  input "Email" bind=email kind=email required=true placeholder="name@example.com"
+  input "Guests" bind=guests kind=number tip="Up to 8 online; call us for larger groups" error="{guests > 8 ? 'For more than 8, please call us' : ''}"
+  input "Anything we should know?" bind=note lines=3 placeholder="Allergies, a high chair, a birthday…"
+  button "Request a table" on="set:booked:true;emit:book" disabled={trim(name) == '' || trim(email) == '' || guests > 8}
+  callout "Thanks, {name}! We'll email {email} shortly." tone=good if=booked
+`,
+  },
   inventory: {
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",

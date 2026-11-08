@@ -32,6 +32,25 @@ export interface EditorSpec {
   label: string;
   /** Longest value in characters. */
   max: number;
+  /** Rows of text: 1 is a one-line field; more is a multi-line box where Enter starts a new line. Default 1. */
+  lines?: number;
+  /** For several lines: the height of one, in CSS pixels, so the text box's lines match the canvas's. */
+  lineHeight?: number;
+  /** Told to screen readers while typing, as on the field itself. */
+  required?: boolean;
+  /** What's wrong with the field, when something is (aria-invalid, and read as its description). */
+  problem?: string;
+}
+
+/**
+ * A small number standing for a field's value, kept in its view state when it's left, so its
+ * message shows only while the value is still the one the person left it with: a value written
+ * from elsewhere (a form cleared after sending, the host) starts it afresh.
+ */
+export function valueStamp(text: string): number {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) | 0;
+  return h;
 }
 
 /** What the text box reports back to the engine. */

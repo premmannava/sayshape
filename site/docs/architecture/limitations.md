@@ -19,7 +19,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 ## Not built yet
 
 - **Data sources and host commands.** Your app fetches data and sets state; a spec can't declare where data comes from.
-- **Multi-line text and form validation** (required fields, email format). A spec can show a hint with `if=` for now.
+- **Forms beyond the basics.** Fields take several lines (`lines=`) and say what's wrong once left (`required=`, `kind=email`, `kind=number`, `error=`), but nothing checks every field at once on submit; hold a submit button back with `disabled={…}`.
 - **Overlays beyond dialogs, menus and tips.** No toasts or sheets. (`tip=` on any element shows a short tooltip.) The popup layer serves a component's own popup (a select's list, a menu's actions), and `dialog` is the one overlay, one open at a time. (`scroll` gives a scrolling area inside a screen, up and down only, without virtualization.)
 - **Typing to search** in a select, and option groups. (A select picks several with `multiple=true`.)
 - **Larger tables**: more than 200 rows, vertical scrolling, sticky headers, editable cells, multi-row selection. (Wide tables already scroll sideways.)
@@ -49,4 +49,4 @@ SayShape hasn't been benchmarked against other UI approaches, so nothing here sa
 
 ## Roadmap
 
-The phase plan is in [`docs/PLAN.md`](https://github.com/premmannava/sayshape/blob/main/docs/PLAN.md) in the repository: multi-line text and form validation next, then the model server and an app built on top.
+The phase plan is in [`docs/PLAN.md`](https://github.com/premmannava/sayshape/blob/main/docs/PLAN.md) in the repository: data sources next, then the model server and an app built on top.
