@@ -27,15 +27,17 @@ Interfaces match the chat app they're in. The view follows its light or dark mod
 Above each interface, at the right, the view can show a slim toolbar:
 
 - **Save image** (a download icon), in chat apps that let views download files (MCP Apps' `downloadFile` capability). It saves the interface as it looks now, after anything the person changed, as a sharp PNG (twice the screen's resolution, on the theme's background, without hover or messages) named after the interface's title, ready to paste into an email, a chat or a slide. Nothing is sent to the model.
+- **Copy text** (a copy icon). A canvas has no text to select, so this copies the whole interface as it is now: headings and text as lines, fields as "Label: value", checkboxes as [x] or [ ], and tables and chart data as tab-separated rows that paste straight into Excel or Google Sheets as cells. Buttons are left out and passwords are never copied. Ctrl+C (Cmd+C on a Mac) does the same unless the person is typing in a field. The server asks the chat app for clipboard access; where it isn't given, the view says so. Nothing is sent to the model.
 - **A theme selector** for SayShape's Teal, Purple, Blue and Neutral presets, when the server is started with `--theme-picker`. Useful for demos; for a company, set its theme with `--theme` instead.
 
-When neither is on, there's no toolbar at all. Whoever installs the server chooses, with flags in the chat app's `args`:
+When none is on, there's no toolbar at all. Whoever installs the server chooses, with flags in the chat app's `args`:
 
 | Flag | Effect |
 |---|---|
 | `--theme-picker` | Show the theme selector (off by default) |
 | `--theme teal\|purple\|blue\|neutral\|studio` | The theme interfaces use (default `teal`). `studio` is the Studio look: Inter, rounder corners and an indigo-to-violet accent |
 | `--no-save-image` | Hide Save image (shown by default where the chat app can download) |
+| `--no-copy-text` | Hide Copy text, and leave Ctrl+C alone (shown by default) |
 | `--scene` | **Experimental.** Turn on scenes: pictures and animations the model paints from shapes (off by default). Leave it out to turn them off again. |
 
 ```json

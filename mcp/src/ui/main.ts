@@ -21,7 +21,8 @@ import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
 import { eventDelivery, FIXING_SPEC, imageName, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
-import { isPresetId, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
+import { COPY_ACTION, isPresetId, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
+import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
 import { readViewOptions } from "./view-options";
 
@@ -29,7 +30,7 @@ const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 
 
 const bar = document.querySelector<HTMLElement>("#bar")!;
 const themeCanvas = document.querySelector<HTMLCanvasElement>("#view-tools")!;
-/** What the server was started with: --theme-picker, --theme, --no-save-image. */
+/** What the server was started with: --theme-picker, --theme, --no-save-image, --no-copy-text. */
 const viewOptions = readViewOptions(document);
 const canvas = document.querySelector<HTMLCanvasElement>("#sayshape")!;
 const app = new App({ name: "SayShape", version: "0.1.0" }, {}, { autoResize: true });
@@ -319,13 +320,50 @@ async function saveImage(): Promise<void> {
   }
 }
 
+/**
+ * Copy the interface's words, as it is right now, to the clipboard: nothing
+ * drawn on a canvas can be selected, so this stands in for selecting it all.
+ * Tables and chart data come as tab-separated rows, so they paste into a
+ * spreadsheet as cells (SayShape.copyText()). Nothing goes to the model.
+ */
+async function copyText(): Promise<void> {
+  if (!sayshape) return;
+  if (introShowing || folded !== null) { sayshape.notify("There's nothing to copy yet"); return; }
+  const text = sayshape.copyText();
+  if (!text) { sayshape.notify("There's no text to copy"); return; }
+  const ok = await writeClipboard(text, browserClipboard(document));
+  sayshape.notify(ok ? "Text copied" : "This chat app doesn't allow copying from here");
+}
+
+/**
+ * Ctrl+C (Cmd+C on a Mac) copies the interface's text, as the Copy text
+ * button does, unless the person is typing in a field or has selected text
+ * somewhere else on the page.
+ */
+function onCopyKey(e: KeyboardEvent): void {
+  if (!viewOptions.copyText || e.key.toLowerCase() !== "c" || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+  if (isTypingField(e.target)) return;
+  if (document.getSelection()?.toString()) return;
+  e.preventDefault();
+  void copyText();
+}
+
+/** A field someone types in, where Ctrl+C copies their own selection. The accessibility mirror's checkboxes and sliders aren't. */
+function isTypingField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable || target.tagName === "TEXTAREA") return true;
+  return target instanceof HTMLInputElement && !["checkbox", "radio", "range", "button", "submit", "reset"].includes(target.type);
+}
+
 async function start(): Promise<void> {
   await app.connect();
   const theme = await applyTheme(app.getHostContext());
-  // The theme selector only when the server was started with --theme-picker; the download
-  // button unless --no-save-image, and only where the chat app can download files.
+  // The theme selector only when the server was started with --theme-picker; the copy
+  // button unless --no-copy-text; the download button unless --no-save-image, and only
+  // where the chat app can download files.
   const tools = {
     picker: viewOptions.themePicker,
+    copy: viewOptions.copyText,
     save: viewOptions.saveImage && !!app.getHostCapabilities()?.downloadFile,
     theme: viewOptions.theme,
   };
@@ -342,6 +380,7 @@ async function start(): Promise<void> {
     });
     themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
       if (name === SAVE_ACTION) { void saveImage(); return; }
+      if (name === COPY_ACTION) { void copyText(); return; }
       if (name !== "theme") return;
       if (!isPresetId(value)) {
         themePicker?.state.set("preset", activePreset);
@@ -364,6 +403,7 @@ async function start(): Promise<void> {
     if (name === SHOW_ANYWAY) { unfold(); return; }
     void deliver(name, value, sayshape.state.snapshot());
   });
+  document.addEventListener("keydown", onCopyKey);
   syncLoading();
   if (pending) { const p = pending; pending = null; show(p.spec, p.final); }
   else { sayshape.setSpec(INTRO); introShowing = true; }

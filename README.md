@@ -850,7 +850,7 @@ A small symbol on its own, like a status mark or a weather sign. To start a line
 
 | Prop | Type | Description |
 |---|---|---|
-| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, bell, search, filter, download, share, link, sliders. |
+| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, bell, search, filter, download, copy, share, link, sliders. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `size` | `sm` / `md` / `lg` | sm, md or lg. |
 | `label` | string | What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration. |
@@ -1493,6 +1493,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `notify(text)` | Show a short message, as `notify:` does |
 | `imagesLoaded()` | A promise that resolves once every requested image has loaded or failed |
 | `picture({ pixelRatio?, background?, widen? })` | A promise of a new canvas with the screen as it is now (current state and screen), at 2× by default, on the theme's surface, without hover, focus, popups or messages. When a table scrolls sideways, the picture is drawn wider (up to 2,400 px) so every column shows; `widen: false` keeps the screen's width. Save it with `toBlob()` for a "Save image" button |
+| `copyText()` | The screen as plain text, for a "Copy text" button, since nothing on a canvas can be selected: headings and text as lines, fields as `Label: value`, checkboxes as `[x]`, and tables and chart data as tab-separated rows that paste into a spreadsheet as cells. Buttons are left out, and a password is never included |
 | `hiddenWidth()` | How much wider the screen would need to be for nothing to scroll sideways; 0 when nothing does |
 | `setTheme(theme)` | Switch themes |
 | `find(type)` | All nodes of a type, e.g. `ui.find("button")` |
@@ -2078,7 +2079,7 @@ docs/images/        README images
 SayShape draws everything itself, so it gives up what the browser normally provides for free. Today it does **not** have:
 
 - **Multi-line text, and form validation** (required fields, email format). A model can show a hint with `if=` for now.
-- **Text selection, copy and browser find.**
+- **Text selection and browser find.** To copy, a host can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
 - **Scrolling regions, dialogs, menus or tooltips.** The one popup so far is a select's list of options (one open at a time); there's no general overlay element yet.
 - **Dates beyond one day.** `date-picker` picks a single calendar day: no ranges, times, recurring dates or time zones, and names are in US English with weeks starting on Sunday.
 - **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.

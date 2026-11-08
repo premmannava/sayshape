@@ -63,7 +63,9 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
-  await page.setContent(`<!doctype html><body style="margin:20px;font-family:sans-serif;background:#fff"><script>${hostJs}</script></body>`);
+  // Served from an https address, like a real chat app, so the page is a secure context and has a clipboard.
+  await page.route("https://host.test/", (route) => route.fulfill({ contentType: "text/html", body: `<!doctype html><body style="margin:20px;font-family:sans-serif;background:#fff"><script>${hostJs}</script></body>` }));
+  await page.goto("https://host.test/");
   // The same Content Security Policy chat apps give the view: inline scripts and styles, no eval.
   // A violation is logged as a console error, so "no errors in the page" catches it.
   const csp = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data:">`;
@@ -72,8 +74,10 @@ try {
   const withPicker = uiHtml.replace(/<head>/i, `<head><meta name="sayshape-view" content="picker=1&theme=teal&save=1">`);
   const strict = withPicker.replace(/<head>/i, `<head>${csp}${listen}`);
   check(strict !== withPicker, "the view runs under a strict Content Security Policy");
-  // This host can download files, so the view offers "Save image" beside the theme picker.
-  await page.evaluate((html) => window.TestHost.mount(html, "light", undefined, false, true), strict);
+  // This host can download files, so the view offers "Save image" beside the theme picker,
+  // and it grants the clipboard access the view asks for, so "Copy text" can write.
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate((html) => window.TestHost.mount(html, "light", undefined, false, true, true), strict);
   await page.evaluate(() => window.host.ready);
   check(true, "the view completed the MCP Apps handshake");
 
@@ -151,6 +155,24 @@ try {
   writeFileSync(out + "5-saved.png", png);
   check((await page.evaluate(() => window.host.messages)).length === before, "saving sends nothing to the model");
 
+  // "Copy text" sits just left of Save image: it puts the interface's words on the clipboard,
+  // fields as "Label: value" and the chart's data as tab-separated rows, and tells the model nothing.
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+  await frame.locator("#view-tools").click({ position: { x: Math.round(bar.w - 4 - 30 - 8 - 15), y: Math.round(bar.h / 2) } });
+  await page.waitForTimeout(300);
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  writeFileSync(out + "6-copied.txt", copied);
+  check(copied.startsWith("Weekend hike planner\n"), `Copy text put the interface's text on the clipboard ("${copied.split("\n")[0]}")`);
+  check(/^Hikers: \d+$/m.test(copied) && /^Water to carry: \d+ L$/m.test(copied), "fields and stats copy as \"Label: value\"");
+  check(copied.includes("Tent\t2.4") && !copied.includes("Plan this trip"), "the chart copies as tab-separated data, and buttons are left out");
+  check((await page.evaluate(() => window.host.messages)).length === before, "copying sends nothing to the model");
+  // Ctrl+C on the interface does the same.
+  await page.evaluate(() => navigator.clipboard.writeText(""));
+  await frame.locator("#sayshape").focus();
+  await page.keyboard.press("Control+c");
+  await page.waitForTimeout(300);
+  check((await page.evaluate(() => navigator.clipboard.readText())) === copied, "Ctrl+C on the interface copies the same text");
+
   await page.evaluate(() => { document.body.style.background = "#1f1f1e"; window.host.bridge.setHostContext({ theme: "dark" }); });
   await page.waitForTimeout(400);
   await page.screenshot({ path: out + "4-dark.png" });
@@ -204,8 +226,17 @@ try {
   const styledFrame = styled.frames().find((f) => f !== styled.mainFrame());
   const hostBacking = await styledFrame.evaluate(() => getComputedStyle(document.querySelector("#sayshape")).backgroundColor);
   check(hostBacking === "rgb(48, 48, 46)", `Canvas gutter respects the host's custom surface color (${hostBacking})`);
-  // Started without flags, in a chat app that can't download: no theme picker, no download, no toolbar at all.
-  check(await styledFrame.evaluate(() => document.querySelector("#bar").hidden), "without flags or downloads the view shows no toolbar");
+  // Started without flags, in a chat app that can't download: no theme picker and no download, so only Copy text.
+  const plainBar = await styledFrame.evaluate(() => ({ hidden: document.querySelector("#bar").hidden, w: document.querySelector("#view-tools").getBoundingClientRect().width }));
+  check(!plainBar.hidden && Math.round(plainBar.w) === 38, `without flags or downloads the toolbar holds only Copy text (${Math.round(plainBar.w)}px wide)`);
+  // With --no-copy-text as well, there's nothing to show, so no toolbar at all.
+  const bare = await browser.newPage({ viewport: { width: 680, height: 600 } });
+  await bare.setContent(`<!doctype html><body><script>${hostJs}</script></body>`);
+  await bare.evaluate((html) => window.TestHost.mount(html, "light"), uiHtml.replace(/<head>/i, `<head><meta name="sayshape-view" content="picker=0&theme=teal&save=1&copy=0">`));
+  await bare.evaluate(() => window.host.ready);
+  const bareFrame = bare.frames().find((f) => f !== bare.mainFrame());
+  check(await bareFrame.evaluate(() => document.querySelector("#bar").hidden), "with --no-copy-text and no downloads the view shows no toolbar");
+  await bare.close();
   const cardPixel = await styledFrame.evaluate(() => {
     const c = document.querySelector("#sayshape");
     // A point inside the card, left of the title and above it.

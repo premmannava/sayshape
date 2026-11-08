@@ -118,6 +118,8 @@ export interface Rendered {
   isShown(query: Query): boolean;
   /** Text drawn in the most recent frame, one entry per line of text. */
   text(): string[];
+  /** The screen as a host's Copy text button would copy it (SayShape.copyText()). */
+  copyText(): string;
 
   /** Click the centre of an element through the real pointer path. Throws if it can't be pressed. */
   press(query: Query): void;
@@ -306,6 +308,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     find,
     isShown: (query) => find(query).box !== null,
     text: () => drawOps.filter((d) => d.op === "fillText").map((d) => String(d.args[0])),
+    copyText: () => sayshape.copyText(),
 
     wheel(x, y, deltaY, o = {}) {
       canvas.dispatch("wheel", { clientX: x, clientY: y, deltaY, deltaX: o.deltaX ?? 0, shiftKey: !!o.shift });

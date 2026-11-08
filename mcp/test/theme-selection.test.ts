@@ -7,14 +7,14 @@ import { render } from "../../src/testing";
 import { darkTheme, lightTheme, seriesColors } from "../../src/theme";
 import { PRESETS } from "../../playground/appearance/presets";
 import type { ReadVar } from "../src/ui/host-theme";
-import { DEFAULT_PRESET, isPresetId, SAVE_ACTION, toolbarSpec, toolbarWidth, TOOLBAR_PADDING, themeForPreset } from "../src/ui/theme-selection";
+import { COPY_ACTION, DEFAULT_PRESET, isPresetId, SAVE_ACTION, toolbarSpec, toolbarWidth, TOOLBAR_PADDING, themeForPreset } from "../src/ui/theme-selection";
 import { toolButton } from "../src/ui/tool-button";
 
 const registry = new Registry();
 for (const component of [...coreComponents, toolButton]) registry.register(component);
 const TOOLS = [...coreComponents, toolButton];
-const PICKER_ONLY = toolbarSpec({ picker: true, save: false, theme: DEFAULT_PRESET });
-const BOTH = toolbarSpec({ picker: true, save: true, theme: DEFAULT_PRESET });
+const PICKER_ONLY = toolbarSpec({ picker: true, save: false, copy: false, theme: DEFAULT_PRESET });
+const BOTH = toolbarSpec({ picker: true, save: true, copy: false, theme: DEFAULT_PRESET });
 
 const hostReader = (variables: Record<string, string>): ReadVar => (name) => variables[name];
 
@@ -97,7 +97,7 @@ describe("MCP view toolbar", () => {
   it("is one slim strip with no label: the selector, then the download icon at the right", () => {
     expect(parse(BOTH, registry).diagnostics).toEqual([]);
     expect(BOTH).not.toContain('select "Theme"');
-    const width = toolbarWidth({ picker: true, save: true, theme: DEFAULT_PRESET });
+    const width = toolbarWidth({ picker: true, save: true, copy: false, theme: DEFAULT_PRESET });
     const ui = render(BOTH, { components: TOOLS, width, padding: TOOLBAR_PADDING });
     // "Theme" names the selector for screen readers but is never drawn.
     expect(ui.text().join(" ")).not.toContain("Theme");
@@ -114,25 +114,25 @@ describe("MCP view toolbar", () => {
   });
 
   it("shows only the tools that are on, and nothing at all when none are", () => {
-    expect(toolbarSpec({ picker: false, save: false, theme: "teal" })).toBe("");
-    expect(toolbarWidth({ picker: false, save: false, theme: "teal" })).toBe(2 * TOOLBAR_PADDING);
-    const saveOnly = toolbarSpec({ picker: false, save: true, theme: "teal" });
+    expect(toolbarSpec({ picker: false, save: false, copy: false, theme: "teal" })).toBe("");
+    expect(toolbarWidth({ picker: false, save: false, copy: false, theme: "teal" })).toBe(2 * TOOLBAR_PADDING);
+    const saveOnly = toolbarSpec({ picker: false, save: true, copy: false, theme: "teal" });
     expect(saveOnly).not.toContain("select");
     expect(parse(PICKER_ONLY, registry).diagnostics).toEqual([]);
     expect(PICKER_ONLY).not.toContain("tool-button");
-    const ui = render(saveOnly, { components: TOOLS, width: toolbarWidth({ picker: false, save: true, theme: "teal" }), padding: TOOLBAR_PADDING });
+    const ui = render(saveOnly, { components: TOOLS, width: toolbarWidth({ picker: false, save: true, copy: false, theme: "teal" }), padding: TOOLBAR_PADDING });
     expect(ui.hits.map((h) => h.box.node.type)).toEqual(["tool-button"]);
     ui.destroy();
   });
 
   it("starts the selector on the theme the server was started with", () => {
-    const ui = render(toolbarSpec({ picker: true, save: false, theme: "blue" }));
+    const ui = render(toolbarSpec({ picker: true, save: false, copy: false, theme: "blue" }));
     expect(ui.state.preset).toBe("blue");
     ui.destroy();
   });
 
   it("sends the view's own save action from the download icon, never a message for the model", () => {
-    const ui = render(BOTH, { components: TOOLS, width: toolbarWidth({ picker: true, save: true, theme: "teal" }), padding: TOOLBAR_PADDING });
+    const ui = render(BOTH, { components: TOOLS, width: toolbarWidth({ picker: true, save: true, copy: false, theme: "teal" }), padding: TOOLBAR_PADDING });
     ui.press({ type: "tool-button" });
     expect(ui.emitted).toEqual([{ name: SAVE_ACTION, value: undefined }]);
     expect(ui.state.preset).toBe(DEFAULT_PRESET);
@@ -140,13 +140,41 @@ describe("MCP view toolbar", () => {
   });
 
   it("reads to a screen reader as the theme selector and a Save image button", () => {
-    const ui = render(BOTH, { components: TOOLS, width: toolbarWidth({ picker: true, save: true, theme: "teal" }), padding: TOOLBAR_PADDING });
+    const ui = render(BOTH, { components: TOOLS, width: toolbarWidth({ picker: true, save: true, copy: false, theme: "teal" }), padding: TOOLBAR_PADDING });
     const nodes = ui.accessibility().children!;
     expect(nodes.at(-1)).toEqual({ role: "button", name: "Save image", state: ["focusable"] });
     expect(nodes[0]).toMatchObject({ role: "group", children: [{ role: "combobox", name: "Theme", state: ["not expanded", "value Teal", "focusable"] }] });
     // A screen reader's activation saves, like a press.
     ui.mirror.activate(ui.mirror.keyOf("tool-button"));
     expect(ui.emitted).toEqual([{ name: SAVE_ACTION, value: undefined }]);
+    ui.destroy();
+  });
+
+  it("puts Copy text just before Save image, both icons at the right end", () => {
+    const all = { picker: true, save: true, copy: true, theme: DEFAULT_PRESET } as const;
+    const spec = toolbarSpec(all);
+    expect(parse(spec, registry).diagnostics).toEqual([]);
+    const width = toolbarWidth(all);
+    expect(width).toBe(120 + 8 + 30 + 8 + 30 + 2 * TOOLBAR_PADDING);
+    const ui = render(spec, { components: TOOLS, width, padding: TOOLBAR_PADDING });
+    const select = ui.find("select").box!;
+    const [copy, save] = ui.hits.filter((h) => h.box.node.type === "tool-button").map((h) => h.box);
+    expect(copy!.x).toBeGreaterThan(select.x + select.w);
+    expect(save!.x).toBeGreaterThan(copy!.x + copy!.w);
+    expect(save!.x + save!.w).toBeCloseTo(width - TOOLBAR_PADDING, 0);
+    expect(ui.accessibility().children!.slice(-2)).toEqual([
+      { role: "button", name: "Copy text", state: ["focusable"] },
+      { role: "button", name: "Save image", state: ["focusable"] },
+    ]);
+    ui.destroy();
+  });
+
+  it("sends the view's own copy action from the copy icon, never a message for the model", () => {
+    const tools = { picker: false, save: false, copy: true, theme: "teal" } as const;
+    expect(toolbarWidth(tools)).toBe(30 + 2 * TOOLBAR_PADDING);
+    const ui = render(toolbarSpec(tools), { components: TOOLS, width: toolbarWidth(tools), padding: TOOLBAR_PADDING });
+    ui.press({ type: "tool-button" });
+    expect(ui.emitted).toEqual([{ name: COPY_ACTION, value: undefined }]);
     ui.destroy();
   });
 

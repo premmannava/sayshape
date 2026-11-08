@@ -26,9 +26,11 @@ declare global {
   }
 }
 
-export function mount(html: string, theme: "light" | "dark", styles?: Record<string, string>, serverTools = false, downloads = false): void {
+export function mount(html: string, theme: "light" | "dark", styles?: Record<string, string>, serverTools = false, downloads = false, clipboard = false): void {
   const iframe = document.createElement("iframe");
   iframe.setAttribute("sandbox", "allow-scripts");
+  // What a host that grants the view resource's permissions.clipboardWrite does.
+  if (clipboard) iframe.setAttribute("allow", "clipboard-write");
   iframe.style.cssText = "width:600px;height:200px;border:1px solid #ccc;border-radius:12px";
   document.body.append(iframe);
   const bridge = new AppBridge(null, { name: "TestHost", version: "1.0.0" }, { openLinks: {}, logging: {}, message: { text: {} }, updateModelContext: { text: {} }, ...(serverTools ? { serverTools: {} } : {}), ...(downloads ? { downloadFile: {} } : {}) }, {

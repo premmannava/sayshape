@@ -166,17 +166,20 @@ map bind=selected
     const { contents } = await client.readResource({ uri: UI_URI });
     expect(contents[0]).toMatchObject({ uri: UI_URI, mimeType: RESOURCE_MIME_TYPE });
     expect((contents[0] as { text: string }).text).toMatch(/<!doctype html>/);
-    // The view's settings travel with it; without flags, no picker and Save image on.
-    expect((contents[0] as { text: string }).text).toContain('<meta name="sayshape-view" content="picker=0&theme=teal&save=1">');
+    // The view's settings travel with it; without flags, no picker, and Save image and Copy text on.
+    expect((contents[0] as { text: string }).text).toContain('<meta name="sayshape-view" content="picker=0&theme=teal&save=1&copy=1">');
+    // It asks for clipboard writes, for Copy text; nothing else.
+    expect(contents[0]?._meta).toMatchObject({ ui: { permissions: { clipboardWrite: {} } } });
+    expect(Object.keys((contents[0]?._meta as { ui: { permissions: object } }).ui.permissions)).toEqual(["clipboardWrite"]);
   });
 
   it("passes the view the flags it was started with", async () => {
-    const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: true, theme: "neutral", saveImage: false } });
+    const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: true, theme: "neutral", saveImage: false, copyText: false } });
     const client = new Client({ name: "test", version: "1.0.0" });
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(a), client.connect(b)]);
     const { contents } = await client.readResource({ uri: UI_URI });
-    expect((contents[0] as { text: string }).text).toContain('content="picker=1&theme=neutral&save=0"');
+    expect((contents[0] as { text: string }).text).toContain('content="picker=1&theme=neutral&save=0&copy=0"');
   });
 
   it("never throws on hostile input", () => {

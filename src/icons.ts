@@ -103,6 +103,8 @@ export const ICONS = {
   search: ["O 10.5 10.5 6.5", "M15.2 15.2 L20.5 20.5"],
   filter: ["M3.5 5 H20.5 L14 12.5 V19 L10 21 V12.5 Z"],
   download: ["M12 3.5 V15", "M7 10.5 L12 15.5 L17 10.5", "M4 20 H20"],
+  // Two sheets, the front one whole and the one behind showing only its top-left corner.
+  copy: ["R 9 9 11.5 11.5 2", "M15 5.5 V5 C15 4.2 14.3 3.5 13.5 3.5 H5 C4.2 3.5 3.5 4.2 3.5 5 V13.5 C3.5 14.3 4.2 15 5 15 H5.5"],
   share: ["O 6 12 2.5", "O 17.5 6 2.5", "O 17.5 18 2.5", "M8.3 10.8 L15.2 7.2", "M8.3 13.2 L15.2 16.8"],
   link: [
     "M10 14 C11.2 15.3 13 15.4 14.3 14.2 L17.6 10.9 C18.9 9.6 18.9 7.5 17.6 6.2 C16.3 4.9 14.2 4.9 12.9 6.2 L11.9 7.2",
@@ -133,7 +135,7 @@ export function nearestIcon(name: string): IconName | null {
     work: "briefcase", job: "briefcase", document: "file", goal: "target", energy: "bolt", power: "bolt", insight: "idea",
     tip: "idea", security: "lock", person: "user", people: "users", team: "users", date: "calendar", email: "mail",
     message: "chat", favorite: "star", rating: "star", like: "heart", notification: "bell", find: "search",
-    export: "download", settings: "sliders", options: "sliders", reload: "refresh", sync: "refresh",
+    export: "download", duplicate: "copy", clipboard: "copy", settings: "sliders", options: "sliders", reload: "refresh", sync: "refresh",
   };
   if (Object.hasOwn(ALIASES, n)) return ALIASES[n]!;
   return ICON_NAMES.find((i) => i.replace(/-/g, "") === n || i.startsWith(n) || n.startsWith(i.replace(/-.*/, ""))) ?? null;
