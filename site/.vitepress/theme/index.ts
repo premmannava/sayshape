@@ -21,6 +21,7 @@ import SayShapeLive from "./components/SayShapeLive.vue";
 import Landing from "./components/Landing.vue";
 import Gallery from "./components/Gallery.vue";
 import ExamplesStudio from "./components/ExamplesStudio.vue";
+import ExamplesAsk from "./components/ExamplesAsk.vue";
 import Playground from "./components/Playground.vue";
 import EngineDiagram from "./components/EngineDiagram.vue";
 import Atlas from "./components/Atlas.vue";
@@ -34,6 +35,7 @@ export default {
     app.component("Landing", Landing);
     app.component("Gallery", Gallery);
     app.component("ExamplesStudio", ExamplesStudio);
+    app.component("ExamplesAsk", ExamplesAsk);
     app.component("Playground", Playground);
     app.component("EngineDiagram", EngineDiagram);
     app.component("Atlas", Atlas);
