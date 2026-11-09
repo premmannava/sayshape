@@ -31,7 +31,7 @@ const binds = (e: (typeof data.elements)[number]) => e.props.some((p) => p.name 
   <div class="atlas">
     <header class="at-head">
       <p class="ss-eyebrow">Element atlas</p>
-      <h1>{{ data.elements.length }} elements. <span class="ss-mark">Poke any of them.</span></h1>
+      <h1>{{ data.elements.length }} elements. <em>Poke any of them.</em></h1>
       <p class="at-lede">Every card below is the real engine running that element's example. Press, drag and type, then flip a card to see the lines that draw it.</p>
       <div class="at-controls">
         <div class="at-chips" role="group" aria-label="Show a category">
@@ -61,9 +61,10 @@ const binds = (e: (typeof data.elements)[number]) => e.props.some((p) => p.name 
 </template>
 
 <style scoped>
-.atlas { max-width: 1320px; margin: 0 auto; padding: 48px 24px 96px }
+.atlas { max-width: var(--ss-content); margin: 0 auto; padding: var(--ss-page-top) var(--ss-gutter) var(--ss-page-bottom) }
 .at-head { display: grid; gap: 14px; margin-bottom: 24px }
-.at-head h1 { margin: 0; font: 800 clamp(40px, 6vw, 72px)/0.98 var(--sayshape-display); letter-spacing: -0.045em; text-wrap: balance }
+.at-head h1 { margin: 0; font: 600 clamp(40px, 5.6vw, 64px)/1 var(--sayshape-display); letter-spacing: -0.03em; text-wrap: balance }
+.at-head h1 em { font-style: italic; color: var(--ss-coral) }
 .at-lede { margin: 0; max-width: 60ch; font-size: 18px; line-height: 1.5; color: var(--vp-c-text-2) }
 .at-controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; padding-top: 18px; margin-top: 8px; border-top: 1px solid var(--vp-c-divider) }
 .at-chips { display: flex; flex-wrap: wrap; gap: 8px }
@@ -75,7 +76,7 @@ const binds = (e: (typeof data.elements)[number]) => e.props.some((p) => p.name 
 .at-empty { font-size: 16px; color: var(--vp-c-text-2) }
 .at-section { margin-top: 40px }
 .at-sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-bottom: 16px }
-.at-sec-head h2 { margin: 0; font: 800 32px/1.1 var(--sayshape-display); letter-spacing: -0.03em }
+.at-sec-head h2 { margin: 0; font: 600 32px/1.1 var(--sayshape-display); letter-spacing: -0.03em }
 .at-sec-head p { margin: 0; flex: 1 1 320px; font-size: 15px; color: var(--vp-c-text-2) }
 .at-sec-head a { font-size: 14px; font-weight: 600 }
 .at-wall { columns: 3 340px; column-gap: 16px }

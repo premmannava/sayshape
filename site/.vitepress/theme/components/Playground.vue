@@ -349,7 +349,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
     <header class="pg-head">
       <div>
         <p class="ss-eyebrow">Playground</p>
-        <h1>Write it. <span class="ss-mark">Watch it draw.</span></h1>
+        <h1>Write it. <em>Watch it draw.</em></h1>
         <p class="pg-note">
           Edit any spec and the real engine redraws as you type. No model runs on this site: <a :href="docsModel">connect your own</a>, or paste the
           <a :href="docsGuide">model guide</a> into any chat assistant and drop its answer here.
@@ -519,9 +519,12 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 </template>
 
 <style scoped>
-.pg { max-width: 1440px; margin: 0 auto; padding: 28px 28px 56px }
+.pg { max-width: var(--ss-workspace); margin: 0 auto; padding: var(--ss-page-top) var(--ss-gutter) 56px }
+/* The title lines up with the content pages; the editor below may use the full workspace. */
+.pg-head { max-width: calc(var(--ss-content) - 2 * var(--ss-gutter)); margin-inline: auto }
 .pg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 40px; align-items: end; margin-bottom: 22px }
-.pg-head h1 { font-family: var(--sayshape-display); font-weight: 800; font-size: clamp(40px, 5.6vw, 68px); letter-spacing: -0.045em; margin: 8px 0 12px; line-height: 0.98 }
+.pg-head h1 em { font-style: italic; color: var(--ss-coral) }
+.pg-head h1 { font: 600 clamp(40px, 5.6vw, 64px)/1 var(--sayshape-display); letter-spacing: -0.03em; margin: 8px 0 12px }
 .pg-note { margin: 0; max-width: 64ch; color: var(--vp-c-text-2); line-height: 1.55; font-size: 16px }
 .pg-note a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
 .pg-metrics { display: flex; margin: 0; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; overflow: hidden; background: var(--ss-card) }

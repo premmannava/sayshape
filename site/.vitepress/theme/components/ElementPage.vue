@@ -103,7 +103,7 @@ const defaultLabel = (p: Prop) => (p.required ? "required" : p.default === null 
     <header class="ep-head">
       <a class="ss-eyebrow ep-crumb" :href="withBase('/docs/elements/')">Elements / {{ category.title }}</a>
       <div class="ep-titlerow">
-        <h1 class="ep-name"><span class="ss-mark">{{ el.type }}</span></h1>
+        <h1 class="ep-name">{{ el.type }}</h1>
         <span v-if="bindsState" class="ep-pill">binds state</span>
         <span v-if="el.parents" class="ep-pill quiet">inside {{ el.parents.join(", ") }}</span>
       </div>
@@ -221,7 +221,7 @@ const defaultLabel = (p: Prop) => (p.required ? "required" : p.default === null 
 </template>
 
 <style scoped>
-.ep { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; display: grid; gap: 32px }
+.ep { max-width: var(--ss-content); margin: 0 auto; padding: var(--ss-page-top) var(--ss-gutter) var(--ss-page-bottom); display: grid; gap: 32px }
 .ep-head { display: grid; gap: 12px }
 .ep-crumb { text-decoration: none }
 .ep-titlerow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 14px }
@@ -268,7 +268,7 @@ const defaultLabel = (p: Prop) => (p.required ? "required" : p.default === null 
 .ep-typo[aria-pressed="true"] { background: var(--ss-mark-soft) }
 
 .ep-cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; align-items: start }
-.ep-props h2 { margin: 0 0 4px; font: 800 30px/1.1 var(--sayshape-display); letter-spacing: -0.03em }
+.ep-props h2 { margin: 0 0 4px; font: 600 30px/1.1 var(--sayshape-display); letter-spacing: -0.03em }
 .ep-rows { border-top: 1px solid var(--vp-c-divider); margin-top: 12px }
 .ep-row { display: grid; grid-template-columns: 120px 150px minmax(0, 1fr) 90px; gap: 16px; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--vp-c-divider) }
 .ep-row .nm { font-size: 15px; font-weight: 500; color: var(--vp-c-brand-1); background: none; padding: 0 }

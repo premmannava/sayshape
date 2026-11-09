@@ -38,7 +38,16 @@
 
   --vp-home-hero-name-color: var(--vp-c-text-1);
   --vp-nav-logo-height: 26px;
-  --vp-layout-max-width: 1360px;
+  --vp-layout-max-width: 1280px;
+  /* Page widths. Content pages (home, examples, elements) line up with the
+     nav at --ss-content; tools (playground, compare) may run wider, to
+     --ss-workspace, but their titles still line up with the content. Docs
+     keep VitePress's reading column. */
+  --ss-content: 1280px;
+  --ss-workspace: 1440px;
+  --ss-gutter: clamp(16px, 4vw, 40px);
+  --ss-page-top: clamp(28px, 4vw, 56px);
+  --ss-page-bottom: clamp(56px, 7vw, 96px);
   --vp-nav-bg-color: var(--vp-c-bg);
   --vp-sidebar-bg-color: var(--vp-c-bg);
 
@@ -212,6 +221,12 @@
   box-shadow: var(--ss-lift-sm);
 }
 
+/* The nav's edges line up with the page content on pages without a sidebar. */
+@media (min-width: 768px) {
+  .VPNavBar:not(.has-sidebar) { padding-left: var(--ss-gutter) !important; padding-right: var(--ss-gutter) !important }
+  .VPNavBar:not(.has-sidebar) .container { max-width: calc(var(--ss-content) - 2 * var(--ss-gutter)) !important }
+}
+
 /* ------------------------------------------------------------ type */
 
 .vp-doc h1,
@@ -272,8 +287,8 @@
   transition: background-color 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
-.sayshape-btn.primary { background: var(--vp-button-brand-bg); border-color: var(--vp-button-brand-bg); color: var(--vp-button-brand-text) }
-.sayshape-btn.primary:hover { background: var(--vp-button-brand-hover-bg); border-color: var(--vp-button-brand-hover-bg) }
+.sayshape-btn.primary { background: var(--vp-c-text-1); border-color: var(--vp-c-text-1); color: var(--vp-c-bg) }
+.sayshape-btn.primary:hover { background: var(--ss-ink-hover); border-color: var(--ss-ink-hover) }
 .sayshape-btn.quiet { background: transparent; color: var(--vp-c-text-1); border-color: var(--ss-rule) }
 .sayshape-btn.quiet:hover { background: var(--vp-c-text-1); color: var(--ss-on-ink) }
 .sayshape-btn.small { height: 34px; padding: 0 14px; font-size: 13px }

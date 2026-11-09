@@ -373,8 +373,9 @@ const toggle = (k: Key) => { open.value = { ...open.value, [k]: !open.value[k] }
 </template>
 
 <style scoped>
-.cmp { max-width: 1360px; margin: 0 auto; padding: 32px 24px 64px; display: flex; flex-direction: column; gap: 24px; }
-.cmp-head h1 { margin: 0 0 10px; font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; }
+.cmp { max-width: var(--ss-workspace); margin: 0 auto; padding: var(--ss-page-top) var(--ss-gutter) 64px; display: flex; flex-direction: column; gap: 24px; }
+.cmp-head { width: 100%; max-width: calc(var(--ss-content) - 2 * var(--ss-gutter)); margin-inline: auto; }
+.cmp-head h1 { margin: 0 0 12px; font: 600 clamp(40px, 5.6vw, 64px)/1 var(--sayshape-display); letter-spacing: -0.03em; text-wrap: balance; }
 .cmp-head p { margin: 0; max-width: 780px; font-size: 17px; line-height: 1.55; color: var(--vp-c-text-2); }
 .cmp-card { background: var(--vp-c-bg-soft); border: 1px solid var(--vp-c-divider); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
 .cmp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -384,7 +385,7 @@ const toggle = (k: Key) => { open.value = { ...open.value, [k]: !open.value[k] }
 .cmp-request p { margin: 6px 0 0; font-size: 16px; line-height: 1.5; }
 .cmp-controls { gap: 12px; }
 .cmp-primary, .cmp-secondary { min-height: 44px; padding: 0 18px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
-.cmp-primary { border: 0; background: var(--vp-c-brand-1); color: var(--vp-c-white); }
+.cmp-primary { border: 0; background: var(--vp-c-text-1); color: var(--vp-c-bg); }
 .cmp-secondary { border: 1px solid var(--vp-c-divider); background: var(--vp-c-bg); color: var(--vp-c-text-1); font-weight: 500; }
 .cmp-primary:disabled, .cmp-secondary:disabled { opacity: 0.5; cursor: default; }
 .cmp-scrub { flex: 1 1 240px; display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--vp-c-text-2); min-width: 0; }
@@ -411,5 +412,5 @@ const toggle = (k: Key) => { open.value = { ...open.value, [k]: !open.value[k] }
 .cmp-source { margin: 0; width: 100%; box-sizing: border-box; max-height: 360px; overflow: auto; padding: 12px; border-radius: 10px; background: var(--vp-code-block-bg); font: 12.5px/1.55 var(--vp-font-family-mono); white-space: pre; }
 .cmp-foot { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--vp-c-text-2); border-top: 1px solid var(--vp-c-divider); padding-top: 16px; }
 .cmp-foot p { margin: 0; line-height: 1.55; max-width: 900px; }
-@media (max-width: 640px) { .cmp-head h1 { font-size: 30px; } .cmp { padding: 20px 16px 48px; } }
+@media (max-width: 640px) { .cmp { padding-bottom: 48px; } }
 </style>
