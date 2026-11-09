@@ -309,8 +309,8 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
 </template>
 
 <style scoped>
-.lp { --gutter: clamp(16px, 4vw, 40px); overflow-x: clip }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 0 var(--gutter) }
+.lp { --gutter: var(--ss-gutter); overflow-x: clip }
+.wrap { max-width: var(--ss-content); margin: 0 auto; padding: 0 var(--gutter) }
 .block { padding-top: clamp(56px, 7vw, 104px); padding-bottom: clamp(56px, 7vw, 104px) }
 .band { background: var(--ss-card); border-top: 1px solid var(--vp-c-divider); border-bottom: 1px solid var(--vp-c-divider); padding: clamp(56px, 7vw, 104px) 0 }
 
@@ -339,7 +339,7 @@ h3 { margin: 0; font-size: 19px; font-weight: 700 }
 .link-btn { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--vp-c-text-1); font: 600 14px var(--vp-font-family-base); text-decoration: underline; text-underline-offset: 3px; cursor: pointer }
 
 /* 1 · Hero */
-.hero { max-width: 1240px; margin: 0 auto; padding: clamp(28px, 4.5vw, 64px) var(--gutter) clamp(48px, 6vw, 88px) }
+.hero { max-width: var(--ss-content); margin: 0 auto; padding: clamp(28px, 4.5vw, 64px) var(--gutter) clamp(48px, 6vw, 88px) }
 .hero-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px 56px; margin-bottom: clamp(28px, 4vw, 48px) }
 .hero-title { flex: 1 1 560px; min-width: 0 }
 .eyebrow { margin: 0 0 16px; font-size: 14px; font-weight: 600; color: var(--ss-coral-ink) }
