@@ -783,6 +783,7 @@ ELEMENTS
     cluster=<boolean>  Group nearby pins into clickable counts. Zooming in separates them.
     interactive=<boolean>  Enable mouse-wheel zoom and drag pan.
     controls=<boolean>  Show Canvas zoom in, zoom out and reset controls. Opt in to preserve the original minimal map appearance.
+    route=<boolean>  Join the pins with a line in the order they are written, for a trip or a delivery run.
     children: pin
     example:
       state selected=""
