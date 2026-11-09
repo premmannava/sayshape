@@ -145,7 +145,7 @@ grid min=280
     text "Activities" style=lead
     each items=stops as=s
       check "{s.name}{s.cost ? ' · ' + money(s.cost) + ' each' : ' · free'}" bind=s.on
-    map fit=pins bind=picked controls=true
+    map fit=pins bind=picked controls=true route=true
       each items=stops as=s
         pin "{s.place}" lat={s.lat} lon={s.lon} size=7 detail="{s.name}|{s.drive}" tone={s.on ? "accent" : "muted"}`,
   },

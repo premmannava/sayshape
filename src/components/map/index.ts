@@ -13,6 +13,7 @@ import { drawBubbleLegend, drawChoroplethLegend } from "./legend";
 import { overlappingGroups, spiderfy, type SpiderPoint } from "./overlap";
 import { layoutBubbleLabels, type LabelCircle } from "./labels";
 import { stateBoundaryPaths } from "./states";
+import { lakes, placeNames, rivers, scaleBar, type Rect } from "./layers";
 import { mapVisual, choroplethColor } from "./visual";
 import { isList } from "../../data";
 import { constrain, fitPins, panBy, worldView, zoomAt, type Viewport } from "./viewport";
@@ -112,6 +113,7 @@ interface MapData {
   runtime: MapRuntime;
   fit: "world" | "pins";
   controls: boolean;
+  route: boolean;
   kind: MapKind;
   regions?: RegionValues;
   bubbles?: BubbleValues;
@@ -183,6 +185,91 @@ function activateMap(ctx: PressContext): boolean {
   return false;
 }
 
+/** City names, the route line and the scale bar for pin maps; drawn under the pins. */
+function paintContext(box: Box, ctx: Parameters<NonNullable<ComponentDef["paintOver"]>>[1], data: MapData) {
+  const { g, theme } = ctx;
+  const c = theme.colors;
+  const visual = mapVisual(theme);
+  const { scale, view } = data;
+  const unit = scale * view.zoom;
+  // Keep names off the pins, their labels and the zoom controls.
+  g.font = ctx.font(600, 12);
+  const avoid: Rect[] = [];
+  if (data.controls) avoid.push({ x: box.w - 40, y: 4, w: 36, h: 105 });
+  for (const group of data.groups) {
+    const pin = group.items[0]!;
+    const r = group.items.length > 1 ? 22 : pin.size + 4;
+    avoid.push({ x: group.x - r, y: group.y - r, w: r * 2, h: r * 2 });
+    if (group.items.length === 1) avoid.push({ x: group.x + pin.size + 2, y: group.y - 9, w: g.measureText(pin.label).width + 6, h: 18 });
+  }
+  avoid.push({ x: 0, y: box.h - 30, w: 150, h: 30 });
+  g.font = ctx.font(500, 11);
+  const names = placeNames(view.zoom, (x, y) => [x * unit + view.dx, y * unit + view.dy],
+    box.w, box.h, (text) => g.measureText(text).width, avoid);
+  g.textAlign = "left";
+  g.textBaseline = "middle";
+  for (const place of names) {
+    g.beginPath();
+    g.arc(box.x + place.dotX, box.y + place.dotY, 2.2, 0, Math.PI * 2);
+    g.fillStyle = c.muted;
+    g.fill();
+    g.lineWidth = 3;
+    g.strokeStyle = visual.labelHalo;
+    g.strokeText(place.name, box.x + place.x, box.y + place.y);
+    g.fillStyle = c.muted;
+    g.fillText(place.name, box.x + place.x, box.y + place.y);
+  }
+  if (data.route && data.pins.length > 1) {
+    g.save();
+    g.beginPath();
+    data.pins.forEach((pin, i) => {
+      const x = box.x + pin.x * unit + view.dx, y = box.y + pin.y * unit + view.dy;
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    });
+    g.lineJoin = "round";
+    g.lineCap = "round";
+    g.lineWidth = 5;
+    g.strokeStyle = visual.labelHalo;
+    g.globalAlpha = 0.8;
+    g.stroke();
+    g.lineWidth = 2.5;
+    g.strokeStyle = c.accent;
+    g.globalAlpha = 0.85;
+    g.stroke();
+    g.restore();
+  }
+  // A scale bar once a region is in view, measured at the map's middle.
+  if (view.zoom >= 3 && box.w >= 200) {
+    const worldY = (box.h / 2 - view.dy) / unit;
+    const lat = 2 * Math.atan(Math.exp((WORLD.t[1] - worldY) / WORLD.k)) - Math.PI / 2;
+    const metersPerPx = (40075016.686 / WORLD.w) * Math.cos(lat) / unit;
+    const bar = scaleBar(metersPerPx, 90);
+    if (bar) {
+      const x = box.x + 12, y = box.y + box.h - 12;
+      const text = `${bar.miles.toLocaleString("en-US")} mi · ${bar.km.toLocaleString("en-US")} km`;
+      g.beginPath();
+      g.moveTo(x, y - 5);
+      g.lineTo(x, y);
+      g.lineTo(x + bar.px, y);
+      g.lineTo(x + bar.px, y - 5);
+      g.lineCap = "square";
+      g.lineWidth = 4;
+      g.strokeStyle = visual.labelHalo;
+      g.stroke();
+      g.lineWidth = 1.5;
+      g.strokeStyle = c.muted;
+      g.stroke();
+      g.font = ctx.font(500, 11);
+      g.textBaseline = "bottom";
+      g.lineWidth = 3;
+      g.strokeStyle = visual.labelHalo;
+      g.strokeText(text, x, y - 6);
+      g.fillStyle = c.muted;
+      g.fillText(text, x, y - 6);
+    }
+  }
+}
+
 export const map: ComponentDef = {
   type: "map",
   category: "data",
@@ -203,6 +290,7 @@ export const map: ComponentDef = {
     cluster: { type: "boolean", default: false, description: "Group nearby pins into clickable counts. Zooming in separates them." },
     interactive: { type: "boolean", default: true, description: "Enable mouse-wheel zoom and drag pan." },
     controls: { type: "boolean", default: false, description: "Show Canvas zoom in, zoom out and reset controls. Opt in to preserve the original minimal map appearance." },
+    route: { type: "boolean", default: false, description: "Join the pins with a line in the order they are written, for a trip or a delivery run." },
   },
   children: ["pin"],
   check(props) {
@@ -335,7 +423,7 @@ map bind=selected fit=pins cluster=true controls=true
     if (expanded && !active) runtime.spider = null;
     const spiderPoints = active && expanded ? spiderfy(expanded.indices, allCircles, box.w, box.h) : [];
     box.data = {
-      scale, pins, groups, view, runtime, fit, controls: p.bool("controls", false),
+      scale, pins, groups, view, runtime, fit, controls: p.bool("controls", false), route: p.bool("route", false),
       kind, regions, bubbles, legend: p.bool("legend", kind !== "markers"),
       legendTitle: p.str("legendTitle", kind === "choropleth" ? "Country value" : "Location value"),
       fingerprint: key, overlaps, spiderPoints,
@@ -384,6 +472,13 @@ map bind=selected fit=pins cluster=true controls=true
       g.stroke(path);
       g.globalAlpha = 1;
     }
+    // Lakes and rivers in the ocean's color; smaller ones appear as you zoom in.
+    g.fillStyle = visual.ocean;
+    for (const lake of lakes(view.zoom)) g.fill(lake);
+    g.strokeStyle = visual.ocean;
+    g.lineCap = "round";
+    g.lineWidth = 1.3 / (scale * view.zoom);
+    for (const river of rivers(view.zoom)) g.stroke(river);
     // World-level maps remain uncluttered. At regional zoom, local US
     // geography is visible without street tiles or changing map behavior.
     if (view.zoom >= 4) {
@@ -508,6 +603,7 @@ map bind=selected fit=pins cluster=true controls=true
     g.beginPath();
     g.rect(box.x, box.y, box.w, box.h);
     g.clip();
+    if (data.kind === "markers") paintContext(box, ctx, data);
     for (const group of data.groups) {
       const x = box.x + group.x, y = box.y + group.y;
       if (group.items.length > 1) {

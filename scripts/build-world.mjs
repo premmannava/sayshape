@@ -4,6 +4,7 @@
 import fs from "fs";
 import { feature, mesh } from "topojson-client";
 import { presimplify, simplify, quantile } from "topojson-simplify";
+import { topology } from "topojson-server";
 import { geoMercator, geoPath } from "d3-geo";
 
 const W = 1000;
@@ -46,5 +47,51 @@ fs.writeFileSync("src/components/map/states.json", JSON.stringify({
   states,
 }));
 
+// Lakes, rivers and cities: Natural Earth 1:50m (public domain), worldwide.
+// Downloaded once into node_modules/.cache, since no npm package carries them.
+const NE = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/";
+async function naturalEarth(name) {
+  const file = `node_modules/.cache/natural-earth/${name}.geojson`;
+  if (!fs.existsSync(file)) {
+    const res = await fetch(NE + name + ".geojson");
+    if (!res.ok) throw new Error(`Couldn't download ${name}: ${res.status}`);
+    fs.mkdirSync("node_modules/.cache/natural-earth", { recursive: true });
+    fs.writeFileSync(file, await res.text());
+  }
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+// One path per Natural Earth scalerank (0 = most important), so the map can
+// show big lakes and rivers early and add smaller ones as it zooms in.
+function byRank(geojson, keep) {
+  let topo = presimplify(topology({ f: geojson }));
+  topo = simplify(topo, quantile(topo, keep));
+  const path = geoPath(proj).digits(1);
+  const ranks = new Map();
+  for (const f of feature(topo, topo.objects.f).features) {
+    const d = path(f);
+    if (!d) continue;
+    const r = Number(f.properties.scalerank) || 0;
+    ranks.set(r, (ranks.get(r) ?? "") + d);
+  }
+  return [...ranks].sort((a, b) => a[0] - b[0]);
+}
+const water = {
+  lakes: byRank(await naturalEarth("ne_50m_lakes"), 0.15),
+  rivers: byRank(await naturalEarth("ne_50m_rivers_lake_centerlines"), 0.15),
+};
+fs.writeFileSync("src/components/map/water.json", JSON.stringify(water));
+
+// Cities as [name, x, y, scalerank], most important first, so label
+// placement can take them in order and skip the ones that would collide.
+const round = (v) => Math.round(v * 10) / 10;
+const places = (await naturalEarth("ne_50m_populated_places_simple")).features
+  .map((f) => f.properties)
+  .sort((a, b) => a.scalerank - b.scalerank || b.pop_max - a.pop_max)
+  .map((p) => { const [x, y] = proj([p.longitude, p.latitude]); return [p.name, round(x), round(y), p.scalerank]; })
+  .filter(([, , y]) => y >= 0 && y <= H);
+fs.writeFileSync("src/components/map/places.json", JSON.stringify(places));
+
 const kb = (o) => (JSON.stringify(o).length / 1024).toFixed(0) + " KB";
-console.log(countries.length, "countries,", states.length, "states,", H, "tall;", "world", kb(out), "states", kb(states));
+console.log(countries.length, "countries,", states.length, "states,", places.length, "places,", H, "tall;",
+  "world", kb(out), "states", kb(states), "water", kb(water), "places", kb(places));
