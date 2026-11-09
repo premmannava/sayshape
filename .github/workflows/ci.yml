@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22]
+        node: [18, 20, 22, 24]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -63,6 +63,33 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+
+  package:
+    name: npm packages, installed outside the repository (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    if: github.event.action != 'labeled'
+    strategy:
+      fail-fast: false
+      matrix:
+        # The MCP server supports Node 20 and later; --data needs 22.13 or later.
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix mcp
+      - run: npm run build
+      - run: npm --prefix mcp run build
+      - run: npx playwright install --with-deps chromium
+      # Packs both packages, installs them into clean projects outside the repository
+      # and checks them there: imports, types, a Vite app, the MCP handshake and tools.
+      - run: npm run verify:pack
 
   fuzz:
     name: Long fuzz run

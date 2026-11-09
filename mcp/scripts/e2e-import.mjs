@@ -3,10 +3,13 @@
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const serverPath = fileURLToPath(new URL("../dist/server.js", import.meta.url));
+// SAYSHAPE_MCP_DIST points the check at another build, such as the one inside an installed npm package.
+const dist = process.env.SAYSHAPE_MCP_DIST ?? fileURLToPath(new URL("../dist/", import.meta.url));
+const serverPath = join(dist, "server.js");
 const samplePath = fileURLToPath(new URL("../examples/github-prs.json", import.meta.url));
 
 const forbidden = spawnSync(process.execPath,

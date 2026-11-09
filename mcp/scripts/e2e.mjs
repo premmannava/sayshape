@@ -6,6 +6,7 @@
 //   npm run build && npm run test:e2e        screenshots go to e2e-output/
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { build } from "vite";
 import { chromium } from "@playwright/test";
 
@@ -13,7 +14,9 @@ const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const out = here("../e2e-output/");
 mkdirSync(out, { recursive: true });
 
-const uiHtml = readFileSync(here("../dist/ui.html"), "utf8");
+// SAYSHAPE_MCP_DIST points the check at another build, such as the one inside an installed npm package.
+const dist = process.env.SAYSHAPE_MCP_DIST ?? here("../dist/");
+const uiHtml = readFileSync(join(dist, "ui.html"), "utf8");
 if (/\b(src|href)=["']https?:/i.test(uiHtml)) throw new Error("ui.html loads something from another origin");
 
 await build({

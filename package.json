@@ -4,6 +4,27 @@
   "description": "A canvas UI engine and a UI language designed for AI models to write.",
   "type": "module",
   "license": "MIT",
+  "author": "premmannava",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/premmannava/sayshape.git"
+  },
+  "homepage": "https://premmannava.github.io/sayshape/",
+  "bugs": {
+    "url": "https://github.com/premmannava/sayshape/issues"
+  },
+  "keywords": [
+    "generative-ui",
+    "ui-language",
+    "canvas",
+    "ai",
+    "llm",
+    "mcp",
+    "sayshape"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "main": "./dist/sayshape.js",
   "module": "./dist/sayshape.js",
   "types": "./dist/types/index.d.ts",
@@ -34,7 +55,7 @@
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tsc -p tsconfig.build.json",
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/fix-dts-imports.mjs",
     "build:playground": "vite build --config vite.playground.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -59,7 +80,8 @@
     "site:preview": "npm --prefix site run preview",
     "site:check": "node scripts/check-site.mjs",
     "scene-eval": "vite-node scripts/scene-eval.ts --",
-    "bench:scene-browser": "node bench/browser/run.mjs"
+    "bench:scene-browser": "node bench/browser/run.mjs",
+    "verify:pack": "node scripts/verify-pack.mjs"
   },
   "devDependencies": {
     "@a2ui/lit": "0.15.0",

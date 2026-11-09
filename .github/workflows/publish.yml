@@ -1,0 +1,217 @@
+name: Publish to npm
+
+# Publishes sayshape and sayshape-mcp to npm. Nothing here runs for pull requests.
+#
+#   Release   push a tag like v0.1.0 on a commit that's on main and passed CI. The
+#             tarballs are built and checked once, then published as they are to the
+#             "next" dist-tag after someone approves the npm-release environment,
+#             then installed back from npm and checked again.
+#   Promote   run this workflow by hand with the version and "promote" ticked: it
+#             checks that version from npm once more, then (after approval) moves
+#             "latest" to it.
+#   Check     run it by hand without "promote" to check a published version only.
+#
+# Publishing uses npm trusted publishing (GitHub's OIDC token), so there is no npm
+# token in this repository, and npm adds provenance. The very first release, before
+# the packages exist on npm, needs a one-off bootstrap: docs/releasing.md.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to check or promote, such as 0.1.0"
+        required: true
+        type: string
+      promote:
+        description: "Move the latest dist-tag to this version once it passes"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# One release at a time, and never cancel one halfway.
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Check the release commit and build the tarballs
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp/package-lock.json
+
+      - name: The tag matches both package versions
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          lib=$(node -p "require('./package.json').version")
+          mcp=$(node -p "require('./mcp/package.json').version")
+          if [ "$lib" != "$version" ] || [ "$mcp" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match package.json ($lib) and mcp/package.json ($mcp)."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: The tagged commit is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA isn't on main. Tag a commit that has been merged to main."
+            exit 1
+          fi
+
+      - name: CI passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=1" --jq '.total_count')
+          if [ "$passed" = "0" ]; then
+            echo "::error::No successful CI run for $GITHUB_SHA yet. Wait for CI on main to pass, then push the tag again."
+            exit 1
+          fi
+
+      - name: Neither version is on npm yet
+        run: |
+          for name in sayshape sayshape-mcp; do
+            if npm view "$name@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+              echo "::error::$name@${{ steps.version.outputs.version }} is already published. Bump the version; npm never takes the same version twice."
+              exit 1
+            fi
+          done
+
+      - run: npm ci
+      - run: npm ci --prefix mcp
+      - run: npm run build
+      - run: npm --prefix mcp run build
+      - run: npx playwright install --with-deps chromium
+      - name: Check the packages installed outside the repository
+        run: npm run verify:pack
+
+      - name: Pack the tarballs to publish
+        run: |
+          mkdir tarballs
+          npm pack --pack-destination tarballs
+          (cd mcp && npm pack --pack-destination ../tarballs)
+          ls -l tarballs
+          sha256sum tarballs/*.tgz | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarballs
+          path: tarballs/*.tgz
+          retention-days: 30
+
+  publish:
+    name: Publish to npm (next)
+    needs: verify
+    runs-on: ubuntu-latest
+    # Required reviewers on this environment are the approval step.
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          # Trusted publishing needs Node 22.14+ and npm 11.5.1+.
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@^11.21.0 && npm --version
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-tarballs
+          path: tarballs
+      - name: Publish the checked tarballs
+        env:
+          # Empty except during the one-off bootstrap (docs/releasing.md); otherwise npm uses OIDC.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: |
+          version="${{ needs.verify.outputs.version }}"
+          npm publish "tarballs/sayshape-$version.tgz" --tag next --access public --provenance
+          npm publish "tarballs/sayshape-mcp-$version.tgz" --tag next --access public --provenance
+          echo "Published sayshape@$version and sayshape-mcp@$version to the next dist-tag." >> "$GITHUB_STEP_SUMMARY"
+
+  registry-check:
+    name: Install from npm and check again
+    needs: publish
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.publish.result == 'success') }}
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Version
+        id: version
+        run: |
+          v="${{ inputs.version }}"
+          [ -n "$v" ] || v="${GITHUB_REF_NAME#v}"
+          if ! [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then echo "::error::\"$v\" isn't a version like 0.1.0."; exit 1; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp/package-lock.json
+      - name: Wait until npm serves both packages
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          for i in $(seq 1 30); do
+            if npm view "sayshape@$v" version >/dev/null 2>&1 && npm view "sayshape-mcp@$v" version >/dev/null 2>&1; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::sayshape@$v or sayshape-mcp@$v still isn't on npm after 5 minutes."
+          exit 1
+      # The repository's dependencies are only for the checks themselves (TypeScript, Playwright and
+      # the MCP end-to-end scripts); the packages under test come from npm into clean projects.
+      - run: npm ci
+      - run: npm ci --prefix mcp
+      - run: npx playwright install --with-deps chromium
+      - name: Check the published packages
+        run: npm run verify:pack -- --registry "${{ steps.version.outputs.version }}"
+
+  promote:
+    name: Move latest to this version
+    needs: registry-check
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.promote && needs.registry-check.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # dist-tag through OIDC needs npm 11.21 or later.
+      - run: npm install -g npm@^11.21.0 && npm --version
+      - name: Promote
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: |
+          v="${{ needs.registry-check.outputs.version }}"
+          npm dist-tag add "sayshape@$v" latest
+          npm dist-tag add "sayshape-mcp@$v" latest
+          npm view sayshape dist-tags
+          npm view sayshape-mcp dist-tags
+          echo "latest is now $v for sayshape and sayshape-mcp." >> "$GITHUB_STEP_SUMMARY"
