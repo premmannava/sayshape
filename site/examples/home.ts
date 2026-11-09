@@ -28,7 +28,7 @@ derive signups={round(search / 40 + social / 55 + creators / 70)}
 derive split=[{channel: "Search ads", amount: search}, {channel: "Social ads", amount: social}, {channel: "Creators", amount: creators}]
 derive ramp=[{week: "W1", signups: round(signups * 0.06)}, {week: "W2", signups: round(signups * 0.15)}, {week: "W3", signups: round(signups * 0.28)}, {week: "W4", signups: round(signups * 0.42)}, {week: "W5", signups: round(signups * 0.57)}, {week: "W6", signups: round(signups * 0.72)}, {week: "W7", signups: round(signups * 0.87)}, {week: "W8", signups: signups}]
 text "App launch · $40,000 budget" style=title
-grid min=170
+grid min=140
   meter "Budget used" kind=ring value={spent / 40000} max=1 bands="0.9,1.005" good=down format=percent
   stat label="Projected signups" value={number(signups)}
   stat label="Cost per signup" value={signups ? money(spent / signups) : "–"}
@@ -116,7 +116,7 @@ grid min=260
     ask: "Plan a weekend in Sedona for four people.",
     look: { preset: "purple" },
     lookName: "Purple",
-    spec: `state nights=2 people=4 day="sat" picked="" stops=[{name: "Pink jeep tour, Sedona", lat: 34.8697, lon: -111.761, cost: 95, on: true}, {name: "Jerome ghost town", lat: 34.7489, lon: -112.1138, cost: 0, on: true}, {name: "Lowell Observatory, Flagstaff", lat: 35.2029, lon: -111.6646, cost: 30, on: true}, {name: "Grand Canyon South Rim", lat: 36.0617, lon: -112.1077, cost: 0, on: false}]
+    spec: `state nights=2 people=4 day="sat" picked="" stops=[{name: "Pink jeep tour, Sedona", place: "Sedona", lat: 34.8697, lon: -111.761, cost: 95, on: true, drive: "In Sedona"}, {name: "Jerome ghost town", place: "Jerome", lat: 34.7489, lon: -112.1138, cost: 0, on: true, drive: "40 minutes from Sedona"}, {name: "Lowell Observatory, Flagstaff", place: "Flagstaff", lat: 35.2029, lon: -111.6646, cost: 30, on: true, drive: "45 minutes from Sedona"}, {name: "Grand Canyon South Rim", place: "Grand Canyon", lat: 36.0617, lon: -112.1077, cost: 0, on: false, drive: "About 2 hours from Sedona"}]
 derive extras={sum(filter(stops, 'on', true), 'cost') * people}
 derive hotel={nights * 245}
 derive food={nights * people * 60}
@@ -128,25 +128,26 @@ grid min=160
   stat label="Trip total" value={money(hotel + food + extras)}
   stat label="Per person" value={money((hotel + food + extras) / people)}
 grid min=280
-  map fit=pins bind=picked controls=true
-    each items=stops as=s
-      pin "{s.name}" lat={s.lat} lon={s.lon} tone={s.on ? "accent" : "muted"}
+  column
+    tabs bind=day
+      tab "Saturday" value=sat
+        timeline
+          step "Pink jeep tour" detail="Two hours on the red rock trails east of town" time="9:00"
+          step "Lunch in Jerome" detail="The old mining town on the hill, 40 minutes away" time="12:30"
+          step "Sunset at Airport Mesa" detail="Back in Sedona; a short walk up to the overlook" time="17:15"
+      tab "Sunday" value=sun
+        timeline
+          step "Grand Canyon South Rim" detail="Optional: about 2 hours each way, leave early" time="7:30"
+          step "Lunch in Flagstaff" detail="On the way back down" time="13:00"
+          step "Lowell Observatory" detail="Evening telescope viewing, then 45 minutes home" time="19:00"
+    chart "Where the money goes" kind=donut items=breakdown x=part y=amount format=money
   column
     text "Activities" style=lead
     each items=stops as=s
-      check "{s.name}{s.cost ? ' · ' + money(s.cost) + ' each' : ''}" bind=s.on
-grid min=280
-  tabs bind=day
-    tab "Saturday" value=sat
-      timeline
-        step "Pink jeep tour" detail="Red rock trails out of Sedona" time="9:00"
-        step "Jerome ghost town" detail="Lunch on the hill, 40 minutes away" time="13:00"
-        step "Sunset at Airport Mesa" detail="Back in Sedona" time="17:15"
-    tab "Sunday" value=sun
-      timeline
-        step "Grand Canyon South Rim" detail="Optional: a 2-hour drive each way" time="7:30"
-        step "Lowell Observatory, Flagstaff" detail="Evening telescope viewing" time="19:00"
-  chart "Where the money goes" kind=donut items=breakdown x=part y=amount format=money`,
+      check "{s.name}{s.cost ? ' · ' + money(s.cost) + ' each' : ' · free'}" bind=s.on
+    map fit=pins bind=picked controls=true
+      each items=stops as=s
+        pin "{s.place}" lat={s.lat} lon={s.lon} size=7 detail="{s.name}|{s.drive}" tone={s.on ? "accent" : "muted"}`,
   },
   {
     id: "orders",
@@ -157,7 +158,7 @@ grid min=280
     spec: `state show="All" sel="A-1047" orders=[{id: "A-1042", customer: "Northwind", city: "Denver", lat: 39.74, lon: -104.99, due: "Nov 6", status: "Delayed", stage: 2}, {id: "A-1043", customer: "Bluebird Co", city: "Austin", lat: 30.27, lon: -97.74, due: "Nov 9", status: "On time", stage: 3}, {id: "A-1047", customer: "Kestrel", city: "Chicago", lat: 41.88, lon: -87.63, due: "Nov 5", status: "Delayed", stage: 2}, {id: "A-1051", customer: "Harbor & Pine", city: "Seattle", lat: 47.61, lon: -122.33, due: "Nov 11", status: "On time", stage: 1}, {id: "A-1052", customer: "Larkspur", city: "Atlanta", lat: 33.75, lon: -84.39, due: "Nov 7", status: "Delayed", stage: 3}, {id: "A-1055", customer: "Juniper Labs", city: "Phoenix", lat: 33.45, lon: -112.07, due: "Nov 12", status: "On time", stage: 1}]
 derive shown={show == "All" ? orders : filter(orders, 'status', show)}
 derive o={find(orders, 'id', sel)}
-grid min=150
+grid min=90
   stat label="Open orders" value={count(orders)}
   stat label="Delayed" value={count(orders, 'status', 'Delayed')}
   stat label="On time" value="{round(count(orders, 'status', 'On time') / count(orders) * 100)}%"
@@ -166,10 +167,6 @@ map fit=pins bind=sel
   each items=shown as=s
     pin "{s.id}" lat={s.lat} lon={s.lon} detail="{s.customer} · {s.city}" tone={s.status == "Delayed" ? "bad" : "good"}
 grid min=280
-  list
-    each items=shown as=s
-      list-item "{s.id} · {s.customer}" detail="{s.city} · due {s.due}" on=set:sel:{s.id}
-        badge "{s.status}" tone={s.status == "Delayed" ? "bad" : "good"}
   column
     details "{o.id} · {o.customer}" subtitle="{o.city} · due {o.due}"
       detail "Status" value={o.status} tone={o.status == "Delayed" ? "bad" : "good"}
@@ -178,7 +175,11 @@ grid min=280
       step "Left the warehouse" status={o.stage >= 2 ? (o.stage == 2 ? "current" : "done") : "upcoming"}
       step "Out for delivery" status={o.stage >= 3 ? "current" : "upcoming"}
       step "Delivered" status=upcoming
-    button "Email the delayed customers" on=emit:notify`,
+    button "Email the delayed customers" on=emit:email
+  list
+    each items=shown as=s
+      list-item "{s.id} · {s.customer}" detail="{s.city} · due {s.due}" on=set:sel:{s.id}
+        badge "{s.status}" tone={s.status == "Delayed" ? "bad" : "good"}`,
   },
 ];
 
