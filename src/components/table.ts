@@ -162,6 +162,9 @@ function formatNumber(v: number, money: boolean): string {
   // Very large or small numbers in scientific form, so they're never cut or shown as 0.
   const opts: Intl.NumberFormatOptions = huge || tiny ? { notation: "scientific", maximumFractionDigits: 3 } : money ? {} : { maximumFractionDigits: 2 };
   if (money) Object.assign(opts, { style: "currency", currency: "USD" });
+  // Say how many decimals money keeps in scientific form: engines resolve the
+  // default differently (Node 22 gives -$1.00E300, Node 24 -$1E300).
+  if (money && (huge || tiny)) opts.minimumFractionDigits = 2;
   return new Intl.NumberFormat(LOCALE, opts).format(v);
 }
 
