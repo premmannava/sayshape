@@ -95,7 +95,7 @@ export default defineConfig({
   sitemap: { hostname: SITE_URL },
   head: [
     ["link", { rel: "icon", type: "image/svg+xml", href: `${BASE}favicon.svg` }],
-    ["meta", { name: "theme-color", content: "#0B6B5A" }],
+    ["meta", { name: "theme-color", content: "#F9F7F2" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: TITLE }],
     ["meta", { property: "og:title", content: "SayShape: a UI language for AI, and an engine that brings it to life" }],

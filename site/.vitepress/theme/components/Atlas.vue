@@ -65,7 +65,7 @@ const binds = (e: (typeof data.elements)[number]) => e.props.some((p) => p.name 
 .at-head { display: grid; gap: 14px; margin-bottom: 24px }
 .at-head h1 { margin: 0; font: 800 clamp(40px, 6vw, 72px)/0.98 var(--sayshape-display); letter-spacing: -0.045em; text-wrap: balance }
 .at-lede { margin: 0; max-width: 60ch; font-size: 18px; line-height: 1.5; color: var(--vp-c-text-2) }
-.at-controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; padding-top: 18px; margin-top: 8px; border-top: 2px solid var(--ss-rule) }
+.at-controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; padding-top: 18px; margin-top: 8px; border-top: 1px solid var(--vp-c-divider) }
 .at-chips { display: flex; flex-wrap: wrap; gap: 8px }
 .at-chips button { height: 38px; padding: 0 14px; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; font-weight: 600; font-size: 14px; color: var(--vp-c-text-1) }
 .at-chips button span { opacity: 0.55; font-weight: 500; margin-left: 4px }

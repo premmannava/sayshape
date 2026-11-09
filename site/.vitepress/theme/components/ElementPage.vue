@@ -269,7 +269,7 @@ const defaultLabel = (p: Prop) => (p.required ? "required" : p.default === null 
 
 .ep-cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 40px; align-items: start }
 .ep-props h2 { margin: 0 0 4px; font: 800 30px/1.1 var(--sayshape-display); letter-spacing: -0.03em }
-.ep-rows { border-top: 2px solid var(--ss-rule); margin-top: 12px }
+.ep-rows { border-top: 1px solid var(--vp-c-divider); margin-top: 12px }
 .ep-row { display: grid; grid-template-columns: 120px 150px minmax(0, 1fr) 90px; gap: 16px; align-items: baseline; padding: 13px 0; border-bottom: 1px solid var(--vp-c-divider) }
 .ep-row .nm { font-size: 15px; font-weight: 500; color: var(--vp-c-brand-1); background: none; padding: 0 }
 .ep-row .ty { font: 12px/1.5 var(--vp-font-family-mono); color: var(--vp-c-text-3); overflow-wrap: anywhere }

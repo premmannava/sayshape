@@ -116,7 +116,7 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", fromHash));
 
 <style scoped>
 .gallery { max-width: 1320px; margin: 0 auto; padding: 48px 24px 96px }
-.g-head { display: grid; gap: 12px; padding-bottom: 22px; margin-bottom: 28px; border-bottom: 2px solid var(--ss-rule) }
+.g-head { display: grid; gap: 12px; padding-bottom: 22px; margin-bottom: 28px; border-bottom: 1px solid var(--vp-c-divider) }
 .g-head h1 { margin: 0; font: 800 clamp(48px, 7vw, 88px)/0.95 var(--sayshape-display); letter-spacing: -0.05em }
 .g-head p { margin: 0; font-size: 19px; color: var(--vp-c-text-2) }
 .g-chips { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px }
@@ -125,7 +125,7 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", fromHash));
 
 .g-grid { columns: 3 380px; column-gap: 20px }
 .g-card { color: var(--vp-c-text-1); break-inside: avoid; margin: 0 0 20px; border: 1.5px solid var(--vp-c-divider); border-radius: 18px; overflow: hidden; background: var(--ss-card); transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s }
-.g-card:hover, .g-card:focus-within { border-color: var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow); transform: translate(-2px, -2px) }
+.g-card:hover, .g-card:focus-within { border-color: var(--ss-rule); box-shadow: var(--ss-lift-sm); transform: translate(-2px, -2px) }
 .g-meta { display: flex; align-items: center; gap: 14px; padding: 14px 16px 16px; border-top: 1px solid var(--vp-c-divider) }
 .g-text { flex: 1; min-width: 0 }
 .g-text h2 { margin: 0; font: 800 21px/1.15 var(--sayshape-display); letter-spacing: -0.02em }
@@ -134,7 +134,7 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", fromHash));
 .g-open:hover { background: var(--vp-c-text-1); color: var(--ss-on-ink) }
 .g-foot { margin: 16px 0 0; font-size: 15px; color: var(--vp-c-text-3) }
 
-.g-dialog { box-sizing: border-box; width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 2px solid var(--ss-rule); border-radius: 22px; background: var(--vp-c-bg); color: var(--vp-c-text-1); box-shadow: 6px 6px 0 var(--ss-shadow); overflow-x: hidden }
+.g-dialog { box-sizing: border-box; width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; border: 1px solid var(--vp-c-border); border-radius: 22px; background: var(--vp-c-bg); color: var(--vp-c-text-1); box-shadow: var(--ss-lift-sm); overflow-x: hidden }
 .g-dialog::backdrop { background: rgba(15, 26, 23, 0.5) }
 .g-view { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 22px 26px 24px }
 .g-view-head { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between }

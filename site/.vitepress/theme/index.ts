@@ -1,18 +1,21 @@
 import DefaultTheme from "vitepress/theme";
 import type { Theme } from "vitepress";
-// The engine draws with Instrument Sans and IBM Plex Mono (src/theme.ts); the site uses the same faces,
-// self-hosted, so the shell and the canvas match and no font is fetched from a third party.
+// All fonts are self-hosted, so no font is fetched from a third party. The engine draws with
+// Instrument Sans and IBM Plex Mono (src/theme.ts); the site's text is Inter (also the Studio
+// theme's face) and its display type is Fraunces.
 import "@fontsource/instrument-sans/400.css";
 import "@fontsource/instrument-sans/600.css";
 import "@fontsource/instrument-sans/700.css";
-// Inter is the Studio theme's face, offered in the playground's style picker.
 import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
-import "@fontsource/bricolage-grotesque/700.css";
-import "@fontsource/bricolage-grotesque/800.css";
+import "@fontsource/fraunces/500.css";
+import "@fontsource/fraunces/600.css";
+import "@fontsource/fraunces/500-italic.css";
+import "@fontsource/fraunces/600-italic.css";
 import "./style.css";
 import SayShapeLive from "./components/SayShapeLive.vue";
 import Landing from "./components/Landing.vue";

@@ -530,7 +530,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .pg-metrics dt { font: 500 10.5px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3) }
 .pg-metrics dd { margin: 0; font: 500 13px var(--vp-font-family-mono); font-variant-numeric: tabular-nums; white-space: nowrap }
 
-.pg-toolbar { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: end; padding: 14px 0 12px; border-top: 2px solid var(--ss-rule) }
+.pg-toolbar { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: end; padding: 14px 0 12px; border-top: 1px solid var(--vp-c-divider) }
 .pg-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: end }
 .pg-right { margin-left: auto }
 .pg-field { display: grid; gap: 4px; font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3) }
@@ -562,7 +562,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 
 .pg-pane { border: 1.5px solid var(--vp-c-divider); border-radius: 16px; background: var(--ss-card); overflow: hidden; display: flex; flex-direction: column; min-width: 0 }
 .pg-pane-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 16px; border-bottom: 1px solid var(--vp-c-divider); background: transparent }
-.pg-preview { border: 2px solid var(--ss-rule); box-shadow: 5px 5px 0 var(--ss-shadow) }
+.pg-preview { border: 1px solid var(--vp-c-border); box-shadow: var(--ss-lift-sm) }
 .pg-pane-head h2 { margin: 0 auto 0 0; font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--vp-c-brand-1) }
 .pg-edited { color: var(--vp-c-text-2); font-weight: 500 }
 .pg-diag-summary { font-size: 12.5px; color: var(--sayshape-ok); font-weight: 600 }
