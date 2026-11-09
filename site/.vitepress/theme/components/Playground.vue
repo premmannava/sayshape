@@ -317,7 +317,7 @@ function loadFromHash(): boolean {
   return true;
 }
 
-// A #spec= link followed while already on this page (from Ask, say) only changes the hash.
+// A #spec= link followed while already on this page only changes the hash.
 function onHashChange() {
   if (loadFromHash()) sayshape.value?.setSpec(text.value, { resetState: true });
 }
