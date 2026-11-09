@@ -14,5 +14,5 @@
     "types": ["node", "vite/client"],
     "paths": { "@sayshape/*": ["../src/*"] }
   },
-  "include": [".vitepress/**/*.ts", ".vitepress/**/*.vue", "examples/**/*.ts", "learn/**/*.ts", "ask/**/*.ts"]
+  "include": [".vitepress/**/*.ts", ".vitepress/**/*.vue", "examples/**/*.ts", "ask/**/*.ts"]
 }
