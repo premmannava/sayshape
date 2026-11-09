@@ -9,6 +9,8 @@
  *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --no-copy-text  hide the Copy text button
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
+ *   sayshape-mcp --image-hosts cdn.example.com,*.images.example.com
+ *                                hosts images may load from (none by default; https only)
  *   sayshape-mcp --http [port]   Streamable HTTP on /mcp (default port 3001), for
  *                                clients that connect to a URL. Bind it behind
  *                                HTTPS before exposing it beyond localhost.
@@ -19,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import { basename } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createServer, setScenes } from "./server";
+import { createServer, setImageHosts, setScenes } from "./server";
 import { parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
@@ -76,18 +78,23 @@ async function main(): Promise<void> {
     console.error([
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...] [--http [port]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral] [--no-save-image] [--no-copy-text] [--scene]",
+      "                    [--image-hosts host1,host2,...]",
       "",
       "  --theme-picker   show a theme selector above each interface (off by default)",
       "  --theme <name>   the theme interfaces use (default teal)",
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
       "  --no-copy-text   hide the Copy text button",
       "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",
+      "  --image-hosts    hosts images may load from, comma-separated; *.example.com allows its subdomains",
+      "                   (none by default; https only, and the host must send CORS headers)",
     ].join("\n"));
     return;
   }
   const view = parseViewArgs(args);
   // Experimental scenes: the server's parser and docs and the view must agree.
   setScenes(view.scene === true);
+  // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.
+  setImageHosts(view.imageHosts ?? []);
   const dataAt = args.indexOf("--data");
   let data: DataSource | undefined;
   if (dataAt >= 0) {

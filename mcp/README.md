@@ -39,10 +39,21 @@ When none is on, there's no toolbar at all. Whoever installs the server chooses,
 | `--no-save-image` | Hide Save image (shown by default where the chat app can download) |
 | `--no-copy-text` | Hide Copy text, and leave Ctrl+C alone (shown by default) |
 | `--scene` | **Experimental.** Turn on scenes: pictures and animations the model paints from shapes (off by default). Leave it out to turn them off again. |
+| `--image-hosts cdn.example.com,*.img.example.com` | Hosts `image` elements may load from, comma-separated; `*.example.com` allows its subdomains. None by default, so no images show. See [Images](#images). |
 
 ```json
 "sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--theme", "blue", "--theme-picker"] }
 ```
+
+### Images
+
+The view has no website of its own, so an `image` only loads from a host you list with `--image-hosts`, usually your company's image CDN:
+
+```json
+"sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--image-hosts", "cdn.acme.com,images.unsplash.com"] }
+```
+
+The one list does three things: the view's engine loads from those hosts and no others, the server asks the chat app to allow them in the view's Content Security Policy (MCP Apps `resourceDomains`), and the model is told which hosts work, so it doesn't invent URLs elsewhere. Images must be https, and the host must send CORS headers (`Access-Control-Allow-Origin`), as image CDNs do, because the view keeps its canvas readable for Save image and Copy text. An image that can't load shows its description instead. Some chat apps may not honour a view's CSP request; then images show their descriptions there.
 
 ## Tokens
 
