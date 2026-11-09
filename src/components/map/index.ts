@@ -1,7 +1,8 @@
 /**
  * Canvas-only geographic data visualization. No tiles, external services,
  * mapping libraries or geographic navigation/routing dependencies.
- * The Natural Earth 1:110m country outlines are embedded in this opt-in entry.
+ * Natural Earth 1:50m country outlines (simplified, Web Mercator) are embedded
+ * in this opt-in entry.
  */
 import type { ComponentDef, PressContext } from "../../component";
 import type { Box, SayShapeNode } from "../../types";
@@ -51,11 +52,14 @@ function graticule(): Path2D {
 /** Country names available for matching data values. */
 export const COUNTRY_NAMES: readonly string[] = WORLD.c.map((c) => c[0]);
 
-/** Natural Earth I projection, shared with the pre-projected country outlines. */
+/**
+ * Web Mercator, shared with the pre-projected country and state outlines.
+ * Meridians stay straight, so regional maps look like everyday web maps.
+ */
 export function project(lon: number, lat: number): [number, number] {
-  const l = (lon * Math.PI) / 180, f = (lat * Math.PI) / 180, f2 = f * f, f4 = f2 * f2;
-  const x = l * (0.8707 - 0.131979 * f2 + f4 * (-0.013791 + f4 * (0.003971 * f2 - 0.001529 * f4)));
-  const y = f * (1.007226 + f2 * (0.015085 + f4 * (-0.044475 + 0.028874 * f2 - 0.005916 * f4)));
+  const f = (Math.max(-85, Math.min(85, lat)) * Math.PI) / 180;
+  const x = (lon * Math.PI) / 180;
+  const y = Math.log(Math.tan(Math.PI / 4 + f / 2));
   return [WORLD.t[0] + WORLD.k * x, WORLD.t[1] - WORLD.k * y];
 }
 
