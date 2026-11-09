@@ -1,40 +1,40 @@
 /*
- * Direction B, "bright editorial": a paper ground, ink type, SayShape's teal
- * and a highlighter yellow used sparingly (the line being written, a key
- * phrase). Dark mode is its own palette, not an inversion: a green-tinted ink
- * ground, a lifted teal and a softer gold highlighter.
+ * "Editorial meets developer studio": warm paper, deep navy ink, coral for
+ * emphasis and SayShape's teal for links and focus. The site stays quiet so
+ * the interfaces the engine draws (each in its own look) are the loudest
+ * things on a page. Dark mode is its own navy palette, not an inversion.
  */
 :root {
-  --vp-font-family-base: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --vp-font-family-base: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --vp-font-family-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
-  --sayshape-display: "Bricolage Grotesque", "Instrument Sans", system-ui, sans-serif;
+  --sayshape-display: "Fraunces", Georgia, "Times New Roman", serif;
 
-  --vp-c-bg: #f4f5f1;
-  --vp-c-bg-alt: #eceee8;
-  --vp-c-bg-soft: #eceee8;
+  --vp-c-bg: #f9f7f2;
+  --vp-c-bg-alt: #f1ede5;
+  --vp-c-bg-soft: #fcfbf8;
   --vp-c-bg-elv: #ffffff;
-  --vp-c-text-1: #0f1a17;
-  --vp-c-text-2: #3a4642;
-  --vp-c-text-3: #56625e;
-  --vp-c-divider: #d5dad3;
-  --vp-c-border: #c3cac2;
-  --vp-c-gutter: #e4e7e1;
+  --vp-c-text-1: #171b32;
+  --vp-c-text-2: #474c66;
+  --vp-c-text-3: #5b6077;
+  --vp-c-divider: #e5e0d8;
+  --vp-c-border: #d6cfc3;
+  --vp-c-gutter: #ece7de;
 
-  --vp-c-brand-1: #0b6b5a;
-  --vp-c-brand-2: #08584a;
-  --vp-c-brand-3: #0b6b5a;
-  --vp-c-brand-soft: rgba(11, 107, 90, 0.12);
+  --vp-c-brand-1: #0e766c;
+  --vp-c-brand-2: #0a5f57;
+  --vp-c-brand-3: #0e766c;
+  --vp-c-brand-soft: rgba(14, 118, 108, 0.12);
   /* Code blocks sit on white with a border: the highlighting theme's colors need it for 4.5:1. */
   --vp-code-block-bg: #ffffff;
-  --vp-code-color: #08584a;
-  --vp-code-bg: rgba(11, 107, 90, 0.09);
+  --vp-code-color: #0a5f57;
+  --vp-code-bg: rgba(14, 118, 108, 0.09);
 
-  --vp-button-brand-bg: #0b6b5a;
-  --vp-button-brand-hover-bg: #08584a;
-  --vp-button-brand-active-bg: #064538;
-  --vp-button-brand-text: #ffffff;
-  --vp-button-brand-hover-text: #ffffff;
-  --vp-button-brand-active-text: #ffffff;
+  --vp-button-brand-bg: #171b32;
+  --vp-button-brand-hover-bg: #2a3050;
+  --vp-button-brand-active-bg: #0d1022;
+  --vp-button-brand-text: #f9f7f2;
+  --vp-button-brand-hover-text: #f9f7f2;
+  --vp-button-brand-active-text: #f9f7f2;
 
   --vp-home-hero-name-color: var(--vp-c-text-1);
   --vp-nav-logo-height: 26px;
@@ -44,92 +44,127 @@
 
   /* Editorial accents */
   --ss-rule: var(--vp-c-text-1);
-  --ss-mark: #ffe45c;
-  --ss-mark-soft: #fff0a3;
+  --ss-coral: #e94f3a;            /* large type and fills only */
+  --ss-coral-ink: #c33a24;        /* coral text at body sizes (4.9:1 on the paper) */
+  --ss-coral-strong: #d8432e;
+  --ss-coral-soft: rgba(233, 79, 58, 0.1);
+  --ss-gold: #d9a441;
+  --ss-mark: rgba(233, 79, 58, 0.22);
+  --ss-mark-soft: rgba(233, 79, 58, 0.1);
   --ss-card: #ffffff;
-  --ss-shadow: #0f1a17;
-  --ss-on-ink: #f4f5f1;
+  --ss-shadow: rgba(23, 27, 50, 0.16);
+  --ss-on-ink: #f9f7f2;
+  --ss-ink-hover: #2a3050;
+  --ss-bar: #cbc3b5;
+  --ss-lift: 0 40px 90px -56px rgba(23, 27, 50, 0.5);
+  --ss-lift-sm: 0 14px 34px -22px rgba(23, 27, 50, 0.45);
+  /* Code on a navy panel (hero spec, setup snippets), the same in both modes. */
+  --ss-code-bg: #171b32;
+  --ss-code-ink: #d9dae8;
+  --ss-code-tag: #ff9a80;
+  --ss-code-kw: #f2c2ff;
+  --ss-code-str: #ffd37a;
+  --ss-code-expr: #9fb4ff;
+  --ss-code-com: #9ca0bf;
 
-  --sayshape-stage: #e9ece5;
-  --sayshape-stage-dot: #cdd3ca;
+  --sayshape-stage: #f1ede5;
+  --sayshape-stage-dot: #ddd6ca;
   --sayshape-panel: #ffffff;
   --sayshape-code-bg: #ffffff;
   --sayshape-ok: #1c7a45;
   --sayshape-warn: #9a4a07;
   --sayshape-bad: #b42318;
   --sayshape-hl: var(--ss-mark-soft);
-  --sayshape-shadow: 0 1px 0 rgba(15, 26, 23, 0.05), 0 14px 32px -20px rgba(15, 26, 23, 0.35);
+  --sayshape-shadow: 0 1px 0 rgba(23, 27, 50, 0.05), 0 14px 32px -20px rgba(23, 27, 50, 0.35);
 
   /* Spec highlighting (spec view and playground editor) */
-  --tk-tag: #0b6b5a;
-  --tk-kw: #0f1a17;
-  --tk-prop: #4e5a56;
+  --tk-tag: #0e766c;
+  --tk-kw: #171b32;
+  --tk-prop: #4e5268;
   --tk-str: #9a4b12;
   --tk-expr: #1d4ed8;
-  --tk-com: #5f6a66;
+  --tk-com: #5f6378;
 }
 
 .dark {
-  --vp-c-bg: #0f1513;
-  --vp-c-bg-alt: #0b100e;
-  --vp-c-bg-soft: #161e1b;
-  --vp-c-bg-elv: #161e1b;
-  --vp-c-text-1: #edf1ec;
-  --vp-c-text-2: #c3ccc8;
-  --vp-c-text-3: #98a49f;
-  --vp-c-divider: #26302c;
-  --vp-c-border: #34403b;
-  --vp-c-gutter: #0b100e;
+  --vp-c-bg: #11131c;
+  --vp-c-bg-alt: #0c0e15;
+  --vp-c-bg-soft: #151823;
+  --vp-c-bg-elv: #191c28;
+  --vp-c-text-1: #f2efe8;
+  --vp-c-text-2: #c9c7d3;
+  --vp-c-text-3: #a2a5b8;
+  --vp-c-divider: #272b3b;
+  --vp-c-border: #353a4f;
+  --vp-c-gutter: #0c0e15;
 
-  --vp-c-brand-1: #4fd1b2;
-  --vp-c-brand-2: #7fe0c8;
-  --vp-c-brand-3: #4fd1b2;
-  --vp-c-brand-soft: rgba(79, 209, 178, 0.14);
-  --vp-code-color: #7fe0c8;
-  --vp-code-block-bg: #121a17;
-  --vp-code-bg: rgba(79, 209, 178, 0.1);
+  --vp-c-brand-1: #5cc9bb;
+  --vp-c-brand-2: #86d9ce;
+  --vp-c-brand-3: #5cc9bb;
+  --vp-c-brand-soft: rgba(92, 201, 187, 0.14);
+  --vp-code-color: #86d9ce;
+  --vp-code-block-bg: #151823;
+  --vp-code-bg: rgba(92, 201, 187, 0.1);
 
-  --vp-button-brand-bg: #4fd1b2;
-  --vp-button-brand-hover-bg: #7fe0c8;
-  --vp-button-brand-active-bg: #a3ead8;
-  --vp-button-brand-text: #072b23;
-  --vp-button-brand-hover-text: #072b23;
-  --vp-button-brand-active-text: #072b23;
+  --vp-button-brand-bg: #f2efe8;
+  --vp-button-brand-hover-bg: #ffffff;
+  --vp-button-brand-active-bg: #dcd8ce;
+  --vp-button-brand-text: #11131c;
+  --vp-button-brand-hover-text: #11131c;
+  --vp-button-brand-active-text: #11131c;
 
-  --ss-mark: #c9a92a;
-  --ss-mark-soft: rgba(255, 228, 92, 0.13);
-  --ss-card: #161e1b;
-  --ss-shadow: #4fd1b2;
-  --ss-on-ink: #0f1513;
+  --ss-coral: #ff7a63;
+  --ss-coral-ink: #ff8f7a;
+  --ss-coral-strong: #e9553f;
+  --ss-coral-soft: rgba(255, 122, 99, 0.12);
+  --ss-mark: rgba(255, 122, 99, 0.3);
+  --ss-mark-soft: rgba(255, 122, 99, 0.12);
+  --ss-card: #191c28;
+  --ss-shadow: rgba(0, 0, 0, 0.5);
+  --ss-on-ink: #11131c;
+  --ss-ink-hover: #ffffff;
+  --ss-bar: #3d4258;
+  --ss-lift: 0 40px 90px -50px rgba(0, 0, 0, 0.8);
+  --ss-lift-sm: 0 14px 34px -20px rgba(0, 0, 0, 0.7);
+  --ss-code-bg: #0c0e15;
 
-  --sayshape-stage: #0b100e;
-  --sayshape-stage-dot: #1e2724;
-  --sayshape-panel: #131a17;
-  --sayshape-code-bg: #121a17;
+  --sayshape-stage: #0c0e15;
+  --sayshape-stage-dot: #232737;
+  --sayshape-panel: #151823;
+  --sayshape-code-bg: #151823;
   --sayshape-ok: #5bd69a;
   --sayshape-warn: #f5b454;
   --sayshape-bad: #f87171;
   --sayshape-hl: var(--ss-mark-soft);
   --sayshape-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 16px 40px -20px rgba(0, 0, 0, 0.7);
 
-  --tk-tag: #4fd1b2;
-  --tk-kw: #edf1ec;
-  --tk-prop: #c3ccc8;
+  --tk-tag: #5cc9bb;
+  --tk-kw: #f2efe8;
+  --tk-prop: #c9c7d3;
   --tk-str: #f2b37b;
   --tk-expr: #8ab4f8;
-  --tk-com: #8a9692;
+  --tk-com: #8f93a8;
 }
 
 /* ------------------------------------------------------------ shell: nav, sidebar, footer */
 
-/* The editorial rule under the nav: one solid ink line instead of a soft divider. */
+/* A hairline under the nav. */
 .VPNavBar .divider-line,
-.VPNavBar.has-sidebar .divider-line { background-color: var(--ss-rule) !important; height: 2px }
-.VPNavBar:not(.top) .divider-line { background-color: var(--ss-rule) }
+.VPNavBar.has-sidebar .divider-line { background-color: var(--vp-c-divider) !important; height: 1px }
+.VPNavBar:not(.top) .divider-line { background-color: var(--vp-c-divider) }
 .VPNavBar .title { border-bottom: 0 !important }
-.VPNavBarTitle .title::after { content: "."; color: var(--vp-c-brand-1) }
+.VPNavBarTitle .title::after { content: "."; color: var(--ss-coral) }
 .VPNavBarMenuLink { font-size: 15px; font-weight: 500 }
 .VPNavBarMenuLink.active { color: var(--vp-c-brand-1); font-weight: 600 }
+/* Six links and search only just fit on a tablet: tighten them there rather than overflow. */
+@media (min-width: 768px) and (max-width: 1100px) {
+  .VPNavBarMenuLink { padding: 0 7px !important; font-size: 14px }
+  .VPNavBarSearch { padding-left: 12px !important }
+}
+@media (min-width: 768px) and (max-width: 840px) {
+  .VPNavBarMenuLink { padding: 0 5px !important; font-size: 13.5px }
+  .VPNavBarSearch { padding-left: 4px !important }
+}
 @media (min-width: 768px) {
   .VPNavBarSearch .DocSearch-Button { border-radius: 999px; border: 1.5px solid var(--vp-c-divider); background: var(--ss-card) }
 }
@@ -151,14 +186,14 @@
 .VPSidebarItem.level-1.is-active > .item > .indicator { display: none }
 
 /* "On this page": a ruled margin note. */
-.VPDocAsideOutline .content { border-left: 2px solid var(--ss-rule) }
+.VPDocAsideOutline .content { border-left: 1px solid var(--vp-c-divider) }
 .VPDocAsideOutline .outline-title { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--vp-c-text-3) }
 
-.VPFooter { border-top: 2px solid var(--ss-rule) !important; background: var(--vp-c-bg) !important }
+.VPFooter { border-top: 1px solid var(--vp-c-divider) !important; background: var(--vp-c-bg) !important }
 .VPFooter .message { font-size: 13.5px }
 .VPFooter .message a { color: var(--vp-c-text-1); font-weight: 600; text-underline-offset: 3px }
 
-/* A yellow highlighter behind a key phrase. Use once or twice per page, never as decoration. */
+/* A soft coral highlighter behind a key phrase. Use once or twice per page, never as decoration. */
 .ss-mark {
   background-image: linear-gradient(var(--ss-mark), var(--ss-mark));
   background-repeat: no-repeat;
@@ -169,12 +204,12 @@
 }
 /* A small label in the mono face, for numbered steps and section eyebrows. */
 .ss-eyebrow { font: 500 12px/1.4 var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-brand-1) }
-/* A card set off by an ink outline and a hard offset shadow. Reserve it for the thing being demonstrated. */
+/* A card lifted off the page. Reserve it for the thing being demonstrated. */
 .ss-card {
   background: var(--ss-card);
-  border: 2px solid var(--ss-rule);
+  border: 1px solid var(--vp-c-divider);
   border-radius: 18px;
-  box-shadow: 5px 5px 0 var(--ss-shadow);
+  box-shadow: var(--ss-lift-sm);
 }
 
 /* ------------------------------------------------------------ type */
@@ -182,22 +217,22 @@
 .vp-doc h1,
 .vp-doc h2 {
   font-family: var(--sayshape-display);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
   text-wrap: balance;
 }
-.vp-doc h1 { font-weight: 800; font-size: 48px; line-height: 1.02; margin-bottom: 20px }
+.vp-doc h1 { font-weight: 600; font-size: 48px; line-height: 1.04; margin-bottom: 20px }
 .vp-doc h2 {
-  font-weight: 800;
-  font-size: 30px;
-  line-height: 1.1;
-  border-top: 2px solid var(--ss-rule);
+  font-weight: 600;
+  font-size: 31px;
+  line-height: 1.12;
+  border-top: 1px solid var(--vp-c-divider);
   padding-top: 18px;
   margin-top: 56px;
 }
 .vp-doc h3 { font-weight: 600; font-size: 19px }
 .vp-doc p, .vp-doc li { line-height: 1.7 }
 .vp-doc > div > p:first-of-type { font-size: 18px; color: var(--vp-c-text-2) }
-.VPNavBarTitle .title { font-family: var(--sayshape-display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em }
+.VPNavBarTitle .title { font-family: var(--sayshape-display); font-weight: 600; font-size: 23px; letter-spacing: -0.01em }
 .vp-doc .generated-note {
   font-size: 14px;
   color: var(--vp-c-text-2);
@@ -208,7 +243,7 @@
 .vp-doc table { font-size: 14px; border-collapse: collapse; display: table; width: 100% }
 .vp-doc th { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3); background: transparent !important }
 .vp-doc tr { background: transparent !important; border-top: 1px solid var(--vp-c-divider) }
-.vp-doc thead tr { border-top: 2px solid var(--ss-rule) }
+.vp-doc thead tr { border-top: 1px solid var(--vp-c-divider) }
 .vp-doc th, .vp-doc td { border: 0 !important; padding: 10px 14px 10px 0 }
 .vp-doc :not(pre) > code { font-size: 0.86em; border-radius: 5px }
 .vp-doc div[class*="language-"] { border-radius: 12px }
@@ -266,8 +301,10 @@
   background-size: 16px 16px;
   padding: 18px;
 }
-/* The engine sizes the canvas to its parent's width, so the parent must have no padding. */
-.sayshape-canvas-wrap { width: 100%; min-width: 0 }
+/* The engine sizes the canvas to its parent's width, so the parent must have no padding. Positioned, so the
+   engine's invisible accessibility mirror (placed from the canvas's offsets) stays over the canvas when
+   content above it changes height after it was laid out. */
+.sayshape-canvas-wrap { position: relative; width: 100%; min-width: 0 }
 .sayshape-stage canvas {
   display: block;
   border-radius: 10px;
@@ -280,11 +317,11 @@
 
 .sayshape-live {
   margin: 24px 0 32px;
-  border: 2px solid var(--ss-rule);
+  border: 1px solid var(--vp-c-border);
   border-radius: 16px;
   overflow: hidden;
   background: var(--ss-card);
-  box-shadow: 4px 4px 0 var(--ss-shadow);
+  box-shadow: var(--ss-lift-sm);
 }
 .sayshape-live__code div[class*="language-"] { margin: 0 !important; border-radius: 0 !important }
 .vp-doc .sayshape-live__code div[class*="language-"] { background: var(--vp-code-block-bg); border: 0 }

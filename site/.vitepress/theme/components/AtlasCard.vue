@@ -45,7 +45,7 @@ function reset() { sayshape.value?.setSpec(props.example, { resetState: true });
 
 <style scoped>
 .ac { break-inside: avoid; margin: 0 0 16px; display: flex; flex-direction: column; background: var(--ss-card); border: 1.5px solid var(--vp-c-divider); border-radius: 16px; overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s }
-.ac:hover, .ac:focus-within { border-color: var(--ss-rule); box-shadow: 4px 4px 0 var(--ss-shadow) }
+.ac:hover, .ac:focus-within { border-color: var(--ss-rule); box-shadow: var(--ss-lift-sm) }
 .ac-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px 10px }
 .ac-name { font: 500 16px var(--vp-font-family-mono); color: var(--vp-c-brand-1); text-decoration: none }
 .ac-name:hover { text-decoration: underline; text-underline-offset: 3px }

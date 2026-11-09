@@ -52,6 +52,6 @@ The engine needs a canvas, fonts and `window`, so every demo creates its instanc
 
 ## The landing page's demo
 
-The hero plays three saved answers (`site/examples/hero-scenes.ts`) the way a model's response arrives, with the real engine, then presses parts of each screen through the engine's own pointer handling. `test/hero-scenes.test.ts` checks every spec and every press. No model runs on the site.
+The landing page's demos are saved specs in `site/examples/home.ts`, all drawn by the real engine: the hero streams its answer the way a model's response arrives, then drags two sliders through the engine's own pointer handling; the four showcases, the mortgage calculator and the look switcher run their specs live. `test/home.test.ts` checks that every spec parses and streams cleanly at phone and desktop widths and that its controls and numbers work. No model runs on the site.
 
 The site itself holds no secrets: nothing from `.env.local` is read by the site build, and `site:check` fails if a key-shaped string or a value from `.env.local` ends up in the output.

@@ -43,9 +43,16 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 
 Numbers, money and dates are formatted in US English. Weeks start on Sunday.
 
-## Claims this site doesn't make
+## Measured results
 
-SayShape hasn't been benchmarked against other UI approaches, so nothing here says it's faster or uses fewer tokens. The engine's own timings are shown in the playground for the spec you're looking at. Model quality varies by model; measure yours with `npm run eval`.
+The landing page's two numbers come from one limited, recorded comparison, and nothing more general:
+
+- **What:** 7 requests (a signups chart with a week/month toggle, a spending tracker, a sign-up form, a to-do list, a budget tracker, a product table with a search box and a mortgage calculator), each answered by Claude Sonnet 5.5 in SayShape, in HTML and in A2UI at the same moment, in November 2026. The recordings are on the [Compare](../../compare) page, which replays each answer at the speed it arrived.
+- **Output tokens:** estimated as characters ÷ 4, because they come from the recorded text. Medians: SayShape 171, A2UI 628, HTML 1,299, so HTML took 7.6 times as many.
+- **Time:** from the request until the model's output was complete. Medians: SayShape 2.4 s, HTML 13.2 s, A2UI 17.2 s. From the unrounded medians (2.43 s and 13.18 s), HTML took 5.4 times as long.
+- **What it doesn't say:** it measures the model's output only, not how long a screen takes to draw or how fast your app is. It's one model and seven tasks; other models and requests will give other numbers. Record your own with `scripts/record.ts`, or score whole answers with `npm run compare`.
+
+Model quality varies by model too; measure yours with `npm run eval`. The engine's own timings are shown in the playground for the spec you're looking at.
 
 ## Roadmap
 
