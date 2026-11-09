@@ -128,7 +128,7 @@ grid min=160
   stat label="Trip total" value={money(hotel + food + extras)}
   stat label="Per person" value={money((hotel + food + extras) / people)}
 grid min=280
-  map fit=pins bind=picked controls=true
+  map fit=pins bind=picked controls=true route=true
     each items=stops as=s
       pin "{s.name}" lat={s.lat} lon={s.lon} tone={s.on ? "accent" : "muted"}
   column

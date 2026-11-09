@@ -1635,6 +1635,7 @@ Canvas map with pin markers, data-driven country choropleths and proportional bu
 | `cluster` | boolean | Group nearby pins into clickable counts. Zooming in separates them. |
 | `interactive` | boolean | Enable mouse-wheel zoom and drag pan. |
 | `controls` | boolean | Show Canvas zoom in, zoom out and reset controls. Opt in to preserve the original minimal map appearance. |
+| `route` | boolean | Join the pins with a line in the order they are written, for a trip or a delivery run. |
 
 Children: `pin`.
 
@@ -2355,4 +2356,4 @@ The full phase-by-phase plan, including the component pipeline, testing strategy
 
 [MIT](LICENSE).
 
-Country outlines in `src/components/map/world.json` come from [Natural Earth](https://www.naturalearthdata.com/) (public domain) via [world-atlas](https://github.com/topojson/world-atlas). US state borders in `src/components/map/states.json` come from the US Census (public domain) via [us-atlas](https://github.com/topojson/us-atlas). Both are drawn with the Web Mercator projection.
+Country outlines in `src/components/map/world.json` come from [Natural Earth](https://www.naturalearthdata.com/) (public domain) via [world-atlas](https://github.com/topojson/world-atlas). US state borders in `src/components/map/states.json` come from the US Census (public domain) via [us-atlas](https://github.com/topojson/us-atlas). Lakes, rivers and city names in `src/components/map/water.json` and `places.json` come from Natural Earth 1:50m (public domain). All are drawn with the Web Mercator projection.
