@@ -293,13 +293,22 @@ async function checkAppInBrowser(browser, root) {
   try {
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.waitForFunction(() => window.painted === true, null, { timeout: 15000 });
-    const inked = await page.evaluate(() => {
+    // The first frames fade the content in, so count once the picture stops changing.
+    const measure = () => page.evaluate(() => {
       const c = document.querySelector("canvas");
       const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
       let n = 0;
       for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && (d[i] < 200 || d[i + 1] < 200 || d[i + 2] < 200)) n++;
       return { n, w: c.width, h: c.height };
     });
+    let inked = await measure();
+    for (let i = 0; i < 40; i++) {
+      await page.waitForTimeout(250);
+      const next = await measure();
+      const settled = next.n === inked.n && next.h === inked.h;
+      inked = next;
+      if (settled && inked.n > 500) break;
+    }
     check(inked.n > 500 && inked.h > 100, `the bundled app paints in Chromium (${inked.w}×${inked.h}, ${inked.n} inked pixels)`);
     await page.locator("canvas").focus();
     for (let i = 0; i < 8 && (await page.evaluate(() => window.heard.length)) === 0; i++) {
