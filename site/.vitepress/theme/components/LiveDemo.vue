@@ -45,7 +45,7 @@ const { sayshape, failed } = useSayShape(canvas, (ui) => {
   ];
   emit("ready", ui);
   return () => offs.forEach((off) => off());
-}, { lazy: props.eager ? undefined : root, followSiteTheme: () => false, map: props.map });
+}, { lazy: props.eager ? undefined : root, followSiteTheme: () => false, map: props.map, padding: "auto" });
 
 watch(theme, () => { if (sayshape.value) applyTheme(sayshape.value); });
 watch(() => props.spec, (spec) => sayshape.value?.setSpec(spec, { resetState: true }));
@@ -64,5 +64,6 @@ defineExpose({ sayshape, reset: () => sayshape.value?.setSpec(props.spec, { rese
 .live { border-radius: inherit; padding: clamp(14px, 2.2vw, 24px); transition: background 0.3s }
 .live canvas { display: block }
 .live canvas:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 4px; border-radius: 6px }
+@media (max-width: 560px) { .live { padding: 10px } }
 .live-failed { margin: 0; padding: 12px; font-size: 14px; color: var(--sayshape-bad) }
 </style>
