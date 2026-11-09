@@ -38,8 +38,13 @@ async function onKey(e: KeyboardEvent, i: number) {
   tabs.value[to]?.focus();
 }
 
+/** What a real app might do with each action; this page only shows that it arrived. */
+const NEXT: Record<string, string> = {
+  choose: "A real app would start the sign-up from here.",
+  email: "A real app would send the emails; this demo sends nothing.",
+};
 function onAction(name: string) {
-  lastAction.value = `The screen sent “${name}” to the page. In a real app, your code decides what that does.`;
+  lastAction.value = `The screen sent “${name}” to the page. ${NEXT[name] ?? "Your code decides what that does."}`;
 }
 </script>
 
@@ -119,7 +124,7 @@ function onAction(name: string) {
 }
 @media (max-width: 560px) {
   .sc-meta { padding: 8px 10px 8px 14px }
-  .sc-live { margin: 8px; border-radius: 14px }
+  .sc-live { margin: 6px; border-radius: 14px }
   .sc-spec { margin: 8px 8px 0 }
   .sc-note { margin: 0 14px 12px }
   .sc-panel { border-radius: 18px }

@@ -110,11 +110,12 @@ export default defineConfig({
     siteTitle: "SayShape",
     nav: [
       { text: "Playground", link: "/playground", activeMatch: "^/playground" },
-      { text: "Compare", link: "/compare", activeMatch: "^/compare" },
       { text: "Examples", link: "/examples/", activeMatch: "^/examples" },
-      { text: "Elements", link: "/docs/elements/", activeMatch: "^/docs/elements/" },
-      { text: "Docs", link: "/docs/", activeMatch: "^/docs/(?!architecture/limitations|elements/)" },
-      { text: "Status", link: "/docs/architecture/limitations", activeMatch: "^/docs/architecture/limitations" },
+      { text: "Compare", link: "/compare", activeMatch: "^/compare" },
+      // Elements (the atlas and reference) and Status (limits) live in the docs sidebar.
+      { text: "Docs", link: "/docs/", activeMatch: "^/docs/(?!integration/mcp)" },
+      // Setting it up in the AI you already use: the same page the homepage's "Set up SayShape" opens.
+      { text: "Get started", link: "/docs/integration/mcp", activeMatch: "^/docs/integration/mcp" },
     ],
     socialLinks: [{ icon: "github", link: REPO, ariaLabel: "SayShape on GitHub" }],
     sidebar: { "/docs/": docsSidebar },

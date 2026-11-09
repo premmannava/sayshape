@@ -27,6 +27,12 @@ export interface CreateOptions {
   onWarning?: (message: string) => void;
   /** Fixed "today" for date pickers, so examples look the same for everyone. */
   today?: string;
+  /**
+   * Space around the screen, in px (the engine's default is 20). "auto" keeps
+   * the default but drops to 4 on phone-width windows, where the page around
+   * the demo already gives it a margin and every pixel of width counts.
+   */
+  padding?: number | "auto";
 }
 
 export interface SayShapeModules {
@@ -59,6 +65,7 @@ export async function createSayShape(canvas: HTMLCanvasElement, opts: CreateOpti
     imageHosts: [],
     onWarning: opts.onWarning ?? (() => {}),
     today: opts.today ? () => opts.today! : undefined,
+    padding: opts.padding === "auto" ? (window.matchMedia("(max-width: 560px)").matches ? 4 : undefined) : opts.padding,
   });
 }
 

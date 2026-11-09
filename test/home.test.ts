@@ -98,6 +98,23 @@ describe("hero: launch budget planner", () => {
     r.key("End");
     expect(r.state.search).toBe(30000);
   });
+
+  it("“Share the plan” sends a named action the page can answer", () => {
+    const r = show(heroSpec);
+    r.press({ type: "button", text: /Share the plan/ });
+    expect(r.emitted).toEqual([{ name: "share", value: undefined }]);
+  });
+});
+
+describe("every demo button", () => {
+  it("sends a named action, so the page can show what happened", () => {
+    const specs = [heroSpec, ...showcases.map((s) => s.spec), mortgageSpec, lookSpec];
+    for (const s of specs) {
+      for (const line of s.split("\n").filter((l) => l.trim().startsWith("button "))) {
+        expect(line, line).toMatch(/on=emit:\w+/);
+      }
+    }
+  });
 });
 
 describe("showcases", () => {
@@ -151,6 +168,8 @@ describe("showcases", () => {
     expect(r.state.sel).toBe("A-1052");
     expect(r.copyText()).toContain("Status: Delayed");
     expect(r.copyText()).toContain("Out for delivery, current");
+    r.press({ type: "button", text: /Email the delayed customers/ });
+    expect(r.emitted).toEqual([{ name: "email", value: undefined }]);
   });
 });
 

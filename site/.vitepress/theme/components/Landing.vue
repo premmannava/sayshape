@@ -41,8 +41,8 @@ function onMortgageChange(key: string) {
 // characters ÷ 4; time is until each answer finished. The headline ratios come
 // from the unrounded medians (1,299 / 171 tokens; 13.18 s / 2.43 s).
 const numbers = [
-  { headline: 7.6, what: "fewer output tokens than HTML", note: "Median estimated output tokens per screen", unit: "", digits: 0, accent: true, rows: [["SayShape", 171], ["A2UI", 628], ["HTML", 1299]] as const },
-  { headline: 5.4, what: "faster for the model to finish writing", note: "Median time until the model's output was complete", unit: " s", digits: 1, accent: false, rows: [["SayShape", 2.4], ["HTML", 13.2], ["A2UI", 17.2]] as const },
+  { headline: 7.6, what: "fewer output tokens than HTML", note: "Median estimated output tokens per screen, across 7 recorded tasks", unit: "", digits: 0, accent: true, rows: [["SayShape", 171], ["A2UI", 628], ["HTML", 1299]] as const },
+  { headline: 5.4, what: "faster for the model to finish writing", note: "Median time until the model's output was complete, across the same 7 tasks", unit: " s", digits: 1, accent: false, rows: [["SayShape", 2.4], ["HTML", 13.2], ["A2UI", 17.2]] as const },
 ];
 // The numbers count up once, when they scroll into view. They start at their
 // final values, so the built page (and reduced motion) shows the real numbers.
@@ -89,9 +89,9 @@ const hosts = [
   { name: "Claude on the web and phone", note: "As a custom connector, at an HTTPS address you host" },
   { name: "ChatGPT", note: "Developer mode, at an HTTPS address; on plans that allow custom connectors" },
   { name: "VS Code", note: "With MCP Apps turned on (experimental)" },
-  { name: "Cursor, Goose and other MCP Apps clients", note: "Support differs between apps and versions" },
+  { name: "Goose and other MCP Apps clients", note: "Support differs between apps and versions" },
 ];
-const chips = ["Claude", "ChatGPT", "VS Code", "Cursor", "Goose"];
+const chips = ["Claude", "ChatGPT", "VS Code", "Goose"];
 // The MCP server isn't on npm yet: setup builds it from source (checked in CI by the mcp job).
 const build = `git clone https://github.com/premmannava/sayshape.git
 cd sayshape/mcp && npm ci && npm run build`;
@@ -156,7 +156,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
       <div class="wrap">
         <div class="head split">
           <h2 id="examples-title">One question. A whole new way to answer.</h2>
-          <p>Ask something different and your AI builds something different. Pick a question to see the screen it made.</p>
+          <p>Ask something different and your AI builds something different. Pick a question to see the kind of screen it can answer with.</p>
         </div>
         <HomeShowcases />
       </div>
@@ -226,7 +226,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
       <div class="paths">
         <article class="path">
           <div class="path-head"><span class="path-icon coral" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z" /><path d="M9 10h6" /></svg></span><h3>In my existing AI assistant</h3></div>
-          <p>Bring interactive answers into supported chat apps and coding assistants, without building a new app. Your assistant's own model writes the screens, so there's no extra API key.</p>
+          <p>Bring interactive answers into chat apps and editors that support MCP Apps, without building a new app. Your assistant's own model writes the screens, so there's no extra API key.</p>
           <ul class="chips" aria-label="Apps it works in"><li v-for="c in chips" :key="c">{{ c }}</li></ul>
           <div class="path-actions">
             <a class="btn primary" :href="href('/docs/integration/mcp')">Connect to my AI</a>
@@ -247,7 +247,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
           <ul class="ticks">
             <li>Your model, your data, your theme</li>
             <li>Screens build line by line as your model streams</li>
-            <li>One canvas, no UI framework, no dependencies</li>
+            <li>One canvas, no UI framework, no runtime dependencies</li>
           </ul>
           <div class="path-actions">
             <a class="btn quiet" :href="href('/docs/integration/embedding')">Explore integration</a>
@@ -274,7 +274,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
             </div>
             <div>
               <h3>Your actions</h3>
-              <p>A screen can only send named actions to your app, and your code decides what each one does. A spec can't run code, open links or make requests.</p>
+              <p>A screen can only send named actions to your app, and your code decides what each one does. A spec can't run code or open links, and it loads images only from hosts your app allows.</p>
               <a :href="href('/docs/architecture/security')">The expression boundary →</a>
             </div>
             <div>
@@ -301,7 +301,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
         <div class="closing-install">
           <p class="small">Build it from source today (Node.js 20 or later)</p>
           <div class="code dark"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" @click="copy('closing', build)">{{ copied === "closing" ? "Copied" : "Copy the commands" }}</button></div><pre tabindex="0" role="region" aria-label="Build commands"><code>{{ build }}</code></pre></div>
-          <p class="small">A one-line npm install arrives with the first release.</p>
+          <p class="small">Not on npm yet; a one-line install is planned for the first release.</p>
         </div>
       </div>
     </section>
@@ -453,8 +453,13 @@ h1 { margin: 0; font-size: clamp(50px, 7vw, 104px); line-height: 0.95; letter-sp
   .cta .btn { flex: 1 1 auto; justify-content: center }
   .before .more, .before .typing { display: none }
   .before { padding: 18px }
-  .after { padding: 12px; border-radius: 18px }
+  .after { padding: 10px; border-radius: 18px }
+  .after-head { margin: 4px 4px 10px }
   .after-live { border-radius: 12px }
+  .number { padding: 18px }
+  .ratio { font-size: 52px }
+  .numbers { gap: 12px }
+  .code pre { white-space: pre-wrap; overflow-wrap: anywhere }
   .hosts { grid-template-columns: minmax(0, 1fr); gap: 2px }
   .hosts dd { margin-bottom: 8px }
   .closing { border-radius: 22px }

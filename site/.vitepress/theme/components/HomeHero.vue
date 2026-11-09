@@ -27,6 +27,8 @@ const shown = ref(0);
 const paused = ref(false);
 const changes = ref(0);
 const specOpen = ref(false);
+/** What the screen last sent the page, shown where the proof line is. */
+const sent = ref("");
 const cursor = ref({ x: 0, y: 0, on: false, pressing: false });
 
 const root = ref<HTMLElement | null>(null);
@@ -41,7 +43,8 @@ const step = computed(() => (phase.value === "asking" ? 0 : phase.value === "wri
 const lines = computed(() => LINES.map((line, i) => ({ html: highlightLine(line), on: i < shown.value })));
 const running = computed(() => phase.value !== "done" && !paused.value);
 const proof = computed(() =>
-  changes.value === 0 ? "Try the sliders: the screen answers, not the AI."
+  sent.value ? sent.value
+  : changes.value === 0 ? "Try the sliders: the screen answers, not the AI."
   : `${changes.value} ${changes.value === 1 ? "change" : "changes"}, updated on the spot · 0 new AI messages`);
 
 let run = { cancelled: false };
@@ -90,6 +93,7 @@ async function play() {
   const still = prefersReducedMotion();
   paused.value = false;
   changes.value = 0;
+  sent.value = "";
   cursor.value = { ...cursor.value, on: false, pressing: false };
 
   // 1 · The person asks.
@@ -176,13 +180,18 @@ const { sayshape } = useSayShape(canvas, (ui) => {
     const now = performance.now();
     if (now - lastChange > 500) changes.value++;
     lastChange = now;
+    sent.value = "";
+  });
+  // "Share the plan" can only send a named action; on a real site the app would share it.
+  const offAction = ui.on("action", ({ name }) => {
+    sent.value = `The screen sent “${name}” to your app, which decides what sharing does. Nothing leaves this page.`;
   });
   const c = canvas.value!;
   c.addEventListener("pointerdown", takeOver);
   c.addEventListener("keydown", takeOver);
   void play();
-  return () => { off(); c.removeEventListener("pointerdown", takeOver); c.removeEventListener("keydown", takeOver); };
-}, { lazy: root });
+  return () => { off(); offAction(); c.removeEventListener("pointerdown", takeOver); c.removeEventListener("keydown", takeOver); };
+}, { lazy: root, padding: "auto" });
 
 onBeforeUnmount(() => { run.cancelled = true; });
 </script>
@@ -196,9 +205,9 @@ onBeforeUnmount(() => { run.cancelled = true; });
         <button type="button" class="hd-btn" :aria-label="running ? 'Pause the demo' : phase === 'done' ? 'Play the demo again' : 'Resume the demo'" @click="togglePause">
           <svg v-if="running" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
           <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5l12 7-12 7z" /></svg>
-          {{ running ? "Pause" : phase === "done" ? "Play" : "Resume" }}
+          <span class="hd-btn-text">{{ running ? "Pause" : phase === "done" ? "Play" : "Resume" }}</span>
         </button>
-        <button type="button" class="hd-btn" @click="play"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8" /><path d="M4 4v4h4" /></svg>Replay</button>
+        <button type="button" class="hd-btn" aria-label="Replay the demo" @click="play"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.5-5.8" /><path d="M4 4v4h4" /></svg><span class="hd-btn-text">Replay</span></button>
       </span>
     </div>
 
@@ -313,9 +322,13 @@ onBeforeUnmount(() => { run.cancelled = true; });
 }
 @media (max-width: 560px) {
   .hd { border-radius: 20px }
-  .hd-label { order: 3; width: 100% ; text-align: center }
-  .hd-stage { padding: 12px }
-  .hd-screen { padding: 12px; border-radius: 14px }
+  .hd-bar { padding: 8px 8px 8px 14px }
+  .hd-label { order: 3; width: 100%; text-align: center }
+  .hd-btn { min-width: 44px; padding: 0 12px; justify-content: center }
+  .hd-btn-text { display: none }
+  .hd-rail { padding: 12px 12px 0 }
+  .hd-stage { padding: 10px }
+  .hd-screen { padding: 8px; border-radius: 14px }
   .hd-flow li { padding: 12px 10px; grid-template-columns: 1fr; justify-items: start }
   .hd-flow-text { display: none }
 }
