@@ -79,7 +79,10 @@ describe("regional basemap boundaries", () => {
     const zoomed = render(sameCoords, { components });
     expect((zoomed.find("map").box!.data as { view: { zoom: number } }).view.zoom).toBeGreaterThan(4);
     const outline = lightTheme.colors.muted;
-    expect(zoomed.drawOps.filter((op) => op.op === "stroke" && op.strokeStyle === outline)).toHaveLength(51);
+    // Each shared border is stored once, under one of its two states, so some states hold none.
+    const drawn = stateLines.states.filter((state) => state[1]).length;
+    expect(drawn).toBeGreaterThan(30);
+    expect(zoomed.drawOps.filter((op) => op.op === "stroke" && op.strokeStyle === outline)).toHaveLength(drawn);
     zoomed.destroy();
 
     const world = render("map", { components });
