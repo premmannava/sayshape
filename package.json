@@ -1,6 +1,6 @@
 {
   "name": "sayshape",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A canvas UI engine and a UI language designed for AI models to write.",
   "type": "module",
   "license": "MIT",

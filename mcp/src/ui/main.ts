@@ -33,7 +33,7 @@ const themeCanvas = document.querySelector<HTMLCanvasElement>("#view-tools")!;
 /** What the server was started with: --theme-picker, --theme, --no-save-image, --no-copy-text. */
 const viewOptions = readViewOptions(document);
 const canvas = document.querySelector<HTMLCanvasElement>("#sayshape")!;
-const app = new App({ name: "SayShape", version: "0.1.0" }, {}, { autoResize: true });
+const app = new App({ name: "SayShape", version: "0.1.1" }, {}, { autoResize: true });
 
 let sayshape: SayShape | null = null;
 let themePicker: SayShape | null = null;
