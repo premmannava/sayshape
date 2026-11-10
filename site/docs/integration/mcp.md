@@ -22,13 +22,25 @@ Nothing else leaves an interface. A spec can't run code, open links or make requ
 
 Start the server with `--data path/to/database.db` (SQLite, opened read-only) and the model gets three more tools. It looks at the tables (`describe_data`), runs one read-only `SELECT` (`query_data`), and shows the result by passing the dataset to `show_interface`. The model sees only the result's columns and a few sample rows. The interface fetches the rows itself, so the numbers on screen come straight from the database and never pass through the model. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#readme) has the details.
 
-## In chat apps that can't draw interfaces
+## In chat apps that can't draw interfaces {#coding-agents}
 
 Coding agents such as Claude Code, Codex and Antigravity call the server's tools but can't show MCP Apps views. For them, `show_interface` returns a small HTML page that draws the interface with the engine from a CDN, and tells the model to publish it as a page or save it as a file for you to open in a browser. Nothing on the page can send something back to the chat, so the model is told not to use `emit:` there (links in the text open in a new tab instead); Save image and Copy text aren't on it, it needs internet access, and interfaces that load database rows can't be shown. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#in-chat-apps-that-cant-draw-interfaces) has the details.
 
 ## Install
 
-The server is on npm as [`sayshape-mcp`](https://www.npmjs.com/package/sayshape-mcp). You need Node.js 20 or later; `npx` downloads it the first time. Add it to your chat app's MCP settings. In Claude Desktop that's Settings → Developer → Edit Config:
+The server is on npm as [`sayshape-mcp`](https://www.npmjs.com/package/sayshape-mcp). You need Node.js 20 or later; `npx` downloads it the first time. Which setup you need depends on your app:
+
+| Your app | Where the server runs | What you see |
+|---|---|---|
+| Claude Desktop, VS Code, Goose and other MCP Apps clients | On your computer | The interface, inside the chat |
+| Claude on the web and phone, ChatGPT | At an HTTPS address you host | The interface, inside the chat |
+| Claude Code, Codex, Antigravity | On your computer | A page the agent publishes or saves for you to open in a browser |
+
+Support differs between apps, versions and plans.
+
+### On your computer, inside the chat
+
+Add it to your chat app's MCP settings. In Claude Desktop that's Settings → Developer → Edit Config:
 
 ```json
 {
@@ -48,13 +60,48 @@ In VS Code, put it in `.vscode/mcp.json`:
 }
 ```
 
-For apps that connect to a URL (Claude on the web, ChatGPT), run it over HTTP, put it behind HTTPS and add its `/mcp` address:
+Then restart the app.
+
+### Coding agents: Claude Code, Codex, Antigravity {#coding-agent-setup}
+
+They add MCP servers in their own ways. The answer arrives as a page, not inside the chat ([what that means](#coding-agents)).
+
+**Claude Code**, in a terminal:
 
 ```bash
-npx -y sayshape-mcp --http 3001
+claude mcp add sayshape -- npx -y sayshape-mcp
 ```
 
-Then restart the app.
+**Codex**, in a terminal. It adds the server to `~/.codex/config.toml`:
+
+```bash
+codex mcp add sayshape -- npx -y sayshape-mcp
+```
+
+**Antigravity:** in the agent panel's **…** menu, choose **MCP Servers**, then **Manage MCP Servers**, then **View raw config**, and add this to `mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "sayshape": { "command": "npx", "args": ["-y", "sayshape-mcp"] }
+  }
+}
+```
+
+### Claude on the web and phone, and ChatGPT {#hosted}
+
+These apps connect to a server's address; they can't run a program on your computer. So the server has to run somewhere they can reach, at a public HTTPS address, which you (or someone you trust) host. There's no SayShape-hosted address. On a host that puts its own HTTPS proxy in front, such as Render, start it with an exact version:
+
+```bash
+npx -y sayshape-mcp@0.1.1 --http --host 0.0.0.0 --trust-proxy
+```
+
+Its address is then your host's address plus `/mcp`, such as `https://your-domain.example/mcp`. Add it:
+
+- **Claude:** as a custom connector. On Pro and Max, that's Customize → Connectors → Add, then Add custom connector; on Team and Enterprise, an owner adds it for the organization. Free plans can add one custom connector. Claude connects from Anthropic's servers, so the address must be reachable from the internet.
+- **ChatGPT:** turn on developer mode (Settings → Apps → Advanced settings), then create an app with the address (Apps → Create). Developer mode is a beta on the web, for Pro, Business, Enterprise and Edu plans; on Business, Enterprise and Edu an admin may need to allow it.
+
+The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#host-it-publicly) explains each flag, the rate limit, the health check at `/`, and what the server logs. Don't add `--data` there: on a public address it would let anyone read the whole database, so the server refuses it.
 
 ### Options
 
