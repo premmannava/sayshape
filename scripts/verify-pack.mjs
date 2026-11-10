@@ -9,13 +9,17 @@
 // Node, a card, a chart with data, a state change through a control, an emit:
 // action reaching the host, the map, scenes staying opt-in, the declarations
 // under both bundler and node16 resolution, and a minimal Vite app that
-// bundles and paints in Chromium.
+// bundles and paints in Chromium, and the classic-script build
+// (dist/sayshape.global.js and dist/sayshape-map.global.js) loaded with a plain
+// <script src> painting a chart and a map.
 //
 // The MCP server: what the package holds, its bin and shebang, --help, stdout
 // carrying only protocol messages, the handshake and tools through a real MCP
 // client, valid and invalid specs, the docs tool, the UI resource, themes,
-// scenes only with --scene, --data, --mcp-result, --http, and then the browser
-// end-to-end checks in mcp/scripts run against the installed copy.
+// scenes only with --scene, --data, --mcp-result, --http, the page it gives
+// clients that can't draw MCP Apps views and the engine version that page
+// loads, and then the browser end-to-end checks in mcp/scripts run against the
+// installed copy (the page's check with the installed library's scripts).
 //
 // Exits 1 if anything fails, and keeps the temporary projects to look at.
 import { spawn, spawnSync } from "node:child_process";
@@ -248,8 +252,11 @@ async function verifyLibrary(browser) {
   check(!installed.dependencies || Object.keys(installed.dependencies).length === 0, "has no runtime dependencies");
   checkContents(pkgDir, "the package", ["package.json", "README.md", "LICENSE", /^dist\/[\w.-]+\.js(\.map)?$/, /^dist\/types\/.+\.d\.ts$/]);
   for (const [sub, target] of Object.entries(installed.exports)) {
-    check(existsSync(join(pkgDir, target.import)) && existsSync(join(pkgDir, target.types)), `exports "${sub}" points at real files`);
+    const paths = typeof target === "string" ? [target] : [target.import, target.types];
+    check(paths.every((p) => existsSync(join(pkgDir, p))), `exports "${sub}" points at real files`);
   }
+  for (const field of ["unpkg", "jsdelivr"]) check(installed[field] === "./dist/sayshape.global.js" && existsSync(join(pkgDir, installed[field])), `"${field}" points at the classic-script build`);
+  installedEngine = join(pkgDir, "dist");
 
   writeFileSync(join(dir, "runtime.mjs"), RUNTIME);
   const r = run(process.execPath, ["runtime.mjs"], { cwd: dir });
@@ -276,6 +283,67 @@ async function verifyLibrary(browser) {
   const built = join(app, "dist");
   check(v.status === 0 && existsSync(join(built, "index.html")), `a minimal Vite ${viteVersion} app bundles it`, (v.stdout + v.stderr).trim());
   if (browser && v.status === 0) await checkAppInBrowser(browser, built);
+  if (browser) await checkGlobalScript(browser, pkgDir);
+}
+
+/** The installed library's dist/, for the MCP page check; set by verifyLibrary. */
+let installedEngine;
+
+const GLOBAL_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Plain script</title></head>
+<body style="margin:0;background:#fff"><div style="width:480px"><canvas id="a"></canvas><canvas id="b"></canvas></div>
+<script src="/dist/sayshape.global.js"></script><script src="/dist/sayshape-map.global.js"></script>
+<script>
+  var S = window.sayshape;
+  window.names = Object.keys(S).sort();
+  new S.SayShape(document.getElementById("a"), { components: S.coreComponents, theme: S.lightTheme })
+    .setSpec('state s=[{m: "Jan", v: 3}, {m: "Feb", v: 5}]\\ncard\\n  text "Plain script" style=title\\n  chart "Sales" kind=bar items=s x=m y=v');
+  new S.SayShape(document.getElementById("b"), { components: S.coreComponents.concat(window.sayshapeMap.mapComponents), theme: S.darkTheme })
+    .setSpec('map fit=pins\\n  pin "Tokyo" lat=35.7 lon=139.7');
+</script></body></html>`;
+
+/** Loads dist/sayshape.global.js and the map's script with plain <script src> tags, as a page from a CDN would. */
+async function checkGlobalScript(browser, pkgDir) {
+  const body = (path) => (path === "/" ? GLOBAL_HTML : readFileSync(join(pkgDir, path)));
+  const server = createServer((req, res) => {
+    const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+    if (path !== "/" && !/^\/dist\/sayshape(-map)?\.global\.js$/.test(path)) return res.writeHead(404).end();
+    res.writeHead(200, { "Content-Type": path === "/" ? "text/html" : "text/javascript" }).end(body(path));
+  });
+  await new Promise((done) => server.listen(0, "127.0.0.1", done));
+  const page = await browser.newPage({ viewport: { width: 520, height: 900 } });
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  try {
+    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    const names = await page.evaluate(() => window.names);
+    check(["SayShape", "coreComponents", "darkTheme", "lightTheme", "sceneComponents"].every((n) => names.includes(n)), `dist/sayshape.global.js defines the global sayshape (${names.join(", ")})`);
+    const inked = async (id) => {
+      let last = -1;
+      for (let i = 0; i < 40; i++) {
+        await page.waitForTimeout(250);
+        const n = await page.evaluate((id) => {
+          const c = document.getElementById(id);
+          const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+          let k = 0;
+          for (let j = 0; j < d.length; j += 4) if (d[j + 3] > 0 && (d[j] < 200 || d[j + 1] < 200 || d[j + 2] < 200)) k++;
+          return k;
+        }, id);
+        if (n === last && n > 500) return n;
+        last = n;
+      }
+      return last;
+    };
+    const chart = await inked("a");
+    check(chart > 500, `a spec paints from the plain <script src> build (${chart} inked pixels)`);
+    const map = await inked("b");
+    check(map > 500, `a map paints with dist/sayshape-map.global.js added (${map} inked pixels)`);
+    check(errors.length === 0, "no errors in the plain-script page", errors.join("\n"));
+  } catch (e) {
+    check(false, "the plain-script build runs in Chromium", e.message);
+  } finally {
+    await page.close();
+    server.close();
+  }
 }
 
 async function checkAppInBrowser(browser, root) {
@@ -355,8 +423,10 @@ async function verifyMcp(browser) {
   const { Client } = await import(join(dir, "node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js"));
   const { StdioClientTransport } = await import(join(dir, "node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js"));
   const { StreamableHTTPClientTransport } = await import(join(dir, "node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js"));
-  const connect = async (flags) => {
-    const client = new Client({ name: "sayshape-verify", version: "1.0.0" });
+  const { EXTENSION_ID, RESOURCE_MIME_TYPE } = await import(join(dir, "node_modules/@modelcontextprotocol/ext-apps/dist/src/server/index.js"));
+  // A chat app that draws MCP Apps views, unless textOnly.
+  const connect = async (flags, textOnly = false) => {
+    const client = new Client({ name: "sayshape-verify", version: "1.0.0" }, textOnly ? undefined : { capabilities: { extensions: { [EXTENSION_ID]: { mimeTypes: [RESOURCE_MIME_TYPE] } } } });
     const transport = new StdioClientTransport({ command: process.execPath, args: [join(pkgDir, "dist/server.js"), ...flags], cwd: dir, stderr: "pipe" });
     let stderr = "";
     transport.stderr?.on("data", (d) => (stderr += d));
@@ -394,6 +464,18 @@ async function verifyMcp(browser) {
     check(stderr().trim() === "", "a normal run writes nothing to stderr", stderr());
   } finally {
     await client.close();
+  }
+
+  // A client that can't draw MCP Apps views gets a page that loads the engine from jsDelivr.
+  const plain = await connect([], true);
+  try {
+    const r = await plain.client.callTool({ name: "show_interface", arguments: { spec: 'card\n  text "</script>Shown on a page" style=title' } });
+    const html = /(`{3,})html\n([\s\S]*?)\1/.exec(text(r))?.[2] ?? "";
+    const pinned = /cdn\.jsdelivr\.net\/npm\/sayshape@(\d+\.\d+\.\d+)\/dist\/sayshape\.global\.js/.exec(html)?.[1];
+    check(r.structuredContent?.page === true && !!pinned && (html.match(/<\/script/g) ?? []).length === 2, `a text-only client gets a page that loads sayshape@${pinned} from jsDelivr`, text(r).slice(0, 300));
+    if (pinned) checkPinnedEngine(pinned);
+  } finally {
+    await plain.client.close();
   }
 
   // Studio theme, theme picker and scenes.
@@ -460,7 +542,7 @@ async function verifyMcp(browser) {
   }
 
   // The existing end-to-end checks, pointed at the installed copy.
-  const e2e = [["e2e-import.mjs", "--mcp-result import (no browser)", false], ["e2e.mjs", "the view in a sandboxed iframe: handshake, streaming, themes, an emit: action back to the chat", true], ["e2e-data.mjs", "--data from the model's query to the rows in the view", true]];
+  const e2e = [["e2e-import.mjs", "--mcp-result import (no browser)", false], ["e2e.mjs", "the view in a sandboxed iframe: handshake, streaming, themes, an emit: action back to the chat", true], ["e2e-data.mjs", "--data from the model's query to the rows in the view", true], ["e2e-fallback.mjs", "the page for text-only chat apps, opened in Chromium in light and dark", true]];
   for (const [script, what, needsBrowser] of e2e) {
     if (needsBrowser && !browser) {
       console.log(`  - skipped ${script} (no browser)`);
@@ -471,9 +553,36 @@ async function verifyMcp(browser) {
       check(false, `mcp/scripts/${script} needs the repository's mcp dependencies (npm ci --prefix mcp)`);
       continue;
     }
-    const r = run(process.execPath, [join(repo, "mcp/scripts", script)], { cwd: join(repo, "mcp"), env: { ...process.env, SAYSHAPE_MCP_DIST: join(pkgDir, "dist") } });
+    const env = { ...process.env, SAYSHAPE_MCP_DIST: join(pkgDir, "dist"), ...(installedEngine ? { SAYSHAPE_ENGINE_DIST: installedEngine } : {}) };
+    const r = run(process.execPath, [join(repo, "mcp/scripts", script)], { cwd: join(repo, "mcp"), env });
     check(r.status === 0, `installed copy passes mcp/scripts/${script}: ${what}`, (r.stdout + r.stderr).trim().split("\n").slice(-12).join("\n"));
   }
+}
+
+/**
+ * The sayshape version the text-only page loads (PAGE_ENGINE_VERSION in
+ * mcp/src/fallback.ts) must be on npm with dist/sayshape.global.js. Some chat
+ * apps only load a version from a CDN once it's two weeks old, so its age is
+ * reported too. Checking npm needs the network, so a local run only notes it.
+ */
+function checkPinnedEngine(version) {
+  const r = run(npm, ["view", `sayshape@${version}`, "time", "--json"]);
+  let published;
+  try {
+    published = JSON.parse(r.stdout)[version];
+  } catch {}
+  const pack = published ? run(npm, ["pack", `sayshape@${version}`, "--dry-run", "--json"], { cwd: work }) : { stdout: "" };
+  let hasScript = false;
+  try {
+    hasScript = JSON.parse(pack.stdout)[0].files.some((f) => f.path === "dist/sayshape.global.js");
+  } catch {}
+  const ok = !!published && hasScript;
+  const age = published ? Math.floor((Date.now() - Date.parse(published)) / 86_400_000) : 0;
+  const what = ok
+    ? `the page's sayshape@${version} is on npm with dist/sayshape.global.js (published ${age} day${age === 1 ? "" : "s"} ago${age < 14 ? "; some chat apps won't load it until it's 14 days old" : ""})`
+    : `the page's sayshape@${version} is on npm with dist/sayshape.global.js`;
+  if (registryTag) check(ok, what, published ? "the tarball has no dist/sayshape.global.js" : r.stderr.trim().split("\n")[0]);
+  else console.log(`  ${ok ? "·" : "!"} ${what}${ok ? "" : ": not yet (fine before it's released; the release run checks it)"}`);
 }
 
 /** Starts the server, sends initialize and tools/list by hand, and checks every stdout line is a JSON-RPC message. */

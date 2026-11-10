@@ -87,7 +87,7 @@ npm run dev        # opens the playground
 | `npm run pick-eval` | Scores whether a model picks the representation that shows the data best ([Check the picks](#check-the-picks)) |
 | `npm run guide:size` | Measures the model guide by section, per mode and profile |
 | `npm run typecheck` | Type-checks everything |
-| `npm run build` | Builds the library into `dist/` |
+| `npm run build` | Builds the library into `dist/`: ES modules, and `sayshape.global.js` and `sayshape-map.global.js` for a plain `<script src>` (they define the globals `sayshape` and `sayshapeMap`) |
 | `npm run build:playground` | Builds the playground as a static site into `dist-playground/` |
 | `npm run docs:components` | Regenerates the component reference in this README |
 | `npm run docs:check` | Fails if the component reference is out of date |
@@ -101,7 +101,7 @@ The playground streams sample specs as a model would. Once a sample finishes you
 
 ## In Claude, ChatGPT and other chat apps
 
-[`mcp/`](mcp/) is an [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) server. It lets the model in a chat app that supports MCP Apps (such as Claude, ChatGPT, VS Code or Goose) show SayShape interfaces inside the conversation. The model reads the generated guide once, then calls `show_interface` with a spec. The server checks the spec with the real parser, and the chat app shows a view in which SayShape's engine draws it. Pressing an `emit:` button sends a message back into the conversation.
+[`mcp/`](mcp/) is an [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) server. It lets the model in a chat app that supports MCP Apps (such as Claude, ChatGPT, VS Code or Goose) show SayShape interfaces inside the conversation. The model reads the generated guide once, then calls `show_interface` with a spec. The server checks the spec with the real parser, and the chat app shows a view in which SayShape's engine draws it. Pressing an `emit:` button sends a message back into the conversation. In chat apps that can't show MCP Apps views, such as coding agents, `show_interface` returns a small HTML page instead, which the model publishes or saves for you to open in a browser.
 
 ```bash
 cd mcp && npm ci && npm run build   # then point your chat app at mcp/dist/server.js

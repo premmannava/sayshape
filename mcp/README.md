@@ -55,6 +55,31 @@ The view has no website of its own, so an `image` only loads from a host you lis
 
 The one list does three things: the view's engine loads from those hosts and no others, the server asks the chat app to allow them in the view's Content Security Policy (MCP Apps `resourceDomains`), and the model is told which hosts work, so it doesn't invent URLs elsewhere. Images must be https, and the host must send CORS headers (`Access-Control-Allow-Origin`), as image CDNs do, because the view keeps its canvas readable for Save image and Copy text. An image that can't load shows its description instead. Some chat apps may not honour a view's CSP request; then images show their descriptions there.
 
+## In chat apps that can't draw interfaces
+
+Coding agents and other text-only clients (Claude Code, Codex, Antigravity and others) call `show_interface` but can't show MCP Apps views. When a client connects without announcing MCP Apps support (the `io.modelcontextprotocol/ui` capability), and the spec has nothing to fix, `show_interface`'s text result carries a small, complete HTML page instead, with two sentences telling the model what to do with it: publish it as a page if it has a tool for that, or save it as an `.html` file and give the person its path to open in a browser. The server itself writes no files. Clients that draw views get exactly what they got before.
+
+The page is a few kilobytes plus the spec: a canvas, the engine loaded from jsDelivr (`sayshape@<version>/dist/sayshape.global.js`, and the map's own script when the spec has a map), and the spec embedded as JSON with `<` escaped, so nothing in it can end the script. It follows light and dark mode, and a `data-theme="light"` or `"dark"` on its root element; its background is the engine theme's own; and it fits a phone with no sideways scrolling.
+
+A page outside the chat has no conversation to send `emit:` actions to, so for these clients only:
+
+- **The model is told not to use `emit:`.** Their quick start (in `show_interface`'s description and `sayshape_docs` with nothing named) says to leave it out and ask the person to reply in the chat instead.
+- **A spec with `emit:` gets it back to fix**, line by line, with no page until it's gone. Buttons can keep `set:`, `go:` or `notify:`, so they still do something on the page. Everything else in the interface (state, controls, charts, screens) works.
+- **Links pressed in `rich=true` text open in a new tab** (https only). In the chat they're sent to the model as `emit:link`; on the page, the page is the host, so it opens them as any web page would.
+
+Clients that draw views see none of this: the same descriptions, the same docs and the same results as before.
+
+What doesn't work there:
+
+- **Save image and Copy text** aren't on the page.
+- **It needs internet access** to load the engine from the CDN; without it, or before the pinned version is on the CDN, the page names the engine version that didn't load.
+- **Interfaces that load datasets** (`--data`, `--mcp-result`) can't be shown: the page has no way to fetch rows, and the rows never go through the conversation. The model is told so and answers in text.
+- It uses the default Teal light and dark themes; `--theme`, `--theme-picker` and the chat app's own colors and fonts apply only to the view.
+- The engine version is pinned and moves at releases, so the page can be one release behind the server: an element added in the newest release may not draw there yet. ([Why](https://github.com/premmannava/sayshape/blob/main/docs/releasing.md#the-engine-version-the-text-only-page-loads).)
+- In `--http` mode the server makes a new server for every request and never sees what the client announced, so it always answers as for a client that draws views.
+
+The same interface sent again gets no second page, and a spec with problems gets them to fix first, with no page. To see what a client announces, start the server with `SAYSHAPE_LOG_CLIENT=1` in its environment: each connection writes the client's name and capabilities to stderr.
+
 ## Tokens
 
 A model never reads the whole language guide (about 7,500 tokens). It gets a quick start in `show_interface`'s description (about 450) and asks `sayshape_docs` for only the elements it's about to use: about 140 tokens for a button, 700 for a chart and a table, 1,200 for a six-element dashboard. If it guesses an element wrong, the result of `show_interface` brings that element's docs, so a wrong guess costs one retry, not the whole guide. Retries are the expensive part, because each call resends the whole conversation, so the server avoids the needless ones: it quietly fixes Markdown fences and typographic quotes (the view tidies the same way), tells the model when a problem was only an ignored prop and needs no new call, and answers an unknown function like `argmax` with the one to use instead (`first(sort(rows, 'revenue', 'desc'))`). With a database, the rows go from the database to the interface, so the model's tokens don't grow with the data either.
@@ -188,6 +213,6 @@ npm run build
 npm run test:e2e   # the built view in Chromium, inside a sandboxed iframe driven by the MCP Apps host bridge
 ```
 
-`test:e2e` runs the browser canvas/host-action test, the database-to-interface test, and the **stdio MCP result import test** (`scripts/e2e-import.mjs`). The last one starts the built server with `--mcp-result`, lists the imported schema, calls `show_interface` and verifies the exact rows delivered by app-only `fetch_dataset`. Screenshots from the browser tests go to `e2e-output/`.
+`test:e2e` runs the browser canvas/host-action test, the database-to-interface test, the **text-only page test** (`scripts/e2e-fallback.mjs`: a client without MCP Apps gets a page, which is opened from a file in Chromium with the engine built from `../src` standing in for jsDelivr, and must paint in light, dark and `data-theme`, fit 400px and keep a spec containing `</script>` inert), and the **stdio MCP result import test** (`scripts/e2e-import.mjs`). The last one starts the built server with `--mcp-result`, lists the imported schema, calls `show_interface` and verifies the exact rows delivered by app-only `fetch_dataset`. Screenshots from the browser tests go to `e2e-output/`.
 
 The server bundles the engine from `../src`, so the guide, the parser and the view always match the library they were built with. The MCP packages (`@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `zod`) are dependencies of this package only. The SayShape library itself still has none.

@@ -17,7 +17,7 @@ npm run verify:pack                         # local tarballs, installed outside 
 npm run verify:pack -- --registry next      # what npm serves for a tag or version
 ```
 
-`scripts/verify-pack.mjs` installs each package into a clean temporary project and checks it there: what the package holds (no credentials, no build-machine paths), all five entry points, a card, a chart, a state change, an emit: action reaching the host, the map, scenes staying opt-in, the declarations under bundler, node16 and nodenext resolution, a minimal Vite app painting in Chromium, and for the MCP server its bin, `--help`, a protocol-only stdout, the handshake and tools through a real MCP client, valid and invalid specs, the docs tool, the view resource, themes, `--scene`, `--data`, `--http`, and the browser end-to-end scripts in `mcp/scripts` pointed at the installed copy. CI runs it on Node 20, 22 and 24. `--no-browser` skips the Chromium parts; `--keep` keeps the temporary projects.
+`scripts/verify-pack.mjs` installs each package into a clean temporary project and checks it there: what the package holds (no credentials, no build-machine paths), all five entry points, a card, a chart, a state change, an emit: action reaching the host, the map, scenes staying opt-in, the declarations under bundler, node16 and nodenext resolution, a minimal Vite app painting in Chromium, and for the MCP server its bin, `--help`, a protocol-only stdout, the handshake and tools through a real MCP client, valid and invalid specs, the docs tool, the view resource, themes, `--scene`, `--data`, `--http`, and the page `show_interface` gives text-only clients and the engine version it loads, the plain-script build (`dist/sayshape.global.js` and `dist/sayshape-map.global.js`) painting in Chromium, and the browser end-to-end scripts in `mcp/scripts` pointed at the installed copy. CI runs it on Node 20, 22 and 24. `--no-browser` skips the Chromium parts; `--keep` keeps the temporary projects.
 
 ## A normal release
 
@@ -27,6 +27,14 @@ npm run verify:pack -- --registry next      # what npm serves for a tag or versi
 4. Approve the `npm-release` deployment. It publishes exactly those tarballs to the `next` dist-tag.
 5. It then installs both from npm into clean projects and runs `verify:pack -- --registry <version>`.
 6. When that passes, run the workflow by hand (Actions → Publish to npm → Run workflow) with the version and **promote** ticked. It checks the version from npm once more and, after approval, moves `latest` to it.
+
+### The engine version the text-only page loads
+
+`show_interface` gives chat apps that can't draw MCP Apps views an HTML page that loads `sayshape@<version>/dist/sayshape.global.js` from jsDelivr. The version is `PAGE_ENGINE_VERSION` in `mcp/src/fallback.ts`, pinned exactly, and it is **not** the version being released: some chat apps only let a page load a package version from a CDN once it has been public for two weeks, so a page pointing at a release published the same day would fail right when people install it.
+
+At each release, before step 1: set `PAGE_ENGINE_VERSION` to the newest `sayshape` version that has been on npm for at least 14 days (`npm view sayshape time`), never later than the version being released. If none is old enough yet, leave it. `verify:pack -- --registry <version>` checks that the pinned version is on npm with `dist/sayshape.global.js` and says how old it is. The first version with that file is 0.1.1, so until 0.1.1 has been out for two weeks the page works in browsers (once 0.1.1 is published) but not in chat apps with that rule.
+
+The trade-off: the page can draw with an engine one release older than the server that checked the spec, so an element added in the newest release may not draw on the page yet.
 
 If one package publishes and the other fails, don't unpublish: fix the cause, bump the version for both and release again. npm never accepts the same version twice.
 

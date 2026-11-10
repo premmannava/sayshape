@@ -14,6 +14,10 @@
  *   sayshape-mcp --http [port]   Streamable HTTP on /mcp (default port 3001), for
  *                                clients that connect to a URL. Bind it behind
  *                                HTTPS before exposing it beyond localhost.
+ *
+ * SAYSHAPE_LOG_CLIENT=1 writes each client's name, version and capabilities to
+ * stderr when it connects, to see which chat apps announce MCP Apps
+ * ("io.modelcontextprotocol/ui") and which get the text-only page.
  */
 import { readFile } from "node:fs/promises";
 import { createServer as createHttpServer, type IncomingMessage } from "node:http";
@@ -21,7 +25,8 @@ import { fileURLToPath } from "node:url";
 import { basename } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createServer, setImageHosts, setScenes } from "./server";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { cannotDrawViews, createServer, setImageHosts, setScenes } from "./server";
 import { parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
@@ -32,6 +37,20 @@ let uiCache: Promise<string> | null = null;
 const uiHtml = () => (uiCache ??= readFile(UI_PATH, "utf8"));
 
 const MAX_BODY_BYTES = 1_000_000;
+
+/** SAYSHAPE_LOG_CLIENT: say what the client announced, once it has connected. */
+function logClient(server: McpServer): McpServer {
+  if (!process.env.SAYSHAPE_LOG_CLIENT) return server;
+  // createServer sets its own oninitialized (the text-only description); keep it.
+  const before = server.server.oninitialized;
+  server.server.oninitialized = () => {
+    before?.();
+    const client = server.server.getClientVersion();
+    const caps = JSON.stringify(server.server.getClientCapabilities() ?? {});
+    console.error(`SayShape: ${client?.name ?? "a client"} ${client?.version ?? ""} connected; ${cannotDrawViews(server) ? "no MCP Apps, so show_interface gives a page" : "draws MCP Apps views"}; capabilities ${caps}`);
+  };
+  return server;
+}
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
@@ -59,7 +78,7 @@ async function serveHttp(port: number, data: DataSource | undefined, view: ViewO
       const body = await readJson(req);
       // A fresh server and transport per request keeps requests independent.
       // Datasets live in the shared DataSource, so a later request (the interface fetching rows) finds them.
-      const server = createServer({ uiHtml, data, view });
+      const server = logClient(createServer({ uiHtml, data, view }));
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
       res.on("close", () => { void transport.close(); void server.close(); });
       await server.connect(transport);
@@ -134,7 +153,7 @@ async function main(): Promise<void> {
     return;
   }
   // stdout carries the protocol, so anything for people goes to stderr.
-  await createServer({ uiHtml, data, mcpResults, view }).connect(new StdioServerTransport());
+  await logClient(createServer({ uiHtml, data, mcpResults, view })).connect(new StdioServerTransport());
 }
 
 main().catch((e) => {

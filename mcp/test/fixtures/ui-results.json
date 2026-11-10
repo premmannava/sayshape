@@ -1,0 +1,126 @@
+{
+  "good": {
+    "content": [
+      {
+        "type": "text",
+        "text": "The interface is showing in the conversation, with no problems. Don't call show_interface again unless the person asks for a change."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": "Hike",
+      "errors": 0,
+      "warnings": 0,
+      "toFix": 0,
+      "repeat": false,
+      "diagnostics": []
+    }
+  },
+  "repeat": {
+    "content": [
+      {
+        "type": "text",
+        "text": "This exact interface is already showing in the conversation, just above, so this copy is hidden. Don't call show_interface again unless the person asks for a change; answer them in text if they need more."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": "Hike",
+      "errors": 0,
+      "warnings": 0,
+      "toFix": 0,
+      "repeat": true,
+      "diagnostics": []
+    }
+  },
+  "to fix": {
+    "content": [
+      {
+        "type": "text",
+        "text": "2 problems leave part of this interface wrong or missing, so the person sees a short \"being fixed\" note in its place. Fix them and call show_interface again with the whole corrected spec:\nline 2 (error): Unknown element \"txet\". It was skipped, along with anything inside it\nline 3 (warning): Unknown action \"nope\". Use inc, dec, toggle, set, emit, go, back, notify, add, remove, clear\n\nDocs for button:\n  button \"<text>\"  — A pressable button that runs actions. Use emit: to tell the app what the user chose.\n    \"<text>\" (required)  The button label.\n    on=<action>  What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ;\n    variant=<primary|secondary|danger>  primary (filled), secondary (outlined) or danger.\n    disabled=<condition>  Expression; when true the button is greyed out and can't be pressed.\n    example:\n      button \"Book now\" on=emit:book\n      button \"Back\" variant=secondary on=dec:step"
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": null,
+      "errors": 1,
+      "warnings": 1,
+      "toFix": 2,
+      "repeat": false,
+      "diagnostics": [
+        {
+          "line": 2,
+          "severity": "error",
+          "message": "Unknown element \"txet\". It was skipped, along with anything inside it"
+        },
+        {
+          "line": 3,
+          "severity": "warning",
+          "message": "Unknown action \"nope\". Use inc, dec, toggle, set, emit, go, back, notify, add, remove, clear"
+        }
+      ]
+    }
+  },
+  "ignored prop": {
+    "content": [
+      {
+        "type": "text",
+        "text": "The interface is showing correctly. The parser ignored these small things, which change nothing on screen, so there's no need to call show_interface again:\nline 2 (ignored): \"text\" has no prop \"colour\". Known props: style, weight, tone, align, strike, icon, rich, if, tip"
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": null,
+      "errors": 0,
+      "warnings": 1,
+      "toFix": 0,
+      "repeat": false,
+      "diagnostics": [
+        {
+          "line": 2,
+          "severity": "warning",
+          "message": "\"text\" has no prop \"colour\". Known props: style, weight, tone, align, strike, icon, rich, if, tip"
+        }
+      ]
+    }
+  },
+  "dataset": {
+    "content": [
+      {
+        "type": "text",
+        "text": "The interface is showing in the conversation, with no problems. Don't call show_interface again unless the person asks for a change.\nLoaded into the interface: sales (m1, 2 rows)."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {
+        "sales": {
+          "id": "m1",
+          "rows": 2
+        }
+      },
+      "title": null,
+      "errors": 0,
+      "warnings": 0,
+      "toFix": 0,
+      "repeat": false,
+      "diagnostics": []
+    }
+  },
+  "script in a string": {
+    "content": [
+      {
+        "type": "text",
+        "text": "The interface is showing in the conversation, with no problems. Don't call show_interface again unless the person asks for a change."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": null,
+      "errors": 0,
+      "warnings": 0,
+      "toFix": 0,
+      "repeat": false,
+      "diagnostics": []
+    }
+  }
+}
