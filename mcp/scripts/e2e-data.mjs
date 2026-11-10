@@ -9,6 +9,7 @@
 import { readFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { build } from "vite";
 import { chromium } from "@playwright/test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -16,6 +17,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const out = here("../e2e-output/");
+// SAYSHAPE_MCP_DIST points the check at another build, such as the one inside an installed npm package.
+const dist = process.env.SAYSHAPE_MCP_DIST ?? here("../dist/");
 mkdirSync(out, { recursive: true });
 const { DatabaseSync } = createRequire(import.meta.url)("node:sqlite");
 
@@ -41,7 +44,7 @@ const textOf = (r) => r.content?.[0]?.text ?? "";
 
 // The "model": an MCP client talking to the built server over stdio.
 const client = new Client({ name: "e2e-model", version: "1.0.0" });
-await client.connect(new StdioClientTransport({ command: process.execPath, args: [here("../dist/server.js"), "--data", dbPath], stderr: "ignore" }));
+await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(dist, "server.js"), "--data", dbPath], stderr: "ignore" }));
 const described = textOf(await client.callTool({ name: "describe_data", arguments: {} }));
 check(/Invoice/.test(described), "describe_data lists the tables");
 const queried = textOf(await client.callTool({ name: "query_data", arguments: { sql: SQL } }));
@@ -68,7 +71,7 @@ await build({
   build: { outDir: out + "host", emptyOutDir: true, lib: { entry: here("../test/host/host.ts"), name: "TestHost", formats: ["iife"], fileName: () => "host.js" } },
 });
 const hostJs = readFileSync(out + "host/host.js", "utf8");
-const uiHtml = readFileSync(here("../dist/ui.html"), "utf8");
+const uiHtml = readFileSync(join(dist, "ui.html"), "utf8");
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 680, height: 1100 }, deviceScaleFactor: 2 });

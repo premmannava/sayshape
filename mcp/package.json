@@ -48,5 +48,9 @@
     "claude",
     "chatgpt",
     "sayshape"
-  ]
+  ],
+  "bugs": {
+    "url": "https://github.com/premmannava/sayshape/issues"
+  },
+  "author": "premmannava"
 }

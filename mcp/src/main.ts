@@ -5,7 +5,7 @@
  *   sayshape-mcp                 stdio, for Claude Desktop, Claude Code, VS Code, Goose…
  *   sayshape-mcp --data file.db  also let the model query a SQLite database (read-only)
  *   sayshape-mcp --theme-picker  show a theme selector above interfaces (off by default)
- *   sayshape-mcp --theme blue    the theme interfaces use: teal (default), purple, blue or neutral
+ *   sayshape-mcp --theme blue    the theme interfaces use: teal (default), purple, blue, neutral or studio
  *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --no-copy-text  hide the Copy text button
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
@@ -77,11 +77,11 @@ async function main(): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     console.error([
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...] [--http [port]]",
-      "                    [--theme-picker] [--theme teal|purple|blue|neutral] [--no-save-image] [--no-copy-text] [--scene]",
+      "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--no-save-image] [--no-copy-text] [--scene]",
       "                    [--image-hosts host1,host2,...]",
       "",
       "  --theme-picker   show a theme selector above each interface (off by default)",
-      "  --theme <name>   the theme interfaces use (default teal)",
+      "  --theme <name>   the theme interfaces use: teal (default), purple, blue, neutral or studio",
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
       "  --no-copy-text   hide the Copy text button",
       "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",
