@@ -367,14 +367,35 @@ const CODE_WORDS: Record<string, string> = {
   window: "SayShape can't run code. Write only SayShape lines: elements, state and derive",
 };
 
+/*
+ * The two checks below run on whatever a model writes, so they must take time
+ * in proportion to the line. They used to be single regexes,
+ * /^[}\])](\s*[,;)\]}]*)?(\s*else\b.*)?$/ and
+ * /^[A-Z][a-z]*\s+\w+(\s+\w+)+[\s\w,.:;'!?-]*$/, which give the same answers
+ * but backtrack quadratically on a long line ("}" and 20,000 spaces took about
+ * half a second). test/parser-linear.test.ts compares them on random lines.
+ */
+
+/** A line that only closes a block, as code would: "}", "});", "} else {"... */
+function isClosingLine(body: string): boolean {
+  if (!/^[}\])]/.test(body)) return false;
+  // What's left after the closing brackets and punctuation may only be an else.
+  return /^(?:\s*else\b.*)?$/.test(body.slice(1).replace(/^\s*[,;)\]}]*/, ""));
+}
+
+/** Prose: a capitalised word, then at least two more, with only word characters, spaces and sentence punctuation. */
+function isSentence(body: string): boolean {
+  return /^[A-Z][a-z]*\s+\w+\s+\w/.test(body) && /^[\s\w,.:;'!?-]*$/.test(body);
+}
+
 /** A SayShape message for a line that's code or prose rather than an element, or undefined. */
 export function codeLineMessage(body: string): string | undefined {
   if (/^(\/\/|\/\*|\*\/|--\s)/.test(body)) return "Comments start with #, like # Totals";
-  if (/^[}\])](\s*[,;)\]}]*)?(\s*else\b.*)?$/.test(body)) return "SayShape has no braces around blocks: the lines under an if= or each line are indented under it instead, and nothing closes it";
+  if (isClosingLine(body)) return "SayShape has no braces around blocks: the lines under an if= or each line are indented under it instead, and nothing closes it";
   const word = /^([A-Za-z_]\w*)/.exec(body)?.[1];
   if (word && Object.prototype.hasOwnProperty.call(CODE_WORDS, word)) return CODE_WORDS[word];
   // A sentence: a capitalised word, then more words, with no props or quoted text.
-  if (/^[A-Z][a-z]*\s+\w+(\s+\w+)+[\s\w,.:;'!?-]*$/.test(body) && !/[="]/.test(body)) {
+  if (isSentence(body)) {
     return "Only SayShape lines go in a spec. Leave explanations out, or start them with # as comments";
   }
   return undefined;
