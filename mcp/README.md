@@ -65,7 +65,7 @@ What doesn't work there:
 
 - **Buttons with `on=emit:`** do nothing: a page outside the chat has no conversation to send them to. Everything else in the interface (state, controls, charts, screens) works.
 - **Save image and Copy text** aren't on the page.
-- **It needs internet access** to load the engine from the CDN; without it, the page says the engine didn't load.
+- **It needs internet access** to load the engine from the CDN; without it, or before the pinned version is on the CDN, the page names the engine version that didn't load.
 - **Interfaces that load datasets** (`--data`, `--mcp-result`) can't be shown: the page has no way to fetch rows, and the rows never go through the conversation. The model is told so and answers in text.
 - It uses the default Teal light and dark themes; `--theme`, `--theme-picker` and the chat app's own colors and fonts apply only to the view.
 - The engine version is pinned and moves at releases, so the page can be one release behind the server: an element added in the newest release may not draw there yet. ([Why](https://github.com/premmannava/sayshape/blob/main/docs/releasing.md#the-engine-version-the-text-only-page-loads).)

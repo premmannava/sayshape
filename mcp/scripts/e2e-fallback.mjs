@@ -169,7 +169,7 @@ try {
     await page.route("https://cdn.jsdelivr.net/**", (route) => route.abort());
     await page.goto(pathToFileURL(files.chart).href);
     const note = await page.evaluate(() => { const n = document.getElementById("note"); return n.hidden ? "" : n.textContent; });
-    check(/didn't load from cdn\.jsdelivr\.net/.test(note), `without the CDN it says the engine didn't load ("${note.slice(0, 60)}…")`);
+    check(/sayshape@\d+\.\d+\.\d+\) didn't load from cdn\.jsdelivr\.net/.test(note) && /isn't available from the CDN yet/.test(note), `without the CDN it names the version that didn't load ("${note.slice(0, 70)}…")`);
     await page.close();
   }
 } finally {

@@ -96,7 +96,8 @@ ${map ? `<script src="${engineScriptUrl("sayshape-map.global.js", version)}"></s
   var S = window.sayshape, root = document.documentElement;
   if (!S) {
     var note = document.getElementById("note");
-    note.textContent = "The SayShape engine didn't load from cdn.jsdelivr.net. This page needs an internet connection; reload it to try again.";
+    // A failed script can't tell a missing version from no connection, so say both.
+    note.textContent = ${scriptJson(`The SayShape engine (sayshape@${version}) didn't load from cdn.jsdelivr.net, so this interface can't be drawn. Either there's no internet connection, or that version isn't available from the CDN yet.`)};
     note.hidden = false;
     return;
   }
