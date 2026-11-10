@@ -22,7 +22,7 @@ async function connect(options?: typeof UI_CLIENT, now = () => 1_000) {
   return { client, server };
 }
 
-type Result = { content: Array<{ text: string }>; structuredContent: Record<string, unknown> };
+type Result = { content: Array<{ text: string }>; structuredContent?: Record<string, unknown> };
 const show = async (client: Client, args: Record<string, unknown>) => (await client.callTool({ name: "show_interface", arguments: args })) as unknown as Result;
 const pageIn = (r: Result) => /(`{3,})html\n([\s\S]*?)\1/.exec(r.content[0]!.text)?.[2];
 
@@ -72,7 +72,8 @@ describe("the page for chat apps that can't draw views", () => {
     expect(PAGE_TEXT).not.toMatch(/claude|codex|antigravity|chatgpt|artifact|vs code/i);
     const page = pageIn(r)!;
     expect(page).toBe(fallbackPage({ spec: GOOD, title: "Hike" }));
-    expect(r.structuredContent).toMatchObject({ errors: 0, toFix: 0, repeat: false, page: true });
+    // Text alone: a client that hands its model the structured part in place of the text would lose the page.
+    expect(r).not.toHaveProperty("structuredContent");
     // Small enough for a model to read before it publishes: a couple of kilobytes besides the spec.
     expect(page.length - GOOD.length).toBeLessThan(3_000);
   });
@@ -129,7 +130,7 @@ describe("the page for chat apps that can't draw views", () => {
     const page = fallbackPage({ spec: 'text "```` four backticks"' });
     const block = fenced(page);
     expect(block.startsWith("`````html\n")).toBe(true);
-    expect(pageIn({ content: [{ text: block }], structuredContent: {} })).toBe(page);
+    expect(pageIn({ content: [{ text: block }] })).toBe(page);
   });
 
   it("has no page when there are problems to fix, and says nothing is showing yet", async () => {
@@ -138,7 +139,7 @@ describe("the page for chat apps that can't draw views", () => {
     expect(pageIn(r)).toBeUndefined();
     expect(r.content[0]!.text).toMatch(/^1 problem leaves part of this interface wrong or missing, and this chat app can't draw interfaces, so nothing is showing yet/);
     expect(r.content[0]!.text).toMatch(/line 2/);
-    expect(r.structuredContent).toMatchObject({ toFix: 1, page: false });
+    expect(r).not.toHaveProperty("structuredContent");
   });
 
   it("gives the page with ignored props, and lists them", async () => {
@@ -154,7 +155,7 @@ describe("the page for chat apps that can't draw views", () => {
     const r = await show(client, { spec: GOOD });
     expect(r.content[0]!.text).toBe(PAGE_REPEAT_TEXT);
     expect(r.content[0]!.text).not.toBe(REPEAT_TEXT);
-    expect(r.structuredContent).toMatchObject({ repeat: true, page: false });
+    expect(r).not.toHaveProperty("structuredContent");
   });
 
   it("has no page, and no rows, for an interface that loads a dataset", async () => {
@@ -162,7 +163,7 @@ describe("the page for chat apps that can't draw views", () => {
     const r = await show(client, { spec: 'card\n  chart "Sales" kind=bar items=sales x=team y=revenue\n', data: { sales: "m1" } });
     expect(r.content).toEqual([{ type: "text", text: PAGE_DATASETS_TEXT }]);
     expect(JSON.stringify(r)).not.toMatch(/West|12\b/);
-    expect(r.structuredContent).toMatchObject({ page: false, datasets: { sales: { id: "m1", rows: 1 } } });
+    expect(r).not.toHaveProperty("structuredContent");
   });
 
   it("isn't given to clients that draw views, or whose capabilities the server never saw", async () => {
@@ -170,6 +171,7 @@ describe("the page for chat apps that can't draw views", () => {
     expect(cannotDrawViews(server)).toBe(false);
     const r = await show(client, { spec: GOOD });
     expect(pageIn(r)).toBeUndefined();
+    expect(r.structuredContent).toMatchObject({ toFix: 0, repeat: false });
     expect(r.structuredContent).not.toHaveProperty("page");
     // The stateless HTTP mode makes a server per request, which never sees initialize.
     expect(cannotDrawViews(createServer({ uiHtml: () => "" }))).toBe(false);
@@ -211,7 +213,7 @@ describe("emit: in chat apps that can't draw views", () => {
     expect(text).not.toMatch(/line 6/);
     // No element docs for it: the fix is in the action, not the element.
     expect(text).not.toMatch(/Docs for/);
-    expect(r.structuredContent).toMatchObject({ toFix: 2, page: false });
+    expect(r).not.toHaveProperty("structuredContent");
   });
 
   it("gives the page once it's gone, and a rich-text link isn't an emit: to remove", async () => {

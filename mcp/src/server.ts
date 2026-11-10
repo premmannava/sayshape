@@ -470,17 +470,18 @@ export function createServer(opts: ServerOptions): McpServer {
       const key = interfaceKey(spec, wanted);
       const repeat = toFix === 0 && lastGood !== null && lastGood.key === key && now() - lastGood.at < REPEAT_WINDOW_MS;
       if (toFix === 0) lastGood = { key, at: now() };
-      // Only text-only clients get this field, so results for clients that draw views stay as they were.
-      const page = (shown: boolean) => (textOnly ? { page: shown } : {});
-      const counts = { datasets, title: title ?? null, errors: check.errors.length, warnings: check.warnings.length, toFix };
-      if (textOnly && names.length) {
+      // The structured part is for the view. A client that can't draw one has no view to read it, and some
+      // (Claude Code) hand their model the structured part in place of the text, which would lose the page
+      // and the problems to fix. So text-only clients get the text alone.
+      if (textOnly) {
         // Rows never go through the conversation, and a page outside the chat can't fetch them.
-        return { content: [{ type: "text", text: PAGE_DATASETS_TEXT }], structuredContent: { ...counts, repeat, diagnostics: [], page: false } };
+        if (names.length) return text(PAGE_DATASETS_TEXT);
+        if (repeat) return text(PAGE_REPEAT_TEXT);
       }
       if (repeat) {
         return {
-          content: [{ type: "text", text: textOnly ? PAGE_REPEAT_TEXT : REPEAT_TEXT }],
-          structuredContent: { datasets, title: title ?? null, errors: 0, warnings: check.warnings.length, toFix: 0, repeat: true, diagnostics: [], ...page(false) },
+          content: [{ type: "text", text: REPEAT_TEXT }],
+          structuredContent: { datasets, title: title ?? null, errors: 0, warnings: check.warnings.length, toFix: 0, repeat: true, diagnostics: [] },
         };
       }
       // Docs for the lines that went wrong; an emit: line needs no element docs to fix.
@@ -488,8 +489,10 @@ export function createServer(opts: ServerOptions): McpServer {
       if (failing.length) notes.push(`\nDocs for ${failing.join(", ")}:\n${elementGuide(registry, failing).text}`);
       const withPage = textOnly && toFix === 0;
       if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn })));
+      const said = [describeCheck(check, textOnly), ...notes].join("\n");
+      if (textOnly) return text(said);
       return {
-        content: [{ type: "text", text: [describeCheck(check, textOnly), ...notes].join("\n") }],
+        content: [{ type: "text", text: said }],
         structuredContent: {
           datasets,
           title: title ?? null,
@@ -498,7 +501,6 @@ export function createServer(opts: ServerOptions): McpServer {
           toFix,
           repeat: false,
           diagnostics: [...check.errors, ...check.warnings].slice(0, MAX_REPORTED).map((d) => ({ line: d.line, severity: d.severity, message: d.message })),
-          ...page(withPage),
         },
       };
     },

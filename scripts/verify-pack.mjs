@@ -472,7 +472,8 @@ async function verifyMcp(browser) {
     const r = await plain.client.callTool({ name: "show_interface", arguments: { spec: 'card\n  text "</script>Shown on a page" style=title' } });
     const html = /(`{3,})html\n([\s\S]*?)\1/.exec(text(r))?.[2] ?? "";
     const pinned = /cdn\.jsdelivr\.net\/npm\/sayshape@(\d+\.\d+\.\d+)\/dist\/sayshape\.global\.js/.exec(html)?.[1];
-    check(r.structuredContent?.page === true && !!pinned && (html.match(/<\/script/g) ?? []).length === 2, `a text-only client gets a page that loads sayshape@${pinned} from jsDelivr`, text(r).slice(0, 300));
+    // Text alone: some of these clients give their model the structured part in place of the text, which would lose the page.
+    check(r.structuredContent === undefined && !!pinned && (html.match(/<\/script/g) ?? []).length === 2, `a text-only client gets a page, as text alone, that loads sayshape@${pinned} from jsDelivr`, text(r).slice(0, 300));
     if (pinned) checkPinnedEngine(pinned);
   } finally {
     await plain.client.close();
