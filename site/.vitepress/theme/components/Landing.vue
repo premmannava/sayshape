@@ -343,6 +343,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
         <div class="closing-install">
           <p class="small">Install from npm (Node.js 20 or later)</p>
           <div class="code dark"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" @click="copy('closing', install)">{{ copied === "closing" ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" aria-label="Install commands"><code>{{ install }}</code></pre></div>
+          <p class="small">SayShape v0.1 is an early prototype.</p>
           <p class="small">Claude on the web and ChatGPT need it at an address you host. Open source, MIT licensed. <a :href="href('/docs/integration/mcp')">Setup for each app →</a></p>
         </div>
       </div>

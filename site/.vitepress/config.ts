@@ -98,13 +98,18 @@ export default defineConfig({
     ["meta", { name: "theme-color", content: "#F9F7F2" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: TITLE }],
-    ["meta", { property: "og:title", content: "SayShape: a UI language for AI, and an engine that brings it to life" }],
-    ["meta", { property: "og:description", content: DESCRIPTION }],
+    // og:title and og:description are per page, from transformHead below.
     ["meta", { property: "og:url", content: SITE_URL }],
     ["meta", { property: "og:image", content: `${SITE_URL}og.png` }],
     ["meta", { property: "og:image:width", content: "1200" }],
     ["meta", { property: "og:image:height", content: "630" }],
     ["meta", { name: "twitter:card", content: "summary_large_image" }],
+  ],
+  // A shared link previews with the page's own title and description, the same ones its <title> and
+  // meta description use, so the landing page's preview reads "Let your AI show, not tell".
+  transformHead: ({ title, description }) => [
+    ["meta", { property: "og:title", content: title }],
+    ["meta", { property: "og:description", content: description || DESCRIPTION }],
   ],
   themeConfig: {
     siteTitle: "SayShape",
