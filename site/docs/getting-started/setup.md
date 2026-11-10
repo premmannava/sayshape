@@ -5,7 +5,7 @@ description: Clone the SayShape repository, install it, run the tests and open t
 
 # Local setup
 
-SayShape isn't published to npm yet, so you work from the repository. You need **Node.js 18 or newer** and npm.
+To use SayShape, install it from npm: `npm install sayshape` for your app ([Embedding](../integration/embedding)), or `npx -y sayshape-mcp` for a chat app ([MCP](../integration/mcp)). This page is for working on SayShape itself, from the repository. You need **Node.js 18 or newer** (22 or 24 recommended) and npm.
 
 ```bash
 git clone https://github.com/premmannava/sayshape.git
@@ -44,7 +44,7 @@ npm run docs:check  # the README's component reference is up to date
 
 ## Using it from another project
 
-Build the library, then install the repository folder into your app as a local dependency. npm records it as a `file:` dependency, and the package's own `exports` give you `sayshape`, `sayshape/map`, `sayshape/testing` and `sayshape/model`.
+To use a released version, run `npm install sayshape`. To try your own changes in another app before they're released, build the library, then install the repository folder into your app as a local dependency. npm records it as a `file:` dependency, and the package's own `exports` give you `sayshape`, `sayshape/map`, `sayshape/testing` and `sayshape/model`.
 
 ```bash
 # in the sayshape folder
@@ -54,6 +54,6 @@ npm run build
 npm install ../sayshape
 ```
 
-Rebuild SayShape after pulling changes. When SayShape is published, this becomes an ordinary `npm install`.
+Rebuild SayShape after each change. `npm install sayshape` switches the app back to the released version.
 
 Next: [render your first interface](./first-interface).

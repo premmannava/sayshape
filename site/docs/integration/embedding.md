@@ -5,7 +5,11 @@ description: The SayShape class. Options, methods and events for rendering specs
 
 # Embedding SayShape
 
-> SayShape isn't published to npm yet. Build it and install the repository folder as a local dependency ([Local setup](../getting-started/setup#using-it-from-another-project)). The package name is `sayshape`.
+```bash
+npm install sayshape
+```
+
+It works with any bundler (Vite, webpack, esbuild) and has no runtime dependencies. TypeScript types come with it.
 
 ```ts
 import { SayShape, coreComponents } from "sayshape";

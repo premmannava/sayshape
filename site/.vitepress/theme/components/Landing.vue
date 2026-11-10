@@ -5,8 +5,8 @@
  * drawing saved specs (site/examples/home.ts, checked by test/home.test.ts).
  * No model runs on this site.
  *
- * Claims are kept to what's true today: the MCP server isn't on npm yet, so
- * setup builds it from source; MCP Apps support differs by app; the engine
+ * Claims are kept to what's true today: both packages are on npm (sayshape and
+ * sayshape-mcp, checked from the registry by scripts/verify-pack.mjs); MCP Apps support differs by app; the engine
  * (not the MCP server) is the part with no dependencies; and with host data
  * the AI sees column names and a sample, not the rows.
  */
@@ -92,20 +92,26 @@ const hosts = [
   { name: "Goose and other MCP Apps clients", note: "Support differs between apps and versions" },
 ];
 const chips = ["Claude", "ChatGPT", "VS Code", "Goose"];
-// The MCP server isn't on npm yet: setup builds it from source (checked in CI by the mcp job).
-const build = `git clone https://github.com/premmannava/sayshape.git
-cd sayshape/mcp && npm ci && npm run build`;
-const SERVER = "/full/path/to/sayshape/mcp/dist/server.js";
+// Both are on npm: sayshape (the engine) and sayshape-mcp (the server for chat apps).
+const MCP = "npx -y sayshape-mcp";
+const LIB = "npm install sayshape";
+const install = `# Your AI assistant: add this as an MCP server
+${MCP}
+
+# Your own app
+${LIB}`;
 const setups = [
-  { id: "claude", name: "Claude Desktop", where: "Settings → Developer → Edit Config", code: `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "node",\n      "args": ["${SERVER}"]\n    }\n  }\n}` },
-  { id: "vscode", name: "VS Code", where: "In .vscode/mcp.json", code: `{\n  "servers": {\n    "sayshape": {\n      "type": "stdio",\n      "command": "node",\n      "args": ["${SERVER}"]\n    }\n  }\n}` },
-  { id: "url", name: "Apps that connect to a URL", where: "Run it over HTTP, put it behind HTTPS, then add its /mcp address", code: `node ${SERVER} --http 3001` },
+  { id: "claude", name: "Claude Desktop", where: "Settings → Developer → Edit Config", code: `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}` },
+  { id: "vscode", name: "VS Code", where: "In .vscode/mcp.json", code: `{\n  "servers": {\n    "sayshape": {\n      "type": "stdio",\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}` },
+  { id: "url", name: "Apps that connect to a URL", where: "Run it over HTTP, put it behind HTTPS, then add its /mcp address", code: `${MCP} --http 3001` },
 ];
 const setup = ref(setups[0]!.id);
 const shownSetup = computed(() => setups.find((s) => s.id === setup.value)!);
 const assistantOpen = ref(false);
 const productOpen = ref(false);
-const ownApp = `const ui = new SayShape(canvas, { components: coreComponents });
+const ownApp = `import { SayShape, coreComponents } from "sayshape";
+
+const ui = new SayShape(canvas, { components: coreComponents });
 
 ui.beginStream();
 for await (const text of modelStream) ui.push(text);
@@ -234,10 +240,9 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
           </div>
           <div v-if="assistantOpen" id="assistant-details" class="details">
             <dl class="hosts"><template v-for="h in hosts" :key="h.name"><dt>{{ h.name }}</dt><dd>{{ h.note }}</dd></template></dl>
-            <p class="small">It uses MCP Apps; apps without it, such as Claude Code, show the answer as text. The server isn't on npm yet, so build it from source (Node.js 20 or later):</p>
-            <div class="code"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" @click="copy('build', build)">{{ copied === "build" ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" aria-label="Build commands"><code>{{ build }}</code></pre></div>
+            <p class="small">It uses MCP Apps; apps without it, such as Claude Code, show the answer as text. You need Node.js 20 or later; npx downloads the server the first time.</p>
             <div class="setup-tabs" role="group" aria-label="Where to add it"><button v-for="s in setups" :key="s.id" type="button" :aria-pressed="setup === s.id" @click="setup = s.id">{{ s.name }}</button></div>
-            <p class="small">{{ shownSetup.where }}</p>
+            <p class="small">{{ shownSetup.where }}. Add <code>"--theme", "studio"</code> to the args for the Studio look.</p>
             <div class="code"><div class="code-bar"><span>{{ shownSetup.id === "url" ? "Terminal" : "Settings" }}</span><button type="button" class="copy" @click="copy(shownSetup.id, shownSetup.code)">{{ copied === shownSetup.id ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" :aria-label="`Setup for ${shownSetup.name}`"><code>{{ shownSetup.code }}</code></pre></div>
           </div>
         </article>
@@ -254,8 +259,8 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
             <button type="button" class="link-btn" :aria-expanded="productOpen" aria-controls="product-details" @click="productOpen = !productOpen">{{ productOpen ? "Hide the code" : "See the code" }}</button>
           </div>
           <div v-if="productOpen" id="product-details" class="details">
-            <div class="code"><div class="code-bar"><span>Your app</span></div><pre tabindex="0" role="region" aria-label="Embedding code"><code>{{ ownApp }}</code></pre></div>
-            <p class="small">Not on npm yet: <a :href="href('/docs/getting-started/setup#using-it-from-another-project')">use it from a local build</a>.</p>
+            <div class="code"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" @click="copy('lib', LIB)">{{ copied === "lib" ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" aria-label="Install command"><code>{{ LIB }}</code></pre></div>
+            <div class="code"><div class="code-bar"><span>Your app</span><button type="button" class="copy" @click="copy('app', ownApp)">{{ copied === "app" ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" aria-label="Embedding code"><code>{{ ownApp }}</code></pre></div>
           </div>
         </article>
       </div>
@@ -299,9 +304,9 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
           </div>
         </div>
         <div class="closing-install">
-          <p class="small">Build it from source today (Node.js 20 or later)</p>
-          <div class="code dark"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" @click="copy('closing', build)">{{ copied === "closing" ? "Copied" : "Copy the commands" }}</button></div><pre tabindex="0" role="region" aria-label="Build commands"><code>{{ build }}</code></pre></div>
-          <p class="small">Not on npm yet; a one-line install is planned for the first release.</p>
+          <p class="small">Install from npm (Node.js 20 or later)</p>
+          <div class="code dark"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" @click="copy('closing', install)">{{ copied === "closing" ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" aria-label="Install commands"><code>{{ install }}</code></pre></div>
+          <p class="small">Open source, MIT licensed. <a :href="href('/docs/integration/mcp')">Setup for each app →</a></p>
         </div>
       </div>
     </section>
@@ -433,6 +438,7 @@ h1 { margin: 0; font-size: clamp(50px, 7vw, 104px); line-height: 0.95; letter-sp
 .closing h2 em { color: #ff8a73 }
 .closing-install { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 10px }
 .closing .small { color: #b9bcd6 }
+.closing .small a { color: #f9f7f2; text-decoration: underline; text-underline-offset: 3px }
 .code.dark { background: #23284a }
 .code.dark pre { color: #e4e3f0 }
 

@@ -5,6 +5,12 @@ description: Create a SayShape instance on a canvas, give it a spec, and listen 
 
 # Your first interface
 
+Install it into your app:
+
+```bash
+npm install sayshape
+```
+
 A SayShape interface needs three things: a `<canvas>`, the components the instance understands, and a spec.
 
 ```html
@@ -34,7 +40,7 @@ card
   button "Click me" on=inc:count
 ```
 
-The example above was checked by building a separate Vite app against the repository's `dist/` (see [Local setup](./setup#using-it-from-another-project)).
+This is the same code a clean Vite app runs against the published package in the release checks (`npm run verify:pack`).
 
 ## Listen to it
 

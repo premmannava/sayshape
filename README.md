@@ -67,7 +67,16 @@ Four ideas drive the design:
 
 ## Quick start
 
-Requires Node.js 18 or newer.
+```bash
+npm install sayshape    # the engine, for your own app
+npx -y sayshape-mcp     # SayShape screens in a chat app, as an MCP server (Node.js 20 or later)
+```
+
+Both are on npm: [`sayshape`](https://www.npmjs.com/package/sayshape) and [`sayshape-mcp`](https://www.npmjs.com/package/sayshape-mcp). [Using the engine](#using-the-engine) and [In Claude, ChatGPT and other chat apps](#in-claude-chatgpt-and-other-chat-apps) show what comes next.
+
+### From source
+
+To work on SayShape itself (Node.js 18 or newer):
 
 ```bash
 git clone https://github.com/premmannava/sayshape.git
@@ -104,10 +113,10 @@ The playground streams sample specs as a model would. Once a sample finishes you
 [`mcp/`](mcp/) is an [MCP Apps](https://modelcontextprotocol.io/docs/extensions/apps) server. It lets the model in a chat app that supports MCP Apps (such as Claude, ChatGPT, VS Code or Goose) show SayShape interfaces inside the conversation. The model reads the generated guide once, then calls `show_interface` with a spec. The server checks the spec with the real parser, and the chat app shows a view in which SayShape's engine draws it. Pressing an `emit:` button sends a message back into the conversation.
 
 ```bash
-cd mcp && npm ci && npm run build   # then point your chat app at mcp/dist/server.js
+npx -y sayshape-mcp
 ```
 
-It isn't on npm yet; once it is, `npx -y sayshape-mcp` will replace the build step.
+It's on npm as [`sayshape-mcp`](https://www.npmjs.com/package/sayshape-mcp) (Node.js 20 or later).
 
 Configuration for each chat app is in [`mcp/README.md`](mcp/README.md).
 
@@ -1669,7 +1678,9 @@ pin "Phoenix" lat=33.4484 lon=-112.074 tone=bad size=9 detail="Status: delayed |
 
 ## Using the engine
 
-> SayShape isn't published to npm yet. Until it is, build it with `npm run build` and import from `dist/`, or import from `src/` in your own bundler. The examples use the package name it will have, `sayshape`.
+```bash
+npm install sayshape
+```
 
 ```ts
 import { SayShape, coreComponents } from "sayshape";
