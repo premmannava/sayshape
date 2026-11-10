@@ -186,7 +186,7 @@ Quit Claude Desktop completely (Cmd+Q) and reopen it. If it can't find `npx`, us
 }
 ```
 
-**Apps that connect to a URL** (custom connectors in Claude on the web, ChatGPT developer mode): run it over HTTP and put it behind HTTPS (a reverse proxy or a tunnel). It listens only on 127.0.0.1:
+**Apps that connect to a URL** (custom connectors in Claude on the web, ChatGPT developer mode): run it over HTTP and put it behind HTTPS (a reverse proxy or a tunnel). By default it listens only on 127.0.0.1; to host it for others, see [Host it publicly](#host-it-publicly).
 
 ```bash
 npx -y sayshape-mcp --http 3001    # http://127.0.0.1:3001/mcp
@@ -201,6 +201,32 @@ cd sayshape/mcp && npm ci && npm run build
 ```
 
 Then ask for something visual: *"Show the 2022 World Cup final as a stat card"*, or *"Make me a tip calculator for $86 split three ways"*.
+
+## Host it publicly
+
+To give Claude, ChatGPT and other chat apps a permanent HTTPS address, run the HTTP mode on a host that puts its own HTTPS proxy in front (Render, Fly.io, Railway and the like). There's no sign-in: anyone who has the address can call it, which is fine for `show_interface` and `sayshape_docs`, since they read nothing but the spec they're sent.
+
+Start it with an exact version, never `@latest`, so what runs is what you checked:
+
+```bash
+npx -y sayshape-mcp@0.1.1 --http --host 0.0.0.0 --trust-proxy
+```
+
+| | |
+|---|---|
+| `--http [port]` | Serve MCP on `/mcp`. The port is the flag's, else the `PORT` environment variable (container hosts set it), else 3001. |
+| `--host <address>` | Where to listen. `127.0.0.1` by default; `0.0.0.0` (or `::`) to take requests from the host's proxy. `HOST` from the environment is used when no flag is given, but only if it's an IP address: some machines set `HOST` to their own name. |
+| `--rate-limit <n>` | Calls a minute per client address, in this process (default 300 when listening beyond loopback, off on loopback; 0 turns it off). Each call in a JSON-RPC batch counts. Over the limit, a request gets `429` with `Retry-After`. |
+| `--trust-proxy [hops]` | Count calls by `X-Forwarded-For` instead of the connection's address. Behind a proxy every connection comes from the proxy, so without this everyone shares one count. Each proxy appends the address it received the request from, so the server takes the entry written by the `hops`-th proxy from the end (default 1) and ignores anything the client wrote before it. Set it to exactly the number of proxies in front of the server (your host's docs say how many); more lets clients pick their own address, and never use it without a proxy. |
+| `--allow-public-data` | See below. |
+
+`GET /` answers `200` with one plain line, for the host's health check; it isn't rate limited. Requests have limits too: headers must arrive within 10 seconds and the whole request within 30, bodies are capped at 1 MB and headers at 16 KB and 100 fields, and at most 1,000 connections are open at once.
+
+**What it logs:** one line at startup (the address, port and rate limit), and a note if it ignores `HOST`. Nothing from a request: no specs, no addresses, no errors with request content. Specs come from people's conversations and can hold personal data. `SAYSHAPE_LOG_CLIENT=1` adds one line per connection with the client app's name, version and capabilities, still nothing from the conversation. Your host's own access logs are separate: they usually record each request's address, path and status, so check its settings and your privacy policy.
+
+**Calls come from the chat apps' servers.** When Claude or ChatGPT calls a connector, the request comes from the company's servers, not from each person's computer, so everyone using it through one app may share a few addresses and one count. Watch for `429`s once people use it, and raise `--rate-limit` if they're legitimate.
+
+**Don't use `--data` here.** A public server with `--data` would let anyone, with no sign-in, read every table in the database (`query_data` runs any `SELECT`), fetch other callers' results by their id (`d1`, `d2`…), and stall the server with one slow query. So with `--http` on an address beyond loopback, `--data` is refused unless you also pass `--allow-public-data`; only do that for data that's public anyway, on an address protected some other way. `--mcp-result` is refused with `--http` altogether.
 
 ## Development
 
