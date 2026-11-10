@@ -160,9 +160,7 @@ This is a **source-level integration API**, not yet a published SDK. SayShape do
 
 ## Install
 
-You need Node.js 20 or later.
-
-> **Not on npm yet.** Until it's published, build it from source and point your chat app at `dist/server.js` (see **From source** below), using `"command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js"]` in place of the `npx` lines. Once it's published, the `npx` settings below work as written.
+You need Node.js 20 or later (22.13 or later for `--data`). `npx` downloads the server from npm the first time.
 
 **Claude Desktop:** Settings → Developer → Edit Config, then add:
 

@@ -22,6 +22,15 @@ card
 
 The goal is **generative UI**: a model produces an interface at runtime, in response to a person, and the engine renders it safely and consistently. SayShape isn't trying to replace frameworks for interfaces people build by hand. It's meant to be the layer a model speaks.
 
+## Install
+
+```bash
+npm install sayshape    # the engine, for your own app
+npx -y sayshape-mcp     # for a chat app, as an MCP server
+```
+
+Next: [your first interface](./getting-started/first-interface), or [connect it to your AI](./integration/mcp).
+
 ## Two separate jobs
 
 | | Who does it | What it produces |

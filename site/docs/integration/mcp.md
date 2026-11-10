@@ -28,26 +28,7 @@ Coding agents such as Claude Code, Codex and Antigravity call the server's tools
 
 ## Install
 
-You need Node.js 20 or later. The server isn't on npm yet, so for now build it from the repository:
-
-```bash
-git clone https://github.com/premmannava/sayshape.git
-cd sayshape/mcp
-npm ci
-npm run build
-```
-
-Then add it to your chat app's MCP settings, with the full path to `mcp/dist/server.js`. In Claude Desktop that's Settings → Developer → Edit Config:
-
-```json
-{
-  "mcpServers": {
-    "sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js"] }
-  }
-}
-```
-
-Once it's published to npm, this shorter setting will work instead:
+The server is on npm as [`sayshape-mcp`](https://www.npmjs.com/package/sayshape-mcp). You need Node.js 20 or later; `npx` downloads it the first time. Add it to your chat app's MCP settings. In Claude Desktop that's Settings → Developer → Edit Config:
 
 ```json
 {
@@ -57,7 +38,42 @@ Once it's published to npm, this shorter setting will work instead:
 }
 ```
 
-Then restart the app. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#readme) has the settings for VS Code and for apps that connect to a URL, and how to run it from source.
+In VS Code, put it in `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "sayshape": { "type": "stdio", "command": "npx", "args": ["-y", "sayshape-mcp"] }
+  }
+}
+```
+
+For apps that connect to a URL (Claude on the web, ChatGPT), run it over HTTP, put it behind HTTPS and add its `/mcp` address:
+
+```bash
+npx -y sayshape-mcp --http 3001
+```
+
+Then restart the app.
+
+### Options
+
+Add them after `"sayshape-mcp"` in `args`:
+
+| Option | What it does |
+|---|---|
+| `--theme studio` | The look interfaces use: `teal` (default), `purple`, `blue`, `neutral` or `studio` |
+| `--theme-picker` | A theme selector in the interface's toolbar |
+| `--scene` | Experimental scenes, off unless you ask for them |
+| `--data db.sqlite` | Answers from a SQLite database (needs Node.js 22.13 or later) |
+
+### If it doesn't start
+
+- **Check Node:** run `node -v` in a terminal. It needs 20 or later, and 22.13 or later for `--data`.
+- **`npx` not found (common with nvm):** chat apps don't read your shell's settings. Use the full path from `which npx` as `"command"`.
+- **Still nothing:** run `npx -y sayshape-mcp --help` in a terminal. It should print the options. Apps also keep MCP logs (Claude Desktop: Settings → Developer).
+
+The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#readme) has every option and how to run it from source.
 
 ## Compared with the website
 
