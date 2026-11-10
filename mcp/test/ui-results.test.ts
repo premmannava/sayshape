@@ -48,4 +48,18 @@ describe("MCP Apps clients", () => {
     const before = readFileSync(FIXTURE, "utf8");
     expect(JSON.stringify(await results(UI_CLIENT), null, 2) + "\n").toBe(before);
   });
+
+  it("see the tools, the docs and emit: exactly as before: test/fixtures/ui-tools.json, recorded from main", async () => {
+    const recorded = JSON.parse(readFileSync(new URL("./fixtures/ui-tools.json", import.meta.url), "utf8")) as Record<string, unknown>;
+    const EMIT_SPEC = 'state n=1\ncard\n  text "Pick one" style=title\n  button "Plan this trip" on=set:n:2;emit:plan_trip:{n}\n  text "Read [the guide](https://example.com/guide)" rich=true\n';
+    for (const [name, store] of [["plain", undefined], ["datasets", new McpResultStore()]] as const) {
+      const server = createServer({ uiHtml: () => "<!doctype html>", mcpResults: store });
+      const client = new Client({ name: "test", version: "1.0.0" }, UI_CLIENT);
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await Promise.all([server.connect(a), client.connect(b)]);
+      const now = { tools: (await client.listTools()).tools, docs: await client.callTool({ name: "sayshape_docs", arguments: {} }), emit: await client.callTool({ name: "show_interface", arguments: { spec: EMIT_SPEC } }) };
+      expect(JSON.stringify(now, null, 2)).toBe(JSON.stringify(recorded[name], null, 2));
+      await client.close();
+    }
+  });
 });

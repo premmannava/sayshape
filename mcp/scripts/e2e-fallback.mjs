@@ -2,7 +2,8 @@
 // MCP Apps views: a client that announces no MCP Apps support asks for an
 // interface, the page from its result is saved as a file and opened in
 // Chromium, and it must paint, follow light, dark and data-theme, fit 400px
-// with no sideways scrolling, and keep a hostile spec inert.
+// with no sideways scrolling, keep a hostile spec inert, and open a pressed
+// link in a new tab. A spec with emit: gets no page until it's removed.
 //
 // The page loads the engine from jsDelivr at PAGE_ENGINE_VERSION. Here those
 // requests are answered with the engine built from this repository's src/
@@ -49,7 +50,8 @@ card
   text "Sales by month" style=title
   text "</script><script>window.injected = 1; alert(1)</script><!-- <img src=x onerror=alert(2)>" tone=muted
   chart "Revenue (k$)" kind=bar items=sales x=m y=v
-  button "Send" on=emit:sent
+  text "Read [the notes](https://example.com/notes) on how it was counted." rich=true
+  button "Add May" on=add:sales:{m: "May", v: 190}
 `;
 const MAP = `card
   text "Offices" style=title
@@ -67,6 +69,15 @@ async function pageFor(spec, title) {
 }
 
 const pages = { chart: await pageFor(CHART, "Sales"), map: await pageFor(MAP, "Offices") };
+
+// emit: has no chat to reach from a page: the model is asked to remove it first.
+{
+  const tools = (await client.listTools()).tools;
+  check(/emit: can't reach you: don't use it/.test(tools.find((t) => t.name === "show_interface")?.description ?? ""), "the quick start tells a text-only client not to use emit:");
+  const r = await client.callTool({ name: "show_interface", arguments: { spec: 'card\n  button "Send" on=emit:sent' } });
+  const text = r.content?.[0]?.text ?? "";
+  check(r.structuredContent?.page === false && /line 2 \(error\): emit: can't reach you/.test(text) && !/```/.test(text), "a spec with emit: gets it back to fix, with no page");
+}
 const files = {};
 for (const [name, html] of Object.entries(pages)) {
   files[name] = join(out, `fallback-${name}.html`);
@@ -152,6 +163,25 @@ try {
     await painted(page, rgb(LIGHT.surface));
     check((await background(page)) === LIGHT.surface, `data-theme="light" over a dark system turns it light (${await background(page)})`);
     check(problems.length === 0, `dark: no errors or dialogs${problems.length ? `: ${problems.join("; ")}` : ""}`);
+    await page.close();
+  }
+  // A link pressed in rich text opens in a new tab: Tab to it (the screen reader mirror's link) and press Enter.
+  {
+    const { page, problems } = await open(files.chart, { width: 640 });
+    await painted(page, rgb(LIGHT.surface));
+    await page.context().route("https://example.com/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>notes</title>" }));
+    const opened = page.context().waitForEvent("page", { timeout: 15000 })
+      .then(async (p) => { await p.waitForURL(/^https:/, { timeout: 10000 }).catch(() => {}); return p.url(); })
+      .catch((e) => `nothing opened: ${e.message.split("\n")[0]}`);
+    await page.locator("canvas").focus();
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press("Tab");
+      if (await page.evaluate(() => document.activeElement?.getAttribute("role") === "link")) break;
+    }
+    await page.keyboard.press("Enter");
+    const url = await opened;
+    check(url === "https://example.com/notes", `a pressed link opens in a new tab (${url})`);
+    check(problems.length === 0, `link: no errors${problems.length ? `: ${problems.join("; ")}` : ""}`);
     await page.close();
   }
   // The map's own script.

@@ -41,7 +41,10 @@ const MAX_BODY_BYTES = 1_000_000;
 /** SAYSHAPE_LOG_CLIENT: say what the client announced, once it has connected. */
 function logClient(server: McpServer): McpServer {
   if (!process.env.SAYSHAPE_LOG_CLIENT) return server;
+  // createServer sets its own oninitialized (the text-only description); keep it.
+  const before = server.server.oninitialized;
   server.server.oninitialized = () => {
+    before?.();
     const client = server.server.getClientVersion();
     const caps = JSON.stringify(server.server.getClientCapabilities() ?? {});
     console.error(`SayShape: ${client?.name ?? "a client"} ${client?.version ?? ""} connected; ${cannotDrawViews(server) ? "no MCP Apps, so show_interface gives a page" : "draws MCP Apps views"}; capabilities ${caps}`);

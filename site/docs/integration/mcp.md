@@ -24,7 +24,7 @@ Start the server with `--data path/to/database.db` (SQLite, opened read-only) an
 
 ## In chat apps that can't draw interfaces
 
-Coding agents such as Claude Code, Codex and Antigravity call the server's tools but can't show MCP Apps views. For them, `show_interface` returns a small HTML page that draws the interface with the engine from a CDN, and tells the model to publish it as a page or save it as a file for you to open in a browser. Buttons that send something back to the chat (`emit:`) don't work there, Save image and Copy text aren't on it, it needs internet access, and interfaces that load database rows can't be shown. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#in-chat-apps-that-cant-draw-interfaces) has the details.
+Coding agents such as Claude Code, Codex and Antigravity call the server's tools but can't show MCP Apps views. For them, `show_interface` returns a small HTML page that draws the interface with the engine from a CDN, and tells the model to publish it as a page or save it as a file for you to open in a browser. Nothing on the page can send something back to the chat, so the model is told not to use `emit:` there (links in the text open in a new tab instead); Save image and Copy text aren't on it, it needs internet access, and interfaces that load database rows can't be shown. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#in-chat-apps-that-cant-draw-interfaces) has the details.
 
 ## Install
 

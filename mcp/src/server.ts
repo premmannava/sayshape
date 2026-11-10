@@ -44,6 +44,8 @@ import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PIC
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
+import { parseActions } from "../../src/actions";
+import type { SayShapeNode } from "../../src/types";
 import { QueryError, summarize, type DataSource } from "./data";
 import { listMcpDatasets, type McpResultStore } from "./mcp-results";
 import { fallbackPage, fenced, PAGE_DATASETS_TEXT, PAGE_REPEAT_TEXT, PAGE_TEXT, pageFixLead } from "./fallback";
@@ -135,7 +137,7 @@ function topics(withData: boolean, withMcp = false): Record<string, string> {
  * rules for writing into a chat, and how to ask for more. Simple interfaces
  * need nothing else.
  */
-export function quickStart(withData = false, withMcp = false): string {
+export function quickStart(withData = false, withMcp = false, textOnly = false): string {
   return [
     "QUICK START",
     // The guide's "not JavaScript" line is left out to keep this short: show_interface returns
@@ -144,7 +146,9 @@ export function quickStart(withData = false, withMcp = false): string {
     sectionText("compact", "format").replace(/^FORMAT\n/, "").replace(/^- Not JavaScript:.*\n/m, "").replace(/\n- # starts a comment\.$/m, ""),
     "- Text and props show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
     "- Any element takes tip=\"…\": a short explanation shown on hover, focus or a tap: for a term or a number some people won't know, instead of more words on screen.",
-    "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
+    textOnly
+      ? `- ${NO_EMIT}`
+      : "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue'); within a budget: filter(rows, 'price', {to: budget})`,
     `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
     // The same heading as the guides', in fewer words: this text goes out with every call.
@@ -171,7 +175,7 @@ function arrivesWithParent(c: ComponentDef): boolean {
 }
 
 /** Docs for exactly what was asked for, plus what it depends on. */
-export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false): string {
+export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false): string {
   const parts: string[] = [];
   const t = topics(withData, withMcp);
   if (elements.length) {
@@ -185,7 +189,7 @@ export function docsText(elements: readonly string[], topicNames: readonly strin
     const body = t[name];
     parts.push(body ? body : `No topic called ${name}. Topics: ${Object.keys(t).join(", ")}.`);
   }
-  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp);
+  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp, textOnly);
 }
 
 /** The elements on the lines that went wrong, so their docs can go back with the problems. */
@@ -197,6 +201,37 @@ function elementsOnLines(spec: string, diagnostics: readonly Diagnostic[], max =
     if (type && registry.get(type) && !out.includes(type)) out.push(type);
     if (out.length >= max) break;
   }
+  return out;
+}
+
+/**
+ * For clients that can't draw views, where interfaces are shown as a page
+ * outside the chat: emit: has no conversation to reach from there, so models
+ * are told not to use it, and a spec that does gets it back to fix.
+ */
+export const NO_EMIT =
+  "This chat app shows interfaces as a page outside the chat, so emit: can't reach you: don't use it. " +
+  "Buttons can still change the page (set:, inc:, go:); ask the person to reply in the chat for anything you need back.";
+const EMIT_PROBLEM =
+  "emit: can't reach you from this chat app, which shows interfaces as a page outside the chat. " +
+  "Remove the emit: part and keep any set:, go: or notify: so the button still does something on the page; ask the person to reply in the chat for anything you need back.";
+
+/**
+ * The lines whose on= sends an emit:, as problems to fix (text-only clients
+ * only). A link pressed in rich text isn't one: the page opens it itself.
+ */
+export function emitProblems(spec: string, hostNames: readonly string[] = []): Diagnostic[] {
+  const out: Diagnostic[] = [];
+  const walk = (node: SayShapeNode) => {
+    const on = node.props.on;
+    if (on) {
+      const parsed = parseActions(on);
+      const emits = "actions" in parsed ? parsed.actions.some((a) => a.op === "emit") : /(^|;)\s*emit:/.test(on);
+      if (emits) out.push({ line: node.line, severity: "error", message: EMIT_PROBLEM });
+    }
+    node.children.forEach(walk);
+  };
+  walk(parse(spec, registry, { knownNames: hostNames }).root);
   return out;
 }
 
@@ -354,23 +389,30 @@ export function createServer(opts: ServerOptions): McpServer {
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ elements, topics: names }) => text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults)),
+    async ({ elements, topics: names }) => text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults, cannotDrawViews(server))),
   );
 
-  registerAppTool(
+  const showDescription = (textOnly: boolean) =>
+    (textOnly
+      ? "Draws an interactive interface from a spec you write, with the SayShape engine. This chat app can't show it in the conversation, " +
+        "so when the spec has nothing to fix the result gives you a small web page that draws it, to publish or save for the person. " +
+        "Use it for every visual or interactive answer (charts, tables, dashboards, stat cards, forms, calculators, trackers) " +
+        "rather than writing HTML, React, SVG or chart code. Specs can't run code or choose colors. "
+      : "Shows an interactive interface inside the conversation, drawn by the SayShape engine from a spec you write. " +
+        "Use it for every visual or interactive answer (charts, tables, dashboards, stat cards, forms, calculators, trackers) " +
+        "rather than writing HTML, React, SVG or chart code, or making an artifact. Specs can't run code or choose colors. ") +
+    "The result lists lines the parser skipped, with the docs for those elements, so you can fix them." +
+    (data ? " To show rows from the database, pass data={\"name\": \"d1\"} with a dataset id from query_data and use that name in the spec (items=name)." : "") +
+    (mcpResults ? " For imported MCP results, call list_datasets then pass the selected id in data. The model never needs the full rows." : "") +
+    "\n\n" +
+    quickStart(!!data, !!mcpResults, textOnly);
+
+  const showTool = registerAppTool(
     server,
     "show_interface",
     {
       title: "Show an interface",
-      description:
-        "Shows an interactive interface inside the conversation, drawn by the SayShape engine from a spec you write. " +
-        "Use it for every visual or interactive answer (charts, tables, dashboards, stat cards, forms, calculators, trackers) " +
-        "rather than writing HTML, React, SVG or chart code, or making an artifact. Specs can't run code or choose colors. " +
-        "The result lists lines the parser skipped, with the docs for those elements, so you can fix them." +
-        (data ? " To show rows from the database, pass data={\"name\": \"d1\"} with a dataset id from query_data and use that name in the spec (items=name)." : "") +
-        (mcpResults ? " For imported MCP results, call list_datasets then pass the selected id in data. The model never needs the full rows." : "") +
-        "\n\n" +
-        quickStart(!!data, !!mcpResults),
+      description: showDescription(false),
       inputSchema: {
         spec: z.string().min(1).max(MAX_SPEC_CHARS).describe("The SayShape spec: plain lines, no Markdown fences."),
         title: z.string().max(120).optional().describe("A short name for the interface, e.g. 'Paris 2024 medal table'."),
@@ -399,7 +441,10 @@ export function createServer(opts: ServerOptions): McpServer {
         datasets[name] = { id, rows: d.rows.length };
       }
       const names = Object.keys(datasets);
-      const check = checkSpec(spec, names);
+      const textOnly = cannotDrawViews(server);
+      const parsed = checkSpec(spec, names);
+      // On a page outside the chat emit: goes nowhere, so text-only clients fix it first. Clients that draw views never see this.
+      const check = textOnly ? { ...parsed, errors: [...parsed.errors, ...emitProblems(spec, names)].sort((a, b) => a.line - b.line) } : parsed;
       // A state line would replace the rows the interface loads, so point it out.
       const declared = names.filter((n) => new RegExp(`^state\\b[^\\n]*\\b${n}=`, "m").test(spec));
       const notes = [
@@ -411,7 +456,6 @@ export function createServer(opts: ServerOptions): McpServer {
       const key = interfaceKey(spec, wanted);
       const repeat = toFix === 0 && lastGood !== null && lastGood.key === key && now() - lastGood.at < REPEAT_WINDOW_MS;
       if (toFix === 0) lastGood = { key, at: now() };
-      const textOnly = cannotDrawViews(server);
       // Only text-only clients get this field, so results for clients that draw views stay as they were.
       const page = (shown: boolean) => (textOnly ? { page: shown } : {});
       const counts = { datasets, title: title ?? null, errors: check.errors.length, warnings: check.warnings.length, toFix };
@@ -425,7 +469,8 @@ export function createServer(opts: ServerOptions): McpServer {
           structuredContent: { datasets, title: title ?? null, errors: 0, warnings: check.warnings.length, toFix: 0, repeat: true, diagnostics: [], ...page(false) },
         };
       }
-      const failing = elementsOnLines(spec, [...check.errors, ...check.warnings].filter((d) => !isHarmless(d)));
+      // Docs for the lines that went wrong; an emit: line needs no element docs to fix.
+      const failing = elementsOnLines(spec, [...parsed.errors, ...parsed.warnings].filter((d) => !isHarmless(d)));
       if (failing.length) notes.push(`\nDocs for ${failing.join(", ")}:\n${elementGuide(registry, failing).text}`);
       const withPage = textOnly && toFix === 0;
       if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn })));
@@ -444,6 +489,13 @@ export function createServer(opts: ServerOptions): McpServer {
       };
     },
   );
+
+  // Clients ask for the tool list after they connect, so one that can't draw views gets the text-only description.
+  const connected = server.server.oninitialized;
+  server.server.oninitialized = () => {
+    connected?.();
+    if (cannotDrawViews(server)) showTool.description = showDescription(true);
+  };
 
   if (data) {
     server.registerTool(

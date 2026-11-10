@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { runInNewContext } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { cannotDrawViews, createServer, REPEAT_TEXT } from "../src/server";
+import { cannotDrawViews, createServer, NO_EMIT, quickStart, REPEAT_TEXT } from "../src/server";
 import { McpResultStore } from "../src/mcp-results";
-import { engineScriptUrl, fallbackPage, fenced, PAGE_DATASETS_TEXT, PAGE_ENGINE_VERSION, PAGE_REPEAT_TEXT, PAGE_TEXT, scriptJson, usesMap } from "../src/fallback";
+import { engineScriptUrl, fallbackPage, fenced, NOTHING_SENT, PAGE_DATASETS_TEXT, PAGE_ENGINE_VERSION, PAGE_REPEAT_TEXT, PAGE_TEXT, scriptJson, usesMap } from "../src/fallback";
 import { lightTheme, darkTheme } from "../../src/theme";
 import { UI_CLIENT } from "./clients";
 
@@ -34,8 +34,10 @@ const pageIn = (r: Result) => /(`{3,})html\n([\s\S]*?)\1/.exec(r.content[0]!.tex
 function runPage(html: string, root: { theme?: string; dark?: boolean } = {}) {
   const scripts = [...html.matchAll(/<script(?: src="([^"]*)")?>([\s\S]*?)<\/script>/g)];
   const inline = scripts.filter((m) => !m[1]).map((m) => m[2]!);
-  const drawn: { spec?: string; themes: string[]; components?: unknown[] } = { themes: [] };
+  const drawn: { spec?: string; themes: string[]; components?: unknown[]; notes: string[]; opened: unknown[][]; act?: (a: { name: string; value?: unknown }) => void } = { themes: [], notes: [], opened: [] };
   class SayShape {
+    on(event: string, fn: (a: { name: string; value?: unknown }) => void) { if (event === "action") drawn.act = fn; }
+    notify(text: string) { drawn.notes.push(text); }
     constructor(_canvas: unknown, opts: { components: unknown[]; theme: { name: string } }) {
       drawn.components = opts.components;
       drawn.themes.push(opts.theme.name);
@@ -49,12 +51,13 @@ function runPage(html: string, root: { theme?: string; dark?: boolean } = {}) {
     sayshape: { SayShape, coreComponents: ["core"], sceneComponents: ["scene"], lightTheme, darkTheme },
     sayshapeMap: { mapComponents: ["map"] },
     matchMedia: () => ({ matches: !!root.dark, addEventListener() {} }),
+    open: (...args: unknown[]) => { drawn.opened.push(args); return null; },
   };
   const document = {
     documentElement: { getAttribute: () => root.theme ?? null, style: { setProperty: (k: string, v: string) => style.set(k, v) } },
     getElementById: () => element,
   };
-  for (const code of inline) runInNewContext(code, { window, document });
+  for (const code of inline) runInNewContext(code, { window, document, URL });
   return { inline, external: scripts.filter((m) => m[1]).map((m) => m[1]!), drawn, style };
 }
 
@@ -170,5 +173,60 @@ describe("the page for chat apps that can't draw views", () => {
     expect(r.structuredContent).not.toHaveProperty("page");
     // The stateless HTTP mode makes a server per request, which never sees initialize.
     expect(cannotDrawViews(createServer({ uiHtml: () => "" }))).toBe(false);
+  });
+
+  it("opens a pressed https link in a new tab, ignores any other address, and says when an emit: can't be sent", () => {
+    const { drawn } = runPage(fallbackPage({ spec: 'text "Read [the guide](https://example.com/guide)" rich=true' }));
+    drawn.act!({ name: "link", value: "https://example.com/guide" });
+    expect(drawn.opened).toEqual([["https://example.com/guide", "_blank", "noopener,noreferrer"]]);
+    for (const value of ["javascript:alert(1)", "http://example.com", "data:text/html,hi", "not a url", 42]) drawn.act!({ name: "link", value });
+    expect(drawn.opened).toHaveLength(1);
+    expect(drawn.notes).toEqual([]);
+    drawn.act!({ name: "plan_trip", value: 3 });
+    expect(drawn.notes).toEqual([NOTHING_SENT]);
+  });
+});
+
+describe("emit: in chat apps that can't draw views", () => {
+  const EMIT = 'state n=1\ncard\n  text "Pick one" style=title\n  button "Plan this trip" on=set:n:2;emit:plan_trip:{n}\n  button "Done" on=emit:done\n  button "More" on=inc:n\n';
+
+  it("isn't in the quick start they're given; ask the person to reply in the chat instead", async () => {
+    const { client } = await connect();
+    const show = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
+    expect(show.description).toContain(NO_EMIT);
+    expect(show.description).toContain(quickStart(false, true, true));
+    expect(show.description).not.toMatch(/sends a choice to you|inside the conversation|making an artifact/);
+    const docs = (await client.callTool({ name: "sayshape_docs", arguments: {} })) as unknown as Result;
+    expect(docs.content[0]!.text).toBe(quickStart(false, true, true));
+  });
+
+  it("is a problem to fix, with no page, on each line that uses it, chained or not", async () => {
+    const { client } = await connect();
+    const r = await show(client, { spec: EMIT });
+    const text = r.content[0]!.text;
+    expect(pageIn(r)).toBeUndefined();
+    expect(text).toMatch(/^2 problems leave part of this interface wrong or missing, and this chat app can't draw interfaces/);
+    expect(text).toMatch(/line 4 \(error\): emit: can't reach you from this chat app[^\n]*keep any set:, go: or notify:/);
+    expect(text).toMatch(/line 5 \(error\): emit: can't reach you/);
+    expect(text).not.toMatch(/line 6/);
+    // No element docs for it: the fix is in the action, not the element.
+    expect(text).not.toMatch(/Docs for/);
+    expect(r.structuredContent).toMatchObject({ toFix: 2, page: false });
+  });
+
+  it("gives the page once it's gone, and a rich-text link isn't an emit: to remove", async () => {
+    const { client } = await connect();
+    const spec = 'state n=1\ncard\n  button "Plan this trip" on=set:n:2\n  text "Read [the guide](https://example.com/guide)" rich=true\n';
+    const r = await show(client, { spec });
+    expect(pageIn(r)).toBe(fallbackPage({ spec }));
+  });
+
+  it("changes nothing for clients that draw views", async () => {
+    const { client } = await connect(UI_CLIENT);
+    const r = await show(client, { spec: EMIT });
+    expect(r.content[0]!.text).toMatch(/^The interface is showing in the conversation, with no problems/);
+    const show2 = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
+    expect(show2.description).not.toContain(NO_EMIT);
+    expect(show2.description).toContain(quickStart(false, true));
   });
 });

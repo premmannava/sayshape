@@ -117,6 +117,18 @@ ${map ? `<script src="${engineScriptUrl("sayshape-map.global.js", version)}"></s
   apply();
   if (media && media.addEventListener) media.addEventListener("change", apply);
   if (window.MutationObserver) new MutationObserver(apply).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+  // This page is the host. A link the person presses in rich text (emit:link) opens in a new tab,
+  // https only, as any link on a web page would. Any other emit: has no chat to reach; the server
+  // asks for those to be removed, so this note is only a safety net.
+  ui.on("action", function (a) {
+    if (a.name === "link") {
+      var url = null;
+      try { url = new URL(String(a.value)); } catch (e) {}
+      if (url && url.protocol === "https:") window.open(url.href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    ui.notify(${scriptJson(NOTHING_SENT)});
+  });
   ui.setSpec(spec);
 })();
 </script>
@@ -124,6 +136,9 @@ ${map ? `<script src="${engineScriptUrl("sayshape-map.global.js", version)}"></s
 </html>
 `;
 }
+
+/** Shown on the page if an emit: action fires there anyway. */
+export const NOTHING_SENT = "This page can't send that back to the chat. Tell the assistant in the chat instead.";
 
 /** What the model is told to do with the page. It names no product or tool: it's the same for every chat app. */
 export const PAGE_TEXT =

@@ -61,9 +61,16 @@ Coding agents and other text-only clients (Claude Code, Codex, Antigravity and o
 
 The page is a few kilobytes plus the spec: a canvas, the engine loaded from jsDelivr (`sayshape@<version>/dist/sayshape.global.js`, and the map's own script when the spec has a map), and the spec embedded as JSON with `<` escaped, so nothing in it can end the script. It follows light and dark mode, and a `data-theme="light"` or `"dark"` on its root element; its background is the engine theme's own; and it fits a phone with no sideways scrolling.
 
+A page outside the chat has no conversation to send `emit:` actions to, so for these clients only:
+
+- **The model is told not to use `emit:`.** Their quick start (in `show_interface`'s description and `sayshape_docs` with nothing named) says to leave it out and ask the person to reply in the chat instead.
+- **A spec with `emit:` gets it back to fix**, line by line, with no page until it's gone. Buttons can keep `set:`, `go:` or `notify:`, so they still do something on the page. Everything else in the interface (state, controls, charts, screens) works.
+- **Links pressed in `rich=true` text open in a new tab** (https only). In the chat they're sent to the model as `emit:link`; on the page, the page is the host, so it opens them as any web page would.
+
+Clients that draw views see none of this: the same descriptions, the same docs and the same results as before.
+
 What doesn't work there:
 
-- **Buttons with `on=emit:`** do nothing: a page outside the chat has no conversation to send them to. Everything else in the interface (state, controls, charts, screens) works.
 - **Save image and Copy text** aren't on the page.
 - **It needs internet access** to load the engine from the CDN; without it, or before the pinned version is on the CDN, the page names the engine version that didn't load.
 - **Interfaces that load datasets** (`--data`, `--mcp-result`) can't be shown: the page has no way to fetch rows, and the rows never go through the conversation. The model is told so and answers in text.
