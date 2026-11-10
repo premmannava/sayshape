@@ -22,6 +22,10 @@ Nothing else leaves an interface. A spec can't run code, open links or make requ
 
 Start the server with `--data path/to/database.db` (SQLite, opened read-only) and the model gets three more tools. It looks at the tables (`describe_data`), runs one read-only `SELECT` (`query_data`), and shows the result by passing the dataset to `show_interface`. The model sees only the result's columns and a few sample rows. The interface fetches the rows itself, so the numbers on screen come straight from the database and never pass through the model. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#readme) has the details.
 
+## In chat apps that can't draw interfaces
+
+Coding agents such as Claude Code, Codex and Antigravity call the server's tools but can't show MCP Apps views. For them, `show_interface` returns a small HTML page that draws the interface with the engine from a CDN, and tells the model to publish it as a page or save it as a file for you to open in a browser. Buttons that send something back to the chat (`emit:`) don't work there, Save image and Copy text aren't on it, it needs internet access, and interfaces that load database rows can't be shown. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#in-chat-apps-that-cant-draw-interfaces) has the details.
+
 ## Install
 
 You need Node.js 20 or later. The server isn't on npm yet, so for now build it from the repository:

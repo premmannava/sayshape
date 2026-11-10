@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { UI_CLIENT } from "./clients";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/server";
 import { MAX_ROWS, MAX_VALUES } from "../src/data";
@@ -82,7 +83,7 @@ describe("MCP result normalization", () => {
 describe("scoped MCP datasets over the existing app-only protocol", () => {
   async function connect(store: McpResultStore) {
     const server = createServer({ uiHtml: () => "<!doctype html>", mcpResults: store });
-    const client = new Client({ name: "dataset-test", version: "1" });
+    const client = new Client({ name: "dataset-test", version: "1" }, UI_CLIENT);
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(a), client.connect(b)]);
     return { client, server };

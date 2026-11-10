@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { UI_CLIENT } from "./clients";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
 
 async function connect(now?: () => number) {
   const server = createServer({ uiHtml: () => "<!doctype html><title>view</title>", now });
-  const client = new Client({ name: "test", version: "1.0.0" });
+  const client = new Client({ name: "test", version: "1.0.0" }, UI_CLIENT);
   const [a, b] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(a), client.connect(b)]);
   return client;
@@ -179,7 +180,7 @@ map bind=selected
 
   it("passes the view the flags it was started with", async () => {
     const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: true, theme: "neutral", saveImage: false, copyText: false } });
-    const client = new Client({ name: "test", version: "1.0.0" });
+    const client = new Client({ name: "test", version: "1.0.0" }, UI_CLIENT);
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(a), client.connect(b)]);
     const { contents } = await client.readResource({ uri: UI_URI });
@@ -191,7 +192,7 @@ map bind=selected
 
     it("asks the chat app to allow images from just those hosts, and tells the view", async () => {
       const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: false, theme: "teal", saveImage: true, copyText: true, imageHosts: HOSTS } });
-      const client = new Client({ name: "test", version: "1.0.0" });
+      const client = new Client({ name: "test", version: "1.0.0" }, UI_CLIENT);
       const [a, b] = InMemoryTransport.createLinkedPair();
       await Promise.all([server.connect(a), client.connect(b)]);
       const { contents } = await client.readResource({ uri: UI_URI });

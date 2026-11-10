@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { UI_CLIENT } from "./clients";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer, checkSpec, setScenes } from "../src/server";
 
@@ -28,7 +29,7 @@ describe("scenes in the MCP server", () => {
 
     const server = createServer({ uiHtml: () => "<html><head></head><body></body></html>" });
     const [a, b] = InMemoryTransport.createLinkedPair();
-    const client = new Client({ name: "test", version: "1" });
+    const client = new Client({ name: "test", version: "1" }, UI_CLIENT);
     await Promise.all([server.connect(a), client.connect(b)]);
     const r = await client.callTool({ name: "show_interface", arguments: { spec: SPEC } });
     expect(textOf(r)).toMatch(/^The interface is showing, but its drawing has problems the person can see/);

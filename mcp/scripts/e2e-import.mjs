@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { EXTENSION_ID, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 // SAYSHAPE_MCP_DIST points the check at another build, such as the one inside an installed npm package.
 const dist = process.env.SAYSHAPE_MCP_DIST ?? fileURLToPath(new URL("../dist/", import.meta.url));
@@ -22,7 +23,7 @@ const transport = new StdioClientTransport({
   args: [serverPath, "--mcp-result", samplePath],
   stderr: "pipe",
 });
-const client = new Client({ name: "sayshape-import-e2e", version: "1.0.0" });
+const client = new Client({ name: "sayshape-import-e2e", version: "1.0.0" }, { capabilities: { extensions: { [EXTENSION_ID]: { mimeTypes: [RESOURCE_MIME_TYPE] } } } });
 await client.connect(transport);
 try {
   const tools = (await client.listTools()).tools;

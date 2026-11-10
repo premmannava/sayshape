@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { createRequire } from "node:module";
 import type { DatabaseSync as Db } from "node:sqlite";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { UI_CLIENT } from "./clients";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { checkSql, DataSource, MAX_ROWS, QueryError, summarize } from "../src/data";
 import { createServer } from "../src/server";
@@ -102,7 +103,7 @@ describe("DataSource", () => {
 describe("the data tools", () => {
   async function connect(withData = true) {
     const server = createServer({ uiHtml: () => "<!doctype html>", data: withData ? data : undefined });
-    const client = new Client({ name: "test", version: "1.0.0" });
+    const client = new Client({ name: "test", version: "1.0.0" }, UI_CLIENT);
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(a), client.connect(b)]);
     return client;

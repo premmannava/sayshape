@@ -14,6 +14,7 @@ import { build } from "vite";
 import { chromium } from "@playwright/test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { EXTENSION_ID, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 
 const here = (p) => fileURLToPath(new URL(p, import.meta.url));
 const out = here("../e2e-output/");
@@ -43,7 +44,7 @@ const check = (ok, what) => { console.log(`${ok ? "✓" : "✗"} ${what}`); if (
 const textOf = (r) => r.content?.[0]?.text ?? "";
 
 // The "model": an MCP client talking to the built server over stdio.
-const client = new Client({ name: "e2e-model", version: "1.0.0" });
+const client = new Client({ name: "e2e-model", version: "1.0.0" }, { capabilities: { extensions: { [EXTENSION_ID]: { mimeTypes: [RESOURCE_MIME_TYPE] } } } });
 await client.connect(new StdioClientTransport({ command: process.execPath, args: [join(dist, "server.js"), "--data", dbPath], stderr: "ignore" }));
 const described = textOf(await client.callTool({ name: "describe_data", arguments: {} }));
 check(/Invoice/.test(described), "describe_data lists the tables");
