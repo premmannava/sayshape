@@ -64,7 +64,7 @@ async function pageFor(spec, title) {
   const r = await client.callTool({ name: "show_interface", arguments: { spec, title } });
   const text = r.content?.[0]?.text ?? "";
   const html = /(`{3,})html\n([\s\S]*?)\1/.exec(text)?.[2];
-  check(!!html && r.structuredContent?.page === true, `${title}: the text result carries a page`);
+  check(!!html && r.structuredContent === undefined, `${title}: the text result carries a page`);
   return html ?? "";
 }
 
@@ -76,7 +76,7 @@ const pages = { chart: await pageFor(CHART, "Sales"), map: await pageFor(MAP, "O
   check(/emit: can't reach you: don't use it/.test(tools.find((t) => t.name === "show_interface")?.description ?? ""), "the quick start tells a text-only client not to use emit:");
   const r = await client.callTool({ name: "show_interface", arguments: { spec: 'card\n  button "Send" on=emit:sent' } });
   const text = r.content?.[0]?.text ?? "";
-  check(r.structuredContent?.page === false && /line 2 \(error\): emit: can't reach you/.test(text) && !/```/.test(text), "a spec with emit: gets it back to fix, with no page");
+  check(r.structuredContent === undefined && /line 2 \(error\): emit: can't reach you/.test(text) && !/```/.test(text), "a spec with emit: gets it back to fix, with no page");
 }
 const files = {};
 for (const [name, html] of Object.entries(pages)) {
