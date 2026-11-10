@@ -145,8 +145,9 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
         run: |
           version="${{ needs.verify.outputs.version }}"
-          npm publish "tarballs/sayshape-$version.tgz" --tag next --access public --provenance
-          npm publish "tarballs/sayshape-mcp-$version.tgz" --tag next --access public --provenance
+          # The ./ matters: without it npm reads "tarballs/x.tgz" as a GitHub owner/repo and tries git.
+          npm publish "./tarballs/sayshape-$version.tgz" --tag next --access public --provenance
+          npm publish "./tarballs/sayshape-mcp-$version.tgz" --tag next --access public --provenance
           echo "Published sayshape@$version and sayshape-mcp@$version to the next dist-tag." >> "$GITHUB_STEP_SUMMARY"
 
   registry-check:
