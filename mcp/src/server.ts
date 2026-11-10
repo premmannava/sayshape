@@ -61,6 +61,12 @@ let components: ComponentDef[] = [...coreComponents, ...mapComponents];
 let registry = new Registry(components);
 let scenesOn = false;
 let imageHosts: readonly string[] = [];
+/**
+ * The guide's sections, worked out once per mode. They depend only on the
+ * settings above, which are fixed at startup, and building them is most of
+ * what createServer costs; the HTTP mode makes a server for every request.
+ */
+const sectionsCache = new Map<"full" | "compact", ReturnType<typeof guideSections>>();
 
 /**
  * --scene: turn the experimental scene elements on (off by default). With them
@@ -71,6 +77,7 @@ export function setScenes(on: boolean): void {
   components = [...coreComponents, ...mapComponents, ...(on ? sceneComponents : [])];
   registry = new Registry(components);
   scenesOn = on;
+  sectionsCache.clear();
 }
 
 /**
@@ -81,6 +88,7 @@ export function setScenes(on: boolean): void {
  */
 export function setImageHosts(hosts: readonly string[]): void {
   imageHosts = [...hosts];
+  sectionsCache.clear();
 }
 
 /** The view resource's CSP: images from the allowed hosts, nothing else (MCP Apps resourceDomains). */
@@ -113,8 +121,13 @@ export function guideText(withData = false): string {
   return languageGuide(registry, { mode: "full", imageHosts, notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES });
 }
 
-const sectionText = (mode: "full" | "compact", name: string) =>
-  guideSections(registry, { mode, imageHosts }).find((sec) => sec.name === name)?.text ?? "";
+function sectionsOf(mode: "full" | "compact"): ReturnType<typeof guideSections> {
+  let sections = sectionsCache.get(mode);
+  if (!sections) sectionsCache.set(mode, (sections = guideSections(registry, { mode, imageHosts })));
+  return sections;
+}
+
+const sectionText = (mode: "full" | "compact", name: string) => sectionsOf(mode).find((sec) => sec.name === name)?.text ?? "";
 
 /** Parts of the guide a model can ask for by name, all generated (DATA_NOTES only with a database). */
 function topics(withData: boolean, withMcp = false): Record<string, string> {
@@ -322,7 +335,8 @@ export const REPEAT_WINDOW_MS = 10 * 60_000;
 
 /** What makes two calls the same interface: the spec without blank lines or trailing spaces, and the datasets it shows. */
 export function interfaceKey(spec: string, data: Record<string, string>): string {
-  const lines = spec.split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => l.trim() !== "");
+  // trimEnd strips the same whitespace as /\s+$/, without its quadratic backtracking on a long run of spaces.
+  const lines = spec.split("\n").map((l) => l.trimEnd()).filter((l) => l !== "");
   const sets = Object.keys(data).sort().map((k) => `${k}=${data[k]}`);
   return `${lines.join("\n")}\n--\n${sets.join(",")}`;
 }

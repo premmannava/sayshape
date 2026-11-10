@@ -11,32 +11,39 @@
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
  *   sayshape-mcp --image-hosts cdn.example.com,*.images.example.com
  *                                hosts images may load from (none by default; https only)
- *   sayshape-mcp --http [port]   Streamable HTTP on /mcp (default port 3001), for
- *                                clients that connect to a URL. Bind it behind
- *                                HTTPS before exposing it beyond localhost.
+ *   sayshape-mcp --http [port]   Streamable HTTP on /mcp, for clients that connect to a URL
+ *                                (port: the flag, else PORT, else 3001). Put it behind HTTPS
+ *                                before exposing it beyond this computer.
+ *     --host <address>           where it listens (else HOST if it's an IP address, else 127.0.0.1);
+ *                                0.0.0.0 on a container host
+ *     --rate-limit <n>           calls a minute per client address; 0 turns it off. Default 300
+ *                                beyond loopback, off on loopback
+ *     --trust-proxy [hops]       count calls by X-Forwarded-For, written by this many proxies
+ *                                in front of the server (default 1). Only behind a proxy you run
+ *     --allow-public-data        let --data run beyond loopback (refused otherwise: anyone could
+ *                                read the whole database)
+ *   GET / answers 200 as a health check. Requests have time and size limits;
+ *   nothing from a request is logged (http.ts).
  *
  * SAYSHAPE_LOG_CLIENT=1 writes each client's name, version and capabilities to
  * stderr when it connects, to see which chat apps announce MCP Apps
  * ("io.modelcontextprotocol/ui") and which get the text-only page.
  */
 import { readFile } from "node:fs/promises";
-import { createServer as createHttpServer, type IncomingMessage } from "node:http";
 import { fileURLToPath } from "node:url";
 import { basename } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { cannotDrawViews, createServer, setImageHosts, setScenes } from "./server";
 import { parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
+import { createHttp, dataRefusal, listen, parseHttpArgs, startupLine } from "./http";
 
 // dist/server.js and dist/ui.html sit side by side.
 const UI_PATH = fileURLToPath(new URL("./ui.html", import.meta.url));
 let uiCache: Promise<string> | null = null;
 const uiHtml = () => (uiCache ??= readFile(UI_PATH, "utf8"));
-
-const MAX_BODY_BYTES = 1_000_000;
 
 /** SAYSHAPE_LOG_CLIENT: say what the client announced, once it has connected. */
 function logClient(server: McpServer): McpServer {
@@ -52,52 +59,23 @@ function logClient(server: McpServer): McpServer {
   return server;
 }
 
-async function readJson(req: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += (chunk as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw new Error("too large");
-    chunks.push(chunk as Buffer);
-  }
-  return chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : undefined;
-}
-
-async function serveHttp(port: number, data: DataSource | undefined, view: ViewOptions): Promise<void> {
-  const http = createHttpServer(async (req, res) => {
-    if (new URL(req.url ?? "/", "http://localhost").pathname !== "/mcp") {
-      res.writeHead(404, { "Content-Type": "text/plain" }).end("SayShape MCP server: use /mcp\n");
-      return;
-    }
-    if (req.method !== "POST") {
-      // Stateless: no server-sent event streams to resume and no sessions to end.
-      res.writeHead(405, { Allow: "POST" }).end();
-      return;
-    }
-    try {
-      const body = await readJson(req);
-      // A fresh server and transport per request keeps requests independent.
-      // Datasets live in the shared DataSource, so a later request (the interface fetching rows) finds them.
-      const server = logClient(createServer({ uiHtml, data, view }));
-      const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-      res.on("close", () => { void transport.close(); void server.close(); });
-      await server.connect(transport);
-      await transport.handleRequest(req, res, body);
-    } catch {
-      if (!res.headersSent) res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ jsonrpc: "2.0", error: { code: -32700, message: "Bad request" }, id: null }));
-    }
-  });
-  await new Promise<void>((done) => http.listen(port, "127.0.0.1", done));
-  console.error(`SayShape MCP server on http://127.0.0.1:${port}/mcp`);
-}
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--help") || args.includes("-h")) {
     console.error([
-      "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...] [--http [port]]",
+      "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
+      "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--no-save-image] [--no-copy-text] [--scene]",
       "                    [--image-hosts host1,host2,...]",
+      "",
+      "  --http [port]       Streamable HTTP on /mcp instead of stdio; port from the flag, else PORT, else 3001",
+      "  --host <address>    where to listen: 127.0.0.1 by default, else HOST if it's an IP address;",
+      "                      0.0.0.0 to take requests from other machines (behind an HTTPS proxy)",
+      "  --rate-limit <n>    calls a minute per client address (0: off); default 300 beyond loopback, off on it",
+      "  --trust-proxy [n]   count calls by X-Forwarded-For, as written by n proxies in front (default 1);",
+      "                      only behind proxies you run, or clients can choose their own address",
+      "  --allow-public-data let --data run beyond loopback (refused otherwise: anyone could read the database)",
+      "  GET / answers 200 as a health check. Nothing from a request is logged.",
       "",
       "  --theme-picker   show a theme selector above each interface (off by default)",
       "  --theme <name>   the theme interfaces use: teal (default), purple, blue, neutral or studio",
@@ -114,6 +92,16 @@ async function main(): Promise<void> {
   setScenes(view.scene === true);
   // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.
   setImageHosts(view.imageHosts ?? []);
+  const httpAt = args.indexOf("--http");
+  if (httpAt < 0) {
+    for (const flag of ["--host", "--rate-limit", "--trust-proxy", "--allow-public-data"]) {
+      if (args.includes(flag)) throw new Error(`${flag} only applies with --http.`);
+    }
+  }
+  // Read before opening a database, so a public --data is refused before anything is read.
+  const http = httpAt >= 0 ? parseHttpArgs(args, process.env) : null;
+  const refusal = http && dataRefusal(args.includes("--data"), http.options);
+  if (refusal) throw new Error(refusal);
   const dataAt = args.indexOf("--data");
   let data: DataSource | undefined;
   if (dataAt >= 0) {
@@ -122,7 +110,6 @@ async function main(): Promise<void> {
     data = await DataSource.open(path);
     console.error(`SayShape: reading ${path} (read-only)`);
   }
-  const httpAt = args.indexOf("--http");
   const files: string[] = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] !== "--mcp-result") continue;
@@ -147,9 +134,11 @@ async function main(): Promise<void> {
       console.error("SayShape: imported " + label + " as " + d.id + " (" + d.rows.length + " rows)");
     }
   }
-  if (httpAt >= 0) {
-    const port = Number(args[httpAt + 1] ?? 3001);
-    await serveHttp(Number.isInteger(port) && port > 0 ? port : 3001, data, view);
+  if (http) {
+    for (const note of http.notes) console.error(`SayShape: ${note}`);
+    const server = createHttp(() => logClient(createServer({ uiHtml, data, view })), http.options);
+    const port = await listen(server, http.options.host, http.options.port);
+    console.error(startupLine(http.options, port));
     return;
   }
   // stdout carries the protocol, so anything for people goes to stderr.
