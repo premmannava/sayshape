@@ -1,12 +1,16 @@
-import DefaultTheme from "vitepress/theme";
+// The theme entry without fonts: VitePress's own variable Inter would be downloaded (and
+// preloaded) on top of the static weights below, which are the ones that draw the text.
+import DefaultTheme from "vitepress/theme-without-fonts";
 import type { Theme } from "vitepress";
 // All fonts are self-hosted, so no font is fetched from a third party. The engine draws with
 // Instrument Sans and IBM Plex Mono (src/theme.ts); the site's text is Inter (also the Studio
-// theme's face) and its display type is Fraunces.
+// theme's face) and its display type is Fraunces. Inter comes in the weights the site uses,
+// and an italic for emphasis in the docs, which is only downloaded where a page has some.
 import "@fontsource/instrument-sans/400.css";
 import "@fontsource/instrument-sans/600.css";
 import "@fontsource/instrument-sans/700.css";
 import "@fontsource/inter/400.css";
+import "@fontsource/inter/400-italic.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";

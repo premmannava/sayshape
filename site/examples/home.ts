@@ -29,7 +29,7 @@ derive split=[{channel: "Search ads", amount: search}, {channel: "Social ads", a
 derive ramp=[{week: "W1", signups: round(signups * 0.06)}, {week: "W2", signups: round(signups * 0.15)}, {week: "W3", signups: round(signups * 0.28)}, {week: "W4", signups: round(signups * 0.42)}, {week: "W5", signups: round(signups * 0.57)}, {week: "W6", signups: round(signups * 0.72)}, {week: "W7", signups: round(signups * 0.87)}, {week: "W8", signups: signups}]
 text "App launch · $40,000 budget" style=title
 grid min=140
-  meter "Budget used" kind=ring value={spent / 40000} max=1 bands="0.9,1.005" good=down format=percent
+  meter "Budget used" kind=ring value={spent / 40000} max=1 bands="1.005" good=down format=percent
   stat label="Projected signups" value={number(signups)}
   stat label="Cost per signup" value={signups ? money(spent / signups) : "–"}
 grid min=280

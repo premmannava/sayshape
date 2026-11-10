@@ -227,6 +227,9 @@
   .VPNavBar:not(.has-sidebar) .container { max-width: calc(var(--ss-content) - 2 * var(--ss-gutter)) !important }
 }
 
+/* The landing page isn't a doc: no "Return to top" bar under the nav on phones. Docs pages keep it. */
+.landing .VPLocalNav { display: none }
+
 /* ------------------------------------------------------------ type */
 
 .vp-doc h1,
