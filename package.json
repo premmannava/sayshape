@@ -28,6 +28,8 @@
   "main": "./dist/sayshape.js",
   "module": "./dist/sayshape.js",
   "types": "./dist/types/index.d.ts",
+  "unpkg": "./dist/sayshape.global.js",
+  "jsdelivr": "./dist/sayshape.global.js",
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
@@ -48,14 +50,16 @@
     "./model": {
       "types": "./dist/types/model/index.d.ts",
       "import": "./dist/model.js"
-    }
+    },
+    "./global": "./dist/sayshape.global.js",
+    "./map/global": "./dist/sayshape-map.global.js"
   },
   "files": [
     "dist"
   ],
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tsc -p tsconfig.build.json && node scripts/fix-dts-imports.mjs",
+    "build": "vite build && node scripts/build-browser.mjs && tsc -p tsconfig.build.json && node scripts/fix-dts-imports.mjs",
     "build:playground": "vite build --config vite.playground.config.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
