@@ -19,6 +19,7 @@
  *       {"t":"text","v":"card\n"}     clean SayShape lines, to push into the engine
  *       {"t":"reset"}                 throw away what was shown: a repair is coming
  *       {"t":"done","spec":"…","problems":0,"repaired":false,"ms":1234,"model":"…","tokens":{"in":10900,"out":180}}
+ *       {"t":"thought","v":"…"}       the model's thinking, as it streams (chat only, up to MAX_THOUGHT_CHARS; SHOW_THINKING="false" turns it off)
  *       {"t":"error","message":"…"}   a message to show; the stream ends
  *   → or before streaming, a JSON error: {"error": "…", "reason": "off" | "unconfigured" | "rate" | "daily" | "check" | "too-big" | "bad-request"}
  *
@@ -56,6 +57,12 @@ export interface Env {
   TURNSTILE_SECRET?: string;
   /** "false" turns answers off without redeploying the site. */
   GENERATION_ENABLED?: string;
+  /**
+   * "false" stops streaming the model's thinking to the page. Thinking is free
+   * text, not SayShape, so while it's shown the key can be used to get prose
+   * back (up to MAX_THOUGHT_CHARS an answer).
+   */
+  SHOW_THINKING?: string;
   /** Workers rate limiting binding, keyed by IP. Optional. */
   RATE_LIMITER?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
   /** Questions answered per day (UTC) for the whole site, counted in ANSWER_COUNT. Default 500. */
@@ -74,6 +81,8 @@ export interface Deps {
 
 /** A spreadsheet question's limit: big enough for 40 columns and 3 rows of 100-character cells; far too small for a spreadsheet. */
 export const MAX_BODY_BYTES = 16_000;
+/** The most thinking sent to the page per answer; the model may think longer. */
+export const MAX_THOUGHT_CHARS = 12_000;
 /** No request is read past this, whatever its kind. */
 const MAX_ANY_BODY_BYTES = Math.max(MAX_BODY_BYTES, MAX_CHAT_BODY_BYTES);
 const MAX_TOKENS = 3_000;
@@ -237,6 +246,9 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   const send = (event: Record<string, unknown>) => writer.write(encoder.encode(JSON.stringify(event) + "\n")).catch(() => {});
 
   const run = async () => {
+    // Only chat answers show thinking: the spreadsheet page never did.
+    const showThinking = kind === "chat" && env.SHOW_THINKING !== "false";
+    let thought = 0;
     try {
       const result = await generateSpec({
         config: {
@@ -255,6 +267,12 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
         onText: (v) => void send({ t: "text", v }),
         onReset: () => void send({ t: "reset" }),
         onPhase: (v: Phase) => void send({ t: "phase", v }),
+        onThinking: showThinking ? (v) => {
+          if (thought >= MAX_THOUGHT_CHARS) return;
+          const part = v.slice(0, MAX_THOUGHT_CHARS - thought);
+          thought += part.length;
+          void send({ t: "thought", v: part });
+        } : undefined,
       });
       const errors = result.diagnostics.filter((d) => d.severity === "error");
       if (!result.spec.trim() || errors.some((d) => /never reads data|Don't declare data/.test(d.message))) {

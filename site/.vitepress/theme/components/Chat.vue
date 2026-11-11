@@ -15,9 +15,9 @@ import { withBase } from "vitepress";
 import type { RefineContext } from "@sayshape/model/context";
 import { normalizeHex } from "../../../../playground/appearance/color";
 import ChatAnswer from "./ChatAnswer.vue";
-import { isSiteDark, prefersReducedMotion } from "../sayshape/runtime";
+import { isSiteDark } from "../sayshape/runtime";
 import {
-  advance, applyEvent, canAsk, chatTheme, failure, frameColors, isBusy, MAX_ANSWERS, MAX_MESSAGE_CHARS, newTurn, requestBody,
+  advance, applyEvent, canAsk, chatTheme, failure, frameColors, isBusy, MAX_ANSWERS, MAX_MESSAGE_CHARS, newTurn, requestBody, restart,
   SUGGESTIONS, type Failure, type PageColors, type Turn,
 } from "../sayshape/chat";
 import { configured, fetchStatus, humanCheck, MODEL_LABEL, needsHumanCheck, send } from "../sayshape/chatClient";
@@ -65,13 +65,58 @@ function readPage() {
   const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
   page.value = { bg: v("--vp-c-bg", dark.value ? "#11131c" : "#f9f7f2"), card: v("--ss-card", dark.value ? "#191c28" : "#ffffff") };
 }
+// ---------------------------------------------------------------- following the answer
+
+/**
+ * The page moves only when the answer needs room: as it grows past the
+ * question box, the page scrolls just enough to keep its newest part in
+ * sight, and stops once the question would leave the top. The header stays
+ * put while there's room, and scrolling yourself stops the following.
+ */
+const threadEl = ref<HTMLElement | null>(null);
+const dockEl = ref<HTMLElement | null>(null);
+let tracking = false;
+
+function keepAnswerInView() {
+  const t = last.value;
+  const dock = dockEl.value;
+  const el = t && document.getElementById(`chat-turn-${t.id}`);
+  if (!tracking || !el || !dock) return;
+  const nav = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--vp-nav-height")) || 64;
+  const box = el.getBoundingClientRect();
+  const hidden = box.bottom - (dock.getBoundingClientRect().top - 8);
+  // Never scroll the question itself out of sight above.
+  const room = box.top - (nav + 12);
+  const by = Math.min(hidden, room);
+  if (by > 1) window.scrollBy({ top: by, behavior: "auto" });
+  if (!isBusy(t)) tracking = false;
+}
+
+const stopFollowing = () => { tracking = false; };
+const SCROLL_KEYS = new Set(["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "]);
+function onKeyScroll(e: KeyboardEvent) {
+  const typing = e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement;
+  if (!typing && SCROLL_KEYS.has(e.key)) tracking = false;
+}
+
 let observer: MutationObserver | null = null;
+let resize: ResizeObserver | null = null;
 onMounted(() => {
   readPage();
   observer = new MutationObserver(readPage);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  // The canvas grows a frame after each line arrives, so follow the thread's size, not the text.
+  resize = new ResizeObserver(() => keepAnswerInView());
+  if (threadEl.value) resize.observe(threadEl.value);
+  window.addEventListener("wheel", stopFollowing, { passive: true });
+  window.addEventListener("touchmove", stopFollowing, { passive: true });
+  window.addEventListener("keydown", onKeyScroll);
 });
 onBeforeUnmount(() => {
+  resize?.disconnect();
+  window.removeEventListener("wheel", stopFollowing);
+  window.removeEventListener("touchmove", stopFollowing);
+  window.removeEventListener("keydown", onKeyScroll);
   observer?.disconnect();
   controller?.abort();
   check?.destroy();
@@ -108,10 +153,10 @@ async function ask(question: string, existing?: Turn) {
   if (!existing) {
     turns.value.push(turn);
     draft.value = "";
-    await nextTick();
-    // The question at the top of the view, so the answer has the room below it to grow into.
-    document.getElementById(`chat-turn-${turn.id}`)?.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   }
+  tracking = true;
+  await nextTick();
+  keepAnswerInView();
   controller?.abort();
   controller = new AbortController();
   const signal = controller.signal;
@@ -164,7 +209,7 @@ function stop() {
 }
 
 function retry(turn: Turn) {
-  Object.assign(turn, { status: "waiting", phase: "waiting", text: "", resets: turn.resets + 1, spec: "", problems: 0, failure: undefined });
+  restart(turn);
   void ask(turn.question, turn);
 }
 
@@ -211,7 +256,7 @@ const examples = withBase("/examples/");
       </div>
     </header>
 
-    <section class="chat-thread" aria-label="Conversation">
+    <section ref="threadEl" class="chat-thread" aria-label="Conversation">
       <div v-if="!turns.length" class="chat-empty">
         <p class="ss-eyebrow">Live model</p>
         <h2>What would your assistant show?</h2>
@@ -232,7 +277,7 @@ const examples = withBase("/examples/");
       </article>
     </section>
 
-    <div class="chat-dock">
+    <div ref="dockEl" class="chat-dock">
       <div v-if="blocked" class="chat-notice" role="status">
         <!-- When the last question was refused for this reason, its answer already says so. -->
         <p v-if="last?.failure !== blocked">{{ blocked.message }}</p>

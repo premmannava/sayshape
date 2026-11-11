@@ -2,17 +2,19 @@
 /**
  * One answer in the chat thread: its own engine, drawn straight on the page
  * as the model streams, and live after it finishes (its tabs, sliders and
- * buttons keep their own state). Under it, a quiet footer: the spec the model
- * wrote, Copy text, the model and its time, and the actions the answer sent.
+ * buttons keep their own state). Above it, the model's thinking, live while it
+ * thinks and folded away once it writes. Under it, a quiet footer: the spec
+ * the model wrote, Copy text, Save image, where the time went (waiting,
+ * thinking, writing, SayShape's own drawing), and the actions the answer sent.
  * The engine is destroyed with the component, which is how "New chat" frees it.
  */
-import { computed, ref, shallowRef, watch } from "vue";
+import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import type { Diagnostic } from "@sayshape/index";
 import type { Theme } from "../sayshape/runtime";
 import { useSayShape } from "../sayshape/useSayShape";
 import { onHostEvents } from "../sayshape/events";
 import { highlightLine } from "../sayshape/highlight";
-import { isBusy, PHASE_TEXT, summary, type Turn } from "../sayshape/chat";
+import { duration, isBusy, PHASE_TEXT, stages, summary, type Turn } from "../sayshape/chat";
 
 const props = defineProps<{ turn: Turn; theme: Theme; latest: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
@@ -22,6 +24,11 @@ const showSpec = ref(false);
 const copied = ref("");
 const actions = ref<string[]>([]);
 const diagnostics = shallowRef<Diagnostic[]>([]);
+const thoughtEl = ref<HTMLElement | null>(null);
+const showThought = ref(false);
+/** The engine's own time on this answer: parse, layout and paint of every frame until it's finished. */
+const drawMs = ref(0);
+let counting = true;
 let pushed = 0;
 let resets = -1;
 let streaming = false;
@@ -39,11 +46,31 @@ const marked = computed(() => {
 const problems = computed(() => diagnostics.value.length);
 const specLines = computed(() => (props.turn.spec || props.turn.text).replace(/\n$/, "").split("\n"));
 const specId = computed(() => `chat-spec-${props.turn.id}`);
+const thoughtId = computed(() => `chat-thought-${props.turn.id}`);
+/** Thinking, shown live until the first line arrives. */
+const thinkingLive = computed(() => busy.value && !drawn.value && !!props.turn.thought);
+const times = computed(() => stages({ ...props.turn, drawMs: drawMs.value }));
+const thoughtFor = computed(() => {
+  const t = times.value.find((s) => s.label === "Thought");
+  return t ? `Thought for ${duration(t.ms)}` : "Thinking";
+});
+
+// Keep the live thinking scrolled to its newest line.
+watch(() => props.turn.thought, () => nextTick(() => {
+  const el = thoughtEl.value;
+  if (el && thinkingLive.value) el.scrollTop = el.scrollHeight;
+}));
 
 const { sayshape } = useSayShape(canvas, (l) => {
   l.setTheme(props.theme);
   const offs = [
     l.on("diagnostics", (d) => { diagnostics.value = d; }),
+    l.on("render", (m) => {
+      if (!counting) return;
+      drawMs.value += m.parseMs + m.layoutMs + m.paintMs;
+      // The first frame after the answer ends is its last to count; later ones are people using it.
+      if (!isBusy(props.turn)) counting = false;
+    }),
     // Nothing is listening for emit: actions on this page. Say what an app would receive, as the landing page does.
     onHostEvents(l, (e) => { if (e.kind === "emit") actions.value = [e.text, ...actions.value].slice(0, 2); }),
   ];
@@ -59,6 +86,8 @@ function sync() {
   if (t.resets !== resets) {
     resets = t.resets;
     pushed = 0;
+    drawMs.value = 0;
+    counting = true;
     l.beginStream();
     streaming = true;
   }
@@ -79,6 +108,29 @@ watch(() => props.theme, (th) => sayshape.value?.setTheme(th));
 
 const problemAt = (line: number) => diagnostics.value.filter((d) => d.line === line).map((d) => d.message).join("\n") || undefined;
 
+const fileName = () => (props.turn.question.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "answer") + ".png";
+
+/** The answer as a PNG, drawn again at twice the resolution (SayShape.picture), saved as a download. */
+async function saveImage() {
+  const l = sayshape.value;
+  if (!l) return;
+  try {
+    const pic = await l.picture();
+    const blob = await new Promise<Blob | null>((r) => pic.toBlob(r, "image/png"));
+    if (!blob) throw new Error("no image");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName();
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    copied.value = "Image saved";
+  } catch {
+    copied.value = "Couldn't save the image";
+  }
+  setTimeout(() => { copied.value = ""; }, 2000);
+}
+
 async function copy(what: "text" | "spec") {
   const l = sayshape.value;
   if (!l) return;
@@ -95,7 +147,20 @@ async function copy(what: "text" | "spec") {
 
 <template>
   <div class="ca" :class="{ busy, failed: turn.status === 'failed' }">
-    <div v-if="busy && !drawn" class="ca-wait" aria-hidden="true">
+    <!-- The model's thinking: free text, shown as text, never drawn. Live while it thinks, then one line to open it. -->
+    <div v-if="thinkingLive" class="ca-think live">
+      <p class="ca-think-label" role="status"><span class="ca-dot" aria-hidden="true"></span>Thinking</p>
+      <div ref="thoughtEl" class="ca-think-text" aria-label="The model's thinking so far">{{ turn.thought }}</div>
+    </div>
+    <div v-else-if="turn.thought" class="ca-think">
+      <button type="button" class="ca-link ca-think-toggle" :aria-expanded="showThought" :aria-controls="thoughtId" @click="showThought = !showThought">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" :class="{ open: showThought }"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        {{ thoughtFor }}
+      </button>
+      <div v-if="showThought" :id="thoughtId" class="ca-think-text full" tabindex="0" aria-label="The model's thinking">{{ turn.thought }}</div>
+    </div>
+
+    <div v-if="busy && !drawn && !thinkingLive" class="ca-wait" aria-hidden="true">
       <span class="ca-ghost" style="width: 46%"></span>
       <span class="ca-ghost" style="width: 78%"></span>
       <span class="ca-ghost short" style="width: 30%"></span>
@@ -104,7 +169,7 @@ async function copy(what: "text" | "spec") {
       <canvas ref="canvas" :aria-label="`Answer to “${turn.question}”, drawn by SayShape`"></canvas>
     </div>
 
-    <p v-if="busy" class="ca-phase" role="status">
+    <p v-if="busy && !thinkingLive" class="ca-phase" role="status">
       <span class="ca-dot" aria-hidden="true"></span>{{ phase }}
     </p>
 
@@ -119,11 +184,19 @@ async function copy(what: "text" | "spec") {
         {{ showSpec ? "Hide spec" : "Spec" }}<span v-if="turn.spec"> · {{ specLines.length }} lines</span>
       </button>
       <button type="button" class="ca-link" :disabled="!sayshape" @click="copy('text')">Copy text</button>
+      <button type="button" class="ca-link" :disabled="!sayshape" @click="saveImage">Save image</button>
       <button v-if="problems" type="button" class="ca-link ca-warn" :aria-controls="specId" @click="showSpec = true">
         {{ problems }} {{ problems === 1 ? "problem" : "problems" }} SayShape worked around
       </button>
-      <span class="ca-meta">{{ summary(turn) }}</span>
       <span class="ca-copied" role="status">{{ copied }}</span>
+    </div>
+    <div v-if="turn.status === 'done' && times.length" class="ca-times">
+      <dl>
+        <div v-for="s in times" :key="s.label" :class="{ total: s.label === 'Total', draw: s.label === 'Drew' }">
+          <dt>{{ s.label }}</dt><dd>{{ duration(s.ms) }}</dd>
+        </div>
+      </dl>
+      <span class="ca-meta">{{ summary(turn) }}</span>
     </div>
     <p v-for="(a, i) in actions" :key="i + a" class="ca-action">
       <span class="ca-action-label">Your app would receive</span> <code>{{ a }}</code>
@@ -162,6 +235,27 @@ async function copy(what: "text" | "spec") {
 .ca-ghost.short { height: 40px; border-radius: 12px }
 @keyframes ca-sweep { from { background-position: 100% 0 } to { background-position: -100% 0 } }
 
+.ca-think { display: flex; flex-direction: column; gap: 6px; min-width: 0 }
+.ca-think-label { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 12px var(--vp-font-family-mono); letter-spacing: 0.04em; color: var(--vp-c-text-2) }
+.ca-think-text {
+  max-height: 7.5em;
+  overflow: auto;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--vp-c-divider);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--vp-c-text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Live, the oldest lines fade out at the top as new ones arrive. */
+.ca-think.live .ca-think-text { mask-image: linear-gradient(to bottom, transparent, #000 2.2em); scrollbar-width: none }
+.ca-think-text.full { max-height: 320px }
+.ca-think-text:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 2px; border-radius: 2px }
+.ca-think-toggle { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; color: var(--vp-c-text-2); text-decoration: none }
+.ca-think-toggle svg { transition: transform 0.15s }
+.ca-think-toggle svg.open { transform: rotate(90deg) }
+
 .ca-phase { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 12px var(--vp-font-family-mono); letter-spacing: 0.04em; color: var(--vp-c-text-2) }
 .ca-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--chat-fill); animation: ca-pulse 1.2s ease-in-out infinite }
 @keyframes ca-pulse { 50% { opacity: 0.25 } }
@@ -188,6 +282,12 @@ async function copy(what: "text" | "spec") {
 .ca-link[disabled] { color: var(--vp-c-text-3); cursor: default }
 .ca-link.ca-warn { color: var(--sayshape-warn); text-decoration-color: currentColor }
 .ca-meta { font: 12px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
+.ca-times { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin-top: -4px }
+.ca-times dl { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 }
+.ca-times dl > div { display: flex; align-items: baseline; gap: 5px }
+.ca-times dt { font: 500 10.5px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-2) }
+.ca-times dd { margin: 0; font: 600 12.5px var(--vp-font-family-mono); color: var(--vp-c-text-1) }
+.ca-times .total dd { color: var(--vp-c-text-1) }
 .ca-copied { font-weight: 600; color: var(--vp-c-text-1) }
 .ca-copied:empty { display: none }
 .ca-action { margin: 0; font-size: 12.5px; color: var(--vp-c-text-2); overflow-wrap: anywhere }

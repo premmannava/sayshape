@@ -5,13 +5,16 @@ compatibility_date = "2026-10-01"
 
 [vars]
 # The model's id as the provider names it (its "model" in the provider's API example),
-# and the name the page shows next to live answers. Empty until you pick one: answers stay off.
-MODEL = ""
-MODEL_LABEL = ""
-# The provider's OpenAI-compatible base URL. Set it to DeepSeek's (or another provider's) before deploying.
-MODEL_URL = "https://integrate.api.nvidia.com/v1"
+# and the name the page shows next to live answers. Answers stay off while MODEL is empty.
+MODEL = "deepseek-flash"
+MODEL_LABEL = "DeepSeek V4.1 Flash"
+# The provider's OpenAI-compatible base URL.
+MODEL_URL = "https://api.deepseek.com"
 ALLOWED_ORIGINS = "https://premmannava.github.io"
 GENERATION_ENABLED = "true"
+# "false" stops showing the model's thinking on the chat page. Thinking is free text, so while
+# it's shown the key can be used to get prose back (up to 12,000 characters an answer).
+SHOW_THINKING = "true"
 # Questions answered per day for the whole site. Needs the ANSWER_COUNT namespace below.
 DAILY_ANSWERS = "500"
 # Set to "false" if the model refuses stream_options; the page then shows no token counts.
@@ -28,10 +31,10 @@ namespace_id = "1001"
 
 # The daily count. Create it once with
 #   npx wrangler kv namespace create ANSWER_COUNT
-# then uncomment these lines and paste the id it prints. Without it there's no daily cap.
-# [[kv_namespaces]]
-# binding = "ANSWER_COUNT"
-# id = "<the id from wrangler>"
+# and put the id it prints below. Without it there's no daily cap.
+[[kv_namespaces]]
+binding = "ANSWER_COUNT"
+id = "89cc3751902a421e8ecacfb9cc3f400a"
 
 # Secrets, set with wrangler and never written here:
 #   npx wrangler secret put MODEL_API_KEY        the provider's API key

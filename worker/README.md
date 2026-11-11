@@ -15,6 +15,8 @@ the engine draws the answer as it arrives
 
 `POST /answer` with `{"kind": "chat", "message": "…"}`, or for a follow-up with `"refine": {"task": "the first question", "changes": ["follow-ups since"], "spec": "the latest answer"}`. The worker writes every message the model reads with SayShape's model client: a small chat guide (compact, no worked examples, and a few elements left out; `chatGuide` in `src/chat.ts`), then the request, or for a follow-up the bounded refinement from `src/model/context.ts`. Limits: 400 characters per question and follow-up, 10 earlier follow-ups, a spec of 8,000 characters and 300 lines, 40 KB in all. The spec goes back to the model as its own earlier turn, so it's accepted only when every line is a SayShape line (an element, `state` or `derive`); comments are dropped. Anything else in the body (a model name, messages, a guide) is ignored. What comes back is only ever SayShape lines: the model client drops anything else it writes.
 
+While the model thinks, chat answers stream its thinking as `{"t":"thought"}` events, up to 12,000 characters an answer, which the page shows above the answer. Thinking is free text, not SayShape, so while it's on the key can be used to get prose back that way; set `SHOW_THINKING = "false"` in `wrangler.toml` to stop sending it.
+
 `GET /status` says whether answers are on, and the model's name, without calling the model or counting a question. The chat page asks it when someone starts to type.
 
 A refusal before any answer is JSON with a `reason` the page words itself: `off`, `unconfigured`, `rate`, `daily`, `check`, `too-big` or `bad-request`.
