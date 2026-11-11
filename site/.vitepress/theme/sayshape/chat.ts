@@ -373,15 +373,17 @@ export interface Suggestion {
 }
 
 /**
- * Questions an enterprise assistant gets, and a couple anyone asks. The model
- * makes up example figures. Two lead to a drawing (a scene), the answer a
- * plain chat app can't give.
+ * Three pairs, a row each in the two-column grid: questions people ask for
+ * themselves, questions they ask at work, and two that lead to a drawing (a
+ * scene), the answer a plain chat app can't give. Each is one where an
+ * interface helps more than text: something to adjust, tick off, drag or
+ * press. The model makes up example figures.
  */
 export const SUGGESTIONS: readonly Suggestion[] = [
-  { label: "Sales", question: "How is this quarter's pipeline looking, by stage?" },
-  { label: "Support", question: "Which support queues are over their response-time target this week?" },
-  { label: "Planning", question: "Plan a 3-day team offsite in Lisbon with a budget per day" },
-  { label: "Money", question: "Compare three phone plans for a family of four" },
-  { label: "Operations", question: "Draw our production line and let me click each machine to see how it's doing" },
-  { label: "IT", question: "Draw our network and make the unhealthy servers stand out" },
+  { label: "Personal", question: "Can I afford a $450,000 home? Let me adjust the deposit, rate and years" },
+  { label: "Personal", question: "Plan a week of dinners for four with a shopping list I can tick off" },
+  { label: "Work", question: "Which of our KPIs are on target this quarter, and which are behind?" },
+  { label: "Work", question: "Show our hiring pipeline as a board I can drag candidates across" },
+  { label: "Drawing", question: "Draw our production line and let me click each machine to see how it's doing" },
+  { label: "Drawing", question: "Draw our network and make the unhealthy servers stand out" },
 ];

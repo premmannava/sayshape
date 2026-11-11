@@ -158,9 +158,9 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
           <p class="lede">Give the AI you already use the ability to create interactive answers: charts, comparisons, dashboards and tools people can actually use.</p>
           <div class="cta">
             <a class="btn primary" href="#integrations">Add it to your AI<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
-            <a class="btn quiet" href="#examples">See more examples</a>
+            <a class="btn quiet" :href="href('/chat')">Try it live</a>
           </div>
-          <p class="aside">Not another chatbot. A new capability for your AI.</p>
+          <p class="aside">Not another chatbot. A new capability for your AI. <a href="#examples">See more examples</a></p>
         </div>
       </div>
       <HomeHero class="hero-demo" />
@@ -309,7 +309,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
             <a class="btn light" href="#integrations">Add it to your AI</a>
             <a class="btn outline-light" :href="REPO">View on GitHub</a>
           </div>
-          <p class="small">SayShape v0.1 is an early prototype. Open source, MIT licensed.</p>
+          <p class="small">SayShape v0.1 is an early prototype. Open source, MIT licensed. <a :href="href('/chat')">Ask a live model and watch it answer →</a></p>
         </div>
       </div>
     </section>
@@ -356,6 +356,7 @@ h1 { margin: 0; font-size: clamp(50px, 7vw, 104px); line-height: 0.95; letter-sp
 .lede { margin: 0; font-size: clamp(18px, 1.5vw, 21px); line-height: 1.45; color: var(--vp-c-text-1) }
 .cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px }
 .aside { margin: 16px 0 0; font-size: 14px; color: var(--vp-c-text-2) }
+.aside a { color: var(--vp-c-text-1); font-weight: 600; text-decoration: underline; text-decoration-color: var(--vp-c-border); text-underline-offset: 3px; white-space: nowrap }
 
 /* 3 · Before and after */
 .versus { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr); gap: 20px; align-items: start }
@@ -439,6 +440,8 @@ h1 { margin: 0; font-size: clamp(50px, 7vw, 104px); line-height: 0.95; letter-sp
 .closing h2 { color: #f9f7f2; font-size: clamp(32px, 4.4vw, 58px) }
 .closing h2 em { color: #ff8a73 }
 .closing .small { margin-top: 20px; color: #b9bcd6 }
+.closing .small a { color: #f9f7f2; font-weight: 600; text-underline-offset: 3px; white-space: nowrap }
+.closing .small a:focus-visible { outline: 2px solid #f9f7f2; outline-offset: 3px; border-radius: 3px }
 
 /* Tablet */
 @media (max-width: 1024px) {
