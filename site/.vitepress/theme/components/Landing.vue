@@ -93,55 +93,30 @@ onBeforeUnmount(() => { observer?.disconnect(); cancelAnimationFrame(frame); });
 
 // ---------------------------------------------------------------- integrations
 
-// Three situations, each a line or two: where the server runs, and whether the answer draws in the chat.
-const groups = [
-  {
-    title: "On your computer, drawn in the chat",
-    note: "Add the npx setup below to the app.",
-    hosts: [
-      { name: "Claude Desktop", note: "Works today" },
-      { name: "VS Code", note: "With MCP Apps turned on (experimental)" },
-      { name: "Goose and other MCP Apps clients", note: "Support differs between apps and versions" },
-    ],
-  },
-  {
-    title: "At an address you host, drawn in the chat",
-    note: "These apps can't run a program on your computer, so the server has to run at a public HTTPS address someone hosts.",
-    hosts: [
-      { name: "Claude on the web and phone", note: "Added as a custom connector; Free plans can add one" },
-      { name: "ChatGPT", note: "Developer mode on the web (beta), on Pro, Business, Enterprise and Edu plans" },
-    ],
-  },
-  {
-    title: "On your computer, as a page to open",
-    note: "Coding agents can't draw in the chat. The answer arrives as a small page the agent publishes or saves for you to open in a browser.",
-    hosts: [{ name: "Claude Code, Codex, Antigravity", note: "Buttons can't send anything back to the chat; the page needs internet; no database answers" }],
-  },
-];
-const chips = ["Claude", "ChatGPT", "VS Code", "Goose", "Claude Code", "Codex", "Antigravity"];
 // Both are on npm: sayshape (the engine) and sayshape-mcp (the server for chat apps).
 const MCP = "npx -y sayshape-mcp";
 const LIB = "npm install sayshape";
-const install = `# An AI app on your computer: add this as an MCP server
-${MCP}
-
-# Your own app
-${LIB}`;
 // The hosting command is mcp/README.md's "Host it publicly" one, version pinned; the address is a placeholder.
 const HOSTED = "npx -y sayshape-mcp@0.1.2 --http --host 0.0.0.0 --trust-proxy";
 const ADDRESS = "https://your-domain.example/mcp";
 const MCP_JSON = `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}`;
-const setups = [
-  { id: "claude", name: "Claude Desktop", label: "Settings", where: "In Settings → Developer → Edit Config, then restart the app", code: MCP_JSON },
-  { id: "vscode", name: "VS Code", label: "Settings", where: "In .vscode/mcp.json", code: `{\n  "servers": {\n    "sayshape": {\n      "type": "stdio",\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}` },
-  { id: "hosted", name: "Claude on the web, ChatGPT", label: "On your host", where: `Run this on a host that puts HTTPS in front, such as Render. Then add its address, like ${ADDRESS}: in Claude as a custom connector, in ChatGPT as an app in developer mode`, code: HOSTED, more: { text: "How to host it", to: "/docs/integration/mcp#hosted" } },
-  { id: "claude-code", name: "Claude Code", label: "Terminal", where: "Run this in a terminal; the answer comes as a page", code: `claude mcp add sayshape -- ${MCP}`, more: { text: "What the page can do", to: "/docs/integration/mcp#coding-agents" } },
-  { id: "codex", name: "Codex", label: "Terminal", where: "Run this in a terminal; it adds the server to ~/.codex/config.toml. The answer comes as a page", code: `codex mcp add sayshape -- ${MCP}`, more: { text: "What the page can do", to: "/docs/integration/mcp#coding-agents" } },
-  { id: "antigravity", name: "Antigravity", label: "mcp_config.json", where: "In the agent panel's … menu → MCP Servers → Manage MCP Servers → View raw config. The answer comes as a page", code: MCP_JSON, more: { text: "What the page can do", to: "/docs/integration/mcp#coding-agents" } },
+// One entry per app: the steps to install it there, in order, and nothing else. The step with
+// `code` shows the copy box. What each app can't do is on the docs page, not here.
+const ASK = "Ask for a chart of anything.";
+const PAGE = `${ASK} It opens as a page in your browser.`;
+type Step = { text: string; code?: string; label?: string };
+const setups: { id: string; name: string; steps: Step[]; more?: { text: string; to: string } }[] = [
+  { id: "claude", name: "Claude Desktop", steps: [{ text: "Open Settings → Developer → Edit Config." }, { text: "Paste this:", code: MCP_JSON, label: "claude_desktop_config.json" }, { text: `Restart Claude. ${ASK}` }] },
+  { id: "claude-code", name: "Claude Code", steps: [{ text: "Run this in a terminal:", code: `claude mcp add sayshape -- ${MCP}`, label: "Terminal" }, { text: PAGE }] },
+  { id: "vscode", name: "VS Code", steps: [{ text: "Create .vscode/mcp.json in your project and paste this:", code: `{\n  "servers": {\n    "sayshape": {\n      "type": "stdio",\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}`, label: ".vscode/mcp.json" }, { text: "Turn on MCP Apps in VS Code's settings (experimental)." }, { text: ASK }] },
+  { id: "codex", name: "Codex", steps: [{ text: "Run this in a terminal:", code: `codex mcp add sayshape -- ${MCP}`, label: "Terminal" }, { text: PAGE }] },
+  { id: "antigravity", name: "Antigravity", steps: [{ text: "In the agent panel, open … → MCP Servers → Manage MCP Servers → View raw config." }, { text: "Paste this:", code: MCP_JSON, label: "mcp_config.json" }, { text: PAGE }] },
+  { id: "hosted", name: "Claude web, ChatGPT", steps: [{ text: "Run this on a host with HTTPS, such as Render:", code: HOSTED, label: "On your host" }, { text: `Add its address, like ${ADDRESS}: in Claude as a custom connector, in ChatGPT as an app in developer mode.` }, { text: ASK }], more: { text: "How to host it", to: "/docs/integration/mcp#hosted" } },
+  { id: "other", name: "Goose and others", steps: [{ text: "Add this command as an MCP server in your app:", code: MCP, label: "Command" }, { text: ASK }] },
 ];
+// Claude Desktop's steps show from the start, so the install steps are on screen without a press.
 const setup = ref(setups[0]!.id);
 const shownSetup = computed(() => setups.find((s) => s.id === setup.value)!);
-const assistantOpen = ref(false);
 const productOpen = ref(false);
 const ownApp = `import { SayShape, coreComponents } from "sayshape";
 
@@ -182,7 +157,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
         <div class="hero-copy">
           <p class="lede">Give the AI you already use the ability to create interactive answers: charts, comparisons, dashboards and tools people can actually use.</p>
           <div class="cta">
-            <a class="btn primary" href="#start">Add it to your AI<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
+            <a class="btn primary" href="#integrations">Add it to your AI<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg></a>
             <a class="btn quiet" href="#examples">See more examples</a>
           </div>
           <p class="aside">Not another chatbot. A new capability for your AI.</p>
@@ -267,20 +242,15 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
         <article class="path">
           <div class="path-head"><span class="path-icon coral" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z" /><path d="M9 10h6" /></svg></span><h3>In my existing AI assistant</h3></div>
           <p>Bring interactive answers into chat apps and editors that support MCP Apps, without building a new app, and into coding agents as a page you open. Your assistant's own model writes the screens, so there's no extra API key.</p>
-          <ul class="chips" aria-label="Apps it works in"><li v-for="c in chips" :key="c">{{ c }}</li></ul>
-          <div class="path-actions">
-            <a class="btn primary" :href="href('/docs/integration/mcp')">Connect to my AI</a>
-            <button type="button" class="link-btn" :aria-expanded="assistantOpen" aria-controls="assistant-details" @click="assistantOpen = !assistantOpen">{{ assistantOpen ? "Hide setup details" : "Setup and support details" }}</button>
-          </div>
-          <div v-if="assistantOpen" id="assistant-details" class="details">
-            <div v-for="g in groups" :key="g.title" class="host-group">
-              <p class="small"><strong>{{ g.title }}.</strong> {{ g.note }}</p>
-              <dl class="hosts"><template v-for="h in g.hosts" :key="h.name"><dt>{{ h.name }}</dt><dd>{{ h.note }}</dd></template></dl>
-            </div>
-            <p class="small">Support differs between apps, versions and plans. You need Node.js 20 or later; npx downloads the server the first time.</p>
-            <div class="setup-tabs" role="group" aria-label="Where to add it"><button v-for="s in setups" :key="s.id" type="button" :aria-pressed="setup === s.id" @click="setup = s.id">{{ s.name }}</button></div>
-            <p class="small">{{ shownSetup.where }}. For the Studio look, add <code>{{ shownSetup.code.startsWith("{") ? '"--theme", "studio"' : "--theme studio" }}</code> {{ shownSetup.code.startsWith("{") ? "to the args" : "at the end" }}.<template v-if="shownSetup.more">{{ " " }}<a :href="href(shownSetup.more.to)">{{ shownSetup.more.text }} →</a></template></p>
-            <div class="code"><div class="code-bar"><span>{{ shownSetup.label }}</span><button type="button" class="copy" @click="copy(shownSetup.id, shownSetup.code)">{{ copied === shownSetup.id ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" :aria-label="`Setup for ${shownSetup.name}`"><code>{{ shownSetup.code }}</code></pre></div>
+          <div class="setup-tabs" role="group" aria-label="Pick your app to set it up"><button v-for="s in setups" :key="s.id" type="button" :aria-pressed="setup === s.id" aria-controls="assistant-details" @click="setup = s.id">{{ s.name }}</button></div>
+          <div id="assistant-details" class="details">
+            <ol class="steps">
+              <li v-for="(st, i) in shownSetup.steps" :key="i">
+                <span>{{ st.text }}</span>
+                <div v-if="st.code" class="code"><div class="code-bar"><span>{{ st.label }}</span><button type="button" class="copy" @click="copy(shownSetup.id, st.code)">{{ copied === shownSetup.id ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" :aria-label="`Setup for ${shownSetup.name}`"><code>{{ st.code }}</code></pre></div>
+              </li>
+            </ol>
+            <p class="small">Needs Node.js 20 or later. <a :href="href(shownSetup.more?.to ?? '/docs/integration/mcp')">{{ shownSetup.more?.text ?? "More options" }} →</a></p>
           </div>
         </article>
         <article class="path">
@@ -336,15 +306,10 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
         <div class="closing-copy">
           <h2 id="start-title">Your AI already knows how to answer. <em>Give it a way to show you.</em></h2>
           <div class="cta">
-            <a class="btn light" :href="href('/docs/integration/mcp')">Set up SayShape</a>
+            <a class="btn light" href="#integrations">Add it to your AI</a>
             <a class="btn outline-light" :href="REPO">View on GitHub</a>
           </div>
-        </div>
-        <div class="closing-install">
-          <p class="small">Install from npm (Node.js 20 or later)</p>
-          <div class="code dark"><div class="code-bar"><span>Terminal</span><button type="button" class="copy" @click="copy('closing', install)">{{ copied === "closing" ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" aria-label="Install commands"><code>{{ install }}</code></pre></div>
-          <p class="small">SayShape v0.1 is an early prototype.</p>
-          <p class="small">Claude on the web and ChatGPT need it at an address you host. Open source, MIT licensed. <a :href="href('/docs/integration/mcp')">Setup for each app →</a></p>
+          <p class="small">SayShape v0.1 is an early prototype. Open source, MIT licensed.</p>
         </div>
       </div>
     </section>
@@ -439,17 +404,14 @@ h1 { margin: 0; font-size: clamp(50px, 7vw, 104px); line-height: 0.95; letter-sp
 .path-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px }
 .path-icon.coral { background: var(--ss-coral-soft); color: var(--ss-coral-ink) }
 .path-icon.teal { background: var(--vp-c-brand-soft); color: var(--vp-c-brand-1) }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none }
-.chips li { padding: 7px 12px; border: 1px solid var(--vp-c-divider); border-radius: 999px; font-size: 14px; font-weight: 600 }
 .ticks { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 15px }
 .ticks li { position: relative; padding-left: 26px }
 .ticks li::before { content: ""; position: absolute; left: 2px; top: 5px; width: 12px; height: 7px; border-left: 2.4px solid var(--vp-c-brand-1); border-bottom: 2.4px solid var(--vp-c-brand-1); transform: rotate(-45deg) }
 .path-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: auto }
 .details { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; border-top: 1px solid var(--vp-c-divider) }
-.host-group { display: flex; flex-direction: column; gap: 8px }
-.hosts { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; font-size: 14px }
-.hosts dt { font-weight: 600 }
-.hosts dd { margin: 0; color: var(--vp-c-text-2) }
+.steps { list-style: decimal; display: flex; flex-direction: column; gap: 12px; margin: 0; padding-left: 22px; font-size: 15px; line-height: 1.5 }
+.steps li::marker { font-weight: 700 }
+.steps .code { margin-top: 8px; margin-left: -22px }
 .setup-tabs { display: flex; flex-wrap: wrap; gap: 6px }
 .setup-tabs button { min-height: 44px; padding: 0 12px; border: 1px solid var(--vp-c-divider); border-radius: 999px; background: var(--ss-card); color: var(--vp-c-text-1); font: 600 13px var(--vp-font-family-base); cursor: pointer }
 .setup-tabs button[aria-pressed="true"] { background: var(--vp-c-text-1); border-color: var(--vp-c-text-1); color: var(--vp-c-bg) }
@@ -458,7 +420,6 @@ h1 { margin: 0; font-size: clamp(50px, 7vw, 104px); line-height: 0.95; letter-sp
 .code pre:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: -2px }
 /* Commands never wrap (a wrapped "--host" reads as two commands); they scroll inside their box, at every width. */
 .code pre { margin: 0; padding: 12px 16px 14px; overflow-x: auto; white-space: pre; font: 13px/1.7 var(--vp-font-family-mono); color: var(--ss-code-ink) }
-.details .small code { white-space: nowrap }
 .code code { background: none; padding: 0; color: inherit; font: inherit }
 .copy { min-height: 36px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 8px; background: rgba(255, 255, 255, 0.08); color: var(--ss-code-ink); font: 600 12px var(--vp-font-family-base); letter-spacing: 0; text-transform: none; cursor: pointer }
 .copy:hover { background: rgba(255, 255, 255, 0.16) }
@@ -477,11 +438,7 @@ h1 { margin: 0; font-size: clamp(50px, 7vw, 104px); line-height: 0.95; letter-sp
 .closing-copy { flex: 1 1 440px; min-width: 0 }
 .closing h2 { color: #f9f7f2; font-size: clamp(32px, 4.4vw, 58px) }
 .closing h2 em { color: #ff8a73 }
-.closing-install { flex: 1 1 360px; min-width: 0; display: flex; flex-direction: column; gap: 10px }
-.closing .small { color: #b9bcd6 }
-.closing .small a { color: #f9f7f2; text-decoration: underline; text-underline-offset: 3px }
-.code.dark { background: #23284a }
-.code.dark pre { color: #e4e3f0 }
+.closing .small { margin-top: 20px; color: #b9bcd6 }
 
 /* Tablet */
 @media (max-width: 1024px) {
@@ -506,9 +463,7 @@ h1 { margin: 0; font-size: clamp(50px, 7vw, 104px); line-height: 0.95; letter-sp
   .number { padding: 18px }
   .ratio { font-size: 52px }
   .numbers { gap: 12px }
-  .hosts { grid-template-columns: minmax(0, 1fr); gap: 2px }
-  .hosts dd { margin-bottom: 8px }
-  .closing { border-radius: 22px }
+      .closing { border-radius: 22px }
   .closing .cta .btn { flex: 1 1 auto; justify-content: center }
 }
 @media (prefers-reduced-motion: reduce) { .btn { transition: none } }
