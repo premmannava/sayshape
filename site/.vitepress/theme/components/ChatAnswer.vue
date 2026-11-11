@@ -3,9 +3,11 @@
  * One answer in the chat thread: its own engine, drawn straight on the page
  * as the model streams, and live after it finishes (its tabs, sliders and
  * buttons keep their own state). Above it, the model's thinking, live while it
- * thinks and folded away once it writes. Under it, a quiet footer: the spec
- * the model wrote, Copy text, Save image, where the time went (waiting,
- * thinking, writing, SayShape's own drawing), and the actions the answer sent.
+ * thinks and folded into one line once it writes, on a bar that also holds
+ * Save image and Copy text where they're seen. Under it: the spec the model
+ * wrote, how long the answer took as one bar split by stage (waiting,
+ * thinking, writing) with SayShape's own drawing time beside it, and the
+ * actions the answer sent.
  * The engine is destroyed with the component, which is how "New chat" frees it.
  */
 import { computed, nextTick, ref, shallowRef, watch } from "vue";
@@ -50,6 +52,11 @@ const thoughtId = computed(() => `chat-thought-${props.turn.id}`);
 /** Thinking, shown live until the first line arrives. */
 const thinkingLive = computed(() => busy.value && !drawn.value && !!props.turn.thought);
 const times = computed(() => stages({ ...props.turn, drawMs: drawMs.value }));
+/** The stages that add up to the total, in order, for the bar; drawing overlaps writing, so it's told apart. */
+const spans = computed(() => times.value.filter((s) => s.label !== "Total" && s.label !== "Drew").map((s) => ({ ...s, key: s.label.split(" ")[0]!.toLowerCase() })));
+const total = computed(() => times.value.find((s) => s.label === "Total")?.ms);
+const drew = computed(() => times.value.find((s) => s.label === "Drew")?.ms);
+const finished = computed(() => props.turn.status === "done" || (props.turn.status === "stopped" && drawn.value));
 const thoughtFor = computed(() => {
   const t = times.value.find((s) => s.label === "Thought");
   return t ? `Thought for ${duration(t.ms)}` : "Thinking";
@@ -152,19 +159,28 @@ async function copy(what: "text" | "spec") {
       <p class="ca-think-label" role="status"><span class="ca-dot" aria-hidden="true"></span>Thinking</p>
       <div ref="thoughtEl" class="ca-think-text" aria-label="The model's thinking so far">{{ turn.thought }}</div>
     </div>
-    <div v-else-if="turn.thought" class="ca-think">
-      <button type="button" class="ca-link ca-think-toggle" :aria-expanded="showThought" :aria-controls="thoughtId" @click="showThought = !showThought">
-        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" :class="{ open: showThought }"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-        {{ thoughtFor }}
-      </button>
-      <div v-if="showThought" :id="thoughtId" class="ca-think-text full" tabindex="0" aria-label="The model's thinking">{{ turn.thought }}</div>
+    <!-- Once it draws: the thinking folded to one line, and what can be done with the answer. The buttons hold their place while it's still writing, so nothing moves when it ends. -->
+    <div v-else-if="drawn" class="ca-think">
+      <div class="ca-bar">
+        <button v-if="turn.thought" type="button" class="ca-link ca-think-toggle" :aria-expanded="showThought" :aria-controls="thoughtId" @click="showThought = !showThought">
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" :class="{ open: showThought }"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          {{ thoughtFor }}
+        </button>
+        <span class="ca-copied" role="status">{{ copied }}</span>
+        <div class="ca-acts">
+          <button type="button" class="ca-act" :disabled="!sayshape || !finished" @click="saveImage">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            Save image
+          </button>
+          <button type="button" class="ca-act" :disabled="!sayshape || !finished" @click="copy('text')">
+            <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="2" /><path d="M5 15V6.5A2.5 2.5 0 0 1 7.5 4H15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+            Copy text
+          </button>
+        </div>
+      </div>
+      <div v-if="showThought && turn.thought" :id="thoughtId" class="ca-think-text full" tabindex="0" aria-label="The model's thinking">{{ turn.thought }}</div>
     </div>
 
-    <div v-if="busy && !drawn && !thinkingLive" class="ca-wait" aria-hidden="true">
-      <span class="ca-ghost" style="width: 46%"></span>
-      <span class="ca-ghost" style="width: 78%"></span>
-      <span class="ca-ghost short" style="width: 30%"></span>
-    </div>
     <div v-show="drawn" class="sayshape-canvas-wrap ca-canvas">
       <canvas ref="canvas" :aria-label="`Answer to “${turn.question}”, drawn by SayShape`"></canvas>
     </div>
@@ -179,24 +195,27 @@ async function copy(what: "text" | "spec") {
     </div>
     <p v-else-if="turn.status === 'stopped'" class="ca-note">Stopped. Ask again, or ask something else.</p>
 
-    <div v-if="turn.status === 'done' || (turn.status === 'stopped' && drawn)" class="ca-foot">
+    <!-- How long it took: one number, then a bar split by where the time went. -->
+    <div v-if="turn.status === 'done' && total !== undefined" class="ca-time">
+      <p class="ca-time-head">
+        <strong>Answered in {{ duration(total) }}</strong>
+        <span v-if="drew !== undefined">SayShape drew it in {{ duration(drew) }}</span>
+      </p>
+      <div class="ca-time-bar" aria-hidden="true">
+        <span v-for="s in spans" :key="s.label" :class="s.key" :style="{ flexGrow: Math.max(s.ms, 1) }"></span>
+      </div>
+      <ul class="ca-time-key">
+        <li v-for="s in spans" :key="s.label"><i :class="s.key" aria-hidden="true"></i>{{ s.label }} <b>{{ duration(s.ms) }}</b></li>
+      </ul>
+    </div>
+    <div v-if="finished" class="ca-foot">
       <button type="button" class="ca-link" :aria-expanded="showSpec" :aria-controls="specId" @click="showSpec = !showSpec">
         {{ showSpec ? "Hide spec" : "Spec" }}<span v-if="turn.spec"> · {{ specLines.length }} lines</span>
       </button>
-      <button type="button" class="ca-link" :disabled="!sayshape" @click="copy('text')">Copy text</button>
-      <button type="button" class="ca-link" :disabled="!sayshape" @click="saveImage">Save image</button>
       <button v-if="problems" type="button" class="ca-link ca-warn" :aria-controls="specId" @click="showSpec = true">
         {{ problems }} {{ problems === 1 ? "problem" : "problems" }} SayShape worked around
       </button>
-      <span class="ca-copied" role="status">{{ copied }}</span>
-    </div>
-    <div v-if="turn.status === 'done' && times.length" class="ca-times">
-      <dl>
-        <div v-for="s in times" :key="s.label" :class="{ total: s.label === 'Total', draw: s.label === 'Drew' }">
-          <dt>{{ s.label }}</dt><dd>{{ duration(s.ms) }}</dd>
-        </div>
-      </dl>
-      <span class="ca-meta">{{ summary(turn) }}</span>
+      <span v-if="turn.status === 'done'" class="ca-meta">{{ summary(turn) }}</span>
     </div>
     <p v-for="(a, i) in actions" :key="i + a" class="ca-action">
       <span class="ca-action-label">Your app would receive</span> <code>{{ a }}</code>
@@ -223,18 +242,6 @@ async function copy(what: "text" | "spec") {
 .ca-canvas canvas { display: block }
 .ca-canvas canvas:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 2px; border-radius: 8px }
 
-.ca-wait { display: grid; gap: 10px; padding: 6px 0 2px }
-.ca-ghost {
-  display: block;
-  height: 14px;
-  border-radius: 7px;
-  background: linear-gradient(90deg, var(--vp-c-divider) 0%, var(--vp-c-bg-alt) 50%, var(--vp-c-divider) 100%);
-  background-size: 200% 100%;
-  animation: ca-sweep 1.4s ease-in-out infinite;
-}
-.ca-ghost.short { height: 40px; border-radius: 12px }
-@keyframes ca-sweep { from { background-position: 100% 0 } to { background-position: -100% 0 } }
-
 .ca-think { display: flex; flex-direction: column; gap: 6px; min-width: 0 }
 .ca-think-label { display: flex; align-items: center; gap: 8px; margin: 0; font: 500 12px var(--vp-font-family-mono); letter-spacing: 0.04em; color: var(--vp-c-text-2) }
 .ca-think-text {
@@ -252,6 +259,26 @@ async function copy(what: "text" | "spec") {
 .ca-think.live .ca-think-text { mask-image: linear-gradient(to bottom, transparent, #000 2.2em); scrollbar-width: none }
 .ca-think-text.full { max-height: 320px }
 .ca-think-text:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 2px; border-radius: 2px }
+.ca-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-height: 34px }
+.ca-acts { display: flex; gap: 8px; margin-left: auto }
+/* Save image and Copy text: real buttons, at the top of the answer where they're seen. */
+.ca-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 13px 0 10px;
+  border: 1.5px solid var(--vp-c-border);
+  border-radius: 999px;
+  background: var(--ss-card);
+  font: 600 13px var(--vp-font-family-base);
+  color: var(--vp-c-text-1);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ca-act:hover:not([disabled]) { border-color: var(--vp-c-text-1); box-shadow: var(--ss-lift-sm) }
+.ca-act:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 2px }
+.ca-act[disabled] { color: var(--vp-c-text-3); border-color: var(--vp-c-divider); background: none; cursor: default }
 .ca-think-toggle { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; color: var(--vp-c-text-2); text-decoration: none }
 .ca-think-toggle svg { transition: transform 0.15s }
 .ca-think-toggle svg.open { transform: rotate(90deg) }
@@ -282,12 +309,19 @@ async function copy(what: "text" | "spec") {
 .ca-link[disabled] { color: var(--vp-c-text-3); cursor: default }
 .ca-link.ca-warn { color: var(--sayshape-warn); text-decoration-color: currentColor }
 .ca-meta { font: 12px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
-.ca-times { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin-top: -4px }
-.ca-times dl { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0 }
-.ca-times dl > div { display: flex; align-items: baseline; gap: 5px }
-.ca-times dt { font: 500 10.5px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-2) }
-.ca-times dd { margin: 0; font: 600 12.5px var(--vp-font-family-mono); color: var(--vp-c-text-1) }
-.ca-times .total dd { color: var(--vp-c-text-1) }
+.ca-time { display: grid; gap: 7px; max-width: 560px; margin-top: 2px }
+.ca-time-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin: 0; font-size: 13px; color: var(--vp-c-text-2) }
+.ca-time-head strong { font: 600 14.5px var(--vp-font-family-base); color: var(--vp-c-text-1) }
+/* One bar for the whole wait, split by stage: the model's thinking is usually most of it. */
+.ca-time-bar { display: flex; gap: 2px; height: 6px }
+.ca-time-bar span { flex: 0 1 0; min-width: 3px; border-radius: 3px }
+.ca-time-key { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--vp-c-text-2) }
+.ca-time-key li { display: inline-flex; align-items: center; gap: 6px }
+.ca-time-key i { width: 8px; height: 8px; border-radius: 2px }
+.ca-time-key b { font-weight: 600; color: var(--vp-c-text-1) }
+.ca-time .waited { background: var(--vp-c-border) }
+.ca-time .thought { background: var(--vp-c-text-3) }
+.ca-time .wrote { background: var(--chat-fill) }
 .ca-copied { font-weight: 600; color: var(--vp-c-text-1) }
 .ca-copied:empty { display: none }
 .ca-action { margin: 0; font-size: 12.5px; color: var(--vp-c-text-2); overflow-wrap: anywhere }

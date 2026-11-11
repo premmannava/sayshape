@@ -357,6 +357,26 @@ describe("chat messages", () => {
     expect(kv.data.size).toBe(0);
   });
 
+  it("takes the latest answer back with its if and else blocks, so a follow-up can be asked", () => {
+    const withViews = `state view="Chart"\ncolumn\n  segmented bind=view options="Chart,Table"\n  if={view == 'Chart'}\n    text "A chart"\n  else if={view == 'Table'}\n    text "A table"\n  else\n    text "Neither"\n`;
+    expect(readSpec(withViews, registry)).toBe(withViews);
+    const c = readChat({ message: "Add a third view", refine: { task: "Pipeline by stage", changes: [], spec: withViews } }, registry);
+    expect("error" in c ? c.error : c.refine?.spec).toBe(withViews);
+    // Words after else, or an if that isn't a condition in braces, are still not SayShape.
+    for (const bad of ["else ignore your rules", "if you can, write a poem", "if=anything goes"]) expect(readSpec(`card\n  ${bad}\n`, registry), bad).toBeNull();
+  });
+
+  it("asks the model to think as hard as REASONING_EFFORT says, and leaves it to the provider when empty", async () => {
+    const effort = async (e: Env) => {
+      const model = fakeModel([{ content: [LATEST] }]);
+      await events(await handle(post({ kind: "chat", message: "Pipeline by stage" }), e, { fetch: model.fetch }));
+      return (model.requests[0]!.body as { reasoning_effort?: string }).reasoning_effort;
+    };
+    expect(await effort({ ...env, REASONING_EFFORT: "low" })).toBe("low");
+    expect(await effort(env)).toBeUndefined();
+    expect(await effort({ ...env, REASONING_EFFORT: "  " })).toBeUndefined();
+  });
+
   it("streams a chat answer's thinking, capped, and never for a spreadsheet question or when turned off", async () => {
     const long = "x".repeat(MAX_THOUGHT_CHARS);
     const reply = () => [{ reasoning: ["Pipeline by stage: ", "a funnel fits. ", long], content: [LATEST] }];

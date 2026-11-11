@@ -21,6 +21,14 @@ export interface ModelConfig {
   temperature?: number;
   /** Default 4000. Reasoning models count their thinking here too. */
   maxTokens?: number;
+  /**
+   * How hard a reasoning model thinks before answering, sent as
+   * reasoning_effort, in the server's own words (DeepSeek: "none", "low",
+   * "high", "max"; OpenAI: "minimal" to "high"). Left out by default, so the
+   * server decides, which for DeepSeek means "high": several seconds of
+   * thinking before the first line. Some servers reject the field.
+   */
+  reasoningEffort?: string;
   /** Extra headers, e.g. for a router's analytics. */
   headers?: Record<string, string>;
   /**
@@ -111,6 +119,7 @@ export async function* streamChat(
         stream: true,
         temperature: config.temperature ?? 0.2,
         max_tokens: config.maxTokens ?? 4000,
+        ...(config.reasoningEffort ? { reasoning_effort: config.reasoningEffort } : {}),
         ...(config.streamUsage ? { stream_options: { include_usage: true } } : {}),
       }),
     });

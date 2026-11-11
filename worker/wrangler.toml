@@ -15,6 +15,10 @@ GENERATION_ENABLED = "true"
 # "false" stops showing the model's thinking on the chat page. Thinking is free text, so while
 # it's shown the key can be used to get prose back (up to 12,000 characters an answer).
 SHOW_THINKING = "true"
+# How hard the model thinks before it writes: DeepSeek takes "none", "low", "high" or "max" and
+# uses "high" when this is empty, which is most of the wait for an answer. "none" is fastest and
+# shows no thinking.
+REASONING_EFFORT = "low"
 # Questions answered per day for the whole site. Needs the ANSWER_COUNT namespace below.
 DAILY_ANSWERS = "500"
 # Set to "false" if the model refuses stream_options; the page then shows no token counts.

@@ -74,6 +74,7 @@ These are public values, so they're Variables, not Secrets. The chat page reads 
 - Another model: edit `MODEL` and `MODEL_LABEL` in `wrangler.toml` and `npx wrangler deploy`.
 - Another provider: any OpenAI-compatible API works. Change `MODEL_URL`, `MODEL` and the `MODEL_API_KEY` secret.
 - More or fewer questions a day: change `DAILY_ANSWERS` and deploy.
+- Faster or more careful answers: `REASONING_EFFORT` is how hard the model thinks before it writes (DeepSeek: `none`, `low`, `high`, `max`; `high` when it's empty). Thinking is most of the wait, and `none` leaves no thinking to show.
 - Turn live answers off: set `GENERATION_ENABLED = "false"` and deploy.
 - Rotate the key: create a new one at the provider, `npx wrangler secret put MODEL_API_KEY`, revoke the old one.
 - If answers fail with "didn't answer as expected" for every question, the model may refuse `stream_options`: set `STREAM_USAGE = "false"`.

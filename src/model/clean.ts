@@ -137,12 +137,14 @@ export class SpecFilter {
   }
 }
 
-/** A line that could start a spec: a declaration, a comment, or a known element name. */
+/** A line that could start a spec: a declaration, a comment, a condition block, or a known element name. */
 export function sayShapeLineTest(isElement: (name: string) => boolean): (line: string) => boolean {
   return (line) => {
     const t = line.trim();
     if (!t) return false;
     if (t.startsWith("#")) return true;
+    // Condition blocks aren't elements: a line holding only if={…}, and else or else if={…} after it.
+    if (/^if=\{.*\}$/.test(t) || /^else(\s+if=\{.*\})?$/.test(t)) return true;
     const word = /^[A-Za-z][\w-]*/.exec(t)?.[0];
     if (!word) return false;
     if (word === "state") return /^state(\s|$)/.test(t);
