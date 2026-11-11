@@ -18,10 +18,14 @@ import { highlightSpec } from "../sayshape/highlight";
 import { useSayShape } from "../sayshape/useSayShape";
 import { fromBase64, isSiteDark, prefersReducedMotion, replayStream, toBase64Url } from "../sayshape/runtime";
 import { onHostEvents, type HostEvent } from "../sayshape/events";
+import PgPicker, { type PickerGroup } from "./PgPicker.vue";
 
 // ------------------------------------------------------------ what can be loaded
 
 // The picker's list (the gallery's examples and the development samples, grouped) is in ../sayshape/playgroundSources.
+const pickGroups: PickerGroup[] = sourceGroups.map((g) => ({ label: g.label, items: g.items.map((s) => ({ value: s.key, label: s.title })) }));
+const modeGroups: PickerGroup[] = [{ items: [{ value: "site", label: "Match site" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }] }];
+const presetGroups: PickerGroup[] = [{ items: PRESETS.map((p) => ({ value: p.id, label: p.label })) }];
 const DEFAULT_KEY = examples[0]!.id;
 
 // ------------------------------------------------------------ state
@@ -199,12 +203,8 @@ function load(key: string, spec = sourceOf(key)) {
   history.replaceState(history.state, "", url);
 }
 
-function onPick(e: Event) {
-  const key = (e.target as HTMLSelectElement).value;
-  if (edited.value && !confirm("Load another spec? Your edits to this one will be lost.")) {
-    (e.target as HTMLSelectElement).value = sourceKey.value;
-    return;
-  }
+function onPick(key: string) {
+  if (edited.value && !confirm("Load another spec? Your edits to this one will be lost.")) return;
   load(key);
 }
 
@@ -398,12 +398,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
     </header>
 
     <div ref="toolbar" class="pg-toolbar" role="toolbar" aria-label="Playground controls">
-      <select class="pg-select pg-pick" :value="sourceKey" aria-label="Spec to load" @change="onPick">
-        <option v-if="!sourceKey" value="">From a link</option>
-        <optgroup v-for="g in sourceGroups" :key="g.label" :label="g.label">
-          <option v-for="s in g.items" :key="s.key" :value="s.key">{{ s.title }}</option>
-        </optgroup>
-      </select>
+      <PgPicker class="pg-pick" :model-value="sourceKey" :groups="pickGroups" label="Spec to load" placeholder="From a link" search @update:model-value="onPick" />
       <button class="sayshape-btn primary small" type="button" :disabled="!sayshape || streaming" title="Play the current spec into the preview line by line, as a model's response would arrive" @click="replay">▶ Replay as stream</button>
       <div class="pg-menu" @keydown="onMenuKeydown" @focusout="onMenuFocusOut">
         <button class="sayshape-btn quiet small" type="button" data-menu="reset" aria-haspopup="menu" :aria-expanded="menu === 'reset'" :disabled="!sayshape" @click="toggleMenu('reset')">Reset <span class="pg-caret" aria-hidden="true"></span></button>
@@ -473,14 +468,8 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
         <div class="pg-pane-head">
           <h2>Preview</h2>
           <div class="pg-looks">
-            <select v-model="mode" class="pg-select" aria-label="Preview light or dark">
-              <option value="site">Match site</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-            <select v-model="preset" class="pg-select" aria-label="Preview color style">
-              <option v-for="p in PRESETS" :key="p.id" :value="p.id">{{ p.label }}</option>
-            </select>
+            <PgPicker :model-value="mode" :groups="modeGroups" label="Preview light or dark" small @update:model-value="mode = $event as typeof mode" />
+            <PgPicker :model-value="preset" :groups="presetGroups" label="Preview color style" small @update:model-value="preset = $event as PresetId" />
             <label class="pg-color" title="Your brand color, laid over the style. The spec doesn't change.">
               <input type="color" :value="swatch" aria-label="Your brand color for the preview" @input="pickAccent">
               <span>{{ accent ?? "Your color" }}</span>
@@ -569,18 +558,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .pg-note a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
 
 .pg-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 0; border-top: 1px solid var(--vp-c-divider) }
-.pg-select {
-  height: 34px;
-  min-width: 112px;
-  padding: 0 30px 0 14px;
-  border: 1.5px solid var(--vp-c-divider);
-  border-radius: 999px;
-  background: var(--ss-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23778' fill='none' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 12px center;
-  appearance: none;
-  color: var(--vp-c-text-1);
-  font: 500 14px var(--vp-font-family-base);
-}
-.pg-pick { min-width: 240px; margin-right: 6px }
+.pg-pick { width: 260px; margin-right: 6px }
 .pg-hide { margin-left: auto }
 .pg-notice { margin-left: 6px; font-size: 13.5px; color: var(--vp-c-brand-1); font-weight: 600 }
 
@@ -601,7 +579,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
   box-shadow: var(--ss-lift-sm);
 }
 .pg-menu-list button { all: unset; box-sizing: border-box; display: grid; gap: 2px; padding: 8px 12px; border-radius: 9px; cursor: pointer }
-.pg-menu-list button:hover, .pg-menu-list button:focus-visible { background: var(--sayshape-hl) }
+.pg-menu-list button:hover, .pg-menu-list button:focus-visible { background: color-mix(in srgb, var(--vp-c-text-1) 7%, transparent) }
 .pg-menu-list button:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: -2px }
 .pg-menu-list b { font: 600 14px var(--vp-font-family-base); color: var(--vp-c-text-1) }
 .pg-menu-list span { font-size: 12.5px; line-height: 1.4; color: var(--vp-c-text-2) }
@@ -626,7 +604,6 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .pg-count { font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
 .pg-hint { font: 11.5px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
 .pg-looks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
-.pg-looks .pg-select { height: 30px; font-size: 13px }
 .pg-color { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px 0 5px; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; background: var(--ss-card); font: 500 13px var(--vp-font-family-base); color: var(--vp-c-text-1); cursor: pointer }
 .pg-color:focus-within { outline: 2px solid var(--vp-c-brand-1); outline-offset: 2px }
 .pg-color input { width: 20px; height: 20px; padding: 0; border: 0; background: none; cursor: pointer }
@@ -716,7 +693,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
   .pg { padding: 20px 16px 48px }
   .pg-head { margin-bottom: 12px }
   .pg-hide { display: none }
-  .pg-pick { flex: 1 1 100%; margin-right: 0 }
+  .pg-pick { flex: 1 1 100%; width: auto; margin-right: 0 }
   .pg-notice { flex: 1 1 100%; margin-left: 0 }
   .pg-notice:empty { display: none }
   /* A menu as wide as the toolbar, under it: one hung from its button would run off the screen. */
