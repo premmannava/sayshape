@@ -1,0 +1,14 @@
+# Limitations
+
+SayShape draws everything itself, so it gives up what the browser normally provides for free. Today it does **not** have:
+
+- **Forms beyond the basics.** `input` takes several lines (`lines=`) and says what's wrong once a field has been left (`required=`, `kind=email`, `kind=number`, or its own `error=`), but there's no form element that checks every field at once on submit, no rich text editing, and no pattern or length checks beyond `error=` and `max=`. A submit button can be held back with `disabled={…}`.
+- **Text selection and browser find.** To copy, a host can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
+- **Toasts or sheets.** `tip=` on any element shows a short tooltip. Popups serve one element's own panel (a select's list, a date picker's calendar, a menu's actions; a menu has no submenus or separators), and `dialog` is the one overlay: one open at a time, centred, over a dimmed screen. There are no toasts or sheets that slide in from an edge. `scroll` scrolls up and down only, at one of three heights, and lays out everything inside it (no virtualization), so very long lists should still be paged.
+- **Dates and times beyond the basics.** `date-picker` picks a calendar day (or a range with `range=true`), with no times. `schedule` lays out times as `HH:MM` text and dates as `YYYY-MM-DD`, but has no time zones, recurring events, blocks past midnight, month view, or dragging blocks to move them. Names are in US English with weeks starting on Sunday.
+- **Selects beyond the basics.** At most 200 options, one choice or several (`multiple=true`), with no typing to search, option groups, or options showing anything but text.
+- **Tables beyond the basics.** `table` shows at most 200 rows and 64 columns. A table too wide for its space scrolls sideways, but long tables don't scroll up and down, and there are no sticky headers, editable cells, multi-row selection, nested elements in cells, or resizing and reordering columns.
+- **Charts beyond the basics.** `chart` draws bars (up or across, `kind=hbar`, or stacked), lines or areas of up to 6 series on one shared scale (with a legend), or a pie or donut of one field (at most 6 slices; smaller ones are summed into Other), from at most 200 items with labels evenly spaced in list order. Horizontal bars stop at 1200 px of rows and ask for `take()`. A stat's sparkline takes a list of numbers; `pluck()` takes one from a list of records. `kind=scatter` has a numeric x-axis; the other kinds space their items evenly in list order. No series from different lists, zoom, time axes, or pressing a bar.
+- **Right-to-left or complex-script text shaping** beyond what the canvas does on its own.
+
+Accessibility is covered by a hidden mirror of the canvas (see [Accessibility](engine.md#accessibility)); check it with assistive technology before relying on it where conformance is required.

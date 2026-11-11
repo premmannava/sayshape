@@ -5,7 +5,7 @@
  *   state due=""
  *   date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"
  *
- * Rules (also in the README):
+ * Rules (also in the docs, docs/components.md):
  * - The value is YYYY-MM-DD text, a calendar day with no time or time zone,
  *   or "" for none. Dates are worked out in src/dates.ts, never with
  *   JavaScript's Date, so they never shift by a day.

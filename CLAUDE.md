@@ -1,6 +1,6 @@
 # SayShape: brief for AI assistants
 
-Read this before changing anything in this repository. It explains what SayShape is, the rules that keep it working, and how to make changes safely. The phase plan is in [`docs/PLAN.md`](docs/PLAN.md); user-facing documentation is in [`README.md`](README.md).
+Read this before changing anything in this repository. It explains what SayShape is, the rules that keep it working, and how to make changes safely. The phase plan is in [`docs/PLAN.md`](docs/PLAN.md); [`README.md`](README.md) is a one-page introduction, and the reference it used to hold is in `docs/`: [`language.md`](docs/language.md), [`components.md`](docs/components.md) (generated), [`engine.md`](docs/engine.md), [`model.md`](docs/model.md), [`development.md`](docs/development.md) and [`limitations.md`](docs/limitations.md). Keep the README short: new reference material goes in those files.
 
 ## What SayShape is
 
@@ -89,7 +89,8 @@ npm run guide:size         # model guide size by section, per mode and profile
 npm run typecheck          # tsc --noEmit
 npm run build              # library → dist/
 npm run build:playground   # static playground → dist-playground/
-npm run docs:components    # regenerate the README component reference
+npm run docs:components    # regenerate the component reference (docs/components.md)
+npm run readme:hero        # redraw the README's animated picture from a recorded run (after npm run build)
 npm run docs:check         # fail if it's out of date
 npm run new:component -- <name>   # scaffold and register a component
 npm run build:world        # regenerate map outlines (rarely needed)
@@ -127,8 +128,8 @@ Language changes touch several places. Do them together, in this order:
 2. Validation and diagnostics for the new syntax, with clear messages that say how to fix the problem.
 3. `src/prompt.ts` so the model guide explains it.
 4. Tests, including streaming (every prefix parses) and, for expressions, sandbox escape attempts.
-5. The language section of `README.md`.
-6. Keep old specs working, or document the breaking change in the README.
+5. The language reference, [`docs/language.md`](docs/language.md).
+6. Keep old specs working, or document the breaking change in `docs/language.md`.
 
 ## Code style
 
