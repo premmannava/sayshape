@@ -23,6 +23,8 @@ export const usesMap = (spec: string) => /^\s*map\b/m.test(spec);
 export interface CreateOptions {
   /** Include the world map components (a separate, larger chunk). */
   map?: boolean;
+  /** Include the scene components: drawings a model makes from its own shapes (experimental, opt-in). */
+  scene?: boolean;
   /** Warnings from the engine while running. Default: collected silently. */
   onWarning?: (message: string) => void;
   /** Fixed "today" for date pickers, so examples look the same for everyone. */
@@ -45,6 +47,7 @@ export interface SayShapeModules {
 
 let core: Promise<typeof import("@sayshape/index")> | null = null;
 let mapMod: Promise<typeof import("@sayshape/components/map/index")> | null = null;
+let sceneMod: Promise<typeof import("@sayshape/components/scene/index")> | null = null;
 
 export async function sayShapeModules(): Promise<SayShapeModules> {
   core ??= import("@sayshape/index");
@@ -55,8 +58,9 @@ export async function sayShapeModules(): Promise<SayShapeModules> {
 export async function createSayShape(canvas: HTMLCanvasElement, opts: CreateOptions = {}): Promise<SayShape> {
   core ??= import("@sayshape/index");
   if (opts.map) mapMod ??= import("@sayshape/components/map/index");
-  const [m, map] = await Promise.all([core, opts.map ? mapMod : null, loadFonts()]);
-  const components = [...m.coreComponents, ...(map ? map.mapComponents : [])];
+  if (opts.scene) sceneMod ??= import("@sayshape/components/scene/index");
+  const [m, map, scene] = await Promise.all([core, opts.map ? mapMod : null, opts.scene ? sceneMod : null, loadFonts()]);
+  const components = [...m.coreComponents, ...(scene ? scene.sceneComponents : []), ...(map ? map.mapComponents : [])];
   return new m.SayShape(canvas, {
     components,
     // The site shell decides light or dark; see watchSiteTheme.

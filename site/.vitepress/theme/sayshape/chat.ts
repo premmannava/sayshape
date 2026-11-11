@@ -372,10 +372,16 @@ export interface Suggestion {
   question: string;
 }
 
-/** Questions an enterprise assistant gets, and a couple anyone asks. The model makes up example figures. */
+/**
+ * Questions an enterprise assistant gets, and a couple anyone asks. The model
+ * makes up example figures. Two lead to a drawing (a scene), the answer a
+ * plain chat app can't give.
+ */
 export const SUGGESTIONS: readonly Suggestion[] = [
   { label: "Sales", question: "How is this quarter's pipeline looking, by stage?" },
   { label: "Support", question: "Which support queues are over their response-time target this week?" },
   { label: "Planning", question: "Plan a 3-day team offsite in Lisbon with a budget per day" },
   { label: "Money", question: "Compare three phone plans for a family of four" },
+  { label: "Operations", question: "Draw our production line and let me click each machine to see how it's doing" },
+  { label: "IT", question: "Draw our network and make the unhealthy servers stand out" },
 ];

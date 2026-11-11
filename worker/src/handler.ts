@@ -30,9 +30,11 @@
  */
 import { generateSpec, ModelError, type GenerateOptions, type Phase } from "../../src/model";
 import { coreComponents } from "../../src/components";
+import { mapComponents } from "../../src/components/map";
+import { sceneComponents } from "../../src/components/scene";
 import { Registry } from "../../src/registry";
 import { answerGuide, answerRequest, checkAnswer, DATA, readQuestion } from "./answer";
-import { chatGuide, chatRequest, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
+import { chatGuide, chatRequest, checkDrawing, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
 
 /** The part of a Workers KV namespace the daily count uses. */
 export interface Counter {
@@ -91,11 +93,20 @@ export const MAX_BODY_BYTES = 16_000;
 export const MAX_THOUGHT_CHARS = 12_000;
 /** No request is read past this, whatever its kind. */
 const MAX_ANY_BODY_BYTES = Math.max(MAX_BODY_BYTES, MAX_CHAT_BODY_BYTES);
-const MAX_TOKENS = 3_000;
+/**
+ * The most a reply may be, thinking included. A drawing with its controls runs to about 2,000
+ * tokens before any thinking, and an answer cut off here ends in a broken line and a repair.
+ */
+const MAX_TOKENS = 5_000;
 const DEFAULT_URL = "https://integrate.api.nvidia.com/v1";
 const DEFAULT_DAILY = 500;
 const registry = new Registry(coreComponents);
-const CHAT_GUIDE = chatGuide(registry);
+/**
+ * Chat answers may also draw (scene: the model's own shapes, pressable and moving) and show a
+ * world map. Spreadsheet answers keep to the core elements, and to their smaller guide.
+ */
+export const chatRegistry = new Registry([...coreComponents, ...sceneComponents, ...mapComponents]);
+const CHAT_GUIDE = chatGuide(chatRegistry);
 
 const json = (status: number, body: unknown, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
@@ -165,16 +176,20 @@ async function takeDaily(env: Env, today: string): Promise<boolean> {
 type JobOptions = Pick<GenerateOptions, "request" | "guide" | "refine" | "stateNames" | "check">;
 interface Job {
   options: JobOptions;
+  /** The elements the answer may use. */
+  registry: Registry;
   /** What the person sees when the model gives no usable answer. */
   unanswered: string;
 }
 
 function chatJob(body: Record<string, unknown>): Job | { error: string } {
-  const c = readChat(body, registry);
+  const c = readChat(body, chatRegistry);
   if ("error" in c) return c;
+  const check = (spec: string) => checkDrawing(spec, chatRegistry);
   return {
+    registry: chatRegistry,
     // A follow-up's request is the visitor's words; refineMessages frames them as a change to the latest answer.
-    options: c.refine ? { request: c.message, refine: c.refine, guide: CHAT_GUIDE } : { request: chatRequest(c.message), guide: CHAT_GUIDE },
+    options: c.refine ? { request: c.message, refine: c.refine, guide: CHAT_GUIDE, check } : { request: chatRequest(c.message), guide: CHAT_GUIDE, check },
     unanswered: "The model didn't draw anything for that. Try asking it another way.",
   };
 }
@@ -183,6 +198,7 @@ function dataJob(body: Record<string, unknown>): Job | { error: string } {
   const q = readQuestion(body);
   if ("error" in q) return q;
   return {
+    registry,
     options: { request: answerRequest(q), guide: answerGuide(), stateNames: [DATA], check: checkAnswer },
     unanswered: "The model couldn't answer that one from the spreadsheet. Try asking it another way.",
   };
@@ -265,7 +281,7 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
           streamUsage: env.STREAM_USAGE !== "false",
           ...(env.REASONING_EFFORT?.trim() ? { reasoningEffort: env.REASONING_EFFORT.trim() } : {}),
         },
-        registry,
+        registry: job.registry,
         ...job.options,
         // One repair, only for errors: lines the parser had to skip, or (for data) an answer that doesn't read the data.
         repairOn: "errors",
