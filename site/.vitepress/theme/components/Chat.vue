@@ -260,7 +260,7 @@ const examples = withBase("/examples/");
       <div v-if="!turns.length" class="chat-empty">
         <p class="ss-eyebrow">Live model</p>
         <h2>What would your assistant show?</h2>
-        <p class="chat-empty-note">Ask the way you'd ask your company's assistant. The model has no data of its own, so it makes up example figures and says so.</p>
+        <p class="chat-empty-note">Ask the way you'd ask your own assistant, at home or at work. The model has no data of its own, so it makes up example figures and says so.</p>
         <ul class="chat-suggest" aria-label="Suggested questions">
           <li v-for="s in SUGGESTIONS" :key="s.question">
             <button type="button" :disabled="!!blocked" @focus="getReady" @pointerenter="getReady" @click="ask(s.question)">

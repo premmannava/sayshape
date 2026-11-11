@@ -14,6 +14,9 @@
  * in Node.
  */
 import { sayShapeLineTest, type RefineContext } from "../../src/model";
+import { reviewScenes } from "../../src/components/scene";
+import { parse } from "../../src/parser";
+import type { Diagnostic } from "../../src/types";
 import type { GuideOptions } from "../../src/prompt";
 import type { Registry } from "../../src/registry";
 
@@ -114,7 +117,20 @@ export function chatGuide(registry: Registry): GuideOptions {
     profile: registry.all().map((c) => c.type).filter((t) => !leftOut.has(t)),
     notes: `A demo chat on SayShape's website: people ask anything, as if this were their company's assistant.
 Answer with one screen: the direct answer first (a stat, callout or title), then the detail in whatever shows it best, with controls that change what's shown.
+A thing with parts and a layout (a production line, network, floor plan, route, machine): draw it with scene, its parts pressable with on=, the pressed part's detail beside it. Numbers to compare are a chart, never a drawing.
 You have no data or tools. When a question needs figures, make up realistic ones in state and add text "Example figures" style=caption. Never present them as real.
 Output only the finished SayShape spec.`,
   };
+}
+
+/**
+ * The drawing check on a chat answer's scenes: labels cut off or on top of
+ * each other, text too small on a phone, colors too close to read. They're
+ * warnings, so they never cause a repair on their own (a repair doubles what
+ * an answer costs); when the parser's errors cause one, the model gets these
+ * to fix in the same go.
+ */
+export function checkDrawing(spec: string, registry: Registry): Diagnostic[] {
+  if (!/^\s*scene\b/m.test(spec)) return [];
+  return reviewScenes(parse(spec, registry));
 }

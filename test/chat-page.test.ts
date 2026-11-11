@@ -212,7 +212,7 @@ describe("colors", () => {
 
 describe("the empty thread", () => {
   it("suggests questions short enough to send", () => {
-    expect(SUGGESTIONS.length).toBe(4);
+    expect(SUGGESTIONS.length).toBe(6);
     for (const s of SUGGESTIONS) expect(s.question.length).toBeLessThan(120);
     // A spec in this file's own tests parses, so the fixtures above are real answers.
     expect(parse(FIRST, new Registry(coreComponents)).diagnostics).toEqual([]);

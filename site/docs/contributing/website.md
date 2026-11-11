@@ -58,6 +58,7 @@ The landing page's demos are saved specs in `site/examples/home.ts`, all drawn b
 
 `/chat` (`Chat.vue`, one `ChatAnswer.vue` per answer) is the one page where a live model answers. Questions go to the model proxy in `worker/`, which holds the key and writes every message the model reads; its address and the Turnstile site key reach the build as `VITE_SAYSHAPE_MODEL_ENDPOINT` and `VITE_TURNSTILE_SITE_KEY` (see `worker/README.md`). Without the endpoint the page says live answers aren't set up and the question box stays off.
 
+- Answers may draw (the experimental `scene`) and show the world map as well as the core elements: the worker teaches all three and each answer's engine registers them (`scene: true, map: true`), so the two must change together.
 - Each answer is its own engine, drawn on the page's paper rather than in a frame, and stays live after it finishes. "New chat" unmounts them all, which destroys their engines. A chat stops at eight answers (`MAX_ANSWERS`).
 - A follow-up sends the first question, the follow-ups since and the latest answer's spec (`refineMessages`/`nextRefineContext`); older answers' specs never leave the page.
 - The brand color recolors every answer and, once picked, the chat frame (bubbles, the send button, focus outlines). `chatTheme` and `frameColors` keep it readable on the paper and on cards.

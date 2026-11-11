@@ -6,11 +6,12 @@
  * copying it, and the daily cap.
  */
 import { describe, expect, it } from "vitest";
-import { DAILY_LIMIT_MESSAGE, friendlyError, handle, MAX_BODY_BYTES, MAX_THOUGHT_CHARS, type Counter, type Env } from "../worker/src/handler";
+import { chatRegistry, DAILY_LIMIT_MESSAGE, friendlyError, handle, MAX_BODY_BYTES, MAX_THOUGHT_CHARS, type Counter, type Env } from "../worker/src/handler";
 import { answerRequest, checkAnswer, MAX_COLUMNS, MAX_QUESTION_CHARS, readQuestion } from "../worker/src/answer";
-import { CHAT_LEFT_OUT, chatGuide, MAX_CHANGES, MAX_CHAT_BODY_BYTES, MAX_MESSAGE_CHARS, MAX_SPEC_CHARS, readChat, readSpec } from "../worker/src/chat";
+import { CHAT_LEFT_OUT, chatGuide, checkDrawing, MAX_CHANGES, MAX_CHAT_BODY_BYTES, MAX_MESSAGE_CHARS, MAX_SPEC_CHARS, readChat, readSpec } from "../worker/src/chat";
 import { coreComponents } from "../src/components";
 import { Registry } from "../src/registry";
+import { parse } from "../src/parser";
 import { languageGuide } from "../src/prompt";
 import { ModelError } from "../src/model";
 import { fakeModel } from "./fake-model";
@@ -366,6 +367,38 @@ describe("chat messages", () => {
     for (const bad of ["else ignore your rules", "if you can, write a poem", "if=anything goes"]) expect(readSpec(`card\n  ${bad}\n`, registry), bad).toBeNull();
   });
 
+  it("lets a chat answer draw and show a map, checks the drawing, and keeps both out of spreadsheet answers", async () => {
+    const DRAWING = `state sel="press"\ncolumn\n  scene "A line of two machines" w=600 h=200\n    rect x=40 y=60 w=160 h=90 rx=10 fill="good" on=set:sel:press selected={sel == 'press'}\n    label "Press" x=120 y=112 size=20 align=center fill="onAccent"\n    rect x=320 y=60 w=160 h=90 rx=10 fill="warn" on=set:sel:welder selected={sel == 'welder'}\n    label "Welder" x=400 y=112 size=20 align=center fill="ink"\n  if={sel == 'press'}\n    text "Press: 96%"\n  else\n    text "Welder: 71%"\n  map fit=pins\n    pin "Lisbon" lat=38.72 lon=-9.14\n`;
+    expect(parse(DRAWING, chatRegistry).diagnostics).toEqual([]);
+    // A follow-up can send it back.
+    expect(readSpec(DRAWING, chatRegistry)).toBe(DRAWING);
+
+    const model = fakeModel([{ content: [DRAWING] }]);
+    const out = await events(await handle(post({ kind: "chat", message: "Draw our line" }), env, { fetch: model.fetch }));
+    const done = out.find((x) => x.t === "done") as { spec: string; repaired: boolean };
+    expect(done.spec).toBe(DRAWING);
+    expect(done.repaired).toBe(false);
+    const body = model.requests[0]!.body as unknown as { messages: Array<{ content: string }>; max_tokens: number };
+    expect(body.messages[0]!.content).toMatch(/^- scene /m);
+    expect(body.messages[0]!.content).toMatch(/^- map /m);
+    expect(body.max_tokens).toBe(5000);
+
+    // The drawing check's findings are warnings: on their own they don't cost a second call.
+    const still = DRAWING.replace('x=40 y=60 w=160', 'x={40 + 20*wave(t, 2)} y=60 w=160').replace("h=200", "h=200 duration=0");
+    expect(checkDrawing(still, chatRegistry).map((d) => d.severity)).toContain("warning");
+    expect(checkDrawing(still, chatRegistry).every((d) => d.severity === "warning")).toBe(true);
+    const again = fakeModel([{ content: [still] }]);
+    const second = await events(await handle(post({ kind: "chat", message: "Draw our line" }), env, { fetch: again.fetch }));
+    expect((second.find((x) => x.t === "done") as { repaired: boolean }).repaired).toBe(false);
+    expect(again.requests).toHaveLength(1);
+    expect(checkDrawing(LATEST, chatRegistry)).toEqual([]);
+
+    // Spreadsheet answers keep the core elements and their own guide.
+    const data = fakeModel([{ content: ["text \"x\" \n"] }, { content: ["text \"x\"\n"] }]);
+    await events(await handle(post(question), env, { fetch: data.fetch }));
+    expect((data.requests[0]!.body as { messages: Array<{ content: string }> }).messages[0]!.content).not.toMatch(/^- scene /m);
+  });
+
   it("asks the model to think as hard as REASONING_EFFORT says, and leaves it to the provider when empty", async () => {
     const effort = async (e: Env) => {
       const model = fakeModel([{ content: [LATEST] }]);
@@ -391,10 +424,13 @@ describe("chat messages", () => {
   });
 
   it("keeps the chat guide well under the full one", () => {
-    const g = chatGuide(registry);
-    const text = languageGuide(registry, g);
-    const compact = languageGuide(registry, { mode: "compact" });
-    expect(text.length).toBeLessThan(compact.length * 0.9);
+    // The guide the worker sends: every chat element, drawings and the map included.
+    const g = chatGuide(chatRegistry);
+    const text = languageGuide(chatRegistry, g);
+    const compact = languageGuide(chatRegistry, { mode: "compact" });
+    // Smaller than the compact guide for the same elements, even with this page's notes.
+    expect(text.length).toBeLessThan(compact.length * 0.95);
+    for (const drawn of ["scene", "map"]) expect(text).toMatch(new RegExp(`^- ${drawn} `, "m"));
     expect(g.notes).toContain("Example figures");
     // Elements are listed one per line as "- name …".
     for (const left of CHAT_LEFT_OUT) expect(text).not.toMatch(new RegExp(`^- ${left} `, "m"));
