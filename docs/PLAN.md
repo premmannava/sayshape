@@ -342,7 +342,7 @@ Still to do from the list above: the production server package (rate limits, ses
 - **Security review:** the expression sandbox, spec size and depth limits, source and command rate limits, image host allowlists, and content security policy guidance.
   - Done: nesting depth. The engine overflowed the call stack on specs nested between 500 and 2,000 levels deep, because layout and paint are recursive. The parser now stops at 100 levels (`MAX_DEPTH`) and reports deeper lines as errors. Still to decide: limits on total spec size and element count.
 - **Internationalization:** right-to-left layout, number and currency formatting by locale, and font fallback for other scripts.
-- **Native renderer experiment:** run the same engine in Rust with WebAssembly for heavy screens, and as a native app outside the browser (see the speed discussion in the README).
+- **Native renderer experiment:** run the same engine in Rust with WebAssembly for heavy screens, and as a native app outside the browser.
 - **Release:** publish `sayshape` to npm with semantic versioning and a changelog, and a migration guide for language changes.
 
 ---

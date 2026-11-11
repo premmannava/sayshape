@@ -8,7 +8,7 @@
  * Options come from items=, a list of records (value= and label= name their
  * fields) or of plain text and numbers (each is its own value and label).
  *
- * Rules (also in the README):
+ * Rules (also in the docs, docs/components.md):
  * - A value is text or a finite number, 0 included. Items without one, or
  *   repeating an earlier option's value, aren't offered (with a warning).
  * - unavailable= names a field that, when true, shows an option greyed out;

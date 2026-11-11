@@ -1,9 +1,10 @@
 /**
- * Regenerates the component reference in README.md from the component
- * definitions, between the COMPONENTS:START and COMPONENTS:END markers.
+ * Regenerates the component reference in docs/components.md from the
+ * component definitions, between the COMPONENTS:START and COMPONENTS:END
+ * markers. (It lived in README.md until the README was cut down to a page.)
  *
- *   npm run docs:components           write README.md
- *   npm run docs:components -- --check  fail if README.md is out of date (for CI)
+ *   npm run docs:components           write docs/components.md
+ *   npm run docs:components -- --check  fail if it is out of date (for CI)
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -12,7 +13,7 @@ import { mapComponents } from "../src/components/map";
 import { CATEGORIES } from "../src/component";
 import { componentSection } from "./component-docs";
 
-const README = resolve(__dirname, "../README.md");
+const TARGET = resolve(__dirname, "../docs/components.md");
 const START = "<!-- COMPONENTS:START (generated from src/components) -->";
 const END = "<!-- COMPONENTS:END -->";
 const CAT_START = "<!-- CATEGORIES:START (generated from src/components) -->";
@@ -31,20 +32,20 @@ const categories = [
 /** Replace the text between two markers, failing loudly if they're missing. */
 function between(text: string, start: string, end: string, content: string): string {
   const a = text.indexOf(start), b = text.indexOf(end);
-  if (a < 0 || b < 0) throw new Error(`README.md is missing the ${start} / ${end} markers`);
+  if (a < 0 || b < 0) throw new Error(`docs/components.md is missing the ${start} / ${end} markers`);
   return text.slice(0, a + start.length) + "\n" + content + "\n" + text.slice(b);
 }
 
-const readme = readFileSync(README, "utf8");
-const next = between(between(readme, CAT_START, CAT_END, categories), START, END, all.map((c) => componentSection(c)).join("").trim());
+const current = readFileSync(TARGET, "utf8");
+const next = between(between(current, CAT_START, CAT_END, categories), START, END, all.map((c) => componentSection(c)).join("").trim());
 
 if (process.argv.includes("--check")) {
-  if (next !== readme) {
-    console.error("README.md component reference is out of date. Run: npm run docs:components");
+  if (next !== current) {
+    console.error("docs/components.md is out of date. Run: npm run docs:components");
     process.exit(1);
   }
-  console.log("README.md component reference is up to date.");
+  console.log("docs/components.md is up to date.");
 } else {
-  writeFileSync(README, next);
-  console.log(`Wrote ${all.length} components to README.md`);
+  writeFileSync(TARGET, next);
+  console.log(`Wrote ${all.length} components to docs/components.md`);
 }

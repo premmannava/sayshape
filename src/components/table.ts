@@ -13,7 +13,7 @@
  * press writes state. Nothing is written during layout or paint, and the
  * source list is never changed: sorting orders a list of indices.
  *
- * Rules (also in the README):
+ * Rules (also in the docs, docs/components.md):
  * - Cells: text columns show text as is, numbers as 1,200.5 and true/false
  *   as Yes/No. number and money columns show only numbers; anything else is
  *   the placeholder "—", as are missing fields, null and lists or records.
