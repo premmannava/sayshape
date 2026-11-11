@@ -40,7 +40,7 @@ After the next push to `main` (or running the workflow by hand from the **Action
 
 | Path | What it is |
 |---|---|
-| `site/index.md`, `site/playground.md`, `site/examples/` | The landing page, playground and gallery, as Vue components in the theme |
+| `site/index.md`, `site/chat.md`, `site/playground.md`, `site/examples/` | The landing page, chat, playground and gallery, as Vue components in the theme |
 | `site/examples/catalog.ts` | The gallery's specs: plain data, tested in `test/site.test.ts` |
 | `site/docs/` | The documentation; `docs/components/` is generated |
 | `site/.vitepress/theme/sayshape/` | Creating SayShape instances in the browser, highlighting, events |
@@ -52,6 +52,17 @@ The engine needs a canvas, fonts and `window`, so every demo creates its instanc
 
 ## The landing page's demo
 
-The landing page's demos are saved specs in `site/examples/home.ts`, all drawn by the real engine: the hero streams its answer the way a model's response arrives, then drags two sliders through the engine's own pointer handling; the four showcases, the mortgage calculator and the look switcher run their specs live. `test/home.test.ts` checks that every spec parses and streams cleanly at phone and desktop widths and that its controls and numbers work. No model runs on the site.
+The landing page's demos are saved specs in `site/examples/home.ts`, all drawn by the real engine: the hero streams its answer the way a model's response arrives, then drags two sliders through the engine's own pointer handling; the four showcases, the mortgage calculator and the look switcher run their specs live. `test/home.test.ts` checks that every spec parses and streams cleanly at phone and desktop widths and that its controls and numbers work. No model runs on the landing page.
+
+## The chat page
+
+`/chat` (`Chat.vue`, one `ChatAnswer.vue` per answer) is the one page where a live model answers. Questions go to the model proxy in `worker/`, which holds the key and writes every message the model reads; its address and the Turnstile site key reach the build as `VITE_SAYSHAPE_MODEL_ENDPOINT` and `VITE_TURNSTILE_SITE_KEY` (see `worker/README.md`). Without the endpoint the page says live answers aren't set up and the question box stays off.
+
+- Each answer is its own engine, drawn on the page's paper rather than in a frame, and stays live after it finishes. "New chat" unmounts them all, which destroys their engines. A chat stops at eight answers (`MAX_ANSWERS`).
+- A follow-up sends the first question, the follow-ups since and the latest answer's spec (`refineMessages`/`nextRefineContext`); older answers' specs never leave the page.
+- The brand color recolors every answer and, once picked, the chat frame (bubbles, the send button, focus outlines). `chatTheme` and `frameColors` keep it readable on the paper and on cards.
+- `emit:` actions have nothing listening here: the answer's footer shows what an app would receive.
+- Nothing is requested while the page loads. The status check (`GET /status`) and Turnstile start when someone focuses the question box or a suggestion.
+- The page's logic (what's sent, the stream, refusals, colors) is in `site/.vitepress/theme/sayshape/chat.ts`, tested in `test/chat-page.test.ts`.
 
 The site itself holds no secrets: nothing from `.env.local` is read by the site build, and `site:check` fails if a key-shaped string or a value from `.env.local` ends up in the output.

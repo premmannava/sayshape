@@ -120,6 +120,7 @@ export default defineConfig({
   themeConfig: {
     siteTitle: "SayShape",
     nav: [
+      { text: "Chat", link: "/chat", activeMatch: "^/chat" },
       { text: "Playground", link: "/playground", activeMatch: "^/playground" },
       { text: "Examples", link: "/examples/", activeMatch: "^/examples" },
       { text: "Compare", link: "/compare", activeMatch: "^/compare" },
