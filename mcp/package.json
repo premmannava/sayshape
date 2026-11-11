@@ -1,6 +1,6 @@
 {
   "name": "sayshape-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "An MCP server that lets Claude, ChatGPT and other MCP Apps clients show SayShape interfaces inside the chat.",
   "type": "module",
   "license": "MIT",

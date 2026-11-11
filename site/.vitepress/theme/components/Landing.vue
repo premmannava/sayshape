@@ -128,7 +128,7 @@ ${MCP}
 # Your own app
 ${LIB}`;
 // The hosting command is mcp/README.md's "Host it publicly" one, version pinned; the address is a placeholder.
-const HOSTED = "npx -y sayshape-mcp@0.1.1 --http --host 0.0.0.0 --trust-proxy";
+const HOSTED = "npx -y sayshape-mcp@0.1.2 --http --host 0.0.0.0 --trust-proxy";
 const ADDRESS = "https://your-domain.example/mcp";
 const MCP_JSON = `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}`;
 const setups = [

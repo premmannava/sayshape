@@ -207,7 +207,7 @@ To give Claude, ChatGPT and other chat apps a permanent HTTPS address, run the H
 Start it with an exact version, never `@latest`, so what runs is what you checked:
 
 ```bash
-npx -y sayshape-mcp@0.1.1 --http --host 0.0.0.0 --trust-proxy
+npx -y sayshape-mcp@0.1.2 --http --host 0.0.0.0 --trust-proxy
 ```
 
 | | |
