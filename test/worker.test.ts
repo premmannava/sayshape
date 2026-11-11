@@ -6,7 +6,7 @@
  * copying it, and the daily cap.
  */
 import { describe, expect, it } from "vitest";
-import { DAILY_LIMIT_MESSAGE, friendlyError, handle, MAX_BODY_BYTES, type Counter, type Env } from "../worker/src/handler";
+import { DAILY_LIMIT_MESSAGE, friendlyError, handle, MAX_BODY_BYTES, MAX_THOUGHT_CHARS, type Counter, type Env } from "../worker/src/handler";
 import { answerRequest, checkAnswer, MAX_COLUMNS, MAX_QUESTION_CHARS, readQuestion } from "../worker/src/answer";
 import { CHAT_LEFT_OUT, chatGuide, MAX_CHANGES, MAX_CHAT_BODY_BYTES, MAX_MESSAGE_CHARS, MAX_SPEC_CHARS, readChat, readSpec } from "../worker/src/chat";
 import { coreComponents } from "../src/components";
@@ -355,6 +355,19 @@ describe("chat messages", () => {
     expect((await handle(post({}, ORIGIN, "/status"), env)).status).toBe(405);
     expect(model.requests).toHaveLength(0);
     expect(kv.data.size).toBe(0);
+  });
+
+  it("streams a chat answer's thinking, capped, and never for a spreadsheet question or when turned off", async () => {
+    const long = "x".repeat(MAX_THOUGHT_CHARS);
+    const reply = () => [{ reasoning: ["Pipeline by stage: ", "a funnel fits. ", long], content: [LATEST] }];
+    const thoughts = async (body: Record<string, unknown>, e: Env = env) =>
+      (await events(await handle(post(body), e, { fetch: fakeModel(reply()).fetch }))).filter((x) => x.t === "thought").map((x) => (x as { v: string }).v).join("");
+    const chat = { kind: "chat", message: "Pipeline by stage" };
+    const shown = await thoughts(chat);
+    expect(shown.startsWith("Pipeline by stage: a funnel fits. ")).toBe(true);
+    expect(shown.length).toBe(MAX_THOUGHT_CHARS);
+    expect(await thoughts(chat, { ...env, SHOW_THINKING: "false" })).toBe("");
+    expect(await thoughts(question)).toBe("");
   });
 
   it("keeps the chat guide well under the full one", () => {

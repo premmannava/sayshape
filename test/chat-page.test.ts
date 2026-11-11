@@ -6,8 +6,8 @@
  */
 import { describe, expect, it } from "vitest";
 import {
-  advance, applyEvent, canAsk, chatTheme, failure, frameColors, isBusy, MAX_ANSWERS, newTurn, readableOn, readEvents, refusal, requestBody,
-  SUGGESTIONS, summary, type ChatEvent,
+  advance, applyEvent, canAsk, chatTheme, duration, failure, frameColors, isBusy, MAX_ANSWERS, newTurn, readableOn, readEvents, refusal, requestBody,
+  restart, stages, SUGGESTIONS, summary, type ChatEvent,
 } from "../site/.vitepress/theme/sayshape/chat";
 import { readChat } from "../worker/src/chat";
 import { contrast } from "../playground/appearance/color";
@@ -96,7 +96,41 @@ describe("filling an answer from the stream", () => {
     expect(spec).toBe(FIRST);
     expect(t).toMatchObject({ status: "done", spec: FIRST, problems: 1 });
     expect(isBusy(t)).toBe(false);
-    expect(summary(t)).toBe("DeepSeek · 3.1 s · 4,012 in · 180 out");
+    expect(summary(t)).toBe("DeepSeek · 4,012 tokens in · 180 out");
+  });
+
+  it("keeps the thinking apart from the answer, and times each stage from pressing send", () => {
+    const t = newTurn("How is the pipeline?", 1000);
+    applyEvent(t, { t: "phase", v: "waiting" }, 1100);
+    applyEvent(t, { t: "phase", v: "thinking" }, 1900);
+    applyEvent(t, { t: "thought", v: "Stages: lead, qualified… " }, 1950);
+    applyEvent(t, { t: "thought", v: "a funnel fits." }, 6000);
+    expect(t.thought).toBe("Stages: lead, qualified… a funnel fits.");
+    expect(t.text).toBe("");
+    applyEvent(t, { t: "text", v: FIRST }, 9200);
+    applyEvent(t, { t: "done", spec: FIRST, problems: 0, repaired: false, ms: 8000 }, 15_100);
+    t.drawMs = 38;
+    expect(stages(t)).toEqual([
+      { label: "Waited", ms: 900 },
+      { label: "Thought", ms: 7300 },
+      { label: "Wrote", ms: 5900 },
+      { label: "Drew", ms: 38 },
+      { label: "Total", ms: 14_100 },
+    ]);
+    expect(stages(t).map((s) => duration(s.ms))).toEqual(["900 ms", "7.3 s", "5.9 s", "38 ms", "14.1 s"]);
+  });
+
+  it("times an answer without thinking, says when it was fixed, and starts the clock again on Try again", () => {
+    const t = newTurn("x", 0);
+    applyEvent(t, { t: "text", v: "card\n" }, 1200);
+    applyEvent(t, { t: "reset" }, 2000);
+    applyEvent(t, { t: "text", v: FIRST }, 2500);
+    applyEvent(t, { t: "done", spec: FIRST, problems: 0, repaired: true, ms: 3000 }, 4000);
+    expect(stages(t).map((s) => s.label)).toEqual(["Waited", "Wrote (fixed once)", "Total"]);
+    expect(stages(newTurn("not done"))).toEqual([]);
+    restart(t, 9000);
+    expect(t).toMatchObject({ status: "waiting", text: "", thought: "", spec: "", marks: { sent: 9000 }, drawMs: 0, failure: undefined });
+    expect(t.resets).toBe(2);
   });
 
   it("turns an error or an empty answer into a failure that can be tried again", () => {

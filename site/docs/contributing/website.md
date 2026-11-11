@@ -62,6 +62,8 @@ The landing page's demos are saved specs in `site/examples/home.ts`, all drawn b
 - A follow-up sends the first question, the follow-ups since and the latest answer's spec (`refineMessages`/`nextRefineContext`); older answers' specs never leave the page.
 - The brand color recolors every answer and, once picked, the chat frame (bubbles, the send button, focus outlines). `chatTheme` and `frameColors` keep it readable on the paper and on cards.
 - `emit:` actions have nothing listening here: the answer's footer shows what an app would receive.
+- The model's thinking streams above the answer while it thinks, then folds into "Thought for 8.2 s" (the worker's `SHOW_THINKING` turns it off). Under a finished answer: Spec, Copy text, Save image (`SayShape.picture()`), and where the time went: waiting for the model, thinking, writing, the engine's own drawing time, and the total.
+- The page follows a growing answer only as far as it needs to keep the newest part above the question box, never scrolling the question out of sight, and stops following when the visitor scrolls.
 - Nothing is requested while the page loads. The status check (`GET /status`) and Turnstile start when someone focuses the question box or a suggestion.
 - The page's logic (what's sent, the stream, refusals, colors) is in `site/.vitepress/theme/sayshape/chat.ts`, tested in `test/chat-page.test.ts`.
 

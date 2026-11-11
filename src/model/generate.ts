@@ -123,6 +123,12 @@ export interface GenerateOptions {
   /** Throw away what onText sent so far (a repair is starting, or it was thinking after all). */
   onReset?: (reason: "repair" | "thinking") => void;
   onPhase?: (phase: Phase) => void;
+  /**
+   * Thinking the server sends in its own field (reasoning_content), as it
+   * streams, for a host that shows it. Free text, never SayShape: never
+   * draw it. Thinking written inside the answer (<think>…) isn't passed on.
+   */
+  onThinking?: (text: string) => void;
   signal?: AbortSignal;
   fetch?: typeof fetch;
   now?: () => number;
@@ -186,7 +192,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
     for await (const part of streamChat(o.config, msgs, { signal: o.signal, fetch: o.fetch, usage })) {
       if (firstTokenMs === undefined) firstTokenMs = now() - began;
       if (timings.firstTokenMs === undefined) timings.firstTokenMs = now() - start;
-      if (part.kind === "reasoning") { thinking += part.text; setPhase("thinking"); continue; }
+      if (part.kind === "reasoning") { thinking += part.text; setPhase("thinking"); o.onThinking?.(part.text); continue; }
       raw += part.text;
       const before = filter.thinkingChars;
       emit(filter.push(part.text));

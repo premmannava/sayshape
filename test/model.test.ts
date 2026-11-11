@@ -258,6 +258,16 @@ describe("generateSpec", () => {
     expect(r.timings.totalMs).toBeGreaterThanOrEqual(r.timings.firstLineMs!);
   });
 
+  it("passes the server's thinking on as it streams, and never draws it", async () => {
+    const m = fakeModel([{ reasoning: ["The user wants ", "a card."], content: ["card\n"] }]);
+    const thoughts: string[] = [];
+    const text: string[] = [];
+    const r = await generateSpec({ config, registry, request: "x", fetch: m.fetch, onThinking: (t) => thoughts.push(t), onText: (t) => text.push(t) });
+    expect(thoughts).toEqual(["The user wants ", "a card."]);
+    expect(text.join("")).toBe("card\n");
+    expect(r.spec).toBe("card\n");
+  });
+
   it("carries history for follow-up requests", async () => {
     const m = fakeModel([{ content: [good] }, { content: [good] }]);
     const first = await generateSpec({ config, registry, request: "a card", fetch: m.fetch });

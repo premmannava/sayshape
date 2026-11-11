@@ -60,6 +60,12 @@ export interface Turn {
   text: string;
   /** Bumped when a repair throws away what was shown. */
   resets: number;
+  /** The model's thinking, as the worker streams it (free text: shown as text, never drawn). */
+  thought: string;
+  /** When each stage began, by the page's clock (performance.now()), for the timing line. */
+  marks: Marks;
+  /** Time the engine spent drawing this answer (parse, layout and paint, every frame), filled in by the answer. */
+  drawMs: number;
   /** The final spec, once done. */
   spec: string;
   /** Problems SayShape found in the final spec (lines it skipped or parts it ignored). */
@@ -71,8 +77,26 @@ export interface Turn {
 }
 
 let nextId = 0;
-export function newTurn(question: string): Turn {
-  return { id: ++nextId, question: question.trim(), status: "waiting", phase: "waiting", text: "", resets: 0, spec: "", problems: 0 };
+export interface Marks {
+  sent: number;
+  /** The first sign of the model: thinking or a line. */
+  first?: number;
+  /** The first thinking. */
+  thinking?: number;
+  /** The first SayShape line. */
+  line?: number;
+  done?: number;
+}
+
+const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+export function newTurn(question: string, now = clock()): Turn {
+  return { id: ++nextId, question: question.trim(), status: "waiting", phase: "waiting", text: "", resets: 0, thought: "", marks: { sent: now }, drawMs: 0, spec: "", problems: 0 };
+}
+
+/** Start a turn over for Try again: same question, a fresh attempt. */
+export function restart(t: Turn, now = clock()): void {
+  Object.assign(t, { status: "waiting", phase: "waiting", text: "", resets: t.resets + 1, thought: "", marks: { sent: now }, drawMs: 0, spec: "", problems: 0, failure: undefined, model: undefined, ms: undefined, tokens: undefined });
 }
 
 /** Whether another question fits in this chat. */
@@ -87,15 +111,44 @@ export const PHASE_TEXT: Record<string, string> = {
   repairing: "Fixing a problem SayShape found…",
 };
 
-const secs = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 const group = (n: number) => n.toLocaleString("en-US");
 
-/** The quiet line under a finished answer: model, time, tokens. */
+/** A duration as people read it: "38 ms" under a second, "8.2 s" above. */
+export function duration(ms: number): string {
+  const v = Math.max(0, ms);
+  return v < 1000 ? `${Math.round(v)} ms` : `${(v / 1000).toFixed(1)} s`;
+}
+
+export interface Stage {
+  label: string;
+  ms: number;
+}
+
+/**
+ * Where the time went, for the line under a finished answer: waiting for the
+ * model, its thinking, its writing (a repair included), SayShape drawing it,
+ * and the total from pressing send. Drawing overlaps writing, since lines are
+ * drawn as they arrive, so it isn't part of the sum; it's there to show how
+ * little of the wait is SayShape's.
+ */
+export function stages(t: Turn): Stage[] {
+  const m = t.marks;
+  if (m.done === undefined) return [];
+  const out: Stage[] = [];
+  const first = m.first ?? m.line ?? m.done;
+  out.push({ label: "Waited", ms: first - m.sent });
+  if (m.thinking !== undefined) out.push({ label: "Thought", ms: (m.line ?? m.done) - m.thinking });
+  if (m.line !== undefined) out.push({ label: t.resets > 0 && t.status === "done" ? "Wrote (fixed once)" : "Wrote", ms: m.done - m.line });
+  if (t.drawMs > 0) out.push({ label: "Drew", ms: t.drawMs });
+  out.push({ label: "Total", ms: m.done - m.sent });
+  return out;
+}
+
+/** The model and what it used, after the timings. */
 export function summary(t: Turn): string {
   const parts: string[] = [];
   if (t.model) parts.push(t.model);
-  if (t.ms !== undefined) parts.push(secs(t.ms));
-  if (t.tokens) parts.push(`${group(t.tokens.in)} in · ${group(t.tokens.out)} out`);
+  if (t.tokens) parts.push(`${group(t.tokens.in)} tokens in · ${group(t.tokens.out)} out`);
   return parts.join(" · ");
 }
 
@@ -157,6 +210,7 @@ export type ChatEvent =
   | { t: "phase"; v: string }
   | { t: "text"; v: string }
   | { t: "reset" }
+  | { t: "thought"; v: string }
   | { t: "done"; spec: string; problems: number; repaired: boolean; ms: number; model?: string; tokens?: { in: number; out: number } }
   | { t: "error"; message: string };
 
@@ -186,13 +240,22 @@ export async function readEvents(body: ReadableStream<Uint8Array>, onEvent: (e: 
 }
 
 /** Apply one event to the turn it's for. Returns the spec once the answer is done. */
-export function applyEvent(turn: Turn, e: ChatEvent): string | null {
+export function applyEvent(turn: Turn, e: ChatEvent, now = clock()): string | null {
+  const m = turn.marks;
   switch (e.t) {
     case "phase":
       turn.phase = e.v;
+      if (e.v === "thinking") { m.first ??= now; m.thinking ??= now; }
       if (turn.status !== "repairing" && e.v === "writing") turn.status = "writing";
       return null;
+    case "thought":
+      m.first ??= now;
+      m.thinking ??= now;
+      turn.thought += e.v;
+      return null;
     case "text":
+      m.first ??= now;
+      m.line ??= now;
       turn.text += e.v;
       if (turn.status === "waiting") turn.status = "writing";
       return null;
@@ -203,6 +266,7 @@ export function applyEvent(turn: Turn, e: ChatEvent): string | null {
       turn.phase = "repairing";
       return null;
     case "done":
+      m.done = now;
       turn.spec = e.spec;
       turn.text = e.spec;
       turn.problems = e.problems;
@@ -217,6 +281,7 @@ export function applyEvent(turn: Turn, e: ChatEvent): string | null {
       turn.status = "done";
       return e.spec;
     case "error":
+      m.done = now;
       turn.status = "failed";
       turn.failure = failure("model", e.message);
       return null;
