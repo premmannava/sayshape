@@ -1,6 +1,6 @@
 # Published comparison runs
 
-The raw results behind the figures in the project's [README](../../../README.md). Each folder is one run of `npm run compare`: the same requests answered in SayShape and as HTML by one model, first try with no repair, scored the same way.
+Raw results of SayShape against HTML, kept so the figures quoted from them can be checked. Each folder is one run of `npm run compare`: the same requests answered in SayShape and as HTML by one model, first try with no repair, scored the same way.
 
 | Run | Model | Answers |
 |---|---|---|
