@@ -240,6 +240,22 @@ try {
   const bareFrame = bare.frames().find((f) => f !== bare.mainFrame());
   check(await bareFrame.evaluate(() => document.querySelector("#bar").hidden), "with --no-copy-text and no downloads the view shows no toolbar");
   await bare.close();
+  // Started with --accent "#d93025": the button and the chart's bars take the brand color in light
+  // mode, and dark mode uses the lighter #df4f45 so text in it stays readable there.
+  const branded = await browser.newPage({ viewport: { width: 680, height: 700 }, deviceScaleFactor: 2 });
+  await branded.setContent(`<!doctype html><body><script>${hostJs}</script></body>`);
+  await branded.evaluate((html) => window.TestHost.mount(html, "light"), uiHtml.replace(/<head>/i, `<head><meta name="sayshape-view" content="picker=0&theme=teal&accent=d93025&save=1&copy=1">`));
+  await branded.evaluate(() => window.host.ready);
+  await branded.evaluate((spec) => window.host.bridge.sendToolInput({ arguments: { spec } }), SPEC);
+  await branded.waitForTimeout(500);
+  const brandedFrame = branded.frames().find((f) => f !== branded.mainFrame());
+  await branded.screenshot({ path: out + "9-accent-light.png" });
+  check(await colorPixels(brandedFrame, "#sayshape", [217, 48, 37]) > 500, "--accent colors the button and chart in light mode");
+  await branded.evaluate(() => { document.body.style.background = "#1f1f1e"; window.host.bridge.setHostContext({ theme: "dark" }); });
+  await branded.waitForTimeout(400);
+  await branded.screenshot({ path: out + "9-accent-dark.png" });
+  check(await colorPixels(brandedFrame, "#sayshape", [223, 79, 69]) > 500, "--accent is lightened to stay readable in dark mode");
+  await branded.close();
   const cardPixel = await styledFrame.evaluate(() => {
     const c = document.querySelector("#sayshape");
     // A point inside the card, left of the title and above it.

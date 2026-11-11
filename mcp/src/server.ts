@@ -320,7 +320,7 @@ function describeCheck(c: SpecCheck, textOnly = false): string {
 export interface ServerOptions {
   /** The view's HTML: dist/ui.html, built by `npm run build`. */
   uiHtml: () => string | Promise<string>;
-  /** The view's own settings: --theme-picker, --theme, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
+  /** The view's own settings: --theme-picker, --theme, --accent, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
   view?: ViewOptions;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;

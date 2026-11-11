@@ -127,7 +127,7 @@ function domReader(dark: boolean): ReadVar {
   };
 }
 
-/** The selected SayShape preset in the host's mode, adjusted to its shared colors, fonts and radii. */
+/** The selected SayShape preset in the host's mode, with the server's --accent, adjusted to the host's shared colors, fonts and radii. */
 function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const dark = ctx?.theme ? ctx.theme === "dark" : prefersDark();
   const root = document.documentElement;
@@ -135,7 +135,7 @@ function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const styles = ctx?.styles;
   if (styles?.css?.fonts) applyHostFonts(styles.css.fonts);
   if (styles?.variables) applyHostStyleVariables(styles.variables);
-  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined);
+  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined, viewOptions.accent);
 }
 
 /** Canvas text doesn't trigger font loading, so load the theme's faces before drawing with them. */
