@@ -93,7 +93,7 @@ codex mcp add sayshape -- npx -y sayshape-mcp
 These apps connect to a server's address; they can't run a program on your computer. So the server has to run somewhere they can reach, at a public HTTPS address, which you (or someone you trust) host. There's no SayShape-hosted address. On a host that puts its own HTTPS proxy in front, such as Render, start it with an exact version:
 
 ```bash
-npx -y sayshape-mcp@0.1.1 --http --host 0.0.0.0 --trust-proxy
+npx -y sayshape-mcp@0.1.2 --http --host 0.0.0.0 --trust-proxy
 ```
 
 Its address is then your host's address plus `/mcp`, such as `https://your-domain.example/mcp`. Add it:
