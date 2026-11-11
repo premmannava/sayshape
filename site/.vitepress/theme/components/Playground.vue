@@ -9,10 +9,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 import { withBase } from "vitepress";
 import type { Diagnostic, SayShapeNode } from "@sayshape/index";
-import { examples, exampleById } from "../../../examples/catalog";
-import { samples } from "../../../../playground/samples";
+import { examples } from "../../../examples/catalog";
+import { sourceByKey, sourceGroups, sources } from "../sayshape/playgroundSources";
 import { loadThemeFonts, PRESETS, resolveTheme, type PresetId } from "../../../../playground/appearance/presets";
 import { themeCode } from "../../../../playground/appearance/export";
+import { normalizeHex } from "../../../../playground/appearance/color";
 import { highlightSpec } from "../sayshape/highlight";
 import { useSayShape } from "../sayshape/useSayShape";
 import { fromBase64, isSiteDark, prefersReducedMotion, replayStream, toBase64Url } from "../sayshape/runtime";
@@ -20,14 +21,7 @@ import { onHostEvents, type HostEvent } from "../sayshape/events";
 
 // ------------------------------------------------------------ what can be loaded
 
-interface Source { key: string; title: string; spec: string; group: "Examples" | "Development samples" }
-// The development playground's samples, except those that load remote photos: this site allows no image hosts.
-const sources: Source[] = [
-  ...examples.map((e): Source => ({ key: e.id, title: e.title, spec: e.spec, group: "Examples" })),
-  ...Object.entries(samples)
-    .filter(([, s]) => !/^\s*image\b/m.test(s.spec))
-    .map(([k, s]): Source => ({ key: `sample-${k}`, title: s.label, spec: s.spec.replace(/\n$/, ""), group: "Development samples" })),
-];
+// The picker's list (the gallery's examples and the development samples, grouped) is in ../sayshape/playgroundSources.
 const DEFAULT_KEY = examples[0]!.id;
 
 // ------------------------------------------------------------ state
@@ -45,9 +39,15 @@ const metrics = ref({ nodes: 0, parse: "0.00", layout: "0.00", paint: "0.00" });
 const inspectText = ref("Turn on Inspect and click something in the preview, or put the cursor on a spec line.");
 const streaming = ref(false);
 const hideEditor = ref(false);
-const tab = ref<"spec" | "preview" | "details">("spec");
+// Only narrow screens show one panel at a time; they open on the drawing, which is what the page is about.
+const tab = ref<"spec" | "preview" | "details">("preview");
+/** The toolbar menu that's open, if any. */
+const menu = ref<"" | "reset" | "share">("");
+const toolbar = ref<HTMLElement | null>(null);
 const mode = ref<"site" | "light" | "dark">("site");
 const preset = ref<PresetId>("teal");
+/** The visitor's own color, laid over the chosen style; null until they pick one. */
+const accent = ref<string | null>(null);
 const boxes = ref(false);
 const hits = ref(false);
 const inspecting = ref(false);
@@ -114,11 +114,16 @@ function applyTheme() {
   const l = sayshape.value;
   if (!l) return;
   const scheme = forcedScheme.value ?? (isSiteDark() ? "dark" : "light");
-  const theme = resolveTheme(preset.value, scheme, null).theme;
+  const theme = resolveTheme(preset.value, scheme, accent.value).theme;
   l.setTheme(theme);
   loadThemeFonts(theme, () => l.setTheme(theme));
 }
-watch([mode, preset], () => applyTheme());
+watch([mode, preset, accent], () => applyTheme());
+/** What the picker shows before anything is picked: the chosen style's own accent. */
+const swatch = computed(() => accent.value ?? normalizeHex(resolveTheme(preset.value, "light", null).theme.colors.accent) ?? "#0f766e");
+function pickAccent(e: Event) {
+  accent.value = normalizeHex((e.target as HTMLInputElement).value);
+}
 // When following the site with a non-default style, a site switch must re-resolve the preset.
 let siteObserver: MutationObserver | null = null;
 onMounted(() => {
@@ -137,6 +142,42 @@ function renderState() {
     if (s && s.length > 160) s = s.slice(0, 157) + "…";
     return [k, s ?? "undefined"];
   });
+}
+
+// ------------------------------------------------------------ toolbar menus
+
+function toggleMenu(name: "reset" | "share") {
+  menu.value = menu.value === name ? "" : name;
+  if (menu.value) void nextTick(() => menuItems()[0]?.focus());
+}
+const menuItems = () => [...(toolbar.value?.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]') ?? [])];
+/** Close the open menu; `refocus` puts the keyboard back on the button that opened it. */
+function closeMenu(refocus = false) {
+  if (!menu.value) return;
+  const opener = toolbar.value?.querySelector<HTMLElement>(`[data-menu="${menu.value}"]`);
+  menu.value = "";
+  if (refocus) opener?.focus();
+}
+function pickFromMenu(run: () => void) {
+  closeMenu(true);
+  run();
+}
+function onMenuKeydown(e: KeyboardEvent) {
+  if (e.key === "Escape") { e.preventDefault(); closeMenu(true); return; }
+  const items = menuItems();
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  const to = e.key === "ArrowDown" ? at + 1 : e.key === "ArrowUp" ? at - 1 : e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : null;
+  if (to === null) return;
+  e.preventDefault();
+  items[(to + items.length) % items.length]?.focus();
+}
+function onOutsidePress(e: PointerEvent) {
+  if (menu.value && !(e.target as HTMLElement).closest?.(".pg-menu")) closeMenu();
+}
+/** Tabbing out of an open menu closes it. */
+function onMenuFocusOut(e: FocusEvent) {
+  const next = e.relatedTarget as HTMLElement | null;
+  if (next && !next.closest(".pg-menu")) closeMenu();
 }
 
 // ------------------------------------------------------------ loading and resetting
@@ -231,7 +272,7 @@ function download() {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-const copyTheme = () => copy(themeCode({ preset: preset.value, mode: mode.value === "site" ? "system" : mode.value, accent: null }), "Theme code");
+const copyTheme = () => copy(themeCode({ preset: preset.value, mode: mode.value === "site" ? "system" : mode.value, accent: accent.value }), "Theme code");
 const copyGuide = () => copy(guideText.value, "Model guide");
 
 // ------------------------------------------------------------ editor
@@ -325,9 +366,10 @@ function onHashChange() {
 onMounted(() => {
   const params = new URLSearchParams(location.search);
   window.addEventListener("hashchange", onHashChange);
+  document.addEventListener("pointerdown", onOutsidePress);
   if (!loadFromHash()) {
-    const key = params.get("example");
-    if (key && sources.some((s) => s.key === key)) { sourceKey.value = key; text.value = sourceOf(key); original.value = text.value; }
+    const from = sourceByKey(params.get("example") ?? "");
+    if (from) { sourceKey.value = from.key; text.value = from.spec; original.value = text.value; }
   }
   // The engine may already be running with the default spec.
   if (sayshape.value) sayshape.value.setSpec(text.value, { resetState: true });
@@ -335,6 +377,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("hashchange", onHashChange);
+  document.removeEventListener("pointerdown", onOutsidePress);
   signal.cancelled = true;
   siteObserver?.disconnect();
   clearTimeout(noticeTimer);
@@ -347,68 +390,43 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 <template>
   <div class="pg" :class="{ 'no-editor': hideEditor }">
     <header class="pg-head">
-      <div>
-        <p class="ss-eyebrow">Playground</p>
-        <h1>Write it. <em>Watch it draw.</em></h1>
-        <p class="pg-note">
-          Edit any spec and the real engine redraws as you type. No model runs on this site: <a :href="docsModel">connect your own</a>, or paste the
-          <a :href="docsGuide">model guide</a> into any chat assistant and drop its answer here.
-        </p>
-      </div>
-      <dl class="pg-metrics" aria-label="Last frame">
-        <div><dt>Elements</dt><dd>{{ metrics.nodes }}</dd></div>
-        <div><dt>Parse</dt><dd>{{ metrics.parse }} ms</dd></div>
-        <div><dt>Layout</dt><dd>{{ metrics.layout }} ms</dd></div>
-        <div><dt>Paint</dt><dd>{{ metrics.paint }} ms</dd></div>
-      </dl>
+      <h1>Write it. <em>Watch it draw.</em></h1>
+      <p class="pg-note">
+        Edit any spec and the real engine redraws as you type. No model runs on this site: <a :href="docsModel">connect your own</a>, or paste the
+        <a :href="docsGuide">model guide</a> into any chat assistant and drop its answer here.
+      </p>
     </header>
 
-    <div class="pg-toolbar" role="toolbar" aria-label="Playground controls">
-      <label class="pg-field wide">
-        <span>Spec</span>
-        <select :value="sourceKey" @change="onPick">
-          <option v-if="!sourceKey" value="">From a link</option>
-          <optgroup label="Examples">
-            <option v-for="s in sources.filter((x) => x.group === 'Examples')" :key="s.key" :value="s.key">{{ s.title }}</option>
-          </optgroup>
-          <optgroup label="Development samples">
-            <option v-for="s in sources.filter((x) => x.group === 'Development samples')" :key="s.key" :value="s.key">{{ s.title }}</option>
-          </optgroup>
-        </select>
-      </label>
-      <div class="pg-group" role="group" aria-label="Reset">
-        <button class="sayshape-btn quiet small" type="button" :disabled="!sayshape" title="Restore the spec as it was loaded and start its state over" @click="resetExample">Reset example</button>
-        <button class="sayshape-btn quiet small" type="button" :disabled="!sayshape" title="Keep the spec as it is and start its state over" @click="resetState">Reset state</button>
-        <button class="sayshape-btn primary small" type="button" :disabled="!sayshape || streaming" title="Play the current spec into the preview line by line, as a model's response would arrive" @click="replay">▶ Replay as stream</button>
+    <div ref="toolbar" class="pg-toolbar" role="toolbar" aria-label="Playground controls">
+      <select class="pg-select pg-pick" :value="sourceKey" aria-label="Spec to load" @change="onPick">
+        <option v-if="!sourceKey" value="">From a link</option>
+        <optgroup v-for="g in sourceGroups" :key="g.label" :label="g.label">
+          <option v-for="s in g.items" :key="s.key" :value="s.key">{{ s.title }}</option>
+        </optgroup>
+      </select>
+      <button class="sayshape-btn primary small" type="button" :disabled="!sayshape || streaming" title="Play the current spec into the preview line by line, as a model's response would arrive" @click="replay">▶ Replay as stream</button>
+      <div class="pg-menu" @keydown="onMenuKeydown" @focusout="onMenuFocusOut">
+        <button class="sayshape-btn quiet small" type="button" data-menu="reset" aria-haspopup="menu" :aria-expanded="menu === 'reset'" :disabled="!sayshape" @click="toggleMenu('reset')">Reset <span class="pg-caret" aria-hidden="true"></span></button>
+        <div v-if="menu === 'reset'" class="pg-menu-list" role="menu" aria-label="Reset">
+          <button type="button" role="menuitem" @click="pickFromMenu(resetState)"><b>Start over</b><span>Keep the spec as it is now and clear what the interface remembers</span></button>
+          <button type="button" role="menuitem" @click="pickFromMenu(resetExample)"><b>Undo my edits</b><span>Put the spec back as it was loaded, and start over</span></button>
+        </div>
       </div>
-      <div class="pg-group" role="group" aria-label="Share">
-        <button class="sayshape-btn quiet small" type="button" @click="copySpec">Copy spec</button>
-        <button class="sayshape-btn quiet small" type="button" @click="download">Download</button>
-        <button class="sayshape-btn quiet small" type="button" title="A link with this spec in it" @click="copyLink">Copy link</button>
+      <div class="pg-menu" @keydown="onMenuKeydown" @focusout="onMenuFocusOut">
+        <button class="sayshape-btn quiet small" type="button" data-menu="share" aria-haspopup="menu" :aria-expanded="menu === 'share'" @click="toggleMenu('share')">Share <span class="pg-caret" aria-hidden="true"></span></button>
+        <div v-if="menu === 'share'" class="pg-menu-list" role="menu" aria-label="Share">
+          <button type="button" role="menuitem" @click="pickFromMenu(copyLink)"><b>Copy link</b><span>A link to this page with this spec in it</span></button>
+          <button type="button" role="menuitem" @click="pickFromMenu(copySpec)"><b>Copy spec</b><span>The text in the editor</span></button>
+          <button type="button" role="menuitem" @click="pickFromMenu(download)"><b>Download</b><span>The spec as a .sayshape file</span></button>
+        </div>
       </div>
-      <div class="pg-group pg-right">
-        <label class="pg-field">
-          <span>Preview</span>
-          <select v-model="mode" aria-label="Preview light or dark">
-            <option value="site">Match site</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </label>
-        <label class="pg-field">
-          <span>Style</span>
-          <select v-model="preset" aria-label="Preview color style">
-            <option v-for="p in PRESETS" :key="p.id" :value="p.id">{{ p.label }}</option>
-          </select>
-        </label>
-        <button class="sayshape-btn quiet small pg-hide" type="button" :aria-pressed="hideEditor" @click="hideEditor = !hideEditor">{{ hideEditor ? "Show editor" : "Hide editor" }}</button>
-      </div>
+      <span class="pg-notice" role="status" aria-live="polite">{{ notice }}</span>
+      <button class="sayshape-btn quiet small pg-hide" type="button" :aria-pressed="hideEditor" @click="hideEditor = !hideEditor">{{ hideEditor ? "Show editor" : "Hide editor" }}</button>
     </div>
-    <p class="pg-help"><span class="pg-notice" role="status" aria-live="polite">{{ notice }}</span></p>
 
     <div class="pg-tabs" role="tablist" aria-label="Panels">
-      <button role="tab" type="button" :aria-selected="tab === 'spec'" @click="tab = 'spec'">Spec</button>
       <button role="tab" type="button" :aria-selected="tab === 'preview'" @click="tab = 'preview'">Preview</button>
+      <button role="tab" type="button" :aria-selected="tab === 'spec'" @click="tab = 'spec'">Spec</button>
       <button role="tab" type="button" :aria-selected="tab === 'details'" @click="tab = 'details'">
         Problems <span v-if="diagnostics.length" class="pg-count">{{ diagnostics.length }}</span>
       </button>
@@ -454,14 +472,37 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
       <section class="pg-pane pg-preview" aria-label="Preview">
         <div class="pg-pane-head">
           <h2>Preview</h2>
+          <div class="pg-looks">
+            <select v-model="mode" class="pg-select" aria-label="Preview light or dark">
+              <option value="site">Match site</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+            <select v-model="preset" class="pg-select" aria-label="Preview color style">
+              <option v-for="p in PRESETS" :key="p.id" :value="p.id">{{ p.label }}</option>
+            </select>
+            <label class="pg-color" title="Your brand color, laid over the style. The spec doesn't change.">
+              <input type="color" :value="swatch" aria-label="Your brand color for the preview" @input="pickAccent">
+              <span>{{ accent ?? "Your color" }}</span>
+            </label>
+            <button v-if="accent" class="sayshape-btn-text" type="button" @click="accent = null">Reset color</button>
+          </div>
+        </div>
+        <div class="sayshape-stage pg-stage" :data-scheme="forcedScheme ?? undefined">
+          <div class="sayshape-canvas-wrap"><canvas ref="canvas" aria-label="Preview of the spec, drawn by SayShape on a canvas. The editor holds the readable source."></canvas></div>
+        </div>
+        <div class="pg-pane-foot">
+          <dl class="pg-metrics" aria-label="Last frame">
+            <div><dt>Elements</dt><dd>{{ metrics.nodes }}</dd></div>
+            <div><dt>Parse</dt><dd>{{ metrics.parse }} ms</dd></div>
+            <div><dt>Layout</dt><dd>{{ metrics.layout }} ms</dd></div>
+            <div><dt>Paint</dt><dd>{{ metrics.paint }} ms</dd></div>
+          </dl>
           <div class="pg-tools" role="group" aria-label="Debugging overlays">
             <label><input v-model="boxes" type="checkbox"> Layout boxes</label>
             <label><input v-model="hits" type="checkbox"> Hit regions</label>
             <label><input v-model="inspecting" type="checkbox"> Inspect</label>
           </div>
-        </div>
-        <div class="sayshape-stage pg-stage" :data-scheme="forcedScheme ?? undefined">
-          <div class="sayshape-canvas-wrap"><canvas ref="canvas" aria-label="Preview of the spec, drawn by SayShape on a canvas. The editor holds the readable source."></canvas></div>
         </div>
       </section>
 
@@ -519,27 +560,18 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 </template>
 
 <style scoped>
-.pg { max-width: var(--ss-workspace); margin: 0 auto; padding: var(--ss-page-top) var(--ss-gutter) 56px }
-/* The title lines up with the content pages; the editor below may use the full workspace. */
-.pg-head { max-width: calc(var(--ss-content) - 2 * var(--ss-gutter)); margin-inline: auto }
-.pg-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px 40px; align-items: end; margin-bottom: 22px }
+.pg { max-width: var(--ss-workspace); margin: 0 auto; padding: 24px var(--ss-gutter) 56px; --pg-pane-h: clamp(460px, calc(100vh - 330px), 760px) }
+/* A short heading, so the editor and the drawing are in the first view. */
+.pg-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 24px; margin-bottom: 14px }
 .pg-head h1 em { font-style: italic; color: var(--ss-coral) }
-.pg-head h1 { font: 600 clamp(40px, 5.6vw, 64px)/1 var(--sayshape-display); letter-spacing: -0.03em; margin: 8px 0 12px }
-.pg-note { margin: 0; max-width: 64ch; color: var(--vp-c-text-2); line-height: 1.55; font-size: 16px }
+.pg-head h1 { font: 600 clamp(26px, 2.6vw, 34px)/1.1 var(--sayshape-display); letter-spacing: -0.02em; margin: 0; white-space: nowrap }
+.pg-note { flex: 1 1 420px; margin: 0; max-width: 92ch; color: var(--vp-c-text-2); line-height: 1.5; font-size: 14.5px }
 .pg-note a { color: var(--vp-c-brand-1); font-weight: 600; text-underline-offset: 3px }
-.pg-metrics { display: flex; margin: 0; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; overflow: hidden; background: var(--ss-card) }
-.pg-metrics div { padding: 6px 14px; border-left: 1px solid var(--vp-c-divider) }
-.pg-metrics div:first-child { border-left: 0 }
-.pg-metrics dt { font: 500 10.5px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3) }
-.pg-metrics dd { margin: 0; font: 500 13px var(--vp-font-family-mono); font-variant-numeric: tabular-nums; white-space: nowrap }
 
-.pg-toolbar { display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: end; padding: 14px 0 12px; border-top: 1px solid var(--vp-c-divider) }
-.pg-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: end }
-.pg-right { margin-left: auto }
-.pg-field { display: grid; gap: 4px; font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3) }
-.pg-field select {
+.pg-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 0; border-top: 1px solid var(--vp-c-divider) }
+.pg-select {
   height: 34px;
-  min-width: 120px;
+  min-width: 112px;
   padding: 0 30px 0 14px;
   border: 1.5px solid var(--vp-c-divider);
   border-radius: 999px;
@@ -547,12 +579,32 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
   appearance: none;
   color: var(--vp-c-text-1);
   font: 500 14px var(--vp-font-family-base);
-  letter-spacing: 0;
-  text-transform: none;
 }
-.pg-field.wide select { min-width: 240px }
-.pg-help { margin: 0 0 12px; min-height: 1.4em; font-size: 13.5px; color: var(--vp-c-text-2); line-height: 1.55 }
-.pg-notice { color: var(--vp-c-brand-1); font-weight: 600 }
+.pg-pick { min-width: 240px; margin-right: 6px }
+.pg-hide { margin-left: auto }
+.pg-notice { margin-left: 6px; font-size: 13.5px; color: var(--vp-c-brand-1); font-weight: 600 }
+
+.pg-menu { position: relative }
+.pg-caret { width: 7px; height: 7px; margin: -4px 0 0 -2px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg) }
+.pg-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 6px;
+  border: 1px solid var(--vp-c-border);
+  border-radius: 14px;
+  background: var(--ss-card);
+  box-shadow: var(--ss-lift-sm);
+}
+.pg-menu-list button { all: unset; box-sizing: border-box; display: grid; gap: 2px; padding: 8px 12px; border-radius: 9px; cursor: pointer }
+.pg-menu-list button:hover, .pg-menu-list button:focus-visible { background: var(--sayshape-hl) }
+.pg-menu-list button:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: -2px }
+.pg-menu-list b { font: 600 14px var(--vp-font-family-base); color: var(--vp-c-text-1) }
+.pg-menu-list span { font-size: 12.5px; line-height: 1.4; color: var(--vp-c-text-2) }
 
 .pg-tabs { display: none }
 
@@ -573,12 +625,26 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .pg-diag-summary.warn { color: var(--sayshape-warn) }
 .pg-count { font: 500 12px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
 .pg-hint { font: 11.5px var(--vp-font-family-mono); color: var(--vp-c-text-2) }
+.pg-looks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
+.pg-looks .pg-select { height: 30px; font-size: 13px }
+.pg-color { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px 0 5px; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; background: var(--ss-card); font: 500 13px var(--vp-font-family-base); color: var(--vp-c-text-1); cursor: pointer }
+.pg-color:focus-within { outline: 2px solid var(--vp-c-brand-1); outline-offset: 2px }
+.pg-color input { width: 20px; height: 20px; padding: 0; border: 0; background: none; cursor: pointer }
+.pg-color input::-webkit-color-swatch-wrapper { padding: 0 }
+.pg-color input::-webkit-color-swatch { border: 1px solid var(--vp-c-divider); border-radius: 50% }
+.pg-color input::-moz-color-swatch { border: 1px solid var(--vp-c-divider); border-radius: 50% }
+.pg-looks .sayshape-btn-text { margin-left: 4px }
+.pg-pane-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; padding: 8px 16px; border-top: 1px solid var(--vp-c-divider) }
+.pg-metrics { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0 }
+.pg-metrics div { display: flex; gap: 6px; align-items: baseline }
+.pg-metrics dt { font: 500 10.5px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-3) }
+.pg-metrics dd { margin: 0; font: 500 12px var(--vp-font-family-mono); font-variant-numeric: tabular-nums; white-space: nowrap }
 .pg-tools { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--vp-c-text-2) }
 .pg-tools label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer }
 .pg-tools input { accent-color: var(--vp-c-brand-1) }
 
 /* Editor: a transparent textarea over highlighted text, sharing one font and metrics. */
-.ed { position: relative; display: flex; height: 640px; background: var(--sayshape-code-bg) }
+.ed { position: relative; display: flex; height: var(--pg-pane-h); background: var(--sayshape-code-bg) }
 .ed-gutter { flex: none; width: 46px; overflow: hidden; border-right: 1px solid var(--vp-c-divider); padding: 12px 0; font: 13px/1.7 var(--vp-font-family-mono); color: var(--vp-c-text-3); text-align: right; user-select: none }
 .ed-gutter div div { padding-right: 9px; position: relative; height: 1.7em }
 .ed-gutter .error { color: var(--sayshape-bad); font-weight: 600 }
@@ -613,7 +679,7 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 .ed-input:focus-visible { box-shadow: inset 0 0 0 2px var(--vp-c-brand-1) }
 .ed-input[readonly] { cursor: progress }
 
-.pg-stage { height: 640px; overflow: auto }
+.pg-stage { height: calc(var(--pg-pane-h) - 37px); overflow: auto }
 .pg-stage[data-scheme="light"] { --sayshape-stage: #edf1ef; --sayshape-stage-dot: #cbd4d0 }
 .pg-stage[data-scheme="dark"] { --sayshape-stage: #0b0f14; --sayshape-stage-dot: #222b35 }
 
@@ -645,12 +711,18 @@ const docsGuide = withBase("/docs/integration/model-guide.html");
 
 @media (max-width: 1100px) {
   .pg-details { grid-template-columns: 1fr 1fr }
-  .pg-right { margin-left: 0 }
 }
 @media (max-width: 900px) {
   .pg { padding: 20px 16px 48px }
-  .pg-head h1 { font-size: 32px }
+  .pg-head { margin-bottom: 12px }
   .pg-hide { display: none }
+  .pg-pick { flex: 1 1 100%; margin-right: 0 }
+  .pg-notice { flex: 1 1 100%; margin-left: 0 }
+  .pg-notice:empty { display: none }
+  /* A menu as wide as the toolbar, under it: one hung from its button would run off the screen. */
+  .pg-toolbar { position: relative }
+  .pg-menu { position: static }
+  .pg-menu-list { top: calc(100% - 4px); right: 0; width: auto; max-width: none }
   .pg-tabs { display: flex; gap: 4px; margin-bottom: 12px; position: sticky; top: var(--vp-nav-height, 64px); z-index: 5; background: var(--vp-c-bg); padding: 6px 0 }
   .pg-tabs button {
     flex: 1;
