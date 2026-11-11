@@ -291,7 +291,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
             </div>
             <div>
               <h3>Your design</h3>
-              <p>Your app sets the theme and which elements exist. The AI picks roles like “primary” or “warning”, never colors or code. Try the same spec in each look.</p>
+              <p>Your app sets the theme and which elements exist. The AI picks roles like “primary” or “warning”, never colors or code. Try the same spec in each look, or pick your own brand color.</p>
               <a :href="href('/docs/integration/themes')">Themes →</a>
             </div>
           </div>

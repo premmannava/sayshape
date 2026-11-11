@@ -209,12 +209,17 @@ export const mortgageLook: Look = { preset: "neutral", accent: "#B45309" };
 
 // ---------------------------------------------------------------- your app stays in control
 
-/** One small spec the theme switcher redraws in each look; its button sends an action to the page. */
-export const lookSpec = `state guests=2
+/**
+ * One small spec the theme switcher redraws in each look, and in a color the
+ * visitor picks: the chart and the button take it, though the
+ * spec names no color. Its button sends an action to the page.
+ */
+export const lookSpec = `state guests=2 nights=[{night: "Fri", price: 170}, {night: "Sat", price: 190}, {night: "Sun", price: 150}]
 card
   text "Cabin weekend" style=title
   stepper "Guests" bind=guests min=1 max=6
-  stat label="Total for two nights" value={money(guests * 180)}
+  stat label="Total for three nights" value={money(guests * sum(nights, 'price'))}
+  chart "Price per guest, per night" kind=bar items=nights x=night y=price format=money
   button "Book it" on=emit:book`;
 
 export const lookChoices: { name: string; look: Look }[] = [
