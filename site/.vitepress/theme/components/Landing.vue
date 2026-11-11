@@ -12,9 +12,9 @@
  *
  * How to connect each app (the integrations card) follows mcp/README.md. Apps
  * that can't draw MCP Apps views (coding agents) get a page to open instead,
- * from sayshape-mcp 0.1.1 (mcp/src/fallback.ts). There is no SayShape-hosted
- * address, one-click install or directory listing: Claude on the web and
- * ChatGPT need "an address you host", shown as your-domain.example. App menu
+ * from sayshape-mcp 0.1.1 (mcp/src/fallback.ts). Claude on the web and ChatGPT
+ * use SayShape's public server on Cloud Run (PUBLIC_MCP); there's no one-click
+ * install or directory listing yet. App menu
  * paths and commands were checked on 2026-11-10 against each app's own docs
  * or CLI help (Claude's custom connectors article, ChatGPT's developer mode
  * article, Antigravity's MCP docs, `claude mcp add --help`, `codex mcp add`).
@@ -97,8 +97,8 @@ onBeforeUnmount(() => { observer?.disconnect(); cancelAnimationFrame(frame); });
 const MCP = "npx -y sayshape-mcp";
 const LIB = "npm install sayshape";
 // The hosting command is mcp/README.md's "Host it publicly" one, version pinned; the address is a placeholder.
-const HOSTED = "npx -y sayshape-mcp@0.1.2 --http --host 0.0.0.0 --trust-proxy";
-const ADDRESS = "https://your-domain.example/mcp";
+// SayShape's public server (Cloud Run, from deploy/cloud-run/Dockerfile); docs/integration/mcp#hosted has it too.
+const PUBLIC_MCP = "https://sayshape-26372282324.us-central1.run.app/mcp";
 const MCP_JSON = `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}`;
 // One entry per app: the steps to install it there, in order, and nothing else. The step with
 // `code` shows the copy box. What each app can't do is on the docs page, not here.
@@ -111,7 +111,7 @@ const setups: { id: string; name: string; steps: Step[]; more?: { text: string; 
   { id: "vscode", name: "VS Code", steps: [{ text: "Create .vscode/mcp.json in your project and paste this:", code: `{\n  "servers": {\n    "sayshape": {\n      "type": "stdio",\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}`, label: ".vscode/mcp.json" }, { text: "Turn on MCP Apps in VS Code's settings (experimental)." }, { text: ASK }] },
   { id: "codex", name: "Codex", steps: [{ text: "Run this in a terminal:", code: `codex mcp add sayshape -- ${MCP}`, label: "Terminal" }, { text: PAGE }] },
   { id: "antigravity", name: "Antigravity", steps: [{ text: "In the agent panel, open … → MCP Servers → Manage MCP Servers → View raw config." }, { text: "Paste this:", code: MCP_JSON, label: "mcp_config.json" }, { text: PAGE }] },
-  { id: "hosted", name: "Claude web, ChatGPT", steps: [{ text: "Run this on a host with HTTPS, such as Render:", code: HOSTED, label: "On your host" }, { text: `Add its address, like ${ADDRESS}: in Claude as a custom connector, in ChatGPT as an app in developer mode.` }, { text: ASK }], more: { text: "How to host it", to: "/docs/integration/mcp#hosted" } },
+  { id: "hosted", name: "Claude web, ChatGPT", steps: [{ text: "Copy this address:", code: PUBLIC_MCP, label: "Address" }, { text: "Paste it in Claude as a custom connector, or in ChatGPT as an app in developer mode." }, { text: ASK }], more: { text: "Where to paste it, or host your own", to: "/docs/integration/mcp#hosted" } },
   { id: "other", name: "Goose and others", steps: [{ text: "Add this command as an MCP server in your app:", code: MCP, label: "Command" }, { text: ASK }] },
 ];
 // Claude Desktop's steps show from the start, so the install steps are on screen without a press.
@@ -250,7 +250,7 @@ onBeforeUnmount(() => clearTimeout(copiedTimer));
                 <div v-if="st.code" class="code"><div class="code-bar"><span>{{ st.label }}</span><button type="button" class="copy" @click="copy(shownSetup.id, st.code)">{{ copied === shownSetup.id ? "Copied" : "Copy" }}</button></div><pre tabindex="0" role="region" :aria-label="`Setup for ${shownSetup.name}`"><code>{{ st.code }}</code></pre></div>
               </li>
             </ol>
-            <p class="small">Needs Node.js 20 or later. <a :href="href(shownSetup.more?.to ?? '/docs/integration/mcp')">{{ shownSetup.more?.text ?? "More options" }} →</a></p>
+            <p class="small"><template v-if="shownSetup.id !== 'hosted'">Needs Node.js 20 or later. </template><a :href="href(shownSetup.more?.to ?? '/docs/integration/mcp')">{{ shownSetup.more?.text ?? "More options" }} →</a></p>
           </div>
         </article>
         <article class="path">

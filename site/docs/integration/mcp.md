@@ -33,7 +33,7 @@ The server is on npm as [`sayshape-mcp`](https://www.npmjs.com/package/sayshape-
 | Your app | Where the server runs | What you see |
 |---|---|---|
 | Claude Desktop, VS Code, Goose and other MCP Apps clients | On your computer | The interface, inside the chat |
-| Claude on the web and phone, ChatGPT | At an HTTPS address you host | The interface, inside the chat |
+| Claude on the web and phone, ChatGPT | At SayShape's public address, or one you host | The interface, inside the chat |
 | Claude Code, Codex, Antigravity | On your computer | A page the agent publishes or saves for you to open in a browser |
 
 Support differs between apps, versions and plans.
@@ -90,18 +90,28 @@ codex mcp add sayshape -- npx -y sayshape-mcp
 
 ### Claude on the web and phone, and ChatGPT {#hosted}
 
-These apps connect to a server's address; they can't run a program on your computer. So the server has to run somewhere they can reach, at a public HTTPS address, which you (or someone you trust) host. There's no SayShape-hosted address. On a host that puts its own HTTPS proxy in front, such as Render, start it with an exact version:
+These apps connect to a server's address; they can't run a program on your computer. SayShape runs a public server you can add as it is:
+
+```text
+https://sayshape-26372282324.us-central1.run.app/mcp
+```
+
+Add it:
+
+- **Claude:** as a custom connector. On Pro and Max, that's Customize → Connectors → Add, then Add custom connector; on Team and Enterprise, an owner adds it for the organization. Free plans can add one custom connector. Claude connects from Anthropic's servers, so the address must be reachable from the internet.
+- **ChatGPT:** turn on developer mode (Settings → Apps → Advanced settings), then create an app with the address (Apps → Create). Developer mode is a beta on the web, for Pro, Business, Enterprise and Edu plans; on Business, Enterprise and Edu an admin may need to allow it.
+
+The public server reads only the specs it's sent and keeps nothing between requests. It has a rate limit per caller, and it may change address or version while SayShape is a prototype.
+
+#### Host your own {#host-your-own}
+
+To run it yourself, start it on a host that puts its own HTTPS proxy in front, such as Google Cloud Run or Render, with an exact version:
 
 ```bash
 npx -y sayshape-mcp@0.1.2 --http --host 0.0.0.0 --trust-proxy
 ```
 
-Its address is then your host's address plus `/mcp`, such as `https://your-domain.example/mcp`. Add it:
-
-- **Claude:** as a custom connector. On Pro and Max, that's Customize → Connectors → Add, then Add custom connector; on Team and Enterprise, an owner adds it for the organization. Free plans can add one custom connector. Claude connects from Anthropic's servers, so the address must be reachable from the internet.
-- **ChatGPT:** turn on developer mode (Settings → Apps → Advanced settings), then create an app with the address (Apps → Create). Developer mode is a beta on the web, for Pro, Business, Enterprise and Edu plans; on Business, Enterprise and Edu an admin may need to allow it.
-
-The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#host-it-publicly) explains each flag, the rate limit, the health check at `/`, and what the server logs. Don't add `--data` there: on a public address it would let anyone read the whole database, so the server refuses it.
+On Cloud Run, [`deploy/cloud-run/Dockerfile`](https://github.com/premmannava/sayshape/tree/main/deploy/cloud-run/Dockerfile) does this. Your address is then your host's address plus `/mcp`, such as `https://your-domain.example/mcp`; add it the same way. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#host-it-publicly) explains each flag, the rate limit, the health check at `/`, and what the server logs. Don't add `--data` there: on a public address it would let anyone read the whole database, so the server refuses it.
 
 ### Options
 
