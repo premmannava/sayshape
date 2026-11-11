@@ -17,3 +17,4 @@ site/docs/components/*.md
 .dev.vars
 site/docs/elements/*.md
 eval/compare/results/
+competitive-analysis/
