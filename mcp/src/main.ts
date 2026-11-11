@@ -6,6 +6,8 @@
  *   sayshape-mcp --data file.db  also let the model query a SQLite database (read-only)
  *   sayshape-mcp --theme-picker  show a theme selector above interfaces (off by default)
  *   sayshape-mcp --theme blue    the theme interfaces use: teal (default), purple, blue, neutral or studio
+ *   sayshape-mcp --accent "#e4572e"  a brand color for buttons, highlights and charts (made readable
+ *                                in light and dark; says so at startup when it had to change it)
  *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --no-copy-text  hide the Copy text button
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
@@ -35,7 +37,7 @@ import { basename } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { cannotDrawViews, createServer, setImageHosts, setScenes } from "./server";
-import { parseViewArgs, type ViewOptions } from "./ui/view-options";
+import { accentNotes, parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
 import { createHttp, dataRefusal, listen, parseHttpArgs, startupLine } from "./http";
@@ -65,7 +67,8 @@ async function main(): Promise<void> {
     console.error([
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
-      "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--no-save-image] [--no-copy-text] [--scene]",
+      "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color]",
+      "                    [--no-save-image] [--no-copy-text] [--scene]",
       "                    [--image-hosts host1,host2,...]",
       "",
       "  --http [port]       Streamable HTTP on /mcp instead of stdio; port from the flag, else PORT, else 3001",
@@ -79,6 +82,8 @@ async function main(): Promise<void> {
       "",
       "  --theme-picker   show a theme selector above each interface (off by default)",
       "  --theme <name>   the theme interfaces use: teal (default), purple, blue, neutral or studio",
+      "  --accent <color> a brand color, such as \"#e4572e\", for buttons, highlights and charts;",
+      "                   darkened or lightened where it would be hard to read",
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
       "  --no-copy-text   hide the Copy text button",
       "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",
@@ -88,6 +93,7 @@ async function main(): Promise<void> {
     return;
   }
   const view = parseViewArgs(args);
+  for (const note of accentNotes(view)) console.error(`SayShape: ${note}`);
   // Experimental scenes: the server's parser and docs and the view must agree.
   setScenes(view.scene === true);
   // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.

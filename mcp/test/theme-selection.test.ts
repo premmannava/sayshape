@@ -183,4 +183,46 @@ describe("MCP view toolbar", () => {
     expect(models.has("tool-button")).toBe(false);
     expect(parse(`tool-button "Save" icon=download\n`, models).diagnostics[0]?.message).toMatch(/tool-button/);
   });
+
+  describe("with the server's --accent", () => {
+    const CHART = `state sales=[{month: "Jan", n: 10}, {month: "Feb", n: 14}]
+chart "Sales" kind=bar items=sales x=month y=n
+`;
+
+    it("colors buttons, highlights and the first chart series, in light and dark", () => {
+      const light = themeForPreset("teal", "light", undefined, "#d93025");
+      expect(light.colors.accent).toBe("#d93025");
+      expect(light.colors.series1).toBe("#d93025");
+      expect(light.colors.series2).toBe(lightTheme.colors.series2);
+      // Too dark to read on the dark background, so dark mode lightens it, and the chart follows.
+      const dark = themeForPreset("teal", "dark", undefined, "#d93025");
+      expect(dark.colors.accent).toBe("#df4f45");
+      expect(dark.colors.series1).toBe("#df4f45");
+      expect(dark.colors.series2).toBe(darkTheme.colors.series2);
+      const ui = render(CHART, { theme: themeForPreset("teal", "light", undefined, "#d93025") });
+      expect(drawnColors(ui.drawOps)).toContain("#d93025");
+      ui.destroy();
+    });
+
+    it("makes a color that's hard to read readable on each mode's background", () => {
+      const light = themeForPreset("teal", "light", undefined, "#ffe066");
+      expect(light.colors.accent).not.toBe("#ffe066");
+      expect(light.colors.series1).toBe(light.colors.accent);
+      expect(themeForPreset("teal", "dark", undefined, "#ffe066").colors.accent).toBe("#ffe066");
+    });
+
+    it("goes on top of any preset, and the host's colors still apply around it", () => {
+      expect(themeForPreset("studio", "light", undefined, "#d93025").font).toEqual(themeForPreset("studio", "light").font);
+      const host = themeForPreset("teal", "light", hostReader({ "--color-background-primary": "#faf9f5" }), "#d93025");
+      expect(host.colors.surface).toBe("#faf9f5");
+      expect(host.colors.accent).toBe("#d93025");
+    });
+
+    it("leaves every preset exactly as it was without one", () => {
+      for (const { id } of PRESETS) {
+        for (const scheme of ["light", "dark"] as const) expect(themeForPreset(id, scheme, undefined, undefined)).toEqual(themeForPreset(id, scheme));
+      }
+    });
+  });
 });
+

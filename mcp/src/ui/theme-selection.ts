@@ -64,7 +64,12 @@ export function isPresetId(value: unknown): value is PresetId {
   return typeof value === "string" && PRESETS.some((preset) => preset.id === value);
 }
 
-export function themeForPreset(preset: PresetId, scheme: Scheme, read?: ReadVar): Theme {
-  const theme = resolveTheme(preset, scheme, null).theme;
+/**
+ * A preset in the host's mode, with the server's --accent if it has one (made
+ * readable on this scheme's surface; the first chart series follows it), then
+ * the host's shared colors, fonts and radii. Hosts never send an accent.
+ */
+export function themeForPreset(preset: PresetId, scheme: Scheme, read?: ReadVar, accent?: string): Theme {
+  const theme = resolveTheme(preset, scheme, accent ?? null).theme;
   return read ? hostTheme(theme, read) : theme;
 }

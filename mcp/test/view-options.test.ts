@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeViewOptions, DEFAULT_VIEW_OPTIONS, encodeViewOptions, MAX_IMAGE_HOSTS, parseViewArgs, readViewOptions, withViewOptions } from "../src/ui/view-options";
+import { accentNotes, decodeViewOptions, DEFAULT_VIEW_OPTIONS, encodeViewOptions, MAX_IMAGE_HOSTS, parseViewArgs, readViewOptions, withViewOptions } from "../src/ui/view-options";
 
 describe("view options", () => {
   it("defaults to no theme picker, teal, and Save image and Copy text on", () => {
@@ -65,6 +65,46 @@ describe("view options", () => {
     it("drops a list that was tampered with instead of loading from it", () => {
       expect(decodeViewOptions("images=https://evil.example.com").imageHosts).toBeUndefined();
       expect(decodeViewOptions("images=*").imageHosts).toBeUndefined();
+    });
+  });
+
+  describe("--accent", () => {
+    it("takes a hex color, with or without #, short or long, any case", () => {
+      expect(parseViewArgs(["--accent", "#E4572E"]).accent).toBe("#e4572e");
+      expect(parseViewArgs(["--accent", "e45"]).accent).toBe("#ee4455");
+      expect(parseViewArgs(["--theme", "studio", "--accent", "#0a7"])).toMatchObject({ theme: "studio", accent: "#00aa77" });
+      expect(parseViewArgs([]).accent).toBeUndefined();
+    });
+
+    it("says what it needs when the color is missing or isn't hex", () => {
+      expect(() => parseViewArgs(["--accent", "red"])).toThrow(/--accent needs a hex color, such as "#e4572e" or "#e45"; got "red"/);
+      expect(() => parseViewArgs(["--accent", "rgb(1,2,3)"])).toThrow(/got "rgb\(1,2,3\)"/);
+      expect(() => parseViewArgs(["--accent"])).toThrow(/--accent needs a hex color/);
+      expect(() => parseViewArgs(["--accent", "--theme-picker"])).toThrow(/--accent needs a hex color, such as "#e4572e" or "#e45"\.$/);
+    });
+
+    it("travels to the view in the meta tag and back", () => {
+      const o = { ...DEFAULT_VIEW_OPTIONS, accent: "#e4572e" };
+      expect(encodeViewOptions(o)).toBe("picker=0&theme=teal&accent=e4572e&save=1&copy=1");
+      expect(decodeViewOptions(encodeViewOptions(o))).toEqual(o);
+      // Without --accent the tag is exactly what it was, so existing views don't change.
+      expect(encodeViewOptions(DEFAULT_VIEW_OPTIONS)).toBe("picker=0&theme=teal&save=1&copy=1");
+    });
+
+    it("never lets anything but six hex digits through to the canvas", () => {
+      for (const bad of ["red", "e45", "#e4572e", "e4572e;x", "url(x)", "E4572E", ""]) {
+        expect(decodeViewOptions(`accent=${encodeURIComponent(bad)}`).accent).toBeUndefined();
+      }
+    });
+
+    it("says at startup what each mode uses, since text in it has to stay readable", () => {
+      expect(accentNotes({ theme: "teal" })).toEqual([]);
+      // A mid red reads on white but is too dark on the dark background.
+      expect(accentNotes({ theme: "teal", accent: "#d93025" })).toEqual([
+        "accent #d93025: light mode uses it as is; dark mode uses #df4f45, so text in it stays readable.",
+      ]);
+      // Pale yellow is the other way round.
+      expect(accentNotes({ theme: "teal", accent: "#ffe066" })[0]).toMatch(/^accent #ffe066: light mode uses #[0-9a-f]{6}; dark mode uses it as is, so/);
     });
   });
 });

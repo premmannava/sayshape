@@ -36,6 +36,7 @@ When none is on, there's no toolbar at all. Whoever installs the server chooses,
 |---|---|
 | `--theme-picker` | Show the theme selector (off by default) |
 | `--theme teal\|purple\|blue\|neutral\|studio` | The theme interfaces use (default `teal`). `studio` is the Studio look: Inter, rounder corners and an indigo-to-violet accent |
+| `--accent "#e4572e"` | A brand color (hex, `#rrggbb` or `#rgb`) for buttons, highlights and charts' first series, laid over the theme. Text in it must stay readable (4.5:1), and no color manages that on both white and near-black, so it's darkened in light mode or lightened in dark mode where needed; the server says at startup what each mode uses |
 | `--no-save-image` | Hide Save image (shown by default where the chat app can download) |
 | `--no-copy-text` | Hide Copy text, and leave Ctrl+C alone (shown by default) |
 | `--scene` | **Experimental.** Turn on scenes: pictures and animations the model paints from shapes (off by default). Leave it out to turn them off again. |
