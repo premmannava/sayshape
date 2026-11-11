@@ -40,7 +40,7 @@ card
 
 | | SayShape | HTML |
 |---|---|---|
-| Time to a finished screen (median) | **1.6 s** | 7.3 s |
+| Time to a finished screen (median) | **1.5 s** | 7.3 s |
 | Output tokens (median) | **149** | 1,205 |
 | Input tokens (median) | 11,123 (the language guide) | **168** |
 | Cost per answer, guide cached | **$0.0081** | $0.0108 |
@@ -51,7 +51,7 @@ card
 
 HTML wins two rows, and they matter. Models already know HTML, so it works first try a little more often (on GPT-5.6 Luna the gap was 97% against 99%). `sayshape/model` checks each answer with the parser and asks once for a fix; these figures are without that. And the guide that teaches a model the language is about 11,000 input tokens, so turn on prompt caching or use the compact guide.
 
-These are our own measurements, from 2026-11-05, made with the harness in this repository: `npm run compare` scores both formats the same way on what is shown and on what happens when it's used. Run it against your own model before trusting ours.
+These are our own measurements, from 2026-11-05, made with the harness in this repository: `npm run compare` scores both formats the same way on what is shown and on what happens when it's used. [Every answer and its score](eval/compare/published/) is published, for this run and the GPT-5.6 Luna one. Run it against your own model before trusting ours.
 
 ## Try it
 
