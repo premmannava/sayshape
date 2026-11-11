@@ -29,6 +29,7 @@ import EngineDiagram from "./components/EngineDiagram.vue";
 import Atlas from "./components/Atlas.vue";
 import ElementPage from "./components/ElementPage.vue";
 import Compare from "./components/Compare.vue";
+import Chat from "./components/Chat.vue";
 
 export default {
   extends: DefaultTheme,
@@ -41,5 +42,6 @@ export default {
     app.component("Atlas", Atlas);
     app.component("ElementPage", ElementPage);
     app.component("Compare", Compare);
+    app.component("Chat", Chat);
   },
 } satisfies Theme;

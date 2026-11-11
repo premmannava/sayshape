@@ -4,10 +4,11 @@ main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
 [vars]
-# The model's id as NVIDIA names it on build.nvidia.com (its "model" in the API example),
+# The model's id as the provider names it (its "model" in the provider's API example),
 # and the name the page shows next to live answers. Empty until you pick one: answers stay off.
 MODEL = ""
 MODEL_LABEL = ""
+# The provider's OpenAI-compatible base URL. Set it to DeepSeek's (or another provider's) before deploying.
 MODEL_URL = "https://integrate.api.nvidia.com/v1"
 ALLOWED_ORIGINS = "https://premmannava.github.io"
 GENERATION_ENABLED = "true"
@@ -33,5 +34,5 @@ namespace_id = "1001"
 # id = "<the id from wrangler>"
 
 # Secrets, set with wrangler and never written here:
-#   npx wrangler secret put MODEL_API_KEY        your NVIDIA API key (nvapi-…)
+#   npx wrangler secret put MODEL_API_KEY        the provider's API key
 #   npx wrangler secret put TURNSTILE_SECRET     (recommended)

@@ -44,8 +44,8 @@ jobs:
       - name: Build the website
         run: npm run site:build
         env:
-          # Public settings for the playground's Generate box (Settings → Secrets and variables → Actions → Variables).
-          # Leave them unset and the site runs saved specs only. The API key is never here: it lives in the worker.
+          # Public settings for the chat page (Settings → Secrets and variables → Actions → Variables).
+          # Leave them unset and the chat page says live answers aren't set up. The API key is never here: it lives in the worker.
           VITE_SAYSHAPE_MODEL_ENDPOINT: ${{ vars.SAYSHAPE_MODEL_ENDPOINT }}
           VITE_SAYSHAPE_MODEL_LABEL: ${{ vars.SAYSHAPE_MODEL_LABEL }}
           VITE_TURNSTILE_SITE_KEY: ${{ vars.TURNSTILE_SITE_KEY }}
