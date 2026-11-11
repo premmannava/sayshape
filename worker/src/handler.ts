@@ -51,6 +51,12 @@ export interface Env {
   MODEL_URL?: string;
   /** "false" when the provider refuses stream_options (then the page shows no token counts). */
   STREAM_USAGE?: string;
+  /**
+   * How hard the model thinks before it writes, in the provider's words (DeepSeek: "none", "low",
+   * "high", "max"). Empty leaves it to the provider, which for DeepSeek is "high": about ten
+   * seconds before the first line of an answer.
+   */
+  REASONING_EFFORT?: string;
   /** Comma-separated origins allowed to call, e.g. https://premmannava.github.io */
   ALLOWED_ORIGINS?: string;
   /** Turnstile secret. When set, every request needs a valid token. */
@@ -257,6 +263,7 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
           apiKey: env.MODEL_API_KEY,
           maxTokens: MAX_TOKENS,
           streamUsage: env.STREAM_USAGE !== "false",
+          ...(env.REASONING_EFFORT?.trim() ? { reasoningEffort: env.REASONING_EFFORT.trim() } : {}),
         },
         registry,
         ...job.options,
