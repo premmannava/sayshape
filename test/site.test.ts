@@ -18,6 +18,8 @@ import { mapComponents } from "../src/components/map";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { examples, exampleById } from "../site/examples/catalog";
+import { samples } from "../playground/samples";
+import { SOURCE_ALIASES, sourceByKey, sourceGroups, sources } from "../site/.vitepress/theme/sayshape/playgroundSources";
 
 const TODAY = "2026-10-21";
 type UI = ReturnType<typeof render>;
@@ -292,6 +294,35 @@ function sayShapeBlocks(): Block[] {
   }
   return blocks;
 }
+
+describe("playground picker", () => {
+  it("offers every name once, each in exactly one group", () => {
+    const titles = sources.map((s) => s.title);
+    expect(new Set(titles).size).toBe(titles.length);
+    expect(new Set(sources.map((s) => s.key)).size).toBe(sources.length);
+    expect(sourceGroups.flatMap((g) => g.items)).toHaveLength(sources.length);
+  });
+
+  it("offers every gallery example", () => {
+    for (const e of examples) expect(sourceByKey(e.id)?.spec).toBe(e.spec);
+  });
+
+  it("places every sample it offers in a named group, so new ones aren't left under More unnoticed", () => {
+    const loose = sources.filter((s) => s.group === "More").map((s) => s.key);
+    expect(loose).toEqual(["sample-designShowcase"]);
+  });
+
+  it("keeps links to samples that repeat a gallery example working", () => {
+    expect(Object.keys(SOURCE_ALIASES).sort()).toEqual(["sample-bookTable", "sample-launchPlan", "sample-orgChart"]);
+    expect(sourceByKey("sample-orgChart")?.key).toBe("org-chart");
+    expect(sourceByKey("sample-nothing")).toBeUndefined();
+    // Every other sample without a remote photo is still offered under its own key.
+    for (const [k, s] of Object.entries(samples)) {
+      if (/^\s*image\b/m.test(s.spec) || SOURCE_ALIASES[`sample-${k}`]) continue;
+      expect(sourceByKey(`sample-${k}`)?.key).toBe(`sample-${k}`);
+    }
+  });
+});
 
 describe("documentation examples", () => {
   const blocks = sayShapeBlocks();
