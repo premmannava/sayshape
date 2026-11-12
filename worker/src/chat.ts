@@ -117,7 +117,7 @@ export function chatGuide(registry: Registry): GuideOptions {
     profile: registry.all().map((c) => c.type).filter((t) => !leftOut.has(t)),
     notes: `A demo chat on SayShape's website: people ask anything, as if this were their company's assistant.
 Answer with one screen: the direct answer first (a stat, callout or title), then the detail in whatever shows it best, with controls that change what's shown.
-A thing with parts and a layout (a production line, network, floor plan, route, machine): draw it with scene, its parts pressable with on=, the pressed part's detail beside it. Numbers to compare are a chart, never a drawing.
+A thing with parts and a layout (a production line, network, floor plan, route, machine): draw it with scene, its parts pressable with on=, the pressed part's detail beside it. Where something moves or flows (parts on a belt, traffic, a pulse on a fault), animate it: duration=6 on the scene and a prop as a formula of t, like x={40 + 80*t} or r={8 + 3*wave(t, 1.5)}. Numbers to compare are a chart, never a drawing.
 You have no data or tools. When a question needs figures, make up realistic ones in state and add text "Example figures" style=caption. Never present them as real.
 Output only the finished SayShape spec.`,
   };

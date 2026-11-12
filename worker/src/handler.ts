@@ -33,6 +33,7 @@ import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { sceneComponents } from "../../src/components/scene";
 import { Registry } from "../../src/registry";
+import { languageGuide } from "../../src/prompt";
 import { answerGuide, answerRequest, checkAnswer, DATA, readQuestion } from "./answer";
 import { chatGuide, chatRequest, checkDrawing, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
 
@@ -94,10 +95,13 @@ export const MAX_THOUGHT_CHARS = 12_000;
 /** No request is read past this, whatever its kind. */
 const MAX_ANY_BODY_BYTES = Math.max(MAX_BODY_BYTES, MAX_CHAT_BODY_BYTES);
 /**
- * The most a reply may be, thinking included. A drawing with its controls runs to about 2,000
- * tokens before any thinking, and an answer cut off here ends in a broken line and a repair.
+ * The most a reply may be, thinking included. A drawing with its controls runs to 2,000 to 3,000
+ * tokens and the model thinks for about as many again, even at low effort; an answer cut off
+ * here ends in a broken line.
  */
-const MAX_TOKENS = 5_000;
+const MAX_TOKENS = 8_000;
+/** Thinking arrives a word at a time; it's sent on in pieces of about this many characters, since every event costs the worker time. */
+const THOUGHT_BATCH_CHARS = 120;
 const DEFAULT_URL = "https://integrate.api.nvidia.com/v1";
 const DEFAULT_DAILY = 500;
 const registry = new Registry(coreComponents);
@@ -106,7 +110,9 @@ const registry = new Registry(coreComponents);
  * world map. Spreadsheet answers keep to the core elements, and to their smaller guide.
  */
 export const chatRegistry = new Registry([...coreComponents, ...sceneComponents, ...mapComponents]);
-const CHAT_GUIDE = chatGuide(chatRegistry);
+/** The chat guide's text, built once per worker instance, not per question: it's the same every time. */
+let chatGuideText: string | undefined;
+const chatGuideOnce = () => (chatGuideText ??= languageGuide(chatRegistry, chatGuide(chatRegistry)));
 
 const json = (status: number, body: unknown, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
@@ -189,7 +195,7 @@ function chatJob(body: Record<string, unknown>): Job | { error: string } {
   return {
     registry: chatRegistry,
     // A follow-up's request is the visitor's words; refineMessages frames them as a change to the latest answer.
-    options: c.refine ? { request: c.message, refine: c.refine, guide: CHAT_GUIDE, check } : { request: chatRequest(c.message), guide: CHAT_GUIDE, check },
+    options: c.refine ? { request: c.message, refine: c.refine, guide: chatGuideOnce(), check } : { request: chatRequest(c.message), guide: chatGuideOnce(), check },
     unanswered: "The model didn't draw anything for that. Try asking it another way.",
   };
 }
@@ -265,7 +271,11 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
-  const send = (event: Record<string, unknown>) => writer.write(encoder.encode(JSON.stringify(event) + "\n")).catch(() => {});
+  const write = (event: Record<string, unknown>) => writer.write(encoder.encode(JSON.stringify(event) + "\n")).catch(() => {});
+  // Thinking waiting to be sent. Anything else sends it first, so events stay in order.
+  let pending = "";
+  const flush = () => { if (pending) { const v = pending; pending = ""; void write({ t: "thought", v }); } };
+  const send = (event: Record<string, unknown>) => { flush(); return write(event); };
 
   const run = async () => {
     // Only chat answers show thinking: the spreadsheet page never did.
@@ -294,7 +304,8 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
           if (thought >= MAX_THOUGHT_CHARS) return;
           const part = v.slice(0, MAX_THOUGHT_CHARS - thought);
           thought += part.length;
-          void send({ t: "thought", v: part });
+          pending += part;
+          if (pending.length >= THOUGHT_BATCH_CHARS) flush();
         } : undefined,
       });
       const errors = result.diagnostics.filter((d) => d.severity === "error");
@@ -315,6 +326,7 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
     } catch (e) {
       if (!req.signal?.aborted) await send({ t: "error", message: friendlyError(e) });
     } finally {
+      flush();
       await writer.close().catch(() => {});
     }
   };

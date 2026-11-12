@@ -69,6 +69,10 @@ Then tell the website where the worker is. In GitHub: **Settings → Secrets and
 
 These are public values, so they're Variables, not Secrets. The chat page reads them at build time, so run the Pages workflow again after setting them. Until `SAYSHAPE_MODEL_ENDPOINT` is set, the chat page says live answers aren't set up.
 
+## The plan it needs
+
+Use Cloudflare's **Workers Paid** plan. The free plan allows 10 ms of processing per request, and an answer takes 200 to 500 ms of it (reading the model's stream piece by piece, then checking the answer). Cloudflare doesn't enforce the free limit every time, so on that plan answers fail at random, cut off mid-stream with no error: `npx wrangler tail` shows `exceededCpu`. The page then says the model didn't answer as expected.
+
 ## Change or turn off
 
 - Another model: edit `MODEL` and `MODEL_LABEL` in `wrangler.toml` and `npx wrangler deploy`.

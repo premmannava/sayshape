@@ -381,7 +381,7 @@ describe("chat messages", () => {
     const body = model.requests[0]!.body as unknown as { messages: Array<{ content: string }>; max_tokens: number };
     expect(body.messages[0]!.content).toMatch(/^- scene /m);
     expect(body.messages[0]!.content).toMatch(/^- map /m);
-    expect(body.max_tokens).toBe(5000);
+    expect(body.max_tokens).toBe(8000);
 
     // The drawing check's findings are warnings: on their own they don't cost a second call.
     const still = DRAWING.replace('x=40 y=60 w=160', 'x={40 + 20*wave(t, 2)} y=60 w=160').replace("h=200", "h=200 duration=0");
@@ -397,6 +397,26 @@ describe("chat messages", () => {
     const data = fakeModel([{ content: ["text \"x\" \n"] }, { content: ["text \"x\"\n"] }]);
     await events(await handle(post(question), env, { fetch: data.fetch }));
     expect((data.requests[0]!.body as { messages: Array<{ content: string }> }).messages[0]!.content).not.toMatch(/^- scene /m);
+  });
+
+  it("sends thinking on in pieces, in order with everything else, and teaches motion the engine accepts", async () => {
+    const words = Array.from({ length: 200 }, (_, i) => `word${i} `);
+    const model = fakeModel([{ reasoning: words, content: [LATEST] }]);
+    const out = await events(await handle(post({ kind: "chat", message: "Pipeline by stage" }), env, { fetch: model.fetch }));
+    const thoughts = out.filter((x) => x.t === "thought") as Array<{ v: string }>;
+    expect(thoughts.map((x) => x.v).join("")).toBe(words.join(""));
+    // 200 chunks from the model reach the page as a handful of events.
+    expect(thoughts.length).toBeLessThan(20);
+    // All the thinking is sent before the first line of the answer.
+    const kinds = out.map((x) => x.t);
+    expect(kinds.lastIndexOf("thought")).toBeLessThan(kinds.indexOf("text"));
+
+    // The motion the chat guide's note shows parses, and the drawing check has nothing to say about it.
+    const g = chatGuide(chatRegistry);
+    expect(g.notes).toContain("duration=6");
+    const moving = `scene "A part on a belt" w=600 h=200 duration=6\n  rect x={40 + 80*t} y=80 w=40 h=40 fill="accent"\n  circle x=300 y=100 r={8 + 3*wave(t, 1.5)} fill="bad"\n`;
+    expect(parse(moving, chatRegistry).diagnostics).toEqual([]);
+    expect(checkDrawing(moving, chatRegistry)).toEqual([]);
   });
 
   it("asks the model to think as hard as REASONING_EFFORT says, and leaves it to the provider when empty", async () => {
