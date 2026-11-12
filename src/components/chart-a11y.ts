@@ -4,6 +4,7 @@
  * the largest share), and the numbers it draws as a table, so someone who
  * can't see the plot gets the same answer as someone who can.
  */
+import { layersSummary } from "./chart-layers";
 import type { ElementSemantics, PartSemantics, SemanticsContext } from "../a11y/semantics";
 import { fieldOf, isList, isRecord } from "../data";
 import type { Box } from "../types";
@@ -173,5 +174,9 @@ export function chartSemantics(box: Box, ctx: SemanticsContext): ElementSemantic
       summary = `${items_}.${series}${trend} Highest${of}: ${hi.label}, ${v(hi.value)}. Lowest${of}: ${lo.label}, ${v(lo.value)}.`;
     }
   }
-  return figure(summary, tableParts(name, [x, ...seriesNames], d.slots.map((s) => [s.label, ...s.values.map(v)])));
+  // Layers: levels and notes in the summary, line layers as more columns of the data.
+  const L = geo?.layers;
+  if (L) summary += layersSummary(L, v);
+  const extra = L?.lines ?? [];
+  return figure(summary, tableParts(name, [x, ...seriesNames, ...extra.map((ln) => ln.label)], d.slots.map((s, i) => [s.label, ...s.values.map(v), ...extra.map((ln) => v(ln.values[i] ?? null))])));
 }

@@ -34,6 +34,7 @@
  *   little width for them, shows a message instead of a chart: nothing is
  *   dropped silently.
  */
+import { LAYER_TYPES, layerValues, paintLayers, placeLayers, readLayers, type LayerInput } from "./chart-layers";
 import { chartSemantics } from "./chart-a11y";
 import type { ComponentDef } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
@@ -241,6 +242,7 @@ function gridLegend(entries: Array<{ label: string; detail: string; color: numbe
 
 function axisGeometry(
   box: { w: number }, d: SeriesData, series: ChartGeometry["series"], kind: AxisKind, format: Format, title: string, line: number, ctx: Ctx,
+  layerInput: LayerInput | null = null,
 ): { g: ChartGeometry; h: number } {
   const t: Theme = ctx.theme;
   const m = ctx.measure;
@@ -255,7 +257,8 @@ function axisGeometry(
   if (d.problem === "no-values") return done(say("No numbers to chart"));
 
   const ns = series.length;
-  const values = d.slots.flatMap((s) => s.values.flatMap((v) => (v === null ? [] : [v])));
+  // Layers share the scale, so a target above the tallest bar still fits.
+  const values = [...d.slots.flatMap((s) => s.values.flatMap((v) => (v === null ? [] : [v]))), ...layerValues(layerInput)];
   const plotH = plotHeight(box.w);
   const scale = chartScale(values, kind, Math.max(2, Math.min(6, Math.floor(plotH / 44))));
   const tickText = tickLabels(scale.ticks, scale.step, format);
@@ -322,14 +325,18 @@ function axisGeometry(
   const labelY = plot.y + plot.h + t.space.xs;
   let h = labelY + labelLH;
   let legend: LegendItem[] = [];
-  if (ns > 1) {
-    const l = flowLegend(series, box.w, h + t.space.sm, ctx);
+  const layers = layerInput ? placeLayers(layerInput, d, slots, y, ns, format, line, ctx.warn) : undefined;
+  // A line layer needs naming, so the legend shows with one series too.
+  const entries = [...series, ...(layers?.lines ?? []).map((ln) => ({ label: ln.label, color: ln.color }))];
+  if (entries.length > 1) {
+    const l = flowLegend(entries, box.w, h + t.space.sm, ctx);
     legend = l.items;
     h = l.bottom;
   }
   return {
     g: {
       ...base,
+      ...(layers ? { layers } : {}),
       plot,
       ticks: scale.ticks.map((v, i) => ({ value: v, y: y(v), label: tickText[i]! })),
       zeroY,
@@ -797,6 +804,7 @@ export const chart: ComponentDef = {
     format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number." },
   },
   picks: [
+    { for: "a target, forecast or event marked on bars or a line", write: "chart kind=bar holding chart-rule \"Target\" y=50000" },
     { for: "a ranking or a top 10 with long names", write: "chart kind=hbar" },
     { for: "parts of each total, such as revenue by product per month", write: "chart kind=stacked y=hardware,software" },
     { for: "an amount over time, such as visitors a week", write: "chart kind=area" },
@@ -813,6 +821,7 @@ export const chart: ComponentDef = {
   example: `state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
 chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year labels="This year,Last year" format=money`,
   check,
+  children: LAYER_TYPES,
   minWidth: () => 200,
   layout(box, ctx) {
     const p = ctx.props(box.node);
@@ -830,6 +839,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     }
     const items = p.expr("items");
     const line = box.node.line;
+    const layerKids = ctx.visibleChildren(box.node).filter((k) => (LAYER_TYPES as readonly string[]).includes(k.type));
     if (p.has("items") && !isList(items)) ctx.warn?.(`chart on line ${line}: items is not a list, so there's nothing to chart. Use a list of records, like items=sales`);
     let out: { g: ChartGeometry; h: number };
     if (own) {
@@ -852,7 +862,11 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       const labels = labelsOf(p.str("labels"));
       const series = ys.map((field, k) => ({ field, label: labels[k] || field, color: k }));
       const data = chartSeries(items, x, ys);
-      out = kind === "hbar" ? hbarGeometry(box, data, series, format, p.text(), line, ctx) : axisGeometry(box, data, series, kind as AxisKind, format, p.text(), line, ctx);
+      out = kind === "hbar" ? hbarGeometry(box, data, series, format, p.text(), line, ctx)
+        : axisGeometry(box, data, series, kind as AxisKind, format, p.text(), line, ctx, readLayers(layerKids, items, ctx.props, line, ctx.warn));
+    }
+    if (layerKids.length && kind !== "bar" && kind !== "line") {
+      ctx.warn?.(`chart on line ${line}: chart-line, chart-rule and chart-note are drawn on kind=bar and kind=line only, so they were left out of this kind=${kind} chart`);
     }
     box.data = out.g;
     box.h = out.h;
@@ -955,7 +969,8 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       const hot = ctx.pointer && ctx.isHovered(box.node)
         ? chartHoverAt(d, ctx.pointer.x - ox, ctx.pointer.y - oy)
         : null;
-      const showLabels = d.series.length === 1 && d.slots.length <= 7 && pw / d.slots.length >= 54;
+      // A line layer runs across the tops of the bars, where their values would be written.
+      const showLabels = d.series.length === 1 && d.slots.length <= 7 && pw / d.slots.length >= 54 && !d.layers?.lines.length;
       const format = ctx.props(box.node).oneOf("format", FORMATS, "number");
       d.slots.forEach((s, i) => {
         // A wave from left to right: each bar grows out of the zero line.
@@ -1071,9 +1086,13 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       g.restore();
     }
 
+    // Layers keep their own series colors, also beside a single series drawn in the accent.
+    const layerColor = (k: number) => (k < d.series.length ? colorOf(k) : palette[k % palette.length]!);
+    g.globalAlpha = base;
+    paintLayers(ctx, d, ox, oy, layerColor, reveal);
     g.globalAlpha = base * fade;
     paintSlotLabels(ctx, d, ox, oy);
-    if (d.legend.length) paintLegend(ctx, d, ox, oy, colorOf);
+    if (d.legend.length) paintLegend(ctx, d, ox, oy, d.layers ? layerColor : colorOf);
     if (reveal >= 1) paintChartHover(box, ctx, d);
   },
 };
