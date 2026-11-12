@@ -70,10 +70,10 @@ const PRESS: Record<string, PropDef> = {
 };
 /** Dragging (behavior on only: hidden from the parser, guide and docs otherwise). Said in full once, on group. */
 const DRAG: Record<string, PropDef> = {
-  drag: { type: "boolean", needs: "behavior", description: "People can drag it (pointer, touch or arrow keys). x={a} and y={b} name the state it moves; x={clamp(a, 40, 560)} keeps it between 40 and 560; any other formula holds that axis still. Inside each: x={p.x}." },
+  drag: { type: "boolean", needs: "behavior", description: "People can drag it (or use arrow keys). x={a} y={b} name the state it moves; x={clamp(a, 40, 560)} bounds it; other formulas hold still." },
 };
 const DRAG_SHAPE: Record<string, PropDef> = {
-  drag: { type: "boolean", needs: "behavior", description: "Draggable, like group's drag=." },
+  drag: { type: "boolean", needs: "behavior", description: "Like group's drag=." },
 };
 /** The same props on single shapes, said briefly: the guide lists them on every shape. */
 const PRESS_SHAPE: Record<string, PropDef> = {

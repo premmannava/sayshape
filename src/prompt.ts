@@ -483,9 +483,8 @@ function compactSections(ctx: GuideContext): GuideSection[] {
 - Change the screen (runs here): ${local.join(", ")}
 - Tell the app (host event): emit:name[:value]. Use emit for anything the app must do, like book, pay or save
 ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty, set:t.text:'Done'\n" : ""}- A key can be a path into a record: set:form.email:'', toggle:settings.dark`);
-  if (opts.behavior) add("behavior", `CHANGING BY ITSELF: every 1s if={running && left > 0} do=dec:left, one unindented line, runs do= every interval (16ms-60s) while if= holds
-- do= only changes state (inc, dec, toggle, set, add, remove, clear), in order, each seeing the last: do="inc:vy:{9.8*0.03};set:y:{min(260, y + vy*0.03)}". dec stops at 0; sin, cos, sqrt, clamp, lerp work here
-- Let people stop it: if={running} and button "Pause" on=toggle:running. Never use it to show data`);
+  if (opts.behavior) add("behavior", `CHANGING BY ITSELF: every 1s if={running} do=dec:left (unindented; 16ms-60s; while if= holds)
+- do= only inc/dec/toggle/set/add/remove/clear, in order, each seeing the last; dec stops at 0; sin cos sqrt clamp lerp work. Add a pause: if={running}, button on=toggle:running. Never to show data`);
   if (has("each")) {
     add("data", `DATA AND LISTS
 - Keep data in state and repeat with each; never copy an element by hand per item: each items=todos as=t (t exists only inside; index=i is the 0-based position; key={t.id} keeps focus on items)
@@ -561,10 +560,8 @@ function withProps(c: ComponentDef, behavior: boolean): ComponentDef {
 /** What the full guide says about rules (behavior on). */
 function behaviorSection(scenes: boolean): string {
   return `CHANGING BY ITSELF (timers, countdowns, simulations)
-- every 1s if={running && left > 0} do=dec:left  One unindented line: runs do= every interval (16ms to 60s) while if= holds. It starts once the screen is complete; its first run is one interval after if= turns true.
-- do= only changes state: inc, dec, toggle, set, add, remove, clear (no emit, go, back or notify). Its actions run in order, each seeing the last: do="inc:vy:{9.8*0.03};set:y:{min(260, y + vy*0.03)}". dec never goes below 0: to go past it, write set:y:{y - 5}.
-- if= and do= may also use sin, cos, tan, atan2, sqrt, clamp and lerp.
+- every 1s if={running && left > 0} do=dec:left  One unindented line: runs do= every interval (16ms to 60s) while if= holds, starting once the screen is complete.
+- do= only changes state (inc, dec, toggle, set, add, remove, clear), in order, each seeing the last: do="inc:vy:{9.8*0.03};set:y:{min(260, y + vy*0.03)}". dec stops at 0; write set:y:{y - 5} to go below. sin, cos, tan, atan2, sqrt, clamp and lerp work here.
 - Let people stop it: if={running} and a button "Pause" on=toggle:running.
-- It counts runs, not clock time, and pauses while the screen is out of sight.
-- Never use it to show data: charts, tables and stats still show numbers.${scenes ? " For motion that repeats, a scene's t is simpler." : ""}`;
+- Never use it to show data.${scenes ? " For motion that repeats, a scene's t is simpler." : ""}`;
 }
