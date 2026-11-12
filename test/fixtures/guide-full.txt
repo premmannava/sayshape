@@ -367,7 +367,7 @@ ELEMENTS
       state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
       chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year labels="This year,Last year" format=money
 
-  chart-line "<text>"  — Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars.
+  chart-line "<text>"  — Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars. Name the chart's own bars in the legend with its labels=, like labels="This year".
     "<text>"  Its name in the legend. Defaults to the field name.
     y=<name, required>  The field holding each item's number, e.g. y=forecast.
     only inside: chart

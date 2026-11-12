@@ -49,4 +49,18 @@ describe("chart layers", () => {
     expect(ui.accessibility({ full: true }).children[0]!.description).toMatch(/Target: \$60,000\./);
     expect(ui.copyText()).toMatch(/Forecast/);
   });
+
+  it("keeps a level's name off a line that passes where it would sit", () => {
+    const at = (layers: string) => {
+      const op = render(chart("bar", layers), { width: 600 }).drawOps.find((o) => o.op === "fillText" && String(o.args[0]).startsWith("Target"))!;
+      return { x: Number(op.args[1]), y: Number(op.args[2]) };
+    };
+    // Forecast ends at 47,000, just above a target of 45,000: right where the name goes.
+    const alone = at(`  chart-rule "Target" y=45000\n`);
+    const crossed = at(`  chart-line "Forecast" y=forecast\n  chart-rule "Target" y=45000\n`);
+    expect(crossed.y).toBeGreaterThan(alone.y);
+    // A line nowhere near leaves it where it was.
+    const clear = at(`  chart-line "Forecast" y=forecast\n  chart-rule "Target" y=10000\n`);
+    expect(clear.y).toBe(at(`  chart-rule "Target" y=10000\n`).y);
+  });
 });

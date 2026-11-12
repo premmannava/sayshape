@@ -34,7 +34,7 @@ const leaf = {
 export const chartLine: ComponentDef = {
   ...leaf,
   type: "chart-line",
-  description: "Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars.",
+  description: "Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars. Name the chart's own bars in the legend with its labels=, like labels=\"This year\".",
   text: { description: "Its name in the legend. Defaults to the field name." },
   props: {
     y: { type: "name", required: true, description: "The field holding each item's number, e.g. y=forecast." },
@@ -183,13 +183,6 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
     g.strokeStyle = c.ink;
     g.stroke();
     g.setLineDash([]);
-    g.font = d.labelFont;
-    g.textAlign = "right";
-    g.fillStyle = c.ink;
-    // Above the line, or below it when the line is at the top of the plot.
-    const above = y - top >= 16;
-    g.textBaseline = above ? "bottom" : "top";
-    g.fillText(r.text, right - 2, above ? y - 3 : y + 3);
   }
 
   // Lines over the bars, each in its own series color, with a dot on every point.
@@ -215,6 +208,41 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
         g.stroke();
       }
     }
+  }
+
+  // Each level's name last, on a plate in the surface color: it often sits over a bar.
+  // It goes at the right end above the line unless a chart-line passes there; then below, then the left end.
+  g.font = d.labelFont;
+  g.textBaseline = "middle";
+  const size = parseFloat(/(\d+(?:\.\d+)?)px/.exec(d.labelFont)?.[1] ?? "12");
+  const plateH = size + 6, padX = 5;
+  // Points along every line, close enough together that none slips between two of them past a plate.
+  const linePoints: Array<[number, number]> = [];
+  for (const ln of L.lines) for (const run of ln.runs) {
+    run.forEach((pt, i) => {
+      const next = run[i + 1];
+      const steps = next ? Math.max(1, Math.ceil(Math.abs(next.x - pt.x) / 6)) : 1;
+      for (let k = 0; k < steps; k++) {
+        const u = k / steps;
+        linePoints.push([ox + pt.x + ((next?.x ?? pt.x) - pt.x) * u, oy + pt.y + ((next?.y ?? pt.y) - pt.y) * u]);
+      }
+    });
+  }
+  const covers = (x: number, y: number, w: number) => linePoints.some(([px, py]) => px >= x - 4 && px <= x + w + 4 && py >= y - 4 && py <= y + plateH + 4);
+  for (const r of L.rules) {
+    const y = oy + r.y;
+    const w = g.measureText(r.text).width + padX * 2;
+    const up = y - 3 - plateH, down = y + 3;
+    const fits = (py: number) => py >= top && py + plateH <= bottom;
+    const spots: Array<[number, number]> = [[right - w, up], [right - w, down], [left, up], [left, down]];
+    const [px, py] = spots.find(([sx, sy]) => fits(sy) && !covers(sx, sy, w)) ?? spots.find(([, sy]) => fits(sy)) ?? spots[0]!;
+    g.beginPath();
+    ctx.roundRect(px, py, w, plateH, theme.radius.sm / 2);
+    g.fillStyle = c.surface;
+    g.fill();
+    g.fillStyle = c.ink;
+    g.textAlign = "left";
+    g.fillText(r.text, px + padX, py + plateH / 2);
   }
   g.restore();
 }
