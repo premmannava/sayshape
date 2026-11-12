@@ -57,13 +57,26 @@ export interface Clock {
   now(): number;
   setTimeout(fn: () => void, ms: number): unknown;
   clearTimeout(handle: unknown): void;
+  /**
+   * Call fn just before the screen's next frame, where there is a screen. Fast rules tick on
+   * frames, not a timer: a 16 ms timer never lines up with 16.7 ms frames, so some frames
+   * would show two moves and some none.
+   */
+  requestFrame?(fn: () => void): unknown;
+  cancelFrame?(handle: unknown): void;
 }
+
+const hasFrames = typeof requestAnimationFrame !== "undefined" && typeof cancelAnimationFrame !== "undefined";
 
 export const realClock: Clock = {
   now: () => (typeof performance !== "undefined" ? performance.now() : Date.now()),
   setTimeout: (fn, ms) => setTimeout(fn, ms),
   clearTimeout: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+  ...(hasFrames ? { requestFrame: (fn: () => void) => requestAnimationFrame(fn), cancelFrame: (h: unknown) => cancelAnimationFrame(h as number) } : {}),
 };
+
+/** Rules this fast or faster are motion: they tick on the screen's frames, evenly, where the clock has frames. */
+export const FRAME_RULE_MS = 100;
 
 /** Why rules are paused. Any one holds them all. */
 export type RulePause = "host" | "hidden" | "offscreen" | "waiting" | "streaming";
@@ -95,6 +108,8 @@ interface Armed {
 export class RuleRunner {
   private armed: Armed[] = [];
   private timer: unknown = null;
+  /** Whether the timer is a frame request (cancelled differently). */
+  private onFrame = false;
   private pauses = new Set<RulePause>();
   private floor = MIN_RULE_INTERVAL;
   /** Each recent tick's work, as a share of the fastest interval that was running when it ran. */
@@ -199,12 +214,29 @@ export class RuleRunner {
 
   private schedule(): void {
     const clock = this.host.clock;
-    if (this.timer !== null) { clock.clearTimeout(this.timer); this.timer = null; }
+    if (this.timer !== null) {
+      if (this.onFrame) clock.cancelFrame?.(this.timer); else clock.clearTimeout(this.timer);
+      this.timer = null;
+    }
     if (this.pauses.size) return;
     let next = Infinity;
-    for (const a of this.armed) if (a.due !== undefined && a.due < next) next = a.due;
+    let motion = false;
+    for (const a of this.armed) {
+      if (a.due === undefined || a.due > next) continue;
+      motion = a.due === next ? motion || this.framed(a.rule) : this.framed(a.rule);
+      next = a.due;
+    }
     if (next === Infinity) return;
-    this.timer = clock.setTimeout(() => { this.timer = null; this.run(); }, Math.max(0, next - clock.now()));
+    const wait = Math.max(0, next - clock.now());
+    // Motion waits for a frame once it's within one of being due; run() leaves it for the next frame if it's early.
+    this.onFrame = motion && wait <= FRAME_RULE_MS;
+    const fire = () => { this.timer = null; this.run(); };
+    this.timer = this.onFrame ? clock.requestFrame!(fire) : clock.setTimeout(fire, wait);
+  }
+
+  /** Whether a rule ticks on the screen's frames: it's fast enough to be motion, and the clock has frames. */
+  private framed(rule: RuleDef): boolean {
+    return !!this.host.clock.requestFrame && this.interval(rule) <= FRAME_RULE_MS;
   }
 
   private run(): void {
@@ -227,8 +259,9 @@ export class RuleRunner {
       for (const a of due) {
         if (a.due === undefined) continue;
         const next = a.due + this.interval(a.rule);
-        // Late (a stall): one interval from now, never a burst of the ticks missed.
-        a.due = next <= now ? now + this.interval(a.rule) : next;
+        // Late (a stall): one interval from now, never a burst of the ticks missed. Motion counts
+        // from the frame it ran on, so it lands on every frame, or every second one, evenly.
+        a.due = next <= now || this.framed(a.rule) ? now + this.interval(a.rule) : next;
       }
     }
     this.recheck = false;

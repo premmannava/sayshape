@@ -87,8 +87,20 @@ export interface PieSlice {
   other?: boolean;
 }
 
+/** Layers written under a bar or line chart (chart-layers.ts), placed on its plot. */
+export interface ChartLayers {
+  /** Another field of the same items as a line; color is an index into the series colors. */
+  lines: Array<{ label: string; field: string; color: number; runs: Array<Array<{ x: number; y: number }>>; values: Array<number | null> }>;
+  /** A level across the plot; text is its name and value as drawn. */
+  rules: Array<{ y: number; value: number; label: string; text: string }>;
+  /** A marker at one item. */
+  notes: Array<{ x: number; index: number; label: string }>;
+}
+
 /** Everything paint needs, relative to the chart's box. */
 export type ChartGeometry = {
+  /** Bar and line: what the chart-line, chart-rule and chart-note lines under it add. */
+  layers?: ChartLayers;
   kind: Kind;
   title: string[];
   titleFont: string;

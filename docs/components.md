@@ -5,7 +5,7 @@
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon), [`tile`](#tile) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`chart-line`](#chart-line), [`chart-rule`](#chart-rule), [`chart-note`](#chart-note), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented), [`menu`](#menu), [`menu-item`](#menu-item) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty), [`dialog`](#dialog) |
@@ -422,9 +422,56 @@ A chart of a list of records: bar or line for one or more numbers per item, such
 | `total` | string | Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income". |
 | `format` | `number` / `money` / `percent` | How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number. |
 
+Children: `chart-line`, `chart-rule`, `chart-note`.
+
 ```
 state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
 chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year labels="This year,Last year" format=money
+```
+
+### `chart-line`
+
+Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | Its name in the legend. Defaults to the field name. |
+| `y` | name, required | The field holding each item's number, e.g. y=forecast. |
+
+Only inside: `chart`.
+
+```
+chart-line "Forecast" y=forecast
+```
+
+### `chart-rule`
+
+Under a bar or line chart: a level drawn across the plot, such as a target, a budget or an average.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | What the level is, shown at its end, e.g. "Target". |
+| `y` | expression, required | The level, a number or a formula, e.g. y=50000 or y={avg(pluck(sales, 'revenue'))}. |
+
+Only inside: `chart`.
+
+```
+chart-rule "Target" y=50000
+```
+
+### `chart-note`
+
+Under a bar or line chart: a marker at one item with a few words, such as a launch or an outage.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text, required | The words, kept short, e.g. "Launch". |
+| `at` | string, required | The item it marks: its x value as shown under the chart, e.g. at="Jun". |
+
+Only inside: `chart`.
+
+```
+chart-note "Launch" at="Jun"
 ```
 
 ### `meter`

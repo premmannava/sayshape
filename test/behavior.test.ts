@@ -419,6 +419,62 @@ describe("the slow-down guard", () => {
   });
 });
 
+describe("motion ticks on the screen's frames", () => {
+  /** A clock with frames every frameMs, like a screen. */
+  function screen(frameMs: number) {
+    let t = 0;
+    let seq = 0;
+    const timers = new Map<number, { at: number; fn: () => void }>();
+    const frames = new Map<number, () => void>();
+    const clock: Clock = {
+      now: () => t,
+      setTimeout: (fn, ms) => { timers.set(++seq, { at: t + ms, fn }); return seq; },
+      clearTimeout: (h) => { timers.delete(h as number); },
+      requestFrame: (fn) => { frames.set(++seq, fn); return seq; },
+      cancelFrame: (h) => { frames.delete(h as number); },
+    };
+    const ticks: number[] = [];
+    const perFrame: number[] = [];
+    const runner = new RuleRunner({ clock, scope: () => true, tick: () => { ticks.push(t); } });
+    const run = (count: number) => {
+      for (let f = 1; f <= count; f++) {
+        const at = f * frameMs;
+        for (const [id, tm] of [...timers].sort((a, b) => a[1].at - b[1].at)) if (tm.at <= at) { timers.delete(id); t = tm.at; tm.fn(); }
+        t = at;
+        const before = ticks.length;
+        for (const [id, fn] of [...frames]) { frames.delete(id); fn(); }
+        perFrame.push(ticks.length - before);
+      }
+    };
+    return { runner, run, ticks, perFrame };
+  }
+  const every = (ms: number): RuleDef => ({ line: 1, every: ms, do: "inc:n", actions: [] });
+
+  it("moves once on every frame of a 60 Hz screen, never twice and never not at all", () => {
+    const { runner, run, perFrame } = screen(1000 / 60);
+    runner.set([every(16)]);
+    run(600);
+    // The first frame comes before the rule's first interval is up.
+    expect(new Set(perFrame.slice(2))).toEqual(new Set([1]));
+  });
+
+  it("moves on every second frame of a 120 Hz screen, evenly", () => {
+    const { runner, run, perFrame } = screen(1000 / 120);
+    runner.set([every(16)]);
+    run(1200);
+    const at = perFrame.flatMap((n, i) => (n ? [i] : []));
+    expect(Math.max(...perFrame)).toBe(1);
+    expect(new Set(at.slice(1).map((v, i) => v - at[i]!))).toEqual(new Set([2]));
+  });
+
+  it("leaves a 1 s rule on its timer, keeping time", () => {
+    const { runner, run, ticks } = screen(1000 / 60);
+    runner.set([every(1000)]);
+    run(600);
+    expect(ticks).toEqual([1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 10000]);
+  });
+});
+
 describe("the test clock", () => {
   it("draws a scene at the time a test chooses", () => {
     const ui = render(`scene "Dot" w=200 h=100 duration=2 loop=false\n  label "o" x={10 + 90*t} y=50 fill=ink\n`, { components: ALL, clock: true, animate: true });
