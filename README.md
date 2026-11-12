@@ -69,6 +69,14 @@ card
 npx -y sayshape-mcp
 ```
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/vscode-dark.png">
+  <img src="docs/images/vscode-light.png" width="440" alt="GitHub Copilot's chat in VS Code. The request reads: show monthly sales for January to June as bars, with last year as a line and a target at 16,000. Below it, drawn inside the chat by the SayShape MCP server, is a card titled Monthly sales with six bars, a line for last year, a dashed target line labelled Target $16,000 and a legend.">
+</picture>
+<br><sub>One request in GitHub Copilot's chat in VS Code, answered with a working chart inside the conversation.</sub>
+</p>
+
 **In your own app.**
 
 ```bash
