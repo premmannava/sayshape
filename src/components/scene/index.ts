@@ -59,6 +59,12 @@ const PAINT: Record<string, PropDef> = {
   opacity: num("0 (invisible) to 1 (solid).", 1),
   rotate: num("Turn it by this many degrees around its center (a formula of t spins it)."),
   dash: { type: "string", description: 'A dashed outline: dash and gap lengths, like dash="6 4".' },
+  shadow: { type: "enum", values: ["sm", "md", "lg"], description: "A soft shadow under it, so it sits above what's behind." },
+  glow: { type: "boolean", description: "A soft light around it in its own color: a sun, a lamp, a live dot.", default: false },
+};
+/** For filled shapes only. */
+const SHINE: Record<string, PropDef> = {
+  shine: { type: "boolean", description: "Lit from the upper left, so a circle looks like a ball.", default: false },
 };
 
 /** Props that make a group or use pressable, described in full once. */
@@ -126,12 +132,13 @@ const scene: ComponentDef = {
   # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
   # range(n) for each, and pick(list, i). Reuse a drawing with define and use.
   # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
+  # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
   # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
   # and draw connecting lines before the boxes they join, ending at their edges.
   # A scene shrinks to fit a phone: at w=600, make every label size 15 or more.
   gradient id=sky from="#0B1D3A" to="#F28C38" angle=90
   rect x=0 y=0 w=600 h=300 fill="url(sky)" opacity={ease(t, 0, 3)}
-  circle x=300 y={300 - 160*ease(t, 0, 3)} r=40 fill="#FFD166"
+  circle x=300 y={300 - 160*ease(t, 0, 3)} r=40 fill="#FFD166" glow=true shine=true
   each items={range(3)} as=i
     ellipse x={100 + i*200} y=300 rx=180 ry={70 + 20*i} fill={pick(['#2D6A4F', '#40916C', '#52B788'], i)}
   label "Good morning" x=300 y=60 size=28 weight=bold fill="#FFFFFF" align=center opacity={ease(t, 2, 3)}`,
@@ -293,7 +300,7 @@ const rect: ComponentDef = {
   type: "rect",
   category: "content",
   description: "A rectangle in a scene, from its top-left corner.",
-  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
   example: `rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}`,
 };
 
@@ -302,7 +309,7 @@ const circle: ComponentDef = {
   type: "circle",
   category: "content",
   description: "A circle in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
   example: `circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"`,
 };
 
@@ -311,7 +318,7 @@ const ellipse: ComponentDef = {
   type: "ellipse",
   category: "content",
   description: "An oval in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
   example: `ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"`,
 };
 
@@ -329,7 +336,7 @@ const path: ComponentDef = {
   type: "path",
   category: "content",
   description: "Any outline, in SVG path commands (M move, L line, H, V, C and S curves, Q and T curves, A arc, Z close). For curved shapes: ears, hills, a car body, a wave.",
-  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...PRESS_SHAPE },
+  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
   example: `path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"`,
 };
 
@@ -338,7 +345,7 @@ const polygon: ComponentDef = {
   type: "polygon",
   category: "content",
   description: "A closed shape through points, for triangles, stars, mountains and roofs.",
-  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...PRESS_SHAPE },
+  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
   example: `polygon points="300,40 380,180 220,180" fill="#E9C46A"`,
 };
 
@@ -419,7 +426,7 @@ const gradient: ComponentDef = {
     kind: { type: "enum", values: ["linear", "radial"], description: "linear (a straight blend) or radial (from the middle out).", default: "linear" },
     angle: num("Direction of a linear blend in degrees: 90 is top to bottom, 0 left to right.", 90),
   },
-  example: `gradient id=glow kind=radial from="#FFF3B0" to="#FF8A3D"`,
+  example: `gradient id=glow kind=radial from="accent 25%" to=accent`,
 };
 
 /**

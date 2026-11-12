@@ -814,12 +814,13 @@ ELEMENTS
         # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
         # range(n) for each, and pick(list, i). Reuse a drawing with define and use.
         # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
+        # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
         # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
         # and draw connecting lines before the boxes they join, ending at their edges.
         # A scene shrinks to fit a phone: at w=600, make every label size 15 or more.
         gradient id=sky from="#0B1D3A" to="#F28C38" angle=90
         rect x=0 y=0 w=600 h=300 fill="url(sky)" opacity={ease(t, 0, 3)}
-        circle x=300 y={300 - 160*ease(t, 0, 3)} r=40 fill="#FFD166"
+        circle x=300 y={300 - 160*ease(t, 0, 3)} r=40 fill="#FFD166" glow=true shine=true
         each items={range(3)} as=i
           ellipse x={100 + i*200} y=300 rx=180 ry={70 + 20*i} fill={pick(['#2D6A4F', '#40916C', '#52B788'], i)}
         label "Good morning" x=300 y=60 size=28 weight=bold fill="#FFFFFF" align=center opacity={ease(t, 2, 3)}
@@ -836,6 +837,9 @@ ELEMENTS
     opacity=<number>  0 (invisible) to 1 (solid).
     rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -854,6 +858,9 @@ ELEMENTS
     opacity=<number>  0 (invisible) to 1 (solid).
     rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -873,6 +880,9 @@ ELEMENTS
     opacity=<number>  0 (invisible) to 1 (solid).
     rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -892,6 +902,8 @@ ELEMENTS
     opacity=<number>  0 (invisible) to 1 (solid).
     rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -908,6 +920,9 @@ ELEMENTS
     opacity=<number>  0 (invisible) to 1 (solid).
     rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -924,6 +939,9 @@ ELEMENTS
     opacity=<number>  0 (invisible) to 1 (solid).
     rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -945,6 +963,8 @@ ELEMENTS
     opacity=<number>  0 (invisible) to 1 (solid).
     rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -1004,7 +1024,7 @@ ELEMENTS
     angle=<number>  Direction of a linear blend in degrees: 90 is top to bottom, 0 left to right.
     only inside: scene, group, define
     example:
-      gradient id=glow kind=radial from="#FFF3B0" to="#FF8A3D"
+      gradient id=glow kind=radial from="accent 25%" to=accent
 
 PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)
 - a headline number with its change and recent trend: stat change="+12%" spark=weekly

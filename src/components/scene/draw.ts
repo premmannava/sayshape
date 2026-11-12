@@ -163,13 +163,73 @@ function paintOf(raw: string | undefined, bounds: Bounds, f: Frame, scope: Scope
   return colorOf(v, f);
 }
 
+/** shadow=: how far down it falls and how soft it is, in scene pixels. */
+const SHADOWS: Record<string, readonly [number, number]> = { sm: [2, 5], md: [5, 14], lg: [10, 28] };
+/** A shadow is the same soft dark in every theme: darker on dark pages, where there's less to stand out from. */
+const SHADOW_COLOR = "rgba(0, 0, 0, 0.3)";
+/** How far a glow spreads, in scene pixels. */
+const GLOW_BLUR = 18;
+
+/** One plain color for a fill or stroke: a gradient gives its first color. */
+function solidOf(raw: string | undefined, f: Frame, scope: Scope): string | null {
+  if (raw === undefined) return null;
+  const ref = GRADIENT_REF.exec(raw.trim());
+  if (!ref) return colorOf(raw, f);
+  const gn = f.gradients.get(ref[1]!);
+  const from = gn && strOf(gn, "from", scope);
+  return from ? colorOf(from, f) : null;
+}
+
+/**
+ * Turn on the shape's glow= or shadow= for the next fill or stroke; false when it has neither.
+ * The canvas measures shadows in its own pixels, whatever the scale, so sizes follow the drawing's scale here.
+ */
+function depthOn(node: SayShapeNode, scope: Scope, f: Frame, own: string | null): boolean {
+  if (node.props.glow === undefined && node.props.shadow === undefined) return false;
+  const g = f.g;
+  const t = g.getTransform();
+  const k = Math.sqrt(Math.abs(t.a * t.d - t.b * t.c)) || 1;
+  const glow = node.props.glow === undefined ? false : read(node, "glow", scope);
+  if ((glow === true || glow === "true") && own) {
+    g.shadowColor = own; g.shadowBlur = GLOW_BLUR * k; g.shadowOffsetX = 0; g.shadowOffsetY = 0;
+    return true;
+  }
+  const size = SHADOWS[strOf(node, "shadow", scope) ?? ""];
+  if (!size) return false;
+  g.shadowColor = SHADOW_COLOR; g.shadowBlur = size[1] * k; g.shadowOffsetX = 0; g.shadowOffsetY = size[0] * k;
+  return true;
+}
+function depthOff(g: CanvasRenderingContext2D): void {
+  g.shadowColor = "transparent"; g.shadowBlur = 0; g.shadowOffsetY = 0;
+}
+
+/** shine=true: light from the upper left and a darker far edge over the fill, so a circle reads as a ball. */
+function shine(g: CanvasRenderingContext2D, b: Bounds): void {
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2, r = Math.max(b.w, b.h, 1) / 2;
+  const light = g.createRadialGradient(b.x + b.w * 0.34, b.y + b.h * 0.3, 0, cx, cy, r);
+  light.addColorStop(0, "rgba(255, 255, 255, 0.6)");
+  light.addColorStop(0.55, "rgba(255, 255, 255, 0)");
+  light.addColorStop(0.55, "rgba(0, 0, 0, 0)");
+  light.addColorStop(1, "rgba(0, 0, 0, 0.22)");
+  g.fillStyle = light;
+  g.fill();
+}
+
 /** Fill and stroke the path just traced, with the shape's paint props. */
 function finishShape(node: SayShapeNode, scope: Scope, bounds: Bounds, f: Frame, defaultFill: string | null): void {
   const g = f.g;
   const fillRaw = node.props.fill === undefined ? (defaultFill ?? undefined) : strOf(node, "fill", scope);
   const fill = paintOf(fillRaw, bounds, f, scope);
-  if (fill) { g.fillStyle = fill; g.fill(); }
-  const stroke = paintOf(node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), bounds, f, scope);
+  const strokeRaw = node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope);
+  // The shadow or glow goes under whichever is painted first, once.
+  let deep = depthOn(node, scope, f, solidOf(fill ? fillRaw : strokeRaw, f, scope));
+  if (fill) {
+    g.fillStyle = fill; g.fill();
+    if (deep) { depthOff(g); deep = false; }
+    const lit = node.props.shine === undefined ? false : read(node, "shine", scope);
+    if (lit === true || lit === "true") shine(g, bounds);
+  }
+  const stroke = paintOf(strokeRaw, bounds, f, scope);
   if (stroke) {
     g.strokeStyle = stroke;
     g.lineWidth = Math.max(0, numOf(node, "width", scope, 1));
@@ -179,6 +239,7 @@ function finishShape(node: SayShapeNode, scope: Scope, bounds: Bounds, f: Frame,
     g.setLineDash(dash ? (dash.match(/\d+(\.\d+)?/g) ?? []).map(Number).filter((x) => x >= 0).slice(0, 8) : []);
     g.stroke();
   }
+  if (deep) depthOff(g);
 }
 
 /** Apply opacity and a rotation around (cx, cy), then draw, then undo them. */
@@ -414,7 +475,11 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
         const left = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
         const b = { x: left, y: y - size / 2, w, h: size };
         const fill = paintOf(node.props.fill === undefined ? "#000000" : strOf(node, "fill", scope), b, f, scope);
-        if (fill) { g.fillStyle = fill; g.fillText(text, x, y); }
+        if (fill) {
+          const deep = depthOn(node, scope, f, solidOf(node.props.fill === undefined ? "#000000" : strOf(node, "fill", scope), f, scope));
+          g.fillStyle = fill; g.fillText(text, x, y);
+          if (deep) depthOff(g);
+        }
         const stroke = paintOf(node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), b, f, scope);
         if (stroke) { g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.strokeText(text, x, y); }
         addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
