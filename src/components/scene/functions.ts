@@ -9,6 +9,7 @@
  */
 import { isList, makeList, toNumber } from "../../data";
 import { expressionFunctions, type ExpressionFunctions } from "../../expr";
+import { PURE_MATH } from "../../math";
 import type { Value } from "../../types";
 
 /** The most items range() makes, so a formula can't ask for millions. */
@@ -18,15 +19,7 @@ const n = (v: Value | undefined): number => (v === undefined ? NaN : toNumber(v)
 const unit = (x: number) => Math.min(1, Math.max(0, x));
 
 export const SCENE_FUNCTIONS: ExpressionFunctions = expressionFunctions({
-  sin: (x) => Math.sin(n(x)),
-  cos: (x) => Math.cos(n(x)),
-  tan: (x) => Math.tan(n(x)),
-  atan2: (y, x) => Math.atan2(n(y), n(x)),
-  sqrt: (x) => Math.sqrt(n(x)),
-  /** clamp(x, low, high) */
-  clamp: (x, a, b) => Math.min(n(b), Math.max(n(a), n(x))),
-  /** lerp(a, b, u): from a (u = 0) to b (u = 1). */
-  lerp: (a, b, u) => n(a) + (n(b) - n(a)) * n(u),
+  ...PURE_MATH,
   /** ease(t, start, end): 0 before start, 1 after end, eased out between them. */
   ease: (t, a, b) => {
     const start = n(a), end = n(b);

@@ -9,6 +9,7 @@
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
  *   --no-copy-text      hide the "Copy text" button (shown by default)
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
+ *   --behavior          turn on experimental behavior: rules that tick, and dragging in scenes (off by default)
  *   --image-hosts <list>  hosts images may load from, comma-separated: cdn.example.com,*.images.example.com (none by default)
  *
  * main.ts reads them from the command line; the server writes them into the
@@ -28,6 +29,8 @@ export interface ViewOptions {
   copyText: boolean;
   /** Experimental scenes are registered (the server must agree: setScenes). Absent means off. */
   scene?: boolean;
+  /** Experimental behavior: rules and scene dragging (the server must agree: setBehavior). Absent means off. */
+  behavior?: boolean;
   /**
    * Hosts images may load from (the engine's imageHosts; the server must agree:
    * setImageHosts, and the view resource's CSP). Absent means none: the view has
@@ -60,6 +63,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   if (args.includes("--no-save-image")) out.saveImage = false;
   if (args.includes("--no-copy-text")) out.copyText = false;
   if (args.includes("--scene")) out.scene = true;
+  if (args.includes("--behavior")) out.behavior = true;
   const at = args.indexOf("--theme");
   if (at >= 0) {
     const name = args[at + 1];
@@ -105,7 +109,7 @@ export function encodeViewOptions(o: ViewOptions): string {
   const images = o.imageHosts?.length ? `&images=${o.imageHosts.join(",")}` : "";
   // Without its #, so the value is plain letters and digits.
   const accent = o.accent ? `&accent=${o.accent.slice(1)}` : "";
-  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.scene ? "&scene=1" : ""}${images}`;
+  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${images}`;
 }
 
 /** The settings from encodeViewOptions; anything missing or unknown keeps its default. */
@@ -117,6 +121,7 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   if (p.get("save") === "0") out.saveImage = false;
   if (p.get("copy") === "0") out.copyText = false;
   if (p.get("scene") === "1") out.scene = true;
+  if (p.get("behavior") === "1") out.behavior = true;
   const images = p.get("images");
   const hosts = images ? hostList(images) : null;
   if (hosts) out.imageHosts = hosts;

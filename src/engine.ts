@@ -9,6 +9,8 @@
  * changing state re-lays out, hovering only repaints.
  */
 import { parseActions, runActions } from "./actions";
+import { MAX_RULE_LIST, realClock, RULE_OPS, RuleRunner, type Clock, type RuleDef } from "./behavior";
+import { RULE_FUNCTIONS } from "./math";
 import { PropReader, type ComponentDef, type DragContext, type ElementView, type LayoutContext, type PaintContext, type PopupContext, type PressContext } from "./component";
 import { Emitter } from "./emitter";
 import { locateOf, scopeOf } from "./each";
@@ -63,6 +65,18 @@ export interface SayShapeEvents {
   notify: { text: string };
   /** The visible screen changed, through go:, back or the host. */
   navigate: { screen: string; from: string | undefined };
+  /** Behavior on: the spec's rules, how many are running, or whether they're paused, changed. */
+  rules: RuleStatus;
+}
+
+/** A spec's rules right now (behavior on). */
+export interface RuleStatus {
+  /** Rules the spec has. */
+  count: number;
+  /** Rules whose condition holds, so they tick. */
+  running: number;
+  /** Paused by the host (pauseRules), a hidden page, the canvas out of sight, reduced motion waiting for a press, or streaming. */
+  paused: boolean;
 }
 
 export interface SayShapeOptions {
@@ -115,12 +129,24 @@ export interface SayShapeOptions {
    * sayshape/testing passes a recording host.
    */
   accessibility?: AccessibilityHost | "off";
+  /**
+   * Experimental, opt-in behavior (docs/plans/behavior.md): `every` rules that
+   * change state on an interval, and dragging in scenes. Default off: the
+   * language is exactly what it was.
+   */
+  behavior?: boolean;
+  /** Where time comes from: scene motion, fade-ins and rules. Default the real clock; sayshape/testing passes one a test advances. */
+  clock?: Clock;
+  /**
+   * Whether the person prefers reduced motion. Default: the system setting.
+   * With it, rules don't start until the person first presses or types something here.
+   */
+  reducedMotion?: boolean;
 }
 
 /** The widest picture() draws, in CSS pixels, so a very wide table can't make a huge image. */
 export const MAX_PICTURE_WIDTH = 2400;
 
-const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 export class SayShape {
   readonly canvas: HTMLCanvasElement;
@@ -170,6 +196,23 @@ export class SayShape {
   private width = 0;
   private lastDiagKey = "";
   private cleanup: Array<() => void> = [];
+  private clock: Clock;
+  /** Rules (behavior on, and the spec has some), or null: nothing runs and nothing is checked. */
+  private rules: RuleRunner | null = null;
+  /** Names dialogs bind: rules can't write them (opening one moves focus with no press). */
+  private dialogBinds = new Set<string>();
+  /** Places written by the drag in progress: rules don't write over them while it's held. */
+  private dragHeld: Place[] = [];
+  /** A rule's tick is writing now: its writes aren't the drag's, so they aren't held. */
+  private ruleWriting = false;
+  /** The screen last changed because of a rule, not the person: screen reader updates are throttled and quiet. */
+  private ruleDriven = false;
+  private lastQuietUpdate = -Infinity;
+  private a11yTimer: unknown = null;
+  /** Whether the person has pressed or typed anything here (reduced motion: rules wait for it). */
+  private interacted = false;
+  private behaviorBound = false;
+  private hostPaused = false;
 
   hover: HitTarget | null = null;
   /** The element being dragged, while the pointer is held on one that defines drag. */
@@ -225,6 +268,7 @@ export class SayShape {
   constructor(canvas: HTMLCanvasElement, opts: SayShapeOptions) {
     this.canvas = canvas;
     this.opts = opts;
+    this.clock = opts.clock ?? realClock;
     this.registry = new Registry(opts.components);
     this.loading = new Loading(this.registry);
     const g = canvas.getContext("2d");
@@ -235,7 +279,7 @@ export class SayShape {
     this.inspector = new Inspector(this);
     this.editorHost = opts.editor ?? (typeof document !== "undefined" ? domEditorHost(canvas) : noEditor);
     const warn = (this.warn = opts.onWarning ?? ((m: string) => { if (typeof console !== "undefined") console.warn(`SayShape: ${m}`); }));
-    this.images = new ImageCache(() => this.imagePolicy(), opts.loadImage ?? browserImageLoader, () => this.invalidate("paint"), now, warn);
+    this.images = new ImageCache(() => this.imagePolicy(), opts.loadImage ?? browserImageLoader, () => this.invalidate("paint"), () => this.clock.now(), warn);
 
     canvas.tabIndex = 0;
     canvas.style.outline = "none";
@@ -251,6 +295,7 @@ export class SayShape {
     this.state.subscribe((key, value) => {
       this.events.emit("change", { key, value });
       this.invalidate("layout");
+      this.rules?.check();
     });
     this.bindInput();
     this.bindEnvironment();
@@ -375,7 +420,7 @@ export class SayShape {
    * Call again with the names still loading, or [] when everything is here.
    */
   setLoading(names: Iterable<string>): void {
-    if (this.loading.set(names, now())) this.invalidate("layout");
+    if (this.loading.set(names, this.clock.now())) this.invalidate("layout");
   }
 
   /**
@@ -411,6 +456,14 @@ export class SayShape {
 
   /** Run any dirty stages synchronously. */
   renderNow(): void {
+    // While rules run, every frame counts toward the busy guard, with the tick before it.
+    const timed = !!this.rules?.running;
+    const began = timed ? this.clock.now() : 0;
+    this.renderStages();
+    if (timed) this.rules!.frameCost(this.clock.now() - began);
+  }
+
+  private renderStages(): void {
     if (this.dirty.parse) this.runParse();
     if (this.dirty.layout) this.runLayout();
     if (this.dirty.paint) this.runPaint();
@@ -423,19 +476,21 @@ export class SayShape {
   }
 
   private runParse(): void {
-    const t = now();
+    const t = this.clock.now();
     const s = this.theme.space;
     this.parsed = parse(this.source, this.registry, {
       partial: this.streaming,
       rootProps: { pad: String(this.opts.padding ?? 20), gap: String(s.md) },
       // State the app set itself counts as known, so reading it isn't flagged.
       knownNames: Object.keys(this.state.snapshot()),
+      ...(this.opts.behavior ? { behavior: true } : {}),
     });
     for (const { key, value } of this.parsed.state) this.state.declare(key, value);
     this.warned.clear();
     this.state.derive(this.parsed.derived);
     this.syncScreen();
-    this.metrics.parseMs = now() - t;
+    if (this.opts.behavior) this.syncRules();
+    this.metrics.parseMs = this.clock.now() - t;
     this.metrics.nodes = this.parsed.nodeCount;
     this.dirty.parse = false;
     const key = JSON.stringify(this.parsed.diagnostics);
@@ -444,7 +499,7 @@ export class SayShape {
 
   private runLayout(): void {
     if (!this.parsed) return;
-    const t = now();
+    const t = this.clock.now();
     const width = this.opts.width ?? (this.canvas.parentElement?.clientWidth || 600);
     this.width = width;
     const lv = this.loadingView();
@@ -476,7 +531,7 @@ export class SayShape {
     if (this.canvas.height !== ph) this.canvas.height = ph;
     this.canvas.style.width = width + "px";
     this.canvas.style.height = height + "px";
-    Object.assign(this.metrics, { width, height, pixelWidth: pw, pixelHeight: ph, layoutMs: now() - t });
+    Object.assign(this.metrics, { width, height, pixelWidth: pw, pixelHeight: ph, layoutMs: this.clock.now() - t });
     this.dirty.layout = false;
     this.a11yDirty = true;
     this.refreshTargets();
@@ -554,7 +609,7 @@ export class SayShape {
     // Clear the flag first: painting can ask for another frame (a fade, a pulse),
     // and clearing it afterwards would drop that request and freeze the animation.
     this.dirty.paint = false;
-    const t = now();
+    const t = this.clock.now();
     const g = this.inspector.wrapContext(this.g);
     const dpr = this.canvas.width / Math.max(1, this.metrics.width);
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -590,7 +645,7 @@ export class SayShape {
     this.paintToast(g);
     this.inspector.paintOverlay(g, this.boxes ?? this.rootBox, this.hits);
     this.inspector.endCapture();
-    this.metrics.paintMs = now() - t;
+    this.metrics.paintMs = this.clock.now() - t;
     this.noteRegionChanges(t);
     this.syncAccessibility();
     this.events.emit("render", { ...this.metrics });
@@ -625,8 +680,24 @@ export class SayShape {
   private syncAccessibility(): void {
     const busy = this.streaming || this.loading.loadingNames.length > 0 || this.loading.isAwaiting;
     if (this.a11yDirty && this.a11y.update) {
+      // Changed by a rule, not the person: at most once a second, and quietly (no status read out per tick).
+      const quiet = this.ruleDriven;
+      const wait = quiet ? this.lastQuietUpdate + RULE_A11Y_MS - this.clock.now() : 0;
+      if (wait > 0) {
+        if (this.a11yTimer === null) {
+          this.a11yTimer = this.clock.setTimeout(() => { this.a11yTimer = null; this.a11yDirty = true; this.invalidate("paint"); }, wait);
+        }
+        this.a11yDirty = false;
+        if (this.wasBusy && !busy) this.a11y.announce("Ready");
+        this.wasBusy = busy;
+        this.followFocusInMirror();
+        return;
+      }
       const tree = this.accessibilityTree();
-      if (tree) this.a11y.update(tree, busy);
+      if (tree) {
+        if (quiet) { this.lastQuietUpdate = this.clock.now(); this.a11y.update(tree, busy, { quiet: true }); }
+        else this.a11y.update(tree, busy);
+      }
     }
     this.a11yDirty = false;
     if (this.wasBusy && !busy) this.a11y.announce("Ready");
@@ -673,6 +744,7 @@ export class SayShape {
         this.invalidate("paint");
       },
       activate: (key) => {
+        this.personActed();
         const t = this.targetByKey(key);
         if (!t) return;
         this.keyboardMode = true;
@@ -683,6 +755,7 @@ export class SayShape {
       },
       key: (e) => this.onKeyDown(e),
       step: (key, direction) => {
+        this.personActed();
         const t = this.targetByKey(key);
         if (!t) return;
         this.keyboardMode = true;
@@ -712,7 +785,7 @@ export class SayShape {
     const readers = new WeakMap<SayShapeNode, PropReader>();
     const scope = this.state.scope;
     const animate = this.opts.animate ?? !(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
-    const t = now();
+    const t = this.clock.now();
     const lv = this.loadingView();
     const same = (a: HitTarget | null, n: SayShapeNode, detail?: unknown) =>
       !!a && a.node.id === n.id && (detail === undefined || a.detail === detail);
@@ -735,7 +808,7 @@ export class SayShape {
       addHit: (box, o = {}) => {
         const focusable = o.focusable ?? true;
         const clip = this.clips[this.clips.length - 1];
-        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}) });
+        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
       },
       isHovered: (n, d) => same(this.hover, n, d),
       isFocused: (n, d) => this.keyboardMode && same(this.focus, n, d),
@@ -744,6 +817,7 @@ export class SayShape {
       isPopupOpen: (n) => !!this.popup && this.popup.owner.node.id === n.id,
       today: this.today,
       motion: animate,
+      ...(this.opts.behavior ? { behavior: true } : {}),
       appear: (n) => {
         if (!animate || n.id === "root") return 1;
         let first = this.seen.get(n.id);
@@ -904,7 +978,7 @@ export class SayShape {
   /** Show a short message over the screen for a few seconds, replacing any current one. */
   notify(text: string): void {
     const ms = toastMs(text);
-    this.toast = { text, shownAt: now(), ms };
+    this.toast = { text, shownAt: this.clock.now(), ms };
     this.events.emit("notify", { text });
     this.a11y.announce(text);
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
@@ -915,12 +989,12 @@ export class SayShape {
 
   /** The message currently shown, if any. */
   get notification(): string | null {
-    return this.toast && now() - this.toast.shownAt < this.toast.ms ? this.toast.text : null;
+    return this.toast && this.clock.now() - this.toast.shownAt < this.toast.ms ? this.toast.text : null;
   }
 
   private paintToast(g: CanvasRenderingContext2D): void {
     if (!this.toast) return;
-    const age = now() - this.toast.shownAt;
+    const age = this.clock.now() - this.toast.shownAt;
     const ms = this.toast.ms;
     if (age >= ms) { this.toast = null; return; }
     const animate = this.opts.animate ?? !(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -1017,7 +1091,7 @@ export class SayShape {
         if (!r) readers.set(node, (r = new PropReader(node, scopeOf(node, this.state.scope))));
         return r;
       },
-      set: (path, v) => this.writePath(target.node, path, v),
+      set: (path, v, own) => this.writePath(target.node, path, v, own),
       run: (actions, own) => this.runActionString(actions, target.node, own),
       runAs: (node, actions) => this.runActionString(actions, node),
       openPopup: (state) => this.openPopup(target, state),
@@ -1169,8 +1243,13 @@ export class SayShape {
     if (def?.editor) { this.beginEdit(target); return; }
     if (def?.press) def.press(this.pressContext(target));
     // Draggable elements act through drag and key; Enter shouldn't fire their on=.
-    else if (def?.drag) return;
+    else if (def?.drag && this.regionOf(target)?.drags !== false) return;
     else if (target.node.props.on) this.runActionString(target.node.props.on, target.node);
+  }
+
+  /** The hit region a target stands for, from the latest frame. */
+  private regionOf(target: HitTarget): HitRegion | undefined {
+    return this.hits.find((h) => sameRegion(h, target));
   }
 
   /** Send a drag phase to the dragged element, using its region from the latest frame. */
@@ -1180,8 +1259,12 @@ export class SayShape {
     const region = this.hits.find((h) => sameRegion(h, t));
     const target = region ? { node: region.box.node, box: region.box, detail: region.detail } : t;
     this.dragging = phase === "end" ? null : target;
+    if (phase === "start") this.dragHeld = [];
     const def = this.registry.get(target.node.type);
+    // Writes in the end phase (putting things back on cancel) still count as held, until it's done.
+    if (phase === "end") this.dragging = target;
     const relayout = def?.drag?.({ ...this.pressContext(target), x, y, phase, ...(cancelled ? { cancelled } : {}) });
+    if (phase === "end") { this.dragging = null; this.dragHeld = []; }
     this.invalidate(relayout ? "layout" : "paint");
   }
 
@@ -1267,6 +1350,143 @@ export class SayShape {
     if (typeof v !== "string" || !names.includes(v)) this.state.set(SCREEN_KEY, names[0]!);
   }
 
+  // ---------------------------------------------------------------- rules (behavior)
+
+  /** The spec's rules, how many are running, and whether they're paused (behavior on). */
+  get ruleStatus(): RuleStatus {
+    const r = this.rules;
+    return { count: r?.count ?? 0, running: r?.running ?? 0, paused: !!r?.paused };
+  }
+
+  /** Pause every rule (a host's Pause button). They continue with no catch-up when resumed. */
+  pauseRules(): void {
+    this.hostPaused = true;
+    this.rules?.pause("host");
+  }
+
+  resumeRules(): void {
+    this.hostPaused = false;
+    this.rules?.resume("host");
+  }
+
+  /** After a parse: start the spec's rules once it's complete; while it streams, none run. */
+  private syncRules(): void {
+    const parsed = this.parsed;
+    this.dialogBinds = new Set();
+    if (parsed) {
+      const walk = (n: SayShapeNode) => {
+        if (n.type === "dialog" && n.props.bind) this.dialogBinds.add(n.props.bind.split(".")[0]!);
+        n.children.forEach(walk);
+      };
+      walk(parsed.root);
+    }
+    const rules = this.streaming ? [] : parsed?.rules ?? [];
+    if (!rules.length) {
+      if (this.rules?.count) this.rules.clear();
+      return;
+    }
+    if (!this.rules) {
+      this.rules = new RuleRunner({
+        clock: this.clock,
+        scope: this.state.scope,
+        tick: (due) => this.runRules(due),
+        slowed: (floor, ms) => this.warn(`Rules faster than every ${floor} ms were slowed to it: each tick took about ${Math.round(ms)} ms`),
+        changed: () => this.rulesChanged(),
+      });
+      if (this.hostPaused) this.rules.pause("host");
+      this.bindBehaviorEnvironment();
+      if (!this.interacted && (this.opts.reducedMotion ?? prefersReducedMotion())) this.rules.pause("waiting");
+    }
+    this.rules.set(rules);
+  }
+
+  /** One tick: each due rule's actions, in order, writing state only, never over what the person holds. */
+  private runRules(due: readonly RuleDef[]): void {
+    const root = this.parsed?.root;
+    if (!root) return;
+    this.ruleWriting = true;
+    try {
+      for (const rule of due) {
+        runActions(rule.actions.filter((a) => RULE_OPS.has(a.op)), {
+          scope: this.state.scope,
+          functions: RULE_FUNCTIONS,
+          set: (path, v) => { if (this.ruleMayWrite(path, v)) this.writePath(root, path, v); },
+          warn: (m) => this.warnOnce(m),
+          // Never called: a rule's actions are state writes only. Kept harmless all the same.
+          emit: () => {},
+        });
+      }
+    } finally {
+      this.ruleWriting = false;
+    }
+    this.ruleDriven = true;
+  }
+
+  /** Whether a rule may write this path now: not the screen, a dialog's bind=, what the person is dragging or typing in, or a list past its limit. */
+  private ruleMayWrite(path: string, value: Value): boolean {
+    const root = this.parsed?.root;
+    const place = root ? this.placeFor(root, path) : null;
+    if (!place) return true;
+    if (place.key === SCREEN_KEY || this.dialogBinds.has(place.key)) return false;
+    const held = [...this.dragHeld];
+    if (this.editing) {
+      const bind = this.editing.node.props.bind;
+      const p = bind ? this.placeFor(this.editing.node, bind) : null;
+      if (p) held.push(p);
+    }
+    if (held.some((h) => overlaps(h, place))) return false;
+    if (isList(value) && value.length > MAX_RULE_LIST) {
+      const cur = this.state.get(place.key);
+      const before = place.steps.length ? undefined : cur;
+      if (!isList(before) || value.length > before.length) {
+        this.warnOnce(`A rule stopped growing ${path} at ${MAX_RULE_LIST} items. Keep it shorter, like set:${path}:{slice(${path}, 1)} before adding`);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private rulesChanged(): void {
+    const r = this.rules;
+    if (!r) return;
+    // A rule stopping (its condition turned false): the screen reader hears where it ended, at once.
+    if (!r.running && this.ruleDriven) this.flushRuleA11y();
+    this.events.emit("rules", this.ruleStatus);
+  }
+
+  /** The person pressed or typed: rules waiting for that (reduced motion) start, and the mirror catches up. */
+  private personActed(): void {
+    if (!this.interacted) { this.interacted = true; this.rules?.resume("waiting"); }
+    if (this.ruleDriven) this.flushRuleA11y();
+  }
+
+  private flushRuleA11y(): void {
+    this.ruleDriven = false;
+    if (this.a11yTimer !== null) { this.clock.clearTimeout(this.a11yTimer); this.a11yTimer = null; }
+    this.a11yDirty = true;
+    this.invalidate("paint");
+  }
+
+  /** Rules run only while they can be seen: not in a hidden tab, not scrolled out of sight. */
+  private bindBehaviorEnvironment(): void {
+    if (this.behaviorBound) return;
+    this.behaviorBound = true;
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      const onVisibility = () => { if (document.hidden) this.rules?.pause("hidden"); else this.rules?.resume("hidden"); };
+      onVisibility();
+      document.addEventListener("visibilitychange", onVisibility);
+      this.cleanup.push(() => document.removeEventListener("visibilitychange", onVisibility));
+    }
+    if (typeof IntersectionObserver !== "undefined") {
+      const io = new IntersectionObserver((entries) => {
+        const seen = entries.some((e) => e.isIntersecting);
+        if (seen) this.rules?.resume("offscreen"); else this.rules?.pause("offscreen");
+      });
+      io.observe(this.canvas);
+      this.cleanup.push(() => io.disconnect());
+    }
+  }
+
   private runActionString(src: string, node: SayShapeNode, own?: OwnCopy): void {
     const parsed = parseActions(src, own?.functions);
     if ("error" in parsed) return;
@@ -1302,6 +1522,9 @@ export class SayShape {
       return;
     }
     if (this.derivedWrite(path, place.key)) return;
+    // What a drag writes is held by the person until they let go: rules don't write over it.
+    // A rule's own write during a drag isn't the drag's, or every rule would stop while anything is held.
+    if (this.dragging && !this.ruleWriting && !this.dragHeld.some((h) => overlaps(h, place) && h.steps.length === place.steps.length)) this.dragHeld.push(place);
     if (!place.steps.length) { this.state.set(place.key, value); return; }
     const r = setIn(this.state.get(place.key), place.steps, value);
     if ("error" in r) this.warn(`Can't change ${path}: ${r.error}`);
@@ -1554,6 +1777,7 @@ export class SayShape {
 
   /** Start typing in a field: place the text box over it and focus it, during the press itself. */
   beginEdit(target: HitTarget): void {
+    this.personActed();
     if (this.editing && this.editing.node.id === target.node.id) return;
     this.endEdit();
     const spec = this.editorSpec(target.node);
@@ -1683,6 +1907,7 @@ export class SayShape {
    * element gets the rest, and Enter or Space presses it.
    */
   private onKeyDown(e: MirrorKey): void {
+    this.personActed();
     this.tipAtDown = undefined;
     // A dialog opened from the keyboard goes near what has focus, not the latest press.
     this.lastPressY = null;
@@ -1780,6 +2005,7 @@ export class SayShape {
     // Set while a press is focusing the canvas, so onFocus can tell a click from Tab.
     let pressing = false;
     const onDown = (e: PointerEvent) => {
+      this.personActed();
       this.keyboardMode = false;
       // A press on a shown tip does nothing (the pointer may rest on it); elsewhere it unpins one.
       const at = local(e);
@@ -1815,7 +2041,7 @@ export class SayShape {
       // Pressing inside a popup leaves keyboard focus on its owner.
       if (this.pressed?.layer === "popup") { this.invalidate("paint"); return; }
       if (this.pressed) { this.focus = this.pressed; this.invalidate("paint"); }
-      if (this.pressed && this.registry.get(this.pressed.node.type)?.drag) {
+      if (this.pressed && this.registry.get(this.pressed.node.type)?.drag && this.regionOf(this.pressed)?.drags !== false) {
         // Keep receiving moves when the pointer leaves the canvas mid-drag.
         try { c.setPointerCapture?.(e.pointerId); } catch { /* not capturable; moves outside are missed */ }
         this.dragging = this.pressed;
@@ -1900,16 +2126,19 @@ export class SayShape {
     };
     // Touch: a vertical swipe over a scrolling element scrolls it (the page's own touch-action
     // would otherwise take it), and the press it started on doesn't fire.
-    let touch: { x: number; y: number; lastY: number; scrolled: boolean } | null = null;
+    let touch: { x: number; y: number; lastY: number; scrolled: boolean; claims: boolean } | null = null;
     const onTouchStart = (e: TouchEvent) => {
       const t = e.touches.length === 1 ? e.touches[0] : undefined;
       if (!t || this.popup) { touch = null; return; }
       const r = c.getBoundingClientRect();
       const x = t.clientX - r.left, y = t.clientY - r.top;
-      touch = { x, y, lastY: y, scrolled: false };
+      // On a shape that's dragged up or down, the finger moves it, not the page (canvas touch-action is pan-y).
+      const at = this.targetAt(x, y);
+      touch = { x, y, lastY: y, scrolled: false, claims: !!(at && this.regionOf(at)?.claimsSwipe) };
     };
     const onTouchMove = (e: TouchEvent) => {
       const t = e.touches.length === 1 ? e.touches[0] : undefined;
+      if (touch?.claims && e.cancelable) { e.preventDefault(); return; }
       if (!touch || !t || this.dragging) return;
       const y = t.clientY - c.getBoundingClientRect().top;
       if (!touch.scrolled && Math.abs(y - touch.y) < 6) return;
@@ -2030,6 +2259,9 @@ export class SayShape {
 
   destroy(): void {
     this.destroyed = true;
+    this.rules?.clear();
+    this.rules = null;
+    if (this.a11yTimer !== null) { this.clock.clearTimeout(this.a11yTimer); this.a11yTimer = null; }
     this.endEdit();
     this.popup = null;
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
@@ -2097,6 +2329,8 @@ export const MIN_TARGET = 24;
  */
 /** How far a press may move and still count as a tap, in CSS pixels. */
 const TAP_SLOP = 4;
+/** While rules are what changes the screen, the screen reader mirror is rebuilt at most this often. */
+const RULE_A11Y_MS = 1000;
 
 /** A part an element registers only for a child's tip (compare's row labels): "tip:<i>". */
 function isTipPart(detail: unknown): boolean {
@@ -2140,3 +2374,15 @@ const TIP_MAX_W = 280, TIP_PAD_X = 10, TIP_PAD_Y = 6, TIP_GAP = 6, TIP_MAX_LINES
 
 /** Room kept between an overlay and the edges of what's in sight. */
 const OVERLAY_MARGIN = 16;
+
+function prefersReducedMotion(): boolean {
+  return typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Whether two places in state overlap: the same name, and one path inside the other. */
+function overlaps(a: Place, b: Place): boolean {
+  if (a.key !== b.key) return false;
+  const n = Math.min(a.steps.length, b.steps.length);
+  for (let i = 0; i < n; i++) if (a.steps[i] !== b.steps[i]) return false;
+  return true;
+}

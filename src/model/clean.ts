@@ -138,7 +138,7 @@ export class SpecFilter {
 }
 
 /** A line that could start a spec: a declaration, a comment, a condition block, or a known element name. */
-export function sayShapeLineTest(isElement: (name: string) => boolean): (line: string) => boolean {
+export function sayShapeLineTest(isElement: (name: string) => boolean, opts: { behavior?: boolean } = {}): (line: string) => boolean {
   return (line) => {
     const t = line.trim();
     if (!t) return false;
@@ -149,6 +149,8 @@ export function sayShapeLineTest(isElement: (name: string) => boolean): (line: s
     if (!word) return false;
     if (word === "state") return /^state(\s|$)/.test(t);
     if (word === "derive") return /^derive(\s|$)/.test(t);
+    // Behavior on: a rule line, every 1s … (not the word "every" starting a sentence).
+    if (word === "every" && opts.behavior) return /^every\s+(\d|\.\d)/.test(t);
     // An element name alone, or followed by a space ("card", "text \"Hi\""), not prose ("Here's").
     return isElement(word) && (t.length === word.length || /\s/.test(t[word.length]!));
   };

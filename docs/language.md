@@ -375,6 +375,26 @@ stat label="Open orders" value={open} tip="Paid, not yet handed to the carrier"
 button "Ship all" on=set:open:0 tip="Marks every open order shipped"
 ```
 
+## Rules (experimental)
+
+Off unless the host turns on behavior ([the engine](engine.md#behavior-experimental-off-by-default)); without it, `every` is an unknown element. A rule changes state by itself on an interval, while its condition holds:
+
+```
+state running=false left=60
+every 1s if={running && left > 0} do=dec:left
+stat label="Seconds left" value={left}
+button "{running ? 'Pause' : 'Start'}" on=toggle:running
+```
+
+- One unindented line: `every`, how often (`16ms` to `60s`, like `every 250ms` or `every 1s`; faster is run at `16ms`), an optional `if={…}`, and `do=` with actions. `on=` is read as `do=`.
+- `do=` only changes state: `inc`, `dec`, `toggle`, `set`, `add`, `remove`, `clear`. A rule with `emit:`, `go:`, `back` or `notify:`, or one that writes `screen`, is skipped with an error; one that writes what a `dialog` binds is warned about, and that write is skipped.
+- Its actions run in order, each seeing the last, as chained `on=` actions do: `do="inc:vy:{9.8*0.03};set:y:{min(260, y + vy*0.03)}"`. `dec` never goes below 0; write `set:y:{y - 5}` to go past it.
+- `if=` and `do=` may also use `sin`, `cos`, `tan`, `atan2`, `sqrt`, `clamp` and `lerp`.
+- It starts once the spec is complete. Its first run is one interval after `if=` turns true, and rules due together run in the order written.
+- It counts runs, not clock time: it pauses while the page is hidden or the screen is out of sight, and doesn't catch up afterwards. A countdown in a hidden tab pauses.
+- At most 8 rules, each with at most 8 actions; a rule doesn't grow a list past 500 items.
+- A rule nothing on the screen can stop (its `if=` reads nothing a control writes) gets a warning: add `if={running}` and a button `on=toggle:running`.
+
 ## Not JavaScript
 
 Models often reach for code when a spec needs logic. Each kind of code line gets an error saying what to write instead, so one repair can fix it: `let`, `const` and `var` (use `derive name={…}` or `state`), `function` and `return` (use `derive`), `for` and `while` (use `each`), `elif` (use `else if={…}`), `if (…) {` and closing braces (use `if={…}` lines and indentation), `//` comments (use `#`), and sentences of prose.

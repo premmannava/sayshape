@@ -89,6 +89,8 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
   const hostId = ++hosts;
   let ids = 0;
   let events: MirrorEvents | null = null;
+  /** The update being applied came from a rule (behavior on): statuses are kept quiet. */
+  let quiet = false;
   // Keys pressed while the root holds focus (its element went away) still go
   // to the engine, so Tab carries on through the interface instead of leaving it.
   treeRoot.addEventListener("keydown", (e) => { if (e.target === treeRoot) events?.key(e); });
@@ -167,6 +169,8 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
     if (node.disabled) attrs.set("aria-disabled", "true");
     // A dialog is modal: while it's open, the engine leaves only it in the tree.
     if (node.role === "dialog") attrs.set("aria-modal", "true");
+    // A status updated by a rule's tick is current when read, but not read out on every tick.
+    if (quiet && node.role === "status") attrs.set("aria-live", "off");
     for (const k of ["selected", "expanded", "pressed", "required", "invalid", "multiselectable"] as const) {
       if (node[k] !== undefined) attrs.set(`aria-${k}`, String(node[k]));
     }
@@ -240,7 +244,8 @@ export function domAccessibilityHost(canvas: HTMLCanvasElement): AccessibilityHo
     connect(ev) {
       events = ev;
     },
-    update(tree, busy) {
+    update(tree, busy, opts) {
+      quiet = !!opts?.quiet;
       positionContainer();
       const active = document.activeElement;
       const hadFocus = active !== treeRoot && owns(active);

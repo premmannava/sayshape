@@ -32,6 +32,8 @@ import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
 import { paintScene, type Frame } from "./draw";
 import { locateOf } from "../../each";
+import { dragShape, keyShape, rangeOf } from "./drag";
+import type { PartSemantics } from "../../a11y/semantics";
 import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
@@ -65,6 +67,13 @@ const PRESS: Record<string, PropDef> = {
   selected: { type: "condition", description: "Draws a selection outline while true, e.g. selected={sel == m.id}." },
   tip: { type: "string", description: "Words shown in a small tag while it's hovered or focused; may hold {formulas}." },
   name: { type: "string", description: "What screen readers call it. Default: the words of its labels, else its tip." },
+};
+/** Dragging (behavior on only: hidden from the parser, guide and docs otherwise). Said in full once, on group. */
+const DRAG: Record<string, PropDef> = {
+  drag: { type: "boolean", needs: "behavior", description: "People can drag it (or use arrow keys). x={a} y={b} name the state it moves; x={clamp(a, 40, 560)} bounds it; other formulas hold still." },
+};
+const DRAG_SHAPE: Record<string, PropDef> = {
+  drag: { type: "boolean", needs: "behavior", description: "Like group's drag=." },
 };
 /** The same props on single shapes, said briefly: the guide lists them on every shape. */
 const PRESS_SHAPE: Record<string, PropDef> = {
@@ -143,6 +152,7 @@ const scene: ComponentDef = {
       g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
       m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
     };
+    if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
     g.save();
     g.beginPath();
     ctx.roundRect(box.x, box.y, box.w, box.h, ctx.theme.radius.md);
@@ -162,7 +172,14 @@ const scene: ComponentDef = {
   },
   press(ctx) {
     const r = liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail));
-    if (r) ctx.run(r.on, { scope: r.scope, locate: r.locate, functions: SCENE_FUNCTIONS });
+    if (r?.on) ctx.run(r.on, { scope: r.scope, locate: r.locate, functions: SCENE_FUNCTIONS });
+  },
+  // Behavior on: a drag=true shape follows the pointer and the arrow keys. Its regions are the only ones that drag.
+  drag(ctx) {
+    dragShape(ctx, (key) => liveOf(ctx.target.node)?.regions.get(key));
+  },
+  key(ctx, key) {
+    return keyShape(ctx, liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail)), key);
   },
   semantics: (box, ctx) => {
     const name = ctx.props(box.node).text() || "Picture";
@@ -171,6 +188,7 @@ const scene: ComponentDef = {
       const r = typeof h.detail === "string" ? scene?.regions.get(h.detail) : undefined;
       if (!r) return [];
       const label = regionName(r);
+      if (r.drag) return [dragSemantics(r, label, h.detail)];
       return [{
         role: "button" as const, name: label, detail: h.detail,
         ...(r.tip && r.tip.trim() !== label ? { description: r.tip.trim() } : {}),
@@ -201,7 +219,8 @@ function pressable(box: Box, ctx: PaintContext, regions: readonly SceneRegion[])
     if (!at) continue;
     byKey.set(r.key, r);
     shown.push({ r, at });
-    ctx.addHit({ node: box.node, children: [], ...at }, { detail: r.key });
+    // Only draggable shapes drag; pressable ones press as before.
+    ctx.addHit({ node: box.node, children: [], ...at }, { detail: r.key, drags: !!r.drag, ...(r.drag?.y ? { claimsSwipe: true } : {}) });
   }
   setLive(box.node, { box: area, regions: byKey });
   return shown;
@@ -274,7 +293,7 @@ const rect: ComponentDef = {
   type: "rect",
   category: "content",
   description: "A rectangle in a scene, from its top-left corner.",
-  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...PRESS_SHAPE },
+  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...PRESS_SHAPE, ...DRAG_SHAPE },
   example: `rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}`,
 };
 
@@ -283,7 +302,7 @@ const circle: ComponentDef = {
   type: "circle",
   category: "content",
   description: "A circle in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...PRESS_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...PRESS_SHAPE, ...DRAG_SHAPE },
   example: `circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"`,
 };
 
@@ -292,7 +311,7 @@ const ellipse: ComponentDef = {
   type: "ellipse",
   category: "content",
   description: "An oval in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...PRESS_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...PRESS_SHAPE, ...DRAG_SHAPE },
   example: `ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"`,
 };
 
@@ -337,6 +356,7 @@ const label: ComponentDef = {
     align: { type: "enum", values: ["left", "center", "right"], description: "Which end of the words sits at x.", default: "left" },
     ...PAINT,
     ...PRESS_SHAPE,
+    ...DRAG_SHAPE,
   },
   example: `label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"`,
 };
@@ -345,7 +365,7 @@ const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), ...PRESS },
+  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), ...PRESS, ...DRAG },
   children: SHAPES,
   parents: IN_SCENE,
   example: `group x={600*((t/3) % 1)} y=200
@@ -382,6 +402,7 @@ const use: ComponentDef = {
     x: num("Across."), y: num("Down."), rotate: num("Degrees."), scale: num("Size.", 1), opacity: num("0 to 1.", 1),
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
     ...PRESS,
+    ...DRAG_SHAPE,
   },
   example: `use "cactus" x=120 y=300 scale=1.2 args={{h: 70}}`,
 };
@@ -407,3 +428,25 @@ const gradient: ComponentDef = {
  * Leave them out and scenes are off: "scene" is then an unknown element.
  */
 export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient];
+
+/**
+ * A draggable shape to a screen reader: moving one way, a slider with its
+ * value and range (a native range input on phones); both ways, a movable part
+ * that says where it is and that arrow keys move it.
+ */
+function dragSemantics(r: SceneRegion, name: string, detail: unknown): PartSemantics {
+  const d = r.drag!;
+  const show = (v: number) => String(Math.round(v * 100) / 100);
+  const tip = r.tip?.trim() && r.tip.trim() !== name ? r.tip.trim() : undefined;
+  if (!d.x !== !d.y) {
+    const axis = d.x ? "x" : "y";
+    const g = rangeOf(d, axis);
+    const now = axis === "x" ? d.ax : d.ay;
+    return { role: "slider", name, detail, value: { now: Number(show(now)), min: Number(show(g.lo)), max: Number(show(g.hi)) }, ...(tip ? { description: tip } : {}) };
+  }
+  return {
+    role: "button", roleDescription: "movable", name, detail,
+    description: `${tip ? tip + ". " : ""}x ${show(d.ax)}, y ${show(d.ay)}. Arrow keys move it`,
+    ...(r.selected !== undefined ? { pressed: r.selected } : {}),
+  };
+}

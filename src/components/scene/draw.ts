@@ -14,6 +14,7 @@ import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
 import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type SceneRegion } from "./interact";
 import { PATH, placeOf, type Locate } from "../../paths";
+import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
@@ -117,7 +118,11 @@ export interface Frame {
    * order they start, the ones open around the line being drawn, and which
    * each copy and use the drawing is inside (for stable keys).
    */
-  press?: { regions: SceneRegion[]; open: SceneRegion[]; copy: string[]; alpha?: number; locate: Locate };
+  press?: {
+    regions: SceneRegion[]; open: SceneRegion[]; copy: string[]; alpha?: number; locate: Locate;
+    /** Behavior on: drag=true lines are recorded too, with the scene's own matrix and size to keep them inside it. */
+    drag?: { scene: Matrix; w: number; h: number; count: number; over?: number };
+  };
 }
 
 /** define and gradient lines anywhere in the scene (not inside a define's own drawing). */
@@ -194,16 +199,29 @@ function withLook(node: SayShapeNode, scope: Scope, f: Frame, cx: number, cy: nu
 
 /** Lines that can be pressed: shapes, groups and uses with on=. */
 const PRESSABLE = new Set(["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use"]);
+/** Lines with one x and y, which drag=true can move (behavior on). */
+const DRAGGABLE = new Set(["rect", "circle", "ellipse", "label", "group", "use"]);
 
-/** Start recording a pressable line, or null when it isn't one (or nothing's recording). */
+/** Start recording a pressable or draggable line, or null when it isn't one (or nothing's recording). */
 function openRegion(node: SayShapeNode, scope: Scope, f: Frame): SceneRegion | null {
   const rec = f.press;
-  const on = node.props.on;
-  if (!rec || on === undefined || !on.trim() || !PRESSABLE.has(node.type)) return null;
+  if (!rec || !PRESSABLE.has(node.type)) return null;
+  const on = node.props.on?.trim() ?? "";
+  let drag: DragInfo | undefined;
+  const dr = rec.drag;
+  if (dr && node.props.drag !== undefined && DRAGGABLE.has(node.type) && dr.count < MAX_DRAGGABLE) {
+    const v = read(node, "drag", scope);
+    if (v === true || v === "true") {
+      drag = dragInfoOf(node.props, scope, numOf(node, "x", scope), numOf(node, "y", scope), f.m, dr.scene, dr.w, dr.h);
+      if (drag) dr.count++;
+    }
+  } else if (dr && node.props.drag !== undefined && DRAGGABLE.has(node.type)) dr.over = node.line;
+  if (!on && !drag) return null;
   const sel = node.props.selected === undefined ? undefined : read(node, "selected", scope);
   const r: SceneRegion = {
     key: rec.copy.length ? `${node.id}#${rec.copy.join(".")}` : node.id,
     node, scope, on, locate: rec.locate, geoms: [], words: [],
+    ...(drag ? { drag } : {}),
   };
   const parent = rec.open[rec.open.length - 1];
   if (parent) r.parent = parent;

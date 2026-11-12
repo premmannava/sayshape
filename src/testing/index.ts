@@ -25,6 +25,8 @@ import type { Box, Diagnostic, HitRegion, SayShapeNode, Value } from "../types";
 import { ensurePath2D, FakeCanvas, type DrawOp } from "./canvas";
 
 export { createRecordingContext, FakeCanvas, monoWidth, type DrawOp } from "./canvas";
+export { ManualClock } from "./clock";
+import { ManualClock } from "./clock";
 
 export interface RenderOptions {
   /** Components to register. Default: the core components (add `mapComponents` for maps). */
@@ -42,6 +44,27 @@ export interface RenderOptions {
   viewport?: { top: number; bottom: number };
   /** Today's date as YYYY-MM-DD, for date pickers. Default: the machine's local day. */
   today?: string;
+  /** Experimental behavior: `every` rules and dragging in scenes. Turns on the manual clock too. */
+  behavior?: boolean;
+  /**
+   * Use a clock the test advances (ui.clock.advance(ms)) instead of real time.
+   * Default: on with behavior, off otherwise.
+   */
+  clock?: boolean;
+  /** Scene motion and fade-ins. Default false, so screens are still. Pair with clock to draw a scene at a chosen time. */
+  animate?: boolean;
+  /** As if the person prefers reduced motion: rules wait for a first press or key. Default false. */
+  reducedMotion?: boolean;
+}
+
+/** The test's clock: advance it to run rules' ticks and move scenes on, without waiting. */
+export interface TestClock {
+  /** Milliseconds since the screen was rendered. */
+  now(): number;
+  /** Move time on, running every tick that falls due on the way (and drawing after each). */
+  advance(ms: number): void;
+  /** Timers still waiting: 0 means nothing will change by itself. */
+  readonly pending: number;
 }
 
 /** Which element to find. A string is shorthand for `{ type }`. */
@@ -101,6 +124,8 @@ export interface Rendered {
    * send (activate a node, move to one, press a key on one), by node key.
    */
   readonly mirror: Mirror;
+  /** The test's clock (render with behavior: true or clock: true). */
+  readonly clock: TestClock;
 
   /**
    * The screen as a screen reader gets it: each shown element's role, name
@@ -165,16 +190,18 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
   ensurePath2D();
   const canvas = new FakeCanvas();
   const announcements: Announcement[] = [];
-  const mirrorState = { focused: null as string | null, busy: false, updates: 0, events: null as MirrorEvents | null };
+  const mirrorState = { focused: null as string | null, busy: false, updates: 0, quiet: 0, events: null as MirrorEvents | null };
   const accessibility: AccessibilityHost = {
     announce: (text, politeness = "polite") => { announcements.push({ text, politeness }); },
     connect: (events) => { mirrorState.events = events; },
-    update: (_tree, busy) => { mirrorState.busy = busy; mirrorState.updates++; },
+    update: (_tree, busy, o) => { mirrorState.busy = busy; mirrorState.updates++; if (o?.quiet) mirrorState.quiet++; },
     focus: (key) => { mirrorState.focused = key; return true; },
     destroy() {},
   };
   let editingNode = (): string | null => null;
   const editor = new FakeEditorHost(() => editingNode());
+  const manual = opts.clock ?? !!opts.behavior ? new ManualClock(() => flushLater()) : null;
+  let flushLater = () => {};
   const sayshape: SayShape = new SayShape(canvas as unknown as HTMLCanvasElement, {
     editor,
     accessibility,
@@ -182,8 +209,11 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     theme: opts.theme ?? lightTheme,
     width: opts.width ?? 600,
     padding: opts.padding,
-    animate: false,
+    animate: opts.animate ?? false,
     imageHosts: opts.imageHosts,
+    ...(opts.behavior ? { behavior: true } : {}),
+    ...(manual ? { clock: manual } : {}),
+    reducedMotion: !!opts.reducedMotion,
     loadImage: opts.loadImage,
     onWarning: (m) => warnings.push(m),
     viewport: opts.viewport ? () => opts.viewport! : undefined,
@@ -198,6 +228,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
   editingNode = () => sayshape.editing?.node.id ?? null;
 
   const flush = () => sayshape.renderNow();
+  flushLater = flush;
   sayshape.setSpec(spec);
   flush();
 
@@ -278,10 +309,19 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     get focused() { return sayshape.focus?.node ?? null; },
     get popup() { return sayshape.openPopupInfo; },
     get announcements() { return announcements; },
+    clock: {
+      now: () => (manual ? manual.now() : 0),
+      advance: (ms) => {
+        if (!manual) throw new Error("This screen uses real time. Render it with behavior: true or clock: true to advance its clock");
+        manual.advance(ms);
+      },
+      get pending() { return manual?.pending ?? 0; },
+    },
     mirror: {
       get focused() { return mirrorState.focused; },
       get busy() { return mirrorState.busy; },
       get updates() { return mirrorState.updates; },
+      get quietUpdates() { return mirrorState.quiet; },
       keyOf(query) {
         const found = find(query);
         // An element's own node comes before its parts, in reading order.
@@ -410,6 +450,8 @@ export interface Mirror {
   readonly busy: boolean;
   /** How many times the mirror was rebuilt. */
   readonly updates: number;
+  /** How many of those rebuilds came from rules ticking (behavior on), kept quiet. */
+  readonly quietUpdates: number;
   /** The key of an element's own node, for the methods below. */
   keyOf(query: Query): string;
   /** Activate a node, as a screen reader's double tap does. */

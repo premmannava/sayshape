@@ -17,6 +17,7 @@ import type { Scope } from "../../expr";
 import type { Locate } from "../../paths";
 import { tracePath, type PathSink } from "./path";
 import type { Rect, SayShapeNode } from "../../types";
+import type { DragInfo } from "./drag";
 
 /** An affine transform [a, b, c, d, e, f], as canvas setTransform takes it. */
 export type Matrix = readonly [number, number, number, number, number, number];
@@ -67,6 +68,8 @@ export interface SceneRegion {
   geoms: Geom[];
   /** Words of the labels drawn inside it, for its name. */
   words: string[];
+  /** Behavior on, drag=true: what dragging it moves. */
+  drag?: DragInfo;
 }
 
 /** How close to a line, in canvas pixels, still presses it. */

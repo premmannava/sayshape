@@ -21,7 +21,7 @@ import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
 import { eventDelivery, FIXING_SPEC, imageName, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
-import { COPY_ACTION, isPresetId, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
+import { COPY_ACTION, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
 import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
 import { readViewOptions } from "./view-options";
@@ -355,6 +355,15 @@ function isTypingField(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement && !["checkbox", "radio", "range", "button", "submit", "reset"].includes(target.type);
 }
 
+/** The toolbar's Pause motion / Resume motion button (behavior on): stops and restarts the interface's rules. */
+let motionPaused = false;
+function toggleMotion(): void {
+  if (!sayshape) return;
+  motionPaused = !motionPaused;
+  if (motionPaused) sayshape.pauseRules(); else sayshape.resumeRules();
+  themePicker?.state.set("paused", motionPaused);
+}
+
 async function start(): Promise<void> {
   await app.connect();
   const theme = await applyTheme(app.getHostContext());
@@ -366,6 +375,7 @@ async function start(): Promise<void> {
     copy: viewOptions.copyText,
     save: viewOptions.saveImage && !!app.getHostCapabilities()?.downloadFile,
     theme: viewOptions.theme,
+    motion: !!viewOptions.behavior,
   };
   const toolbar = toolbarSpec(tools);
   if (toolbar) {
@@ -381,6 +391,7 @@ async function start(): Promise<void> {
     themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
       if (name === SAVE_ACTION) { void saveImage(); return; }
       if (name === COPY_ACTION) { void copyText(); return; }
+      if (name === MOTION_ACTION) { toggleMotion(); return; }
       if (name !== "theme") return;
       if (!isPresetId(value)) {
         themePicker?.state.set("preset", activePreset);
@@ -393,11 +404,17 @@ async function start(): Promise<void> {
   }
   sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
+    ...(viewOptions.behavior ? { behavior: true } : {}),
     theme,
     // Only the hosts the server was started with (--image-hosts). The view has no origin of
     // its own to load from, and the server asks the chat app's sandbox to allow just these.
     imageHosts: viewOptions.imageHosts ?? [],
     onWarning: () => {},
+  });
+  // Behavior on: the toolbar offers Pause while the interface has rules, whatever the spec says.
+  sayshape.on("rules", ({ count }) => {
+    themePicker?.state.set("rules", count);
+    if (bar && !tools.picker && !tools.copy && !tools.save) bar.hidden = count === 0;
   });
   sayshape.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
     if (!sayshape) return;

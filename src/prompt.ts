@@ -19,7 +19,7 @@
  * guide never shows the model something it can't use.
  */
 import { ACTION_OPS, ACTION_SYNTAX } from "./actions";
-import { CATEGORIES, COMMON_PROPS, type ComponentDef, type PropDef } from "./component";
+import { CATEGORIES, COMMON_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
 import { EXPRESSION_FUNCTIONS } from "./expr";
 import { parse } from "./parser";
 import { resolveProfile, type ComponentProfile } from "./profiles";
@@ -69,6 +69,12 @@ export interface GuideOptions {
    * examples, which only covers each element's own short example.
    */
   workedExamples?: boolean | readonly WorkedExampleName[];
+  /**
+   * Experimental behavior (docs/plans/behavior.md): explain `every` rules,
+   * and a scene shape's drag=. Pass the same as the engine's behavior option.
+   * Off (default), the guide is exactly what it was.
+   */
+  behavior?: boolean;
 }
 
 export type GuideMode = "full" | "compact";
@@ -100,7 +106,7 @@ function componentBlock(c: ComponentDef, examples: boolean): string {
  * along: a table's table-column, a tab's tabs. Unknown names are returned so
  * the caller can say so.
  */
-export function elementGuide(registry: Registry, names: readonly string[]): { text: string; unknown: string[] } {
+export function elementGuide(registry: Registry, names: readonly string[], opts: { behavior?: boolean } = {}): { text: string; unknown: string[] } {
   const wanted: ComponentDef[] = [];
   const unknown: string[] = [];
   const add = (name: string) => {
@@ -115,7 +121,7 @@ export function elementGuide(registry: Registry, names: readonly string[]): { te
     if (Array.isArray(def.children)) def.children.forEach(add);
     def.parents?.forEach(add);
   }
-  return { text: wanted.map((c) => componentBlock(c, true)).join("\n\n"), unknown };
+  return { text: wanted.map((c) => componentBlock(withProps(c, !!opts.behavior), true)).join("\n\n"), unknown };
 }
 
 /** The heading of the picks section, everywhere it's shown. */
@@ -293,13 +299,15 @@ interface GuideContext {
 function context(registry: Registry, opts: GuideOptions): GuideContext {
   const profile = resolveProfile(registry, opts.profile);
   const exposed = profile.registry;
+  const behavior = !!opts.behavior;
   return {
-    comps: exposed.all(),
+    // A feature that's off hides its props (a scene shape's drag=), as the parser does.
+    comps: exposed.all().map((c) => withProps(c, behavior)),
     exposed,
     has: (type) => exposed.has(type),
     opts,
     mode: opts.mode ?? "full",
-    valid: (spec) => parse(spec.endsWith("\n") ? spec : spec + "\n", exposed).diagnostics.length === 0,
+    valid: (spec) => parse(spec.endsWith("\n") ? spec : spec + "\n", exposed, behavior ? { behavior } : {}).diagnostics.length === 0,
   };
 }
 
@@ -392,6 +400,7 @@ function fullSections(ctx: GuideContext): GuideSection[] {
 - Run several with ; e.g. on="set:step:2;emit:next"
 - Quote on= when it has spaces: on="inc:n;notify:'Saved {n}'"`);
   if (has("each")) add("data", dataSection(ctx));
+  if (opts.behavior) add("behavior", behaviorSection(has("scene")));
   if (opts.actions?.length) {
     add("app-actions", `APP ACTIONS
 The app listens for these. Use them, with these names, for anything the app must do:
@@ -474,6 +483,8 @@ function compactSections(ctx: GuideContext): GuideSection[] {
 - Change the screen (runs here): ${local.join(", ")}
 - Tell the app (host event): emit:name[:value]. Use emit for anything the app must do, like book, pay or save
 ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty, set:t.text:'Done'\n" : ""}- A key can be a path into a record: set:form.email:'', toggle:settings.dark`);
+  if (opts.behavior) add("behavior", `CHANGING BY ITSELF: every 1s if={running} do=dec:left (unindented; 16ms-60s; while if= holds)
+- do= only inc/dec/toggle/set/add/remove/clear, in order, each seeing the last; dec stops at 0; sin cos sqrt clamp lerp work. Add a pause: if={running}, button on=toggle:running. Never to show data`);
   if (has("each")) {
     add("data", `DATA AND LISTS
 - Keep data in state and repeat with each; never copy an element by hand per item: each items=todos as=t (t exists only inside; index=i is the 0-based position; key={t.id} keeps focus on items)
@@ -538,4 +549,19 @@ export function describeGuide(registry: Registry, opts: GuideOptions = {}): Guid
   const profile = resolveProfile(registry, opts.profile);
   const chars = languageGuide(registry, opts).length;
   return { mode: opts.mode ?? "full", profile: profile.name, components: profile.types, chars, estimatedTokens: Math.round(chars / 4) };
+}
+
+/** A component as a host with these features on sees it: props of features that are off left out. */
+function withProps(c: ComponentDef, behavior: boolean): ComponentDef {
+  const props = propsFor(c.props, behavior);
+  return props === c.props ? c : { ...c, props };
+}
+
+/** What the full guide says about rules (behavior on). */
+function behaviorSection(scenes: boolean): string {
+  return `CHANGING BY ITSELF (timers, countdowns, simulations)
+- every 1s if={running && left > 0} do=dec:left  One unindented line: runs do= every interval (16ms to 60s) while if= holds, starting once the screen is complete.
+- do= only changes state (inc, dec, toggle, set, add, remove, clear), in order, each seeing the last: do="inc:vy:{9.8*0.03};set:y:{min(260, y + vy*0.03)}". dec stops at 0; write set:y:{y - 5} to go below. sin, cos, tan, atan2, sqrt, clamp and lerp work here.
+- Let people stop it: if={running} and a button "Pause" on=toggle:running.
+- Never use it to show data.${scenes ? " For motion that repeats, a scene's t is simpler." : ""}`;
 }

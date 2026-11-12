@@ -60,6 +60,7 @@ const MAX_REPORTED = 12;
 let components: ComponentDef[] = [...coreComponents, ...mapComponents];
 let registry = new Registry(components);
 let scenesOn = false;
+let behaviorOn = false;
 let imageHosts: readonly string[] = [];
 /**
  * The guide's sections, worked out once per mode. They depend only on the
@@ -77,6 +78,17 @@ export function setScenes(on: boolean): void {
   components = [...coreComponents, ...mapComponents, ...(on ? sceneComponents : [])];
   registry = new Registry(components);
   scenesOn = on;
+  sectionsCache.clear();
+}
+
+/**
+ * --behavior: turn experimental behavior on (off by default): `every` rules
+ * that change state on an interval, and drag= on scene shapes (with --scene).
+ * Text-only clients never get it: their page loads a pinned engine from
+ * before it existed. Call before createServer; main.ts does.
+ */
+export function setBehavior(on: boolean): void {
+  behaviorOn = on;
   sectionsCache.clear();
 }
 
@@ -118,22 +130,23 @@ const MCP_NOTES = `MCP RESULTS FROM A TRUSTED INTEGRATION
 
 /** The whole guide in one piece (the guide modes' full text plus these notes); kept for measuring and for clients that want it all. */
 export function guideText(withData = false): string {
-  return languageGuide(registry, { mode: "full", imageHosts, notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES });
+  return languageGuide(registry, { mode: "full", imageHosts, notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES, ...(behaviorOn ? { behavior: true } : {}) });
 }
 
 function sectionsOf(mode: "full" | "compact"): ReturnType<typeof guideSections> {
   let sections = sectionsCache.get(mode);
-  if (!sections) sectionsCache.set(mode, (sections = guideSections(registry, { mode, imageHosts })));
+  if (!sections) sectionsCache.set(mode, (sections = guideSections(registry, { mode, imageHosts, ...(behaviorOn ? { behavior: true } : {}) })));
   return sections;
 }
 
 const sectionText = (mode: "full" | "compact", name: string) => sectionsOf(mode).find((sec) => sec.name === name)?.text ?? "";
 
 /** Parts of the guide a model can ask for by name, all generated (DATA_NOTES only with a database). */
-function topics(withData: boolean, withMcp = false): Record<string, string> {
+function topics(withData: boolean, withMcp = false, textOnly = false): Record<string, string> {
   return {
     expressions: sectionText("full", "expressions"),
     actions: sectionText("full", "actions"),
+    ...(behaviorOn && !textOnly ? { behavior: sectionText("full", "behavior") } : {}),
     lists: sectionText("full", "data"),
     rules: sectionText("full", "rules"),
     examples: sectionText("full", "example"),
@@ -163,6 +176,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false):
       ? `- ${NO_EMIT}`
       : "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue'); within a budget: filter(rows, 'price', {to: budget})`,
+    ...(behaviorOn && !textOnly ? [sectionText("compact", "behavior")] : []),
     `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
     // The same heading as the guides', in fewer words: this text goes out with every call.
     // Picks without their "such as …" examples or their "(…)" notes, except notes that teach a
@@ -170,7 +184,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false):
     // every call, so each new element's pick fits.
     `${PICKS_HEADING_SHORT}\n${pickList(components).replace(/, such as [^:\n]*(?=: )/g, "").replace(/ \((?![^)\n]*=)[^)\n]*\)(?=: )/g, "")}`,
     "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
-    `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp)).join(", ")}.`,
+    `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp, textOnly)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");
 }
@@ -190,9 +204,9 @@ function arrivesWithParent(c: ComponentDef): boolean {
 /** Docs for exactly what was asked for, plus what it depends on. */
 export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false): string {
   const parts: string[] = [];
-  const t = topics(withData, withMcp);
+  const t = topics(withData, withMcp, textOnly);
   if (elements.length) {
-    const { text, unknown } = elementGuide(registry, elements);
+    const { text, unknown } = elementGuide(registry, elements, { behavior: behaviorOn && !textOnly });
     if (text) parts.push(`ELEMENTS\n${text}`);
     // Which hosts work, so a model asking about image doesn't write URLs the view can't load.
     if (imageHosts.length && elements.includes("image")) parts.push(sectionText("compact", "images"));
@@ -260,13 +274,14 @@ export interface SpecCheck {
 }
 
 /** Parse a spec with the engine's own parser and components. Never throws. hostNames: state the interface fills in (datasets). */
-export function checkSpec(spec: string, hostNames: readonly string[] = []): SpecCheck {
-  const parsed = parse(spec, registry, { knownNames: hostNames });
+export function checkSpec(spec: string, hostNames: readonly string[] = [], textOnly = false): SpecCheck {
+  const behavior = behaviorOn && !textOnly;
+  const parsed = parse(spec, registry, { knownNames: hostNames, ...(behavior ? { behavior } : {}) });
   const { diagnostics } = parsed;
   return {
     errors: diagnostics.filter((d) => d.severity === "error"),
     warnings: diagnostics.filter((d) => d.severity !== "error"),
-    drawing: scenesOn ? reviewScenes(parsed) : [],
+    drawing: scenesOn ? reviewScenes(parsed, behavior ? { behavior } : {}) : [],
   };
 }
 
@@ -456,7 +471,7 @@ export function createServer(opts: ServerOptions): McpServer {
       }
       const names = Object.keys(datasets);
       const textOnly = cannotDrawViews(server);
-      const parsed = checkSpec(spec, names);
+      const parsed = checkSpec(spec, names, textOnly);
       // On a page outside the chat emit: goes nowhere, so text-only clients fix it first. Clients that draw views never see this.
       const check = textOnly ? { ...parsed, errors: [...parsed.errors, ...emitProblems(spec, names)].sort((a, b) => a.line - b.line) } : parsed;
       // A state line would replace the rows the interface loads, so point it out.

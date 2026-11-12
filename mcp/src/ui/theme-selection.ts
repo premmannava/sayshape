@@ -8,6 +8,8 @@ export const DEFAULT_PRESET: PresetId = "teal";
 export const SAVE_ACTION = "save_image";
 /** The action the toolbar's copy button sends to the view (never to the model). */
 export const COPY_ACTION = "copy_text";
+/** The action the toolbar's Pause/Resume button sends to the view (behavior on; never to the model). */
+export const MOTION_ACTION = "pause_motion";
 
 /** Which tools the toolbar shows: decided by the server's flags and what the chat app can do. */
 export interface Tools {
@@ -19,6 +21,11 @@ export interface Tools {
   copy: boolean;
   /** The theme the selector starts on. */
   theme: PresetId;
+  /**
+   * Pause and Resume for rules (--behavior). Shown only while the interface
+   * has rules (toolbar state rules > 0): WCAG 2.2.2, whatever the spec says.
+   */
+  motion?: boolean;
 }
 
 /** Padding around the toolbar, in pixels: it's a slim strip, not a card. */
@@ -34,7 +41,7 @@ const GAP = 8;
  * minimum (120, or 140 on its own) and each icon button its square (30).
  */
 export function toolbarWidth(t: Tools): number {
-  const icons = (t.copy ? 1 : 0) + (t.save ? 1 : 0);
+  const icons = (t.copy ? 1 : 0) + (t.save ? 1 : 0) + (t.motion ? 1 : 0);
   const widths = [...(t.picker ? [icons ? 120 : 140] : []), ...Array<number>(icons).fill(TOOL)];
   const inner = widths.length ? widths.reduce((a, b) => a + b, 0) + GAP * (widths.length - 1) : 0;
   return inner + 2 * TOOLBAR_PADDING;
@@ -50,12 +57,14 @@ export function toolbarSpec(t: Tools): string {
   // No visible label; a theme is always chosen, so the placeholder is never
   // shown, but it names the selector for screen readers.
   if (t.picker) items.push(`select items=presets value=id label=label bind=preset placeholder="Theme" on="emit:theme:{preset}"`);
+  if (t.motion) items.push(`tool-button "{paused ? 'Resume motion' : 'Pause motion'}" icon={paused ? 'play' : 'pause'} if={rules > 0} on=emit:${MOTION_ACTION}`);
   if (t.copy) items.push(`tool-button "Copy text" icon=copy on=emit:${COPY_ACTION}`);
   if (t.save) items.push(`tool-button "Save image" icon=download on=emit:${SAVE_ACTION}`);
   if (!items.length) return "";
+  const motion = t.motion ? " rules=0 paused=false" : "";
   const state = t.picker
-    ? `state preset="${t.theme}" presets=[${PRESETS.map(({ id, label }) => `{id:${JSON.stringify(id)},label:${JSON.stringify(label)}}`).join(",")}]\n`
-    : "";
+    ? `state preset="${t.theme}" presets=[${PRESETS.map(({ id, label }) => `{id:${JSON.stringify(id)},label:${JSON.stringify(label)}}`).join(",")}]${motion}\n`
+    : motion ? `state${motion}\n` : "";
   if (items.length === 1) return `${state}${items[0]}\n`;
   return `${state}row gap=${GAP} align=center wrap=false\n${items.map((i) => `  ${i}\n`).join("")}`;
 }

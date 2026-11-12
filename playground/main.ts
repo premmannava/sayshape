@@ -5,6 +5,7 @@ import { setupAppearance } from "./appearance/panel";
 import { setupAsk } from "./ask";
 import { samples as coreSamples } from "./samples";
 import { sceneSamples } from "./scene-samples";
+import { behaviorSamples, behaviorSceneSamples } from "./behavior-samples";
 import { playgroundGuide } from "./model-guide";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -16,15 +17,32 @@ const canvas = $<HTMLCanvasElement>("cv");
 const imageHosts = ["images.unsplash.com"];
 // Experimental scenes are off unless the address asks for them: /playground/index.html?scene=1
 const scenes = new URLSearchParams(location.search).get("scene") === "1";
-const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : [])], imageHosts }).expose("sayshape");
-// Scene samples only work with scenes on.
-const samples = scenes ? { ...coreSamples, ...sceneSamples } : coreSamples;
+// Experimental behavior (rules that tick, dragging in scenes) is off unless asked for too: ?behavior=1
+const behavior = new URLSearchParams(location.search).get("behavior") === "1";
+const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : [])], imageHosts, behavior }).expose("sayshape");
+// Scene and behavior samples only work with those on.
+const samples = {
+  ...coreSamples,
+  ...(scenes ? sceneSamples : {}),
+  ...(behavior ? behaviorSamples : {}),
+  ...(behavior && scenes ? behaviorSceneSamples : {}),
+};
+// Behavior on: Pause motion stops every rule, whatever the spec says (WCAG 2.2.2).
+const motion = $<HTMLButtonElement>("motion");
+let motionPaused = false;
+sayshape.on("rules", ({ count }) => { motion.hidden = count === 0; });
+motion.addEventListener("click", () => {
+  motionPaused = !motionPaused;
+  if (motionPaused) sayshape.pauseRules(); else sayshape.resumeRules();
+  motion.textContent = motionPaused ? "Resume motion" : "Pause motion";
+  motion.setAttribute("aria-pressed", String(motionPaused));
+});
 // Style presets, light/dark/system and a custom accent, through sayshape.setTheme.
 setupAppearance(sayshape);
 // The same guide a model gets from "Ask a model", so copying it into a chat app works the same way.
 // Leave room for the request, generated spec and a repair on local 8K models.
 // Keep the library default unchanged; this is the playground's configuration.
-const guideOptions = playgroundGuide(imageHosts);
+const guideOptions = { ...playgroundGuide(imageHosts), ...(behavior ? { behavior: true } : {}) };
 const guideText = languageGuide(sayshape.registry, guideOptions);
 $("guide").textContent = guideText;
 $("copyGuide").addEventListener("click", async (e) => {
