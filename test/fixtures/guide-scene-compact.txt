@@ -33,6 +33,7 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - every element: if=cond
 - column gap=number pad=number [holds elements] — Stacks its children vertically.
 - row gap=number pad=number align=top|center|bottom wrap=true|false [holds elements] — Places children side by side, splitting the width equally.
+- overlap at=top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right inset=number [holds elements] — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card.
 - grid min=number gap=number [holds elements] — Places children in responsive equal columns.
 - card gap=number pad=number variant=raised|hero|tinted|outline on=action [holds elements] — A surface that groups related content, stacked vertically.
 - list [holds elements] — A bordered list of rows, separated by lines.
@@ -107,7 +108,7 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 
 PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)
 - a headline number with its change and recent trend: stat change="+12%" spark=weekly
-- a target, forecast or event marked on bars or a line: chart kind=bar holding chart-rule "Target" y=50000
+- a target or forecast on bars: chart kind=bar holding chart-rule y=50000
 - a ranking or a top 10 with long names: chart kind=hbar
 - parts of each total, such as revenue by product per month: chart kind=stacked y=hardware,software
 - an amount over time, such as visitors a week: chart kind=area
@@ -128,6 +129,7 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - a pipeline or task board by stage: board stage=status move=true
 - a nested breakdown, or an org chart (kind=org): tree items=rows parent=parent
 - a process, journey or decision tree: flow items=steps next=next kind=kind
+- a badge over a card: overlap
 - steps in order with their status, such as a delivery: timeline holding step status=done|current|upcoming
 - cards to page through, such as photos: carousel bind=page
 - a long list inside a card, such as messages or activity: scroll size=md

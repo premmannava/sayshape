@@ -30,6 +30,51 @@ export const column: ComponentDef = {
   },
 };
 
+const OVERLAP_AT = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"] as const;
+/** Space between things placed on top, when there are several. */
+const OVERLAP_GAP = 4;
+
+export const overlap: ComponentDef = {
+  type: "overlap",
+  category: "layout",
+  description: "Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card. The first child sets the size.",
+  props: {
+    at: { type: "enum", values: OVERLAP_AT, default: "top-right", description: "Where the children on top sit: top-left, top, top-right, left, center, right, bottom-left, bottom or bottom-right." },
+    inset: { type: "number", default: 8, description: "How far in from the edges they sit, in pixels (default 8)." },
+  },
+  children: "any",
+  picks: [{ for: "a badge over a card", write: "overlap" }],
+  example: `overlap at=top-right
+  card
+    text "Trail runner socks" weight=semibold
+    text "Three pairs" tone=muted
+  badge "Sale" tone=bad`,
+  // Only layout: what's inside describes itself.
+  semantics: () => null,
+  layout(box, ctx) {
+    const p = ctx.props(box.node);
+    const kids = ctx.visibleChildren(box.node);
+    const first = kids[0];
+    if (!first) { box.h = 0; return; }
+    const at = p.oneOf("at", OVERLAP_AT, "top-right");
+    const inset = Math.max(0, Math.min(p.num("inset", 8), box.w / 4));
+    const base = ctx.layout(first, box.x, box.y, box.w);
+    // Laid out in the room inside the inset; an element that hugs its words (a badge) comes back narrower.
+    const room = Math.max(0, box.w - inset * 2);
+    const tops = kids.slice(1).map((k) => ctx.layout(k, box.x, box.y, room));
+    const tall = tops.reduce((sum, b) => sum + b.h, 0) + OVERLAP_GAP * Math.max(0, tops.length - 1);
+    // Never smaller than what sits on top, so nothing is drawn outside the box.
+    box.h = Math.max(base.h, tops.length ? tall + inset * 2 : 0);
+    let y = at.startsWith("top") ? box.y + inset : at.startsWith("bottom") ? box.y + box.h - inset - tall : box.y + (box.h - tall) / 2;
+    for (const b of tops) {
+      const x = at.endsWith("left") ? box.x + inset : at.endsWith("right") ? box.x + box.w - inset - b.w : box.x + (box.w - b.w) / 2;
+      ctx.shift(b, x - b.x, y - b.y);
+      y += b.h + OVERLAP_GAP;
+    }
+    box.children = [base, ...tops];
+  },
+};
+
 export const row: ComponentDef = {
   type: "row",
   category: "layout",

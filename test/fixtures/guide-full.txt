@@ -101,7 +101,7 @@ EVERY ELEMENT ACCEPTS
     tip=<string>  A short explanation shown on hover, keyboard focus or a tap, e.g. tip="Orders not yet shipped": for a term or a number some people won't know, instead of more words on screen. It makes the element a Tab stop if it isn't one.
 
 ELEMENTS AT A GLANCE
-- layout: column, row, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll
+- layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll
 - content: text, image, code, badge, avatar, callout, icon, tile
 - data: stat, rating, chart, chart-line, chart-rule, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
@@ -128,6 +128,17 @@ ELEMENTS
       row gap=10
         button "Cancel" variant=secondary
         button "Save"
+
+  overlap  — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card. The first child sets the size.
+    at=<top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right>  Where the children on top sit: top-left, top, top-right, left, center, right, bottom-left, bottom or bottom-right.
+    inset=<number>  How far in from the edges they sit, in pixels (default 8).
+    children: any elements
+    example:
+      overlap at=top-right
+        card
+          text "Trail runner socks" weight=semibold
+          text "Three pairs" tone=muted
+        badge "Sale" tone=bad
 
   grid  — Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
     min=<number>  Narrowest a column may be, in pixels (default 200).
@@ -825,7 +836,7 @@ ELEMENTS
 
 PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)
 - a headline number with its change and recent trend: stat change="+12%" spark=weekly
-- a target, forecast or event marked on bars or a line: chart kind=bar holding chart-rule "Target" y=50000
+- a target or forecast on bars: chart kind=bar holding chart-rule y=50000
 - a ranking or a top 10 with long names: chart kind=hbar
 - parts of each total, such as revenue by product per month: chart kind=stacked y=hardware,software
 - an amount over time, such as visitors a week: chart kind=area
@@ -847,6 +858,7 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - a nested breakdown, or an org chart (kind=org): tree items=rows parent=parent
 - a process, journey or decision tree: flow items=steps next=next kind=kind
 - places on a map: map holding pin
+- a badge over a card: overlap
 - steps in order with their status, such as a delivery: timeline holding step status=done|current|upcoming
 - cards to page through, such as photos: carousel bind=page
 - a long list inside a card, such as messages or activity: scroll size=md
