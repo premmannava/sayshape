@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import {
   advance, applyEvent, canAsk, chatTheme, duration, failure, frameColors, isBusy, MAX_ANSWERS, newTurn, readableOn, readEvents, refusal, requestBody,
-  restart, stages, SUGGESTIONS, summary, type ChatEvent,
+  restart, stages, suggestionsIn, SUGGESTIONS, summary, type ChatEvent,
 } from "../site/.vitepress/theme/sayshape/chat";
 import { readChat } from "../worker/src/chat";
 import { contrast } from "../playground/appearance/color";
@@ -212,8 +212,13 @@ describe("colors", () => {
 
 describe("the empty thread", () => {
   it("suggests questions short enough to send", () => {
-    expect(SUGGESTIONS.length).toBe(6);
+    expect(SUGGESTIONS.length).toBe(30);
     for (const s of SUGGESTIONS) expect(s.question.length).toBeLessThan(120);
+    expect(new Set(SUGGESTIONS.map((s) => s.question)).size).toBe(30);
+    expect(suggestionsIn("personal")).toHaveLength(14);
+    expect(suggestionsIn("work")).toHaveLength(14);
+    // The two drawings come last.
+    expect(SUGGESTIONS.slice(-2).map((s) => s.group)).toEqual(["drawing", "drawing"]);
     // A spec in this file's own tests parses, so the fixtures above are real answers.
     expect(parse(FIRST, new Registry(coreComponents)).diagnostics).toEqual([]);
   });
