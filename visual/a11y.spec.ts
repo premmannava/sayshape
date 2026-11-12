@@ -198,6 +198,8 @@ test("an open select stays accessible: focus on the combobox, the highlighted op
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   expect(await focused(page)).toMatchObject({ inMirror: true, role: "combobox", name: "Department" });
   await page.keyboard.press("ArrowDown");
+  // The list has to be open before the second press, or that press only opens it and the highlight stays put.
+  await expect(page.locator(`${MIRROR} [role="combobox"]`)).toHaveAttribute("aria-expanded", "true");
   await page.keyboard.press("ArrowDown");
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   await expect(page.locator(`${MIRROR} [role="combobox"]`)).toHaveAttribute("aria-expanded", "true");

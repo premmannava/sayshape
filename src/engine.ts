@@ -1930,6 +1930,8 @@ export class SayShape {
         e.preventDefault();
         if (e.key === "Escape") this.closePopup(true);
         else this.registry.get(this.popup.owner.node.type)?.popup?.key(this.popupContext(this.popup.owner), e.key);
+        // The highlight moved without a new layout: the mirror still has to say which option is active.
+        this.a11yDirty = true;
         this.invalidate("paint");
         return;
       }
