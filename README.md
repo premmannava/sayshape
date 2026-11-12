@@ -69,6 +69,14 @@ card
 npx -y sayshape-mcp
 ```
 
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/vscode-dark.png">
+  <img src="docs/images/vscode-light.png" width="440" alt="GitHub Copilot's chat in VS Code. The request reads: show monthly sales for January to June as bars, with last year as a line and a target at 16,000. Below it, drawn inside the chat by the SayShape MCP server, is a card titled Monthly sales with six bars, a line for last year, a dashed target line labelled Target $16,000 and a legend.">
+</picture>
+<br><sub>One request in GitHub Copilot's chat in VS Code, answered with a working chart inside the conversation.</sub>
+</p>
+
 **In your own app.**
 
 ```bash
@@ -101,21 +109,37 @@ Two features are **experimental and off by default**. They work, they have tests
 **Drawing (`scene`).** The model paints a picture or an animation from shapes, for what no ready-made element shows: a diagram to press, a ball that bounces, a sun that rises. Any value can be a formula of `t`, the seconds since it started. `shadow=`, `glow=` and `shine=` give shapes depth.
 
 ```
-scene "A ball bouncing on a floor" w=600 h=260 duration=2
-  ellipse x=300 y=232 rx={30 + 22*wave(t, 2)} ry=7 fill="ink 20%"
-  circle x=300 y={70 + 130*wave(t, 2)} r=30 fill=accent shine=true
+state colors=["accent", "warn", "good"]
+scene "Three balls bouncing on a floor" w=600 h=260 duration=1
+  each items={range(3)} as=i
+    ellipse x={150 + 150*i} y=236 rx={50 - 22*abs(sin(PI*(t + i/3)))} ry=7 fill="ink 20%"
+    circle x={150 + 150*i} y={204 - 140*abs(sin(PI*(t + i/3)))} r=30 fill={pick(colors, i)} shine=true
 ```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/demo-draw-dark.gif">
+  <img src="docs/images/demo-draw-light.gif" width="584" alt="What those five lines draw: three shiny balls, teal, amber and green, bouncing one after another, each with a shadow on the floor that grows as the ball comes down.">
+</picture>
 
 **Behavior.** A spec can change by itself and be dragged. `every` runs state changes on a timer, and `drag=true` lets people move a shape in a scene. Rules only ever write state: they still can't run code.
 
 ```
 state x=300 left=10 running=true
 every 1s if={running && left > 0} do=dec:left
-text "Drag the ball. {left} seconds left."
-button "Pause or resume" on=toggle:running
-scene "A ball you can drag" w=600 h=200
-  circle x={clamp(x, 40, 560)} y=100 r=30 fill=accent shine=true shadow=md drag=true
+card
+  text "Drag the ball. {left} seconds left." style=title
+  scene "A ball you can drag" w=600 h=160
+    line x1=40 y1=118 x2=560 y2=118 stroke=line width=2
+    circle x={clamp(x, 40, 560)} y=84 r=30 fill=accent shine=true shadow=md drag=true
+  button "Pause or resume" variant=secondary on=toggle:running
 ```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/demo-behavior-dark.gif">
+  <img src="docs/images/demo-behavior-light.gif" width="584" alt="What that spec does: a card counts down the seconds by itself while the pointer drags a shiny ball right and left along a line.">
+</picture>
+
+Both pictures are recorded from the engine running those exact specs (`npm run readme:demos`).
 
 How to turn them on:
 
@@ -139,6 +163,12 @@ const ui = new SayShape(canvas, {
 ```
 
 Scenes are the one place a spec may name its own colors, because a sunset can't be drawn in brand colors. Everywhere else the theme decides. [Using the engine](docs/engine.md) has the details and the limits.
+
+## Which models can write it
+
+Not every model can produce a good interface as HTML: a full page of markup, styles and script is a lot to get right. SayShape asks for much less. The language is small, there is nothing to style, and the parser tells the model which line was wrong and how to fix it. That puts cards, forms, tables and charts within reach of small, fast and local models, not only the largest ones.
+
+The experimental features ask more of a model. Drawing a scene means placing every shape, and behavior means reasoning about change over time. In our own use so far, these come out well with stronger models, such as GPT-6 Luna, Claude Haiku 5.5 and the models above them, and less reliably below that. This is what we have seen, not a measured result; score any model yourself with `npm run eval` ([Connecting a model](docs/model.md)).
 
 ## What's in it
 
