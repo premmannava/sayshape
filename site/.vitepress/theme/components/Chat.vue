@@ -18,7 +18,7 @@ import ChatAnswer from "./ChatAnswer.vue";
 import { isSiteDark } from "../sayshape/runtime";
 import {
   advance, applyEvent, canAsk, chatTheme, failure, frameColors, isBusy, MAX_ANSWERS, MAX_MESSAGE_CHARS, newTurn, requestBody, restart,
-  SUGGESTIONS, type Failure, type PageColors, type Turn,
+  suggestionsIn, type Failure, type PageColors, type SuggestionGroup, type Turn,
 } from "../sayshape/chat";
 import { configured, fetchStatus, humanCheck, MODEL_LABEL, needsHumanCheck, send } from "../sayshape/chatClient";
 
@@ -234,6 +234,11 @@ watch(draft, () => nextTick(() => {
   el.style.height = Math.min(el.scrollHeight, 160) + "px";
 }));
 
+/** The empty thread's questions: personal or work ones, switched by two buttons; drawings are always under them. */
+const GROUPS: ReadonlyArray<{ id: Exclude<SuggestionGroup, "drawing">; name: string }> = [{ id: "personal", name: "Personal" }, { id: "work", name: "Work" }];
+const shownGroup = ref<Exclude<SuggestionGroup, "drawing">>("personal");
+const shownName = computed(() => GROUPS.find((g) => g.id === shownGroup.value)!.name);
+
 const playground = withBase("/playground");
 const examples = withBase("/examples/");
 </script>
@@ -261,12 +266,19 @@ const examples = withBase("/examples/");
         <p class="ss-eyebrow">Live model</p>
         <h2>What would your assistant show?</h2>
         <p class="chat-empty-note">Ask the way you'd ask your own assistant, at home or at work. The model has no data of its own, so it makes up example figures and says so.</p>
-        <ul class="chat-suggest" aria-label="Suggested questions">
-          <li v-for="s in SUGGESTIONS" :key="s.question">
-            <button type="button" :disabled="!!blocked" @focus="getReady" @pointerenter="getReady" @click="ask(s.question)">
-              <span class="chat-suggest-label">{{ s.label }}</span>
-              <span>{{ s.question }}</span>
-            </button>
+        <div class="chat-groups" role="group" aria-label="Kind of question">
+          <button v-for="g in GROUPS" :key="g.id" type="button" class="chat-group" :aria-pressed="g.id === shownGroup" @click="shownGroup = g.id">{{ g.name }}</button>
+        </div>
+        <ul class="chat-suggest" :aria-label="`${shownName} questions to try`">
+          <li v-for="s in suggestionsIn(shownGroup)" :key="s.question">
+            <button type="button" :disabled="!!blocked" @focus="getReady" @pointerenter="getReady" @click="ask(s.question)">{{ s.question }}</button>
+          </li>
+        </ul>
+        <!-- Drawings are always in sight, last, and marked: the scene element is experimental. -->
+        <h3 class="chat-draw-head">Drawings <span class="chat-flag">Experimental</span></h3>
+        <ul class="chat-suggest" aria-label="Drawing questions to try (experimental)">
+          <li v-for="s in suggestionsIn('drawing')" :key="s.question">
+            <button type="button" :disabled="!!blocked" @focus="getReady" @pointerenter="getReady" @click="ask(s.question)">{{ s.question }}</button>
           </li>
         </ul>
       </div>
@@ -374,21 +386,18 @@ const examples = withBase("/examples/");
 
 .chat-empty { margin: auto 0; padding: clamp(16px, 6vh, 64px) 0 }
 .chat-empty h2 { margin: 6px 0 10px; font: 600 clamp(28px, 3.4vw, 42px)/1.08 var(--sayshape-display); letter-spacing: -0.02em; text-wrap: balance }
-.chat-empty-note { margin: 0 0 22px; max-width: 58ch; font-size: 15.5px; line-height: 1.55; color: var(--vp-c-text-2) }
+.chat-empty-note { margin: 0 0 18px; max-width: 58ch; font-size: 15.5px; line-height: 1.55; color: var(--vp-c-text-2) }
 .chat-suggest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none }
 .chat-suggest button {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   width: 100%;
   height: 100%;
   min-height: 44px;
-  padding: 14px 16px;
+  padding: 10px 14px;
   border: 1px solid var(--vp-c-divider);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--ss-card);
   color: var(--vp-c-text-1);
-  font: 500 15px/1.4 var(--vp-font-family-base);
+  font: 500 14.5px/1.4 var(--vp-font-family-base);
   text-align: left;
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
@@ -396,7 +405,12 @@ const examples = withBase("/examples/");
 .chat-suggest button:hover:not([disabled]) { border-color: var(--vp-c-border); box-shadow: var(--ss-lift-sm) }
 .chat-suggest button:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 2px }
 .chat-suggest button[disabled] { opacity: 0.55; cursor: not-allowed }
-.chat-suggest-label { font: 500 11px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-2) }
+.chat-groups { display: flex; gap: 8px; margin-bottom: 12px }
+.chat-group { min-height: 36px; padding: 0 16px; border: 1.5px solid var(--vp-c-divider); border-radius: 999px; background: none; font: 600 13.5px var(--vp-font-family-base); color: var(--vp-c-text-2); cursor: pointer }
+.chat-group[aria-pressed="true"] { border-color: var(--vp-c-text-1); background: var(--vp-c-text-1); color: var(--vp-c-bg) }
+.chat-group:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 2px }
+.chat-draw-head { display: flex; align-items: center; gap: 10px; margin: 22px 0 10px; font: 600 13.5px var(--vp-font-family-base); color: var(--vp-c-text-1) }
+.chat-flag { padding: 2px 8px; border: 1px solid var(--vp-c-border); border-radius: 999px; font: 500 10.5px var(--vp-font-family-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--vp-c-text-2) }
 
 /* ---------------------------------------------------------------- the dock: notices, the box, the fine print */
 .chat-dock {

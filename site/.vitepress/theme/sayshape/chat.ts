@@ -367,23 +367,62 @@ export function frameColors(accent: string | null, pageBg: string): { fill: stri
 
 // ---------------------------------------------------------------- the empty thread
 
+export type SuggestionGroup = "personal" | "work" | "drawing";
+
 export interface Suggestion {
-  label: string;
+  group: SuggestionGroup;
   question: string;
 }
 
+const inGroup = (g: SuggestionGroup, questions: string[]): Suggestion[] => questions.map((question) => ({ group: g, question }));
+
 /**
- * Three pairs, a row each in the two-column grid: questions people ask for
- * themselves, questions they ask at work, and two that lead to a drawing (a
- * scene), the answer a plain chat app can't give. Each is one where an
- * interface helps more than text: something to adjust, tick off, drag or
- * press. The model makes up example figures.
+ * Thirty questions to press, so nobody has to think of one: fourteen people
+ * ask for themselves, fourteen they ask at work, and two at the end that lead
+ * to a drawing (a scene), which is experimental and says so on the page.
+ * Each is one where an interface helps more than text (something to adjust,
+ * tick off, drag or press), and each is easy or middling for the model: one
+ * screen from the core elements, the simpler ones first in each group. The
+ * model makes up example figures.
  */
 export const SUGGESTIONS: readonly Suggestion[] = [
-  { label: "Personal", question: "Can I afford a $450,000 home? Let me adjust the deposit, rate and years" },
-  { label: "Personal", question: "Plan a week of dinners for four with a shopping list I can tick off" },
-  { label: "Work", question: "Which of our KPIs are on target this quarter, and which are behind?" },
-  { label: "Work", question: "Show our hiring pipeline as a board I can drag candidates across" },
-  { label: "Drawing", question: "Draw our production line and let me click each machine to see how it's doing" },
-  { label: "Drawing", question: "Draw our network and make the unhealthy servers stand out" },
+  ...inGroup("personal", [
+    "Split a $240 dinner bill between five friends, with a tip slider",
+    "Convert a recipe for 4 people to any number of servings",
+    "Make a packing checklist for a week of camping",
+    "How much water should I drink a day? Let me set my weight and activity",
+    "Compare three phone plans for a family of four",
+    "Build a weekly workout plan for a beginner",
+    "Track a monthly budget: rent, food, transport and savings",
+    "Plan a week of dinners for four with a shopping list I can tick off",
+    "How long until I save $20,000 if I put away $600 a month?",
+    "Can I afford a $450,000 home? Let me adjust the deposit, rate and years",
+    "Should I buy or lease a car? Compare the total cost over five years",
+    "Plan a 5-day trip to Japan with a budget per day",
+    "Compare three laptops for a student and recommend one",
+    "Make a study plan for five exam subjects over three weeks",
+  ]),
+  ...inGroup("work", [
+    "Which of our KPIs are on target this quarter, and which are behind?",
+    "Show last month's sales by region",
+    "Make an agenda for a 45-minute project kickoff",
+    "Which support queues are over their response-time target this week?",
+    "Show our website traffic for the last 12 weeks and where it comes from",
+    "Compare three project management tools for a team of ten",
+    "Show our hiring pipeline as a board I can drag candidates across",
+    "Plan a product launch over 8 weeks as a timeline",
+    "Show our team's schedule for next week: meetings and focus time",
+    "How is our marketing budget split, and what does each channel bring in?",
+    "Show the steps to handle a customer refund, with the decision points",
+    "Show an org chart for a 20-person startup",
+    "Show revenue by product and region as a heatmap",
+    "Forecast next year's revenue at 5% growth a month, and let me change the rate",
+  ]),
+  ...inGroup("drawing", [
+    "Draw our production line and let me click each machine to see how it's doing",
+    "Draw a flight taking off from Hyderabad and landing in London",
+  ]),
 ];
+
+/** The suggestions of one group, in the order written. */
+export const suggestionsIn = (g: SuggestionGroup): Suggestion[] => SUGGESTIONS.filter((s) => s.group === g);
