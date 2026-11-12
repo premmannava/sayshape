@@ -58,6 +58,13 @@ export interface HitRegion {
   /** Inside a scrolling element: the part of the screen it shows, and that element's box. The pointer only reaches the region inside it. */
   clip?: Rect;
   clipOwner?: Box;
+  /**
+   * For an element that defines drag: false makes this part press as usual
+   * instead (a scene's pressable shapes beside its draggable ones). Default: drags.
+   */
+  drags?: boolean;
+  /** A drag here moves up or down: a touch that starts on it takes vertical swipes from the page (behavior's scene drag). */
+  claimsSwipe?: boolean;
 }
 
 /** What the pointer or keyboard focus is currently on. */

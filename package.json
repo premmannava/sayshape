@@ -86,6 +86,7 @@
     "site:check": "node scripts/check-site.mjs",
     "scene-eval": "vite-node scripts/scene-eval.ts --",
     "bench:scene-browser": "node bench/browser/run.mjs",
+    "bench:behavior-browser": "node bench/browser/behavior.mjs",
     "verify:pack": "node scripts/verify-pack.mjs"
   },
   "devDependencies": {

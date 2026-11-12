@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluate, interpolate, identifiers, splitTemplate } from "../src/expr";
+import { RULE_FUNCTIONS } from "../src/math";
 
 const scope = (vals: Record<string, unknown>) => (k: string) => vals[k] as never;
 const ev = (src: string, vals: Record<string, unknown> = {}) => evaluate(src, scope(vals));
@@ -95,5 +96,23 @@ describe("expressions", () => {
 
   it("lists identifiers", () => {
     expect(identifiers("a + b * round(c)").sort()).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("the math rules may call (behavior on)", () => {
+  const rv = (src: string, vals: Record<string, unknown> = {}) => evaluate(src, scope(vals), RULE_FUNCTIONS);
+
+  it("adds only pure math, and still rejects anything that could reach JavaScript", () => {
+    expect(rv("clamp(lerp(0, 10, 0.5), 0, 4) + sqrt(9)")).toEqual({ ok: true, value: 7 });
+    for (const bad of ["alert(1)", "constructor.constructor('x')()", "sin.constructor", "window", "this", "a.b", "x = 1", "`t`", "clamp.call(1)", "ease(1, 0, 1)", "random(1)"]) {
+      expect(rv(bad, { a: { b: 1 } }).ok, bad).toBe(false);
+    }
+  });
+
+  it("can't change the functions from a spec, and leaves the core set as it was", () => {
+    rv("__defineGetter__('sin', __lookupGetter__('__proto__'))");
+    expect(rv("sin(0)")).toEqual({ ok: true, value: 0 });
+    expect(Object.isFrozen(RULE_FUNCTIONS)).toBe(true);
+    expect(ev("sin(0)").ok).toBe(false);
   });
 });

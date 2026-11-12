@@ -21,6 +21,7 @@
  * These are warnings for the model to tidy up, not errors: the scene still
  * shows. Headless, like layout: no canvas or DOM, so it runs on a server.
  */
+import { MAX_DRAGGABLE } from "./drag";
 import type { Diagnostic, SayShapeNode, Value } from "../../types";
 import type { Scope } from "../../expr";
 import type { ParseResult } from "../../parser";
@@ -156,21 +157,23 @@ const inside = (p: [number, number], r: Rect, pad: number) => p[0] > r.x - pad &
 const quote = (s: string) => (s.length > 32 ? `"${s.slice(0, 30)}…"` : `"${s}"`);
 
 /** Drawing problems in one scene, drawn as it rests. Never throws. */
-export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: Theme; measure?: MeasureText } = {}): Diagnostic[] {
+export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: Theme; measure?: MeasureText; behavior?: boolean } = {}): Diagnostic[] {
   try {
     const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
     const theme = opts.theme ?? lightTheme;
-    const drawn = drawAtRest(scene, scope, theme, opts.measure);
+    const drawn = drawAtRest(scene, scope, theme, opts.measure, !!opts.behavior);
     const out: Diagnostic[] = [];
     // A scene whose formulas read t but that has no duration is a still picture: it never moves.
     if (!(numOf(scene, "duration", scope, 0) > 0) && readsClock(scene)) {
       out.push({ line: scene.line, severity: "warning", message: "Drawing: this scene's formulas use t, but its duration is 0, so it never moves. Set duration= to the seconds the motion takes (loop=true, the default, repeats it)" });
     }
     out.push(...findProblems(drawn.marks, drawn.regions, w, h));
+    if (drawn.dragOver !== undefined) out.push({ line: drawn.dragOver, severity: "warning", message: `Drawing: a scene can have at most ${MAX_DRAGGABLE} draggable shapes, so this one and those after it can't be dragged. Drag fewer, or use a slider` });
+    out.push(...swipeTraps(drawn.regions, w, h));
     // Contrast in both modes when no theme was asked for: theme colors change between them.
     const light = lowContrast(drawn.marks, drawn.under, theme);
     const dark = opts.theme ? [] : (() => {
-      const d = drawAtRest(scene, scope, darkTheme, opts.measure);
+      const d = drawAtRest(scene, scope, darkTheme, opts.measure, false);
       return lowContrast(d.marks, d.under, darkTheme);
     })();
     const said = new Set<string>();
@@ -199,7 +202,7 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
 }
 
 /** The scene drawn as it rests (its last moment), as marks and pressable regions in scene coordinates. */
-function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined): { marks: Mark[]; regions: SceneRegion[]; under: string } {
+function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; dragOver?: number } {
   const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
   const duration = Math.max(0, numOf(scene, "duration", scope, 0));
   const at: Scope = (name) => (name === "t" ? duration : name === "PI" ? Math.PI : scope(name));
@@ -212,11 +215,13 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
     onNode: (n) => { current = n; },
     m: IDENTITY, press: { regions: [], open: [], copy: [], locate: stateLocate },
   };
+  if (behavior) f.press!.drag = { scene: IDENTITY, w, h, count: 0 };
   paintScene(f, scene.children, at, w, h, undefined);
   // What a label with nothing under it sits on: the scene's background, or the card it's in.
   const bg = scene.props.bg === undefined ? undefined : strOf(scene, "bg", at);
   const under = (bg && colorOf(bg, { colors: theme.colors })) || theme.colors.raised;
-  return { marks, regions: f.press!.regions, under };
+  const over = f.press!.drag?.over;
+  return { marks, regions: f.press!.regions, under, ...(over !== undefined ? { dragOver: over } : {}) };
 }
 
 function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w: number, h: number): Diagnostic[] {
@@ -275,11 +280,11 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
   const pressable = regions.map((r) => ({ r, b: regionBounds(r) })).filter((x): x is { r: SceneRegion; b: Rect } => !!x.b);
   for (const { r, b } of pressable) {
     if (overlap(b, { x: 0, y: 0, w, h }) <= 0) {
-      warn(r.node.line, `this pressable ${r.node.type} is outside the picture, so it can't be pressed. Move it inside 0..${w} across and 0..${h} down`);
+      warn(r.node.line, `this ${r.drag ? "draggable" : "pressable"} ${r.node.type} is outside the picture, so it can't be ${r.drag ? "dragged" : "pressed"}. Move it inside 0..${w} across and 0..${h} down`);
       continue;
     }
     if (Math.min(b.w, b.h) * k < MIN_PHONE_TARGET) {
-      warn(r.node.line, `this pressable ${r.node.type} is only ${Math.round(Math.min(b.w, b.h) * k)} px across on a phone, too small to tap. Make it at least ${Math.ceil(MIN_PHONE_TARGET / k)} scene pixels both ways`);
+      warn(r.node.line, `this ${r.drag ? "draggable" : "pressable"} ${r.node.type} is only ${Math.round(Math.min(b.w, b.h) * k)} px across on a phone, too small to tap. Make it at least ${Math.ceil(MIN_PHONE_TARGET / k)} scene pixels both ways`);
     }
   }
   for (let i = 0; i < pressable.length; i++) {
@@ -421,8 +426,27 @@ function lowContrast(marks: readonly Mark[], background: string, theme: Theme): 
   return out;
 }
 
+/**
+ * Draggable shapes that move up or down take vertical swipes that start on
+ * them away from the page (behavior on). Covering more than a third of the
+ * picture on a phone, they make the page hard to scroll past.
+ */
+function swipeTraps(regions: readonly SceneRegion[], w: number, h: number): Diagnostic[] {
+  let covered = 0;
+  let first: SceneRegion | undefined;
+  for (const r of regions) {
+    if (!r.drag?.y) continue;
+    const b = regionBounds(r);
+    if (!b) continue;
+    covered += overlap(b, { x: 0, y: 0, w, h });
+    first ??= r;
+  }
+  if (!first || covered <= (w * h) / 3) return [];
+  return [{ line: first.node.line, severity: "warning", message: `Drawing: shapes people drag up and down cover over a third of the picture, so on a phone a finger on them moves them instead of scrolling the page. Make them smaller, or let them move only across (x=)` }];
+}
+
 /** Drawing problems in every scene of a parsed spec, with its state and derived values filled in. */
-export function reviewScenes(parsed: Pick<ParseResult, "root" | "state" | "derived">, opts: { theme?: Theme; measure?: MeasureText } = {}): Diagnostic[] {
+export function reviewScenes(parsed: Pick<ParseResult, "root" | "state" | "derived">, opts: { theme?: Theme; measure?: MeasureText; behavior?: boolean } = {}): Diagnostic[] {
   const store = new Store();
   for (const s of parsed.state) store.declare(s.key, s.value);
   store.derive(parsed.derived);

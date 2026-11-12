@@ -54,7 +54,32 @@ export const toolButton: ComponentDef = {
       g.restore();
     }
     const icon = p.str("icon");
-    if (isIconName(icon)) drawIcon(g, icon, x + (size - ICON) / 2, box.y + (size - ICON) / 2, ICON, hover > 0.5 || pressed ? c.ink : c.muted);
+    const ink = hover > 0.5 || pressed ? c.ink : c.muted;
+    const ix = x + (size - ICON) / 2, iy = box.y + (size - ICON) / 2;
+    if (isIconName(icon)) drawIcon(g, icon, ix, iy, ICON, ink);
+    else if (icon === "pause" || icon === "play") drawMotionIcon(g, icon, ix, iy, ICON, ink);
     ctx.addHit(partBox(box, x, box.y, size, size));
   },
 };
+
+/**
+ * Pause and play, for the toolbar's motion button only (behavior on). Drawn
+ * here, not added to the icon set, so the model guide's icon list doesn't change.
+ */
+function drawMotionIcon(g: CanvasRenderingContext2D, icon: "pause" | "play", x: number, y: number, size: number, color: string): void {
+  const u = size / 24;
+  g.save();
+  g.fillStyle = color;
+  g.beginPath();
+  if (icon === "pause") {
+    g.rect(x + 6 * u, y + 5 * u, 4 * u, 14 * u);
+    g.rect(x + 14 * u, y + 5 * u, 4 * u, 14 * u);
+  } else {
+    g.moveTo(x + 7 * u, y + 5 * u);
+    g.lineTo(x + 19 * u, y + 12 * u);
+    g.lineTo(x + 7 * u, y + 19 * u);
+    g.closePath();
+  }
+  g.fill();
+  g.restore();
+}

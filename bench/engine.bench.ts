@@ -17,29 +17,13 @@ import { Store } from "../src/state";
 import { render } from "../src/testing";
 import { MonoMeasurer } from "../src/text";
 import { lightTheme } from "../src/theme";
+import { bigSpec } from "./specs";
+
+export { bigSpec };
+
 
 const registry = new Registry(coreComponents);
 const rootProps = { pad: "20", gap: "14" };
-
-/** About `elements` elements: repeated order cards using most core components. */
-export function bigSpec(elements: number): string {
-  const card = (i: number) => `card
-  text "Order #${i}: trail runner socks, merino blend" style=title
-  text "{qty} pairs, shipped to the valley campground" tone=muted
-  row
-    stat label="Each" value="\${price}"
-    stat label="Total" value={qty * price + ${i % 7}}
-  progress value={qty} max=10 label="Packed {qty} of 10"
-  check "Gift wrap" bind=gift
-  row
-    button "Remove" variant=secondary on=dec:qty
-    button "Add" on=inc:qty
-`;
-  const perCard = 11;
-  const lines = ["state qty=2 price=24 gift=false"];
-  for (let i = 0; i * perCard < elements; i++) lines.push(card(i));
-  return lines.join("\n");
-}
 
 for (const size of [1000, 5000]) {
   const spec = bigSpec(size);

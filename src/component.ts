@@ -30,6 +30,17 @@ export interface PropDef {
   required?: boolean;
   /** A required prop that isn't needed when another prop has one of these values (chart's x= with kind=sankey). */
   unlessProp?: { name: string; values: readonly string[] };
+  /**
+   * An opt-in feature this prop belongs to. Without it on, the parser, the
+   * guide and the docs act as if the prop weren't there (scene drag= needs behavior).
+   */
+  needs?: "behavior";
+}
+
+/** A component's props as a host with these features on sees them. */
+export function propsFor(props: Record<string, PropDef>, behavior: boolean): Record<string, PropDef> {
+  if (behavior || !Object.values(props).some((d) => d.needs)) return props;
+  return Object.fromEntries(Object.entries(props).filter(([, d]) => !d.needs));
 }
 
 export type Category = "layout" | "content" | "data" | "input" | "navigation" | "feedback";
@@ -118,7 +129,7 @@ export interface PaintContext {
    * covering just that part, with the element's node, and a `detail` naming it.
    * Each part is then a separate Tab stop, and press() sees the detail.
    */
-  addHit(box: Box, opts?: { detail?: unknown; focusable?: boolean }): void;
+  addHit(box: Box, opts?: { detail?: unknown; focusable?: boolean; drags?: boolean; claimsSwipe?: boolean }): void;
   hover: HitTarget | null;
   /** Pointer position in canvas CSS pixels, or null when outside. */
   pointer: { x: number; y: number } | null;
@@ -137,6 +148,8 @@ export interface PaintContext {
   today(): string;
   /** False when animation is off (option or reduced motion): draw a still frame. */
   motion: boolean;
+  /** Experimental behavior is on (the engine's behavior option): a scene's drag= works. */
+  behavior?: boolean;
   /** Fade-in opacity for a node that just appeared (0..1). */
   appear(node: SayShapeNode): number;
   /** Ask for another frame (for animation). */
@@ -171,7 +184,7 @@ export interface PressContext {
    * Write a value to a state name or path, as seen from the pressed element:
    * pass its bind= as written (count, or t.done inside each).
    */
-  set(path: string, value: Value): void;
+  set(path: string, value: Value, own?: { scope: Scope; locate?: Locate }): void;
   /**
    * Run an action string such as "inc:count;emit:saved". An element that
    * draws its own copies (a scene's each) passes the scope the pressed copy

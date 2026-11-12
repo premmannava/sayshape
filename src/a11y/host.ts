@@ -34,6 +34,14 @@ export interface MirrorEvents {
   blur(): void;
 }
 
+export interface UpdateOptions {
+  /**
+   * The change came from a rule ticking, not from the person (behavior on):
+   * keep it from being read out (a status's new value) on every tick.
+   */
+  quiet?: boolean;
+}
+
 export interface AccessibilityHost {
   /**
    * Have screen readers say something: polite waits for a pause (a message,
@@ -46,7 +54,7 @@ export interface AccessibilityHost {
    * The screen changed: show this tree. busy is true while a spec streams
    * in or data loads, so screen readers wait for the finished screen.
    */
-  update?(tree: AccessibleNode, busy: boolean): void;
+  update?(tree: AccessibleNode, busy: boolean, opts?: UpdateOptions): void;
   /**
    * The engine moved keyboard focus to this node. Move DOM focus to it when
    * the canvas or the mirror has DOM focus now, or always with force (the

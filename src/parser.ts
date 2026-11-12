@@ -13,7 +13,10 @@
  * mistake costs one element, not the whole screen.
  */
 import { actionExpressions, parseActions } from "./actions";
-import { COMMON_PROPS, type ComponentDef, type PropDef } from "./component";
+import { COMMON_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
+import { MAX_RULES, MAX_RULE_ACTIONS, MAX_RULE_INTERVAL, MIN_RULE_INTERVAL, RULE_OPS, SCREEN_STATE, type RuleDef } from "./behavior";
+import { RULE_FUNCTIONS } from "./math";
+import { dragAxis, readPaths } from "./drag-axis";
 import { looksLikeData, parseData } from "./data";
 import { bareExpression, checkSyntax, identifiers, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
 import { actionTargets } from "./actions";
@@ -76,6 +79,12 @@ export interface ParseOptions {
    * reported as an unknown name.
    */
   knownNames?: readonly string[];
+  /**
+   * Experimental, opt-in behavior (docs/plans/behavior.md): read `every`
+   * rule lines and props that need it (a scene shape's drag=). Off, the
+   * language and the result are exactly what they were.
+   */
+  behavior?: boolean;
 }
 
 /** A derive line's value: a name, its expression, and the names that expression reads. */
@@ -99,6 +108,8 @@ export interface ParseResult {
   nodeCount: number;
   /** Number of complete lines consumed. */
   lines: number;
+  /** Rules (`every 1s … do=…`) that can run. Present only when parsed with behavior on. */
+  rules?: RuleDef[];
 }
 
 interface LineTokens {
@@ -235,6 +246,90 @@ function parseStateLine(body: string, line: number, diags: Diagnostic[], skipped
 
 /** Names nothing may be called: what expressions refuse to read, and state the engine sets. */
 const RESERVED = new Set(["__proto__", "constructor", "prototype", "screen"]);
+
+
+/**
+ * A shape with drag=true (behavior on) whose x= and y= don't say what it
+ * moves, or whose other axis reads a name the drag doesn't move, so it would
+ * stay still with no sign of why (y={py + 0} next to x={px}).
+ */
+function dragProblems(props: Readonly<Record<string, string>>, fixed: ReadonlySet<string>): string[] {
+  const x = dragAxis(props.x), y = dragAxis(props.y);
+  if (!x && !y) return [`drag=true needs x= or y= to be a state name or item path, so it knows what to move: x={px} y={py}, or x={clamp(u, 40, 560)} to keep it between 40 and 560. Other formulas stay still`];
+  const out: string[] = [];
+  for (const [axis, target, other] of [["x", x, "y"], ["y", y, "x"]] as const) {
+    if (target) continue;
+    const expr = props[axis] === undefined ? null : wholeExpression(props[axis]!);
+    if (expr === null) continue;
+    const stray = readPaths(expr).find((p) => !fixed.has(p.split(".")[0]!) && p !== x?.path && p !== y?.path);
+    if (stray) out.push(`${axis}={${expr}} reads ${stray}, which this drag doesn't move, so ${axis} stays still while ${other} moves. To drag it, write ${axis}={${stray}}, or ${axis}={clamp(${stray}, 0, 300)} to keep it in a range`);
+  }
+  return out;
+}
+
+const RULE_PROPS = new Set(["if", "do", "on"]);
+
+/**
+ * A rule line: `every 1s if={running} do=dec:left`. Problems that would make it
+ * run wrongly (no interval, no do=, an action that isn't a state change, a
+ * condition that doesn't parse) skip it; anything else keeps it.
+ */
+function parseRuleLine(body: string, line: number, diags: Diagnostic[]): RuleDef | null {
+  const skip = (message: string): null => { diags.push({ line, severity: "error", message: `${message}. This rule was skipped` }); return null; };
+  const m = /^every\s+(\d+(?:\.\d+)?|\.\d+)\s*(ms|s)(?=\s|$)(.*)$/.exec(body);
+  if (!m) return skip("A rule starts with every and how often, like every 1s or every 250ms, then if={…} and do=…");
+  const every = Number(m[1]) * (m[2] === "s" ? 1000 : 1);
+  if (!(every > 0)) return skip("A rule's interval must be more than 0, like every 1s");
+  const tok = tokenizeLine("every " + m[3]!);
+  for (const p of tok.problems) diags.push({ line, severity: "warning", message: p });
+  if (tok.text !== undefined) diags.push({ line, severity: "warning", message: `A rule takes no quoted text; it was ignored. Write every 1s if={…} do=…` });
+  for (const name of Object.keys(tok.props)) {
+    if (!RULE_PROPS.has(name)) diags.push({ line, severity: "warning", message: `A rule has no "${name}"; it was ignored. Rules take if={condition} and do=actions` });
+  }
+  // Models reach for on=, the action prop everywhere else: read it as do=, with nothing to fix.
+  const src = tok.props.do ?? tok.props.on;
+  if (src === undefined) return skip("A rule needs do= with what to change, like every 1s if={running} do=dec:left");
+  const parsed = parseActions(src, RULE_FUNCTIONS);
+  if ("error" in parsed) return skip(`In do=: ${parsed.error}`);
+  const banned = parsed.actions.find((a) => !RULE_OPS.has(a.op));
+  if (banned) return skip(`Rules only change state (inc, dec, toggle, set, add, remove, clear); ${banned.op} can't run on a timer. To tell the app something, put emit: on a button`);
+  if (parsed.actions.length > MAX_RULE_ACTIONS) return skip(`A rule runs at most ${MAX_RULE_ACTIONS} actions; split it into two rules`);
+  if (actionTargets(parsed.actions).includes(SCREEN_STATE)) return skip(`Rules can't change ${SCREEN_STATE}: that changes what's on screen with no press. Show things with an if= block instead`);
+  let cond: string | undefined;
+  if (tok.props.if !== undefined) {
+    cond = bareExpression(tok.props.if);
+    const err = checkSyntax(cond, RULE_FUNCTIONS);
+    if (err) return skip(`In if=: ${err}`);
+  }
+  return {
+    line,
+    every: Math.min(MAX_RULE_INTERVAL, Math.max(MIN_RULE_INTERVAL, every)),
+    ...(cond !== undefined ? { if: cond } : {}),
+    do: src,
+    actions: parsed.actions,
+  };
+}
+
+/**
+ * Checks on a spec's rules once every line is known: at most MAX_RULES; a
+ * rule people can't stop (nothing on screen writes what its if= reads); a
+ * rule that writes what a dialog binds (opening one moves focus with no press).
+ */
+function checkRules(rules: RuleDef[], controls: ReadonlySet<string>, dialogs: ReadonlySet<string>, diags: Diagnostic[]): RuleDef[] {
+  for (const r of rules.slice(MAX_RULES)) diags.push({ line: r.line, severity: "warning", message: `A spec has at most ${MAX_RULES} rules, so this one was skipped. Put more actions in one rule's do=` });
+  const kept = rules.slice(0, MAX_RULES);
+  for (const r of kept) {
+    const reads = r.if === undefined ? [] : identifiers(r.if, RULE_FUNCTIONS);
+    if (!reads.some((n) => controls.has(n))) {
+      diags.push({ line: r.line, severity: "warning", message: `Nothing on the screen can stop this rule, so it runs for as long as the screen is open. Add if={running} and a button "Pause" on=toggle:running` });
+    }
+    const opens = actionTargets(r.actions).filter((n) => dialogs.has(n));
+    if (opens.length) {
+      diags.push({ line: r.line, severity: "warning", message: `Rules can't open or close a dialog (${opens[0]} is a dialog's bind=), since that moves focus with no press, so that write is skipped. Show it with an if= block instead, like a callout` });
+    }
+  }
+  return kept;
+}
 
 /** One derive line: name={expression} pairs. Problems skip the pair, not the line. */
 function parseDeriveLine(body: string, line: number, diags: Diagnostic[]): DerivedDef[] {
@@ -505,6 +600,10 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   // Where bind= and actions write, to report writes to derived names.
   const writes: Array<{ name: string; line: number }> = [];
   const derivedLines: DerivedDef[] = [];
+  // Behavior (opt-in): rules, what controls write (so a rule can be stopped), and what dialogs bind.
+  const rules: RuleDef[] = [];
+  const controls = new Set<string>();
+  const dialogs = new Set<string>();
 
   const lines = src.split("\n");
   if (lines.at(-1) === "") lines.pop();
@@ -519,6 +618,23 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     if (skipDeeperThan !== null) {
       if (indent > skipDeeperThan) return;
       skipDeeperThan = null;
+    }
+
+    if (opts.behavior && /^every(\s|$)/.test(body)) {
+      // A rule belongs to the whole screen: indented, it's read as if at the top, except inside an each.
+      if (indent > 0 && stack.some((n) => n.type === "each" && n.indent < indent)) {
+        diagnostics.push({ line: lineNo, severity: "warning", message: `Rules can't go inside each: a rule belongs to the whole screen, not one item, so this one was skipped. Write it unindented, at the top` });
+        return;
+      }
+      const rule = parseRuleLine(body, lineNo, diagnostics);
+      if (rule) {
+        rules.push(rule);
+        for (const n of actionTargets(rule.actions)) { written.add(n); writes.push({ name: n, line: lineNo }); }
+        const exprs = [...(rule.if === undefined ? [] : [rule.if]), ...actionExpressions(rule.actions)];
+        const names = [...new Set(exprs.flatMap((e) => identifiers(e, RULE_FUNCTIONS)))];
+        if (names.length) outsideUses.push({ line: lineNo, names });
+      }
+      return;
     }
 
     if (/^derive(\s|$)/.test(body)) {
@@ -629,7 +745,10 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     for (const p of tok.problems) diagnostics.push({ line: lineNo, severity: "warning", message: p });
     if (!tok.type) { skipDeeperThan = indent; return; }
 
-    const def = defOf(tok.type, registry);
+    const found = defOf(tok.type, registry);
+    // Props of an opt-in feature that's off are left out, as if they didn't exist.
+    const shownProps = found && propsFor(found.props, !!opts.behavior);
+    const def = found && shownProps !== found.props ? { ...found, props: shownProps! } : found;
     if (!def) {
       diagnostics.push({ line: lineNo, severity: "error", message: `Unknown element "${tok.type}". It was skipped, along with anything inside it` });
       skipDeeperThan = indent;
@@ -719,6 +838,12 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     if (tok.type === "if" && tok.props.if === undefined) {
       diagnostics.push({ line: lineNo, severity: "warning", message: `An if block needs a condition, like if={count > 0}; the lines under it always show` });
     }
+    if (opts.behavior && def.props.drag?.needs && tok.props.drag !== undefined && tok.props.drag !== "false") {
+      // Names that aren't state: the scene's own (t, PI) and each's index.
+      const fixed = new Set<string>(provided.names);
+      for (const n of stack) if (n.type === "each" && n.props.index) fixed.add(n.props.index);
+      for (const message of dragProblems(tok.props, fixed)) diagnostics.push({ line: lineNo, severity: "warning", message });
+    }
     if (tok.type === "each" && tok.props.as !== undefined && tok.props.as === tok.props.index) {
       diagnostics.push({ line: lineNo, severity: "warning", message: `each uses "${tok.props.as}" for both as= and index=; give them different names` });
     }
@@ -733,7 +858,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     if (names.length && !provided.anyNames) outsideUses.push({ line: lineNo, names });
     for (const [name, raw] of Object.entries(tok.props)) {
       const pdef = def.props[name] ?? COMMON_PROPS[name];
-      const wrote = (n: string) => { written.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
+      const wrote = (n: string) => { written.add(n); controls.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
       if (pdef?.type === "state" && PATH.test(raw)) wrote(raw.split(".")[0]!);
       if (pdef?.type === "action") {
         const r = parseActions(raw, fns);
@@ -767,6 +892,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     pendingChain = null;
     nodeCount++;
     if (tok.type === "each") eaches.push(node);
+    if (tok.type === "dialog" && tok.props.bind !== undefined) dialogs.add(tok.props.bind.split(".")[0]!);
     if (def.children) stack.push(node);
   });
 
@@ -777,8 +903,9 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   // A state value that couldn't be read is reported on its own line; saying again on every line that uses it hides that.
   checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics);
   // Stable sort keeps each line's diagnostics in the order they were found.
+  const kept = opts.behavior ? checkRules(rules, controls, dialogs, diagnostics) : undefined;
   diagnostics.sort((a, b) => a.line - b.line);
-  return { root, state, derived, diagnostics, nodeCount, lines: lines.length };
+  return { root, state, derived, diagnostics, nodeCount, lines: lines.length, ...(kept ? { rules: kept } : {}) };
 }
 
 /**

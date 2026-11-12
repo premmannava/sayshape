@@ -40,6 +40,9 @@ The canvas fills its parent's width and grows to fit its content.
 | `today` | the device's local day | Today's date as `() => "YYYY-MM-DD"`, for date pickers; fix it in tests and screenshots |
 | `viewport` | from the window | The part of the canvas people can see, `() => ({ top, bottom })` in canvas pixels, for placing a select's list ([Popups](#popups)) |
 | `pixelRatio` | the window's `devicePixelRatio` | Device pixels per CSS pixel in the canvas bitmap |
+| `behavior` | `false` | Experimental: `every` rules and dragging in scenes ([Behavior](#behavior-experimental-off-by-default)) |
+| `clock` | the real clock | Where time comes from (`now`, `setTimeout`, `clearTimeout`): scene motion, fade-ins and rules. `sayshape/testing` passes one a test advances |
+| `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it, rules wait for a first press or key |
 
 ## Methods
 
@@ -61,6 +64,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `hiddenWidth()` | How much wider the screen would need to be for nothing to scroll sideways; 0 when nothing does |
 | `setTheme(theme)` | Switch themes |
 | `find(type)` | All nodes of a type, e.g. `ui.find("button")` |
+| `pauseRules()` / `resumeRules()` / `ruleStatus` | Behavior on: stop and restart every rule (a host's Pause button), and how many there are, how many are running and whether they're paused |
 | `expose(name?)` | Put the instance on `window` for the console (default `window.sayshape`) |
 | `destroy()` | Remove listeners and stop rendering |
 
@@ -75,6 +79,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `inspect` | `{ node, box }` or `null` | Inspect mode selected something |
 | `navigate` | `{ screen, from }` | The visible screen changed |
 | `notify` | `{ text }` | A message was shown |
+| `rules` | `{ count, running, paused }` | Behavior on: the spec's rules changed, started or stopped, or were paused |
 
 ```ts
 ui.on("action", ({ name, value }) => {
@@ -118,11 +123,21 @@ scene "Two machines on a line" w=440 h=200
 text "Selected: {find(machines, 'id', sel).name}"
 ```
 
-Hits are exact through the scene's scaling and every move, turn and scale: rectangles, circles, ovals, polygons and filled paths by their outline (filled as the canvas fills them), lines and unfilled paths within a few pixels, labels by their box. Inside the scene's `each`, `key=` keeps focus on the same item when the list changes order. The last drawn wins, and a pressable shape inside a pressable group wins over the group. Pressable shapes are buttons inside the scene's figure for screen readers, with `selected=` read as pressed. Not built: dragging shapes, arrow keys between shapes, and tooltips outside the scene's box. The playground's "Factory monitor (scene)" sample (`?scene=1`) puts it together; [docs/plans/interactive-scenes.md](plans/interactive-scenes.md) has the design and its limits.
+Hits are exact through the scene's scaling and every move, turn and scale: rectangles, circles, ovals, polygons and filled paths by their outline (filled as the canvas fills them), lines and unfilled paths within a few pixels, labels by their box. Inside the scene's `each`, `key=` keeps focus on the same item when the list changes order. The last drawn wins, and a pressable shape inside a pressable group wins over the group. Pressable shapes are buttons inside the scene's figure for screen readers, with `selected=` read as pressed. Not built: arrow keys between shapes, and tooltips outside the scene's box. Dragging shapes comes with [behavior](#behavior-experimental-off-by-default). The playground's "Factory monitor (scene)" sample (`?scene=1`) puts it together; [docs/plans/interactive-scenes.md](plans/interactive-scenes.md) has the design and its limits.
 
 `reviewScenes(parsed)` (the drawing check the MCP server sends back with `--scene`) also warns about labels too small to read and pressable shapes too small to tap on a phone, labels too close in color to what's under them in light or dark mode, pressable shapes on top of each other or outside the picture, and a scene whose formulas use `t` but whose `duration` is 0, so it never moves. Small labels come back as one summary and labels with the same contrast problem as one warning, so a scene full of small text can't push the other problems out of the list.
 
 How well scenes hold up with real models, in a real browser, with a screen reader's view and under load, and what's still missing, is in [docs/plans/interactive-scenes-validation.md](plans/interactive-scenes-validation.md). `npm run scene-eval` scores a model on eight interactive-scene requests (`eval/scenes.ts`; `--score <dir>` scores saved answers), `npx playwright test visual/scene.spec.ts` checks the factory monitor in Chrome at five widths and in four themes, and `npm run bench:scene-browser` times scenes of 4 to 500 objects in a real browser.
+
+## Behavior (experimental, off by default)
+
+With `behavior: true`, a spec can have things that change by themselves, and (with scenes) shapes people drag. Both are off unless a host turns them on: without it, `every` is an unknown element, `drag=` is an unknown prop, and the parser's output and the model guide are exactly what they were. Pass the same flag to `languageGuide(registry, { behavior: true })` and `reviewScenes(parsed, { behavior: true })`. The playground turns it on with `?behavior=1`, the MCP server with `--behavior` (for chat apps that draw views; text-only clients don't get it).
+
+**Rules.** `every 1s if={running && left > 0} do=dec:left` runs `do=` on an interval while `if=` holds ([the language](language.md#rules-experimental)). A rule only changes state: it can't emit, navigate, notify, write `screen` or open a dialog, so a spec can't call your app or the model on a timer. Rules start once a spec is complete (never while it streams), stop when it's replaced or the engine is destroyed, and pause, with no catch-up afterwards, while the page is hidden or the canvas is out of sight. A rule's write to something the person is dragging or typing in is skipped. With reduced motion, rules wait until the person first presses or types something. Rules faster than one frame run at one frame (16 ms); when ticks get expensive, the fastest rules are slowed and `onWarning` says so, while slower rules keep their interval. Screen readers hear nothing per tick: the mirror is rebuilt at most once a second while only rules change the screen, and a status (a stepper's value) isn't read out each time. `pauseRules()` and `resumeRules()` give a host a Pause button that works whatever the spec says; the MCP view and the playground show one while a spec has rules.
+
+**Dragging in scenes.** `drag=true` on a `rect`, `circle`, `ellipse`, `label`, `group` or `use` lets people drag it. Its own `x=` and `y=` say what it moves: `x={px}` moves `px`, `x={clamp(u, 40, 560)}` moves `u` between 40 and 560, `x={p.x}` moves an item of the scene's `each`, and any other formula holds that axis still. It stays inside the picture. A press that doesn't move runs its `on=`. Tab reaches it, and arrow keys move it (Home and End too when it moves one way). To screen readers it's a slider when it moves one way, and a "movable" part that says where it is when it moves both ways. On a phone, a shape that moves up or down takes the swipe instead of the page; the drawing check warns when such shapes cover over a third of the picture.
+
+The playground's behavior samples (`?behavior=1`, and `&scene=1` for the last two): a countdown, stock running down with Play and Pause, a falling ball, and a point on a curve. Design and limits: [docs/plans/behavior.md](plans/behavior.md); validation: [docs/plans/behavior-validation.md](plans/behavior-validation.md).
 
 ## Images
 
