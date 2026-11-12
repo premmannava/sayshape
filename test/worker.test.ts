@@ -413,8 +413,8 @@ describe("chat messages", () => {
 
     // The motion the chat guide's note shows parses, and the drawing check has nothing to say about it.
     const g = chatGuide(chatRegistry);
-    expect(g.notes).toContain("duration=6");
-    const moving = `scene "A part on a belt" w=600 h=200 duration=6\n  rect x={40 + 80*t} y=80 w=40 h=40 fill="accent"\n  circle x=300 y=100 r={8 + 3*wave(t, 1.5)} fill="bad"\n`;
+    expect(g.notes).toContain("duration=8");
+    const moving = `scene "A part on a belt" w=600 h=200 duration=8\n  rect x={lerp(80, 560, ease(t, 1, 7))} y=80 w=40 h=40 fill="accent"\n  circle x=300 y=100 r={8 + 3*wave(t, 1.5)} fill="bad"\n`;
     expect(parse(moving, chatRegistry).diagnostics).toEqual([]);
     expect(checkDrawing(moving, chatRegistry)).toEqual([]);
   });
