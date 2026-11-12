@@ -183,13 +183,6 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
     g.strokeStyle = c.ink;
     g.stroke();
     g.setLineDash([]);
-    g.font = d.labelFont;
-    g.textAlign = "right";
-    g.fillStyle = c.ink;
-    // Above the line, or below it when the line is at the top of the plot.
-    const above = y - top >= 16;
-    g.textBaseline = above ? "bottom" : "top";
-    g.fillText(r.text, right - 2, above ? y - 3 : y + 3);
   }
 
   // Lines over the bars, each in its own series color, with a dot on every point.
@@ -215,6 +208,25 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
         g.stroke();
       }
     }
+  }
+
+  // Each level's name last, at its right end, on a plate in the surface color: it often sits over a bar or a line.
+  g.font = d.labelFont;
+  g.textAlign = "right";
+  g.textBaseline = "middle";
+  const size = parseFloat(/(\d+(?:\.\d+)?)px/.exec(d.labelFont)?.[1] ?? "12");
+  const plateH = size + 6, padX = 5;
+  for (const r of L.rules) {
+    const y = oy + r.y;
+    const w = g.measureText(r.text).width + padX * 2;
+    // Above the line, or below it when the line is at the top of the plot.
+    const py = y - top >= plateH + 3 ? y - 3 - plateH : y + 3;
+    g.beginPath();
+    ctx.roundRect(right - w, py, w, plateH, theme.radius.sm / 2);
+    g.fillStyle = c.surface;
+    g.fill();
+    g.fillStyle = c.ink;
+    g.fillText(r.text, right - padX, py + plateH / 2);
   }
   g.restore();
 }
