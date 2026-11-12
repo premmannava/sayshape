@@ -804,7 +804,7 @@ export const chart: ComponentDef = {
     format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number." },
   },
   picks: [
-    { for: "a target, forecast or event marked on bars or a line", write: "chart kind=bar holding chart-rule \"Target\" y=50000" },
+    { for: "a target or forecast on bars", write: "chart kind=bar holding chart-rule y=50000" },
     { for: "a ranking or a top 10 with long names", write: "chart kind=hbar" },
     { for: "parts of each total, such as revenue by product per month", write: "chart kind=stacked y=hardware,software" },
     { for: "an amount over time, such as visitors a week", write: "chart kind=area" },

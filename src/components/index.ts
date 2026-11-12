@@ -7,7 +7,7 @@ import { datePicker } from "./date-picker";
 import { avatar, badge, code, icon, progress, stat, text } from "./content";
 import { empty, skeleton } from "./feedback";
 import { button, check, input, link, radio, rating, slider, stepper, switchToggle } from "./input";
-import { accordion, card, column, divider, each, grid, list, listItem, row, spacer } from "./layout";
+import { accordion, card, column, divider, each, grid, list, listItem, row, spacer, overlap } from "./layout";
 import { image } from "./media";
 import { breadcrumb, pagination, screen, tab, tabs } from "./navigation";
 import { callout } from "./callout";
@@ -27,7 +27,7 @@ import { dialog } from "./dialog";
 import { menu, menuItem } from "./menu";
 
 export {
-  column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
+  column, row, overlap, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
   text, image, code, badge, avatar, callout, icon,
   stat, rating, chart, chartLine, chartRule, chartNote, meter, table, tableColumn, compare, compareRow, details, detail,
   button, link, check, switchToggle, radio, select, datePicker, stepper, slider, input, segmented,
@@ -46,7 +46,7 @@ export {
 
 /** The built-in components (everything except the map, which is a separate entry). */
 export const coreComponents: ComponentDef[] = [
-  column, row, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
+  column, row, overlap, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
   text, image, code, badge, avatar, callout, icon,
   stat, rating, chart, chartLine, chartRule, chartNote, meter, table, tableColumn, compare, compareRow, details, detail,
   button, link, check, switchToggle, radio, select, datePicker, stepper, slider, input, segmented,
