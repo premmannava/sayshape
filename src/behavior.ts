@@ -33,6 +33,8 @@ export const MAX_RULE_FLOOR = 1000;
 export const RULE_BUSY_SHARE = 0.25;
 /** How many ticks the guard averages over. */
 export const RULE_BUSY_WINDOW = 20;
+/** The floor comes back down, a halving at a time, once ticks take this share of RULE_BUSY_SHARE or less. */
+export const RULE_EASE_SHARE = 0.25;
 /** The operations a rule may run: writes to state only. */
 export const RULE_OPS: ReadonlySet<Action["op"]> = new Set(["inc", "dec", "toggle", "set", "add", "remove", "clear"]);
 /** The state name the current screen lives in (the engine's SCREEN_KEY): rules can't write it. */
@@ -95,11 +97,15 @@ export class RuleRunner {
   private timer: unknown = null;
   private pauses = new Set<RulePause>();
   private floor = MIN_RULE_INTERVAL;
+  /** Each recent tick's work, as a share of the fastest interval that was running when it ran. */
   private costs: number[] = [];
   private ticking = false;
   private recheck = false;
-  /** The work since the last tick began: the tick itself and every frame drawn until the next one. */
-  private pendingTick: number | null = null;
+  /**
+   * The work since the last tick began (the tick itself and every frame drawn until the next one),
+   * and the fastest interval running then: what that work is judged against.
+   */
+  private pendingTick: { ms: number; every: number } | null = null;
 
   constructor(private host: RuleRunnerHost) {}
 
@@ -166,7 +172,18 @@ export class RuleRunner {
    * easing to its new value) costs several frames, not one.
    */
   frameCost(ms: number): void {
-    if (this.pendingTick !== null) this.pendingTick += ms;
+    if (this.pendingTick !== null) this.pendingTick.ms += ms;
+  }
+
+  /** The fastest interval among the rules running now (their condition holds), or undefined when none is. */
+  private fastest(): number | undefined {
+    let fastest: number | undefined;
+    for (const a of this.armed) {
+      if (a.due === undefined) continue;
+      const every = this.interval(a.rule);
+      if (fastest === undefined || every < fastest) fastest = every;
+    }
+    return fastest;
   }
 
   private holds(rule: RuleDef): boolean {
@@ -195,6 +212,7 @@ export class RuleRunner {
     const clock = this.host.clock;
     const now = clock.now();
     const due = this.armed.filter((a) => a.due !== undefined && a.due <= now + 0.5);
+    let spent: number | null = null;
     if (due.length) {
       if (this.pendingTick !== null) this.note(this.pendingTick);
       const started = clock.now();
@@ -205,7 +223,7 @@ export class RuleRunner {
       } finally {
         this.ticking = false;
       }
-      this.pendingTick = clock.now() - started;
+      spent = clock.now() - started;
       for (const a of due) {
         if (a.due === undefined) continue;
         const next = a.due + this.interval(a.rule);
@@ -215,23 +233,37 @@ export class RuleRunner {
     }
     this.recheck = false;
     this.check();
+    if (spent !== null) {
+      // Judged against what's running after this tick: a faster rule that's off doesn't count,
+      // and one that starts before the next tick isn't blamed for the frames drawn until then.
+      const every = this.fastest();
+      this.pendingTick = every === undefined ? null : { ms: spent, every };
+    }
   }
 
-  private note(ms: number): void {
-    this.costs.push(ms);
+  private note(tick: { ms: number; every: number }): void {
+    this.costs.push(tick.ms / tick.every);
     if (this.costs.length > RULE_BUSY_WINDOW) this.costs.shift();
-    if (this.costs.length < RULE_BUSY_WINDOW || !this.armed.length) return;
-    const avg = this.costs.reduce((s, c) => s + c, 0) / this.costs.length;
-    // Judged against the fastest interval actually running.
-    const fastest = Math.max(this.floor, Math.min(...this.armed.map((a) => a.rule.every)));
-    if (avg <= fastest * RULE_BUSY_SHARE || fastest >= MAX_RULE_FLOOR) return;
-    // Raise the floor past it, in one step: doubled until a tick fits its share. Only rules
-    // faster than the floor are slowed: a 1 s countdown stays 1 s.
-    let floor = fastest * 2;
-    while (floor * RULE_BUSY_SHARE < avg && floor < MAX_RULE_FLOOR) floor *= 2;
-    this.floor = Math.min(MAX_RULE_FLOOR, floor);
-    this.costs = [];
-    this.host.slowed?.(this.floor, avg);
+    if (this.costs.length < RULE_BUSY_WINDOW) return;
+    const share = this.costs.reduce((s, c) => s + c, 0) / this.costs.length;
+    const fastest = this.fastest();
+    if (fastest === undefined) return;
+    if (share > RULE_BUSY_SHARE) {
+      if (fastest >= MAX_RULE_FLOOR) return;
+      // Raise the floor past it, in one step: doubled until a tick fits its share. Only rules
+      // faster than the floor are slowed: a 1 s countdown stays 1 s.
+      const ms = share * fastest;
+      let floor = fastest * 2;
+      while (floor * RULE_BUSY_SHARE < ms && floor < MAX_RULE_FLOOR) floor *= 2;
+      this.floor = Math.min(MAX_RULE_FLOOR, floor);
+      this.costs = [];
+      this.host.slowed?.(this.floor, ms);
+    } else if (this.floor > MIN_RULE_INTERVAL && share <= RULE_BUSY_SHARE * RULE_EASE_SHARE) {
+      // Cheap again (a stall passed, a heavy screen went): back down a halving at a time. At half
+      // the interval the same work is at most half the busy share, so it doesn't go straight back up.
+      this.floor = Math.max(MIN_RULE_INTERVAL, this.floor / 2);
+      this.costs = [];
+    }
   }
 }
 

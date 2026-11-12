@@ -203,6 +203,8 @@ export class SayShape {
   private dialogBinds = new Set<string>();
   /** Places written by the drag in progress: rules don't write over them while it's held. */
   private dragHeld: Place[] = [];
+  /** A rule's tick is writing now: its writes aren't the drag's, so they aren't held. */
+  private ruleWriting = false;
   /** The screen last changed because of a rule, not the person: screen reader updates are throttled and quiet. */
   private ruleDriven = false;
   private lastQuietUpdate = -Infinity;
@@ -1402,15 +1404,20 @@ export class SayShape {
   private runRules(due: readonly RuleDef[]): void {
     const root = this.parsed?.root;
     if (!root) return;
-    for (const rule of due) {
-      runActions(rule.actions.filter((a) => RULE_OPS.has(a.op)), {
-        scope: this.state.scope,
-        functions: RULE_FUNCTIONS,
-        set: (path, v) => { if (this.ruleMayWrite(path, v)) this.writePath(root, path, v); },
-        warn: (m) => this.warnOnce(m),
-        // Never called: a rule's actions are state writes only. Kept harmless all the same.
-        emit: () => {},
-      });
+    this.ruleWriting = true;
+    try {
+      for (const rule of due) {
+        runActions(rule.actions.filter((a) => RULE_OPS.has(a.op)), {
+          scope: this.state.scope,
+          functions: RULE_FUNCTIONS,
+          set: (path, v) => { if (this.ruleMayWrite(path, v)) this.writePath(root, path, v); },
+          warn: (m) => this.warnOnce(m),
+          // Never called: a rule's actions are state writes only. Kept harmless all the same.
+          emit: () => {},
+        });
+      }
+    } finally {
+      this.ruleWriting = false;
     }
     this.ruleDriven = true;
   }
@@ -1516,7 +1523,8 @@ export class SayShape {
     }
     if (this.derivedWrite(path, place.key)) return;
     // What a drag writes is held by the person until they let go: rules don't write over it.
-    if (this.dragging && !this.dragHeld.some((h) => overlaps(h, place) && h.steps.length === place.steps.length)) this.dragHeld.push(place);
+    // A rule's own write during a drag isn't the drag's, or every rule would stop while anything is held.
+    if (this.dragging && !this.ruleWriting && !this.dragHeld.some((h) => overlaps(h, place) && h.steps.length === place.steps.length)) this.dragHeld.push(place);
     if (!place.steps.length) { this.state.set(place.key, value); return; }
     const r = setIn(this.state.get(place.key), place.steps, value);
     if ("error" in r) this.warn(`Can't change ${path}: ${r.error}`);

@@ -76,6 +76,8 @@ Everything below was measured, in the environments listed. Anything worked out f
 | F6 | `bench/behavior.bench.ts` imported `bigSpec` from `engine.bench.ts`, which ran the engine benches a second time | Bench output | `bigSpec` moved to `bench/specs.ts` |
 | F7 | The browser bench summed `layoutMs` on paint-only frames, where it's the previous layout's | Totals above 100% | The page times `renderNow` itself |
 | F8 | The guide added about 340 tokens in full mode with scenes, and about 136 in compact (estimates, characters / 4), over the 300 and 100 aimed for | Measured | Rule text and drag descriptions shortened (below) |
+| F9 | While anything was dragged (a slider, a board card), every rule stopped after one tick: a rule's own write during a drag was recorded as held by the person | Review after the report: a rule every 100 ms beside a slider held for 1 s ticked once, not 10 times | Only writes made by the drag itself are held (a test) |
+| F10 | The slow-down guard judged ticks against the fastest rule in the spec even when that rule was off, so a 1 s rule at 0.5% busy raised the floor to 32 ms; and the floor never came back down | Review after the report | Ticks are judged against the rules running when they ran, and the floor halves again once ticks take a sixteenth of the interval or less (three tests) |
 
 ## Browser verification
 

@@ -330,7 +330,8 @@ describe("the sandbox", () => {
 
 describe("the slow-down guard", () => {
   /** A clock whose time moves on as ticks do work, so ticks cost something. */
-  function costly(costMs: number) {
+  function costly(costMs: number, scope: (name: string) => boolean = () => true) {
+    let cost = costMs;
     let t = 0;
     let seq = 0;
     const timers = new Map<number, { at: number; fn: () => void }>();
@@ -343,8 +344,8 @@ describe("the slow-down guard", () => {
     let runner: RuleRunner;
     const host = {
       clock,
-      scope: () => true,
-      tick: (rules: readonly RuleDef[]) => { ticks.push({ at: t, rules: rules.map((r) => r.every) }); t += costMs; },
+      scope,
+      tick: (rules: readonly RuleDef[]) => { ticks.push({ at: t, rules: rules.map((r) => r.every) }); t += cost; },
     };
     runner = new RuleRunner(host);
     const advance = (ms: number) => {
@@ -359,9 +360,9 @@ describe("the slow-down guard", () => {
       }
       t = end;
     };
-    return { runner, advance, ticks };
+    return { runner, advance, ticks, setCost: (ms: number) => { cost = ms; } };
   }
-  const r = (every: number, line = 1): RuleDef => ({ line, every, do: "inc:n", actions: [] });
+  const r = (every: number, line = 1, cond?: string): RuleDef => ({ line, every, ...(cond ? { if: cond } : {}), do: "inc:n", actions: [] });
 
   it("slows only the rules faster than the new floor: a 1 s rule stays 1 s", () => {
     const { runner, advance, ticks } = costly(10);
@@ -380,6 +381,41 @@ describe("the slow-down guard", () => {
     runner.set([r(16)]);
     advance(5000);
     expect(runner.currentFloor).toBe(MIN_RULE_INTERVAL);
+  });
+
+  it("judges ticks against the rules that are running, not a faster one that's off", () => {
+    // A 16 ms rule that's off beside a 1 s rule costing 5 ms a second: nothing is busy.
+    let fast = false;
+    const { runner, advance, ticks } = costly(5, (name) => (name === "fast" ? fast : true));
+    runner.set([r(16, 1, "fast"), r(1000, 2)]);
+    advance(30_000);
+    expect(runner.currentFloor).toBe(MIN_RULE_INTERVAL);
+    // Turned on, the fast rule runs at its own interval: the slow rule's ticks aren't held against it.
+    fast = true;
+    runner.check();
+    const from = ticks.length;
+    advance(160);
+    expect(ticks.slice(from).filter((x) => x.rules.includes(16)).length).toBeGreaterThanOrEqual(6);
+  });
+
+  it("brings the floor back down once ticks are cheap again", () => {
+    const { runner, advance, setCost } = costly(10);
+    runner.set([r(16)]);
+    advance(5000);
+    expect(runner.currentFloor).toBeGreaterThan(MIN_RULE_INTERVAL);
+    // The stall is over (a heavy screen was replaced by a light one): back to every frame.
+    setCost(0.5);
+    advance(10_000);
+    expect(runner.currentFloor).toBe(MIN_RULE_INTERVAL);
+  });
+
+  it("stays slowed while ticks stay costly, without going up and down", () => {
+    const { runner, advance } = costly(10);
+    runner.set([r(16)]);
+    advance(5000);
+    const floor = runner.currentFloor;
+    advance(20_000);
+    expect(runner.currentFloor).toBe(floor);
   });
 });
 
@@ -458,6 +494,23 @@ scene "Point" w=600 h=300
     const at = sceneAt(ui, 400, 200);
     drag(ui, at(300, 100), at(250, 150));
     expect(ui.state.pins).toEqual([{ id: "a", x: 100, y: 100 }, { id: "b", x: 250, y: 150 }]);
+  });
+
+  it("keeps rules ticking while the person drags something else", () => {
+    // Only what the drag itself writes is held: a rule's own writes during a drag aren't.
+    const ui = on(`state n=0 v=50\nevery 100ms do=inc:n\nstat label="N" value={n}\nslider bind=v min=0 max=100\n`, { width: 400 });
+    const box = ui.find({ type: "slider" }).box as Box;
+    const p = (type: string, x: number) => ui.canvas.dispatch(type, { clientX: x, clientY: box.y + box.h / 2, pointerId: 1 });
+    p("pointermove", box.x + box.w / 2);
+    p("pointerdown", box.x + box.w / 2);
+    ui.sayshape.renderNow();
+    p("pointermove", box.x + box.w / 2 + 20);
+    ui.sayshape.renderNow();
+    const held = ui.state.n as number;
+    ui.clock.advance(1000);
+    expect((ui.state.n as number) - held).toBe(10);
+    expect(ui.state.v).not.toBe(50);
+    p("pointerup", box.x + box.w / 2 + 20);
   });
 
   it("presses on= when it isn't moved, and puts things back when the browser cancels", () => {
