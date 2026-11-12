@@ -266,7 +266,7 @@ ELEMENTS
     format=<number|money|percent>  How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number.
     children: chart-line, chart-rule, chart-note
 
-  chart-line "<text>"  — Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars.
+  chart-line "<text>"  — Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars. Name the chart's own bars in the legend with its labels=, like labels="This year".
     "<text>"  Its name in the legend. Defaults to the field name.
     y=<name, required>  The field holding each item's number, e.g. y=forecast.
     only inside: chart

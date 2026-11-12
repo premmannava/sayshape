@@ -450,7 +450,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
 
 ### `chart-line`
 
-Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars.
+Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars. Name the chart's own bars in the legend with its labels=, like labels="This year".
 
 | Prop | Type | Description |
 |---|---|---|
