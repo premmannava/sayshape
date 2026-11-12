@@ -39,7 +39,7 @@ export const chartLine: ComponentDef = {
   props: {
     y: { type: "name", required: true, description: "The field holding each item's number, e.g. y=forecast." },
   },
-  example: `chart-line "Forecast" y=forecast`,
+  example: `chart-line "Last year" y=last_year`,
 };
 
 export const chartRule: ComponentDef = {
@@ -50,7 +50,7 @@ export const chartRule: ComponentDef = {
   props: {
     y: { type: "expression", required: true, description: "The level, a number or a formula, e.g. y=50000 or y={avg(pluck(sales, 'revenue'))}." },
   },
-  example: `chart-rule "Target" y=50000`,
+  example: `chart-rule "Target" y=16000`,
 };
 
 export const chartNote: ComponentDef = {
@@ -61,7 +61,7 @@ export const chartNote: ComponentDef = {
   props: {
     at: { type: "string", required: true, description: "The item it marks: its x value as shown under the chart, e.g. at=\"Jun\"." },
   },
-  example: `chart-note "Launch" at="Jun"`,
+  example: `chart-note "Launch" at="Feb"`,
 };
 
 /** What a chart's layer lines ask for, read from its children. */

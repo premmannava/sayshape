@@ -372,21 +372,21 @@ ELEMENTS
     y=<name, required>  The field holding each item's number, e.g. y=forecast.
     only inside: chart
     example:
-      chart-line "Forecast" y=forecast
+      chart-line "Last year" y=last_year
 
   chart-rule "<text>"  — Under a bar or line chart: a level drawn across the plot, such as a target, a budget or an average.
     "<text>"  What the level is, shown at its end, e.g. "Target".
     y=<expression, required>  The level, a number or a formula, e.g. y=50000 or y={avg(pluck(sales, 'revenue'))}.
     only inside: chart
     example:
-      chart-rule "Target" y=50000
+      chart-rule "Target" y=16000
 
   chart-note "<text>"  — Under a bar or line chart: a marker at one item with a few words, such as a launch or an outage.
     "<text>" (required)  The words, kept short, e.g. "Launch".
     at=<string, required>  The item it marks: its x value as shown under the chart, e.g. at="Jun".
     only inside: chart
     example:
-      chart-note "Launch" at="Jun"
+      chart-note "Launch" at="Feb"
 
   meter "<text>"  — One number against its range, as a ring or a gauge: progress toward a goal, a score, utilization or a budget used. Add bands= to color it bad, warn or good by where the value falls.
     "<text>"  A short label under the meter, e.g. "Goal reached".

@@ -460,7 +460,7 @@ Under a bar or line chart: another field of the same items drawn as a line on to
 Only inside: `chart`.
 
 ```
-chart-line "Forecast" y=forecast
+chart-line "Last year" y=last_year
 ```
 
 ### `chart-rule`
@@ -475,7 +475,7 @@ Under a bar or line chart: a level drawn across the plot, such as a target, a bu
 Only inside: `chart`.
 
 ```
-chart-rule "Target" y=50000
+chart-rule "Target" y=16000
 ```
 
 ### `chart-note`
@@ -490,7 +490,7 @@ Under a bar or line chart: a marker at one item with a few words, such as a laun
 Only inside: `chart`.
 
 ```
-chart-note "Launch" at="Jun"
+chart-note "Launch" at="Feb"
 ```
 
 ### `meter`
