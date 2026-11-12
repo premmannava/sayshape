@@ -101,21 +101,37 @@ Two features are **experimental and off by default**. They work, they have tests
 **Drawing (`scene`).** The model paints a picture or an animation from shapes, for what no ready-made element shows: a diagram to press, a ball that bounces, a sun that rises. Any value can be a formula of `t`, the seconds since it started. `shadow=`, `glow=` and `shine=` give shapes depth.
 
 ```
-scene "A ball bouncing on a floor" w=600 h=260 duration=2
-  ellipse x=300 y=232 rx={30 + 22*wave(t, 2)} ry=7 fill="ink 20%"
-  circle x=300 y={70 + 130*wave(t, 2)} r=30 fill=accent shine=true
+state colors=["accent", "warn", "good"]
+scene "Three balls bouncing on a floor" w=600 h=260 duration=1
+  each items={range(3)} as=i
+    ellipse x={150 + 150*i} y=236 rx={50 - 22*abs(sin(PI*(t + i/3)))} ry=7 fill="ink 20%"
+    circle x={150 + 150*i} y={204 - 140*abs(sin(PI*(t + i/3)))} r=30 fill={pick(colors, i)} shine=true
 ```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/demo-draw-dark.gif">
+  <img src="docs/images/demo-draw-light.gif" width="584" alt="What those five lines draw: three shiny balls, teal, amber and green, bouncing one after another, each with a shadow on the floor that grows as the ball comes down.">
+</picture>
 
 **Behavior.** A spec can change by itself and be dragged. `every` runs state changes on a timer, and `drag=true` lets people move a shape in a scene. Rules only ever write state: they still can't run code.
 
 ```
 state x=300 left=10 running=true
 every 1s if={running && left > 0} do=dec:left
-text "Drag the ball. {left} seconds left."
-button "Pause or resume" on=toggle:running
-scene "A ball you can drag" w=600 h=200
-  circle x={clamp(x, 40, 560)} y=100 r=30 fill=accent shine=true shadow=md drag=true
+card
+  text "Drag the ball. {left} seconds left." style=title
+  scene "A ball you can drag" w=600 h=160
+    line x1=40 y1=118 x2=560 y2=118 stroke=line width=2
+    circle x={clamp(x, 40, 560)} y=84 r=30 fill=accent shine=true shadow=md drag=true
+  button "Pause or resume" variant=secondary on=toggle:running
 ```
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/demo-behavior-dark.gif">
+  <img src="docs/images/demo-behavior-light.gif" width="584" alt="What that spec does: a card counts down the seconds by itself while the pointer drags a shiny ball right and left along a line.">
+</picture>
+
+Both pictures are recorded from the engine running those exact specs (`npm run readme:demos`).
 
 How to turn them on:
 

@@ -72,6 +72,7 @@
     "bench": "vitest bench --run",
     "docs:check": "vite-node scripts/gen-component-docs.ts --check",
     "readme:hero": "node scripts/readme-hero.mjs",
+    "readme:demos": "node scripts/readme-demos.mjs",
     "new:component": "vite-node scripts/new-component.ts --",
     "eval": "vite-node scripts/eval.ts --",
     "compare": "vite-node scripts/compare.ts --",
