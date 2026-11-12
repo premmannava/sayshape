@@ -106,8 +106,11 @@ select "Department" bind=dept items={["sales", "eng", "ops"]}`);
     const full = () => ui.accessibility({ full: true }).children[0]!.children;
     expect(full()[0]!.controls).toBe(full()[1]!.key);
     expect(full()[0]!.activeDescendant).toBe(`${id}|opt:s:eng`);
+    // Moving the highlight lays nothing out again, but the mirror must still be told which option is active.
+    const rebuilt = ui.mirror.updates;
     ui.mirror.key("ArrowDown");
     expect(full()[0]!.activeDescendant).toBe(`${id}|opt:s:ops`);
+    expect(ui.mirror.updates).toBeGreaterThan(rebuilt);
     ui.mirror.key("Enter");
     expect(ui.state.dept).toBe("ops");
     expect(parts()).toEqual([{ role: "combobox", name: "Department", state: ["not expanded", "value ops", "focusable"] }]);

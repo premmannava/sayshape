@@ -50,7 +50,7 @@ import { QueryError, summarize, type DataSource } from "./data";
 import { listMcpDatasets, type McpResultStore } from "./mcp-results";
 import { fallbackPage, fenced, PAGE_DATASETS_TEXT, PAGE_REPEAT_TEXT, PAGE_TEXT, pageFixLead } from "./fallback";
 
-export const VERSION = "0.1.2";
+export const VERSION = "0.2.0";
 export const UI_URI = "ui://sayshape/interface.html";
 /** Longer specs are refused: they're slow to stream and nobody reads them in a chat. */
 export const MAX_SPEC_CHARS = 20_000;
