@@ -39,12 +39,21 @@ When none is on, there's no toolbar at all. Whoever installs the server chooses,
 | `--accent "#e4572e"` | A brand color (hex, `#rrggbb` or `#rgb`) for buttons, highlights and charts' first series, laid over the theme. Text in it must stay readable (4.5:1), and no color manages that on both white and near-black, so it's darkened in light mode or lightened in dark mode where needed; the server says at startup what each mode uses |
 | `--no-save-image` | Hide Save image (shown by default where the chat app can download) |
 | `--no-copy-text` | Hide Copy text, and leave Ctrl+C alone (shown by default) |
-| `--scene` | **Experimental.** Turn on scenes: pictures and animations the model paints from shapes (off by default). Leave it out to turn them off again. |
+| `--scene` | **Experimental.** Turn on scenes: pictures and animations the model paints from shapes, with parts people can press and soft shadows, glow and shine for depth (off by default). Leave it out to turn them off again. |
+| `--behavior` | **Experimental.** Turn on behavior: things that change by themselves on a timer (a countdown, a simulation) and, together with `--scene`, shapes people drag (off by default). Rules only change the interface's own values; they still can't run code. Chat apps that can't draw views don't get it. |
 | `--image-hosts cdn.example.com,*.img.example.com` | Hosts `image` elements may load from, comma-separated; `*.example.com` allows its subdomains. None by default, so no images show. See [Images](#images). |
 
 ```json
 "sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--theme", "blue", "--theme-picker"] }
 ```
+
+With both experimental features on:
+
+```json
+"sayshape": { "command": "npx", "args": ["-y", "sayshape-mcp", "--scene", "--behavior"] }
+```
+
+Then ask for something that moves or can be pressed: *"Draw a traffic light I can press, where the active light glows"*, *"Draw a shiny ball bouncing with a shadow on the floor"* or *"A 30-second countdown I can pause"*. Both features may still change between releases.
 
 ### Images
 
@@ -199,7 +208,7 @@ cd sayshape/mcp && npm ci && npm run build
 # then use "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js"]
 ```
 
-Then ask for something visual: *"Show the 2022 World Cup final as a stat card"*, or *"Make me a tip calculator for $86 split three ways"*.
+Then ask for something visual: *"Show the 2022 World Cup final as a stat card"*, or *"Make me a tip calculator for $86 split three ways"*. Charts can carry a target line, a second line and a note at one point: *"Show monthly sales as bars with last year as a line and a target at 16,000"*.
 
 ## Host it publicly
 
