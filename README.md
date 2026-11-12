@@ -160,7 +160,7 @@ Scenes are the one place a spec may name its own colors, because a sunset can't 
 
 Not every model can produce a good interface as HTML: a full page of markup, styles and script is a lot to get right. SayShape asks for much less. The language is small, there is nothing to style, and the parser tells the model which line was wrong and how to fix it. That puts cards, forms, tables and charts within reach of small, fast and local models, not only the largest ones.
 
-The experimental features ask more of a model. Drawing a scene means placing every shape, and behavior means reasoning about change over time. In our own use so far, these come out well with stronger models, such as GPT-6 Sol or Claude Haiku 5.5 and above, and less reliably below that. This is what we have seen, not a measured result; score any model yourself with `npm run eval` ([Connecting a model](docs/model.md)).
+The experimental features ask more of a model. Drawing a scene means placing every shape, and behavior means reasoning about change over time. In our own use so far, these come out well with stronger models, such as GPT-6 Luna, Claude Haiku 5.5 and the models above them, and less reliably below that. This is what we have seen, not a measured result; score any model yourself with `npm run eval` ([Connecting a model](docs/model.md)).
 
 ## What's in it
 
