@@ -1,6 +1,6 @@
 # The address people add to their chat app for the hosted SayShape MCP server
 # (a Cloudflare Worker). See README.md in this folder.
-name = "sayshape-mcp"
+name = "mcp"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 

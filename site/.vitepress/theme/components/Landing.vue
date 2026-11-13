@@ -98,7 +98,7 @@ const MCP = "npx -y sayshape-mcp";
 const LIB = "npm install sayshape";
 // The hosting command is mcp/README.md's "Host it publicly" one, version pinned; the address is a placeholder.
 // SayShape's public server (Cloud Run, from deploy/cloud-run/Dockerfile); docs/integration/mcp#hosted has it too.
-const PUBLIC_MCP = "https://sayshape-mcp.premmannava.workers.dev/mcp";
+const PUBLIC_MCP = "https://mcp.sayshape.workers.dev/mcp";
 const MCP_JSON = `{\n  "mcpServers": {\n    "sayshape": {\n      "command": "npx",\n      "args": ["-y", "sayshape-mcp"]\n    }\n  }\n}`;
 // One entry per app: the steps to install it there, in order, and nothing else. The step with
 // `code` shows the copy box. What each app can't do is on the docs page, not here.

@@ -3,7 +3,7 @@
 A Cloudflare Worker that passes MCP requests on to the hosted SayShape MCP server. People add its address to their chat app:
 
 ```
-https://sayshape-mcp.premmannava.workers.dev/mcp
+https://mcp.sayshape.workers.dev/mcp
 ```
 
 The address belongs to the Worker, not to wherever the server runs. To move the server (another region, another host), change `UPSTREAM` in `wrangler.toml` and deploy; nobody has to reconnect.
@@ -35,7 +35,7 @@ npx wrangler deploy --config ../deploy/cloudflare/wrangler.toml
 Check it:
 
 ```bash
-curl https://sayshape-mcp.premmannava.workers.dev/               # SayShape MCP server: ok. MCP is at /mcp.
+curl https://mcp.sayshape.workers.dev/               # SayShape MCP server: ok. MCP is at /mcp.
 ```
 
 ## The server's own rate limit
