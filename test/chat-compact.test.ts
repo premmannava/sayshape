@@ -3,8 +3,10 @@
 // the legend beside them, and a bare root card when the host asks for it.
 import { describe, expect, it } from "vitest";
 import { MAX_ROUND_SIZE, type ChartGeometry } from "../src/components/chart";
+import { statLayout, statSizes } from "../src/components/content";
 import { render, type Rendered } from "../src/testing";
-import { lightTheme } from "../src/theme";
+import { MonoMeasurer } from "../src/text";
+import { darkTheme, extendTheme, lightTheme } from "../src/theme";
 
 const c = lightTheme.colors;
 const geo = (ui: Rendered): ChartGeometry => ui.find("chart").box!.data as ChartGeometry;
@@ -124,5 +126,55 @@ describe("bare root card (bareRootCard)", () => {
     ui.press("card");
     expect(ui.emitted).toEqual([{ name: "open", value: undefined }]);
     ui.destroy();
+  });
+});
+
+describe("headline sizes follow the theme", () => {
+  const compact = extendTheme(lightTheme, { text: { display: 24 } });
+  const m = new MonoMeasurer();
+
+  it("tries no stat size above the theme's display size", () => {
+    expect(statSizes(lightTheme)).toEqual([28, 24, 20, 18]);
+    expect(statSizes(darkTheme)).toEqual([28, 24, 20, 18]);
+    expect(statSizes(compact)).toEqual([24, 20, 18]);
+    expect(statSizes(extendTheme(lightTheme, { text: { display: 26 } }))).toEqual([26, 24, 20, 18]);
+  });
+
+  it("picks 28 for a short value with the base theme and 24 with display 24", () => {
+    expect(statLayout("Days", "12", 300, lightTheme, m).size).toBe(28);
+    expect(statLayout("Days", "12", 300, compact, m).size).toBe(24);
+  });
+
+  it("still steps down, then wraps at the smallest size, in both themes", () => {
+    const long = "$1,234,567.89 across every region this quarter";
+    for (const theme of [lightTheme, compact]) {
+      const at = (w: number) => statLayout("Revenue", long, w, theme, m);
+      // Wide enough for one line at some size: the largest that fits, one line.
+      const fitsAt = statSizes(theme).find((s) => m.width(long, `600 ${s}px ${theme.font.family}`) <= 480);
+      if (fitsAt) expect(at(480)).toMatchObject({ size: fitsAt, value: [long] });
+      // Too narrow for any size: wrapped at 18.
+      const narrow = at(140);
+      expect(narrow.size).toBe(18);
+      expect(narrow.value.length).toBeGreaterThan(1);
+    }
+    // The steps below the top are the same, so a value that needs 20 gets 20 in both.
+    const mid = (theme: typeof lightTheme) => statLayout("", "$12,345,678", m.width("$12,345,678", `600 20px ${theme.font.family}`) + 1, theme, m).size;
+    expect(mid(lightTheme)).toBe(20);
+    expect(mid(compact)).toBe(20);
+  });
+
+  it("draws a donut's centre total semibold, no larger than a stat's largest value", () => {
+    const spec = 'state rows=[{k:"A",v:5},{k:"B",v:3}]\nchart kind=donut items=rows x=k y=v\n';
+    const huge = extendTheme(lightTheme, { text: { title: 40, lead: 34, display: 24 } });
+    for (const theme of [lightTheme, compact, huge]) {
+      const r = render(spec, { theme });
+      const center = (r.find("chart").box!.data as ChartGeometry).pie!.center!;
+      const [, weight, size] = center.font.match(/^(\d+) (\d+)px/) ?? [];
+      expect(Number(weight)).toBe(600);
+      expect(Number(size)).toBeLessThanOrEqual(statSizes(theme)[0]!);
+      const drawn = r.drawOps.find((op) => op.op === "fillText" && op.args[0] === "8")!;
+      expect(drawn.font).toBe(center.font);
+      r.destroy();
+    }
   });
 });

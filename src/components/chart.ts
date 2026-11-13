@@ -43,6 +43,7 @@ import { SERIES_COUNT, seriesColors, sliceColors, type Theme } from "../theme";
 import type { Box, Value } from "../types";
 import { easeOut, paintGhost, staggered } from "../ghost";
 import { themeFont } from "./util";
+import { statSizes } from "./content";
 import { CHART_KINDS, paintSankeyHover, sankeyLinkAt, type SankeyGeometry } from "./chart-kinds";
 import {
   barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
@@ -217,6 +218,8 @@ const MAX_SIDE_LEGEND = 280;
 const pieSize = (w: number) => Math.min(w, MAX_ROUND_SIZE, Math.round(Math.max(140, Math.min(220, w * 0.45))));
 /** A donut's hole as a share of its radius: a slim ring reads as more refined than a thick one. */
 const DONUT_INNER = 0.68;
+/** A donut's centre total is semibold, as a stat's figure is. */
+const CENTER_WEIGHT = 600;
 /**
  * Slices in columns below a pie: name on the left, value and share on the
  * right. As many equal columns as the widest entry allows, at least one;
@@ -487,9 +490,13 @@ function roundGeometry(box: { w: number }, d: PieData, kind: "pie" | "donut", fo
   if (inner) {
     const text = valueText(d.total, format);
     const width = inner * 2 * 0.85;
-    const fonts = [themeFont(t, 600, t.text.title), themeFont(t, 600, t.text.lead), themeFont(t, 600, t.text.body)];
-    const font = fonts.find((f) => m.width(text, f) <= width) ?? fonts[fonts.length - 1]!;
-    const fontSize = font === fonts[0] ? t.text.title : font === fonts[1] ? t.text.lead : t.text.body;
+    // Semibold like a stat's figure, and never larger than a stat's largest value in this theme.
+    const most = statSizes(t)[0]!;
+    const sizes = [t.text.title, t.text.lead, t.text.body].map((s) => Math.min(s, most));
+    const fonts = sizes.map((s) => themeFont(t, CENTER_WEIGHT, s));
+    const fits = fonts.findIndex((f) => m.width(text, f) <= width);
+    const k = fits >= 0 ? fits : fonts.length - 1;
+    const font = fonts[k]!, fontSize = sizes[k]!;
     const captionFont = themeFont(t, 400, t.text.caption);
     const caption = m.width("Total", captionFont) <= width ? "Total" : "";
     center = { text: ellipsize(text, width, font, m), font, caption, captionFont, lh: Math.round(fontSize * 1.2) };
