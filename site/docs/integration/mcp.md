@@ -93,7 +93,7 @@ codex mcp add sayshape -- npx -y sayshape-mcp
 These apps connect to a server's address; they can't run a program on your computer. SayShape runs a public server you can add as it is:
 
 ```text
-https://sayshape-26372282324.us-central1.run.app/mcp
+https://sayshape-mcp.premmannava.workers.dev/mcp
 ```
 
 Add it:

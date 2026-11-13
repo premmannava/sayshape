@@ -1,0 +1,19 @@
+# The address people add to their chat app for the hosted SayShape MCP server
+# (a Cloudflare Worker). See README.md in this folder.
+name = "sayshape-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[vars]
+# Where the MCP server runs, without a path. To move the server, change this and deploy.
+UPSTREAM = "https://sayshape-26372282324.us-central1.run.app"
+
+# Per-caller limit, by IP: 300 requests a minute, the server's own default.
+# Change RATE_PERIOD_SECONDS in src/handler.ts if you change the period.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1002"
+
+  [ratelimits.simple]
+  limit = 300
+  period = 60
