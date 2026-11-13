@@ -1,5 +1,5 @@
 import { PRESETS, resolveTheme, type PresetId, type Scheme } from "../../../playground/appearance/presets";
-import type { Theme } from "../../../src/theme";
+import { extendTheme, type Theme } from "../../../src/theme";
 import { hostTheme, type ReadVar } from "./host-theme";
 
 export const DEFAULT_PRESET: PresetId = "teal";
@@ -81,4 +81,16 @@ export function isPresetId(value: unknown): value is PresetId {
 export function themeForPreset(preset: PresetId, scheme: Scheme, read?: ReadVar, accent?: string): Theme {
   const theme = resolveTheme(preset, scheme, accent ?? null).theme;
   return read ? hostTheme(theme, read) : theme;
+}
+
+/**
+ * Tighter tokens for the interface inside a chat app, which already frames it
+ * and gives it little room: a smaller display size, less large spacing and
+ * shorter controls. The toolbar keeps the preset's own sizes.
+ */
+export const CHAT_TOKENS = { text: { display: 24 }, space: { lg: 16 }, control: { height: 32 } } as const;
+
+/** The theme the view draws the interface with: the resolved preset with CHAT_TOKENS over it. */
+export function interfaceTheme(theme: Theme): Theme {
+  return extendTheme(theme, CHAT_TOKENS);
 }

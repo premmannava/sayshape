@@ -207,8 +207,14 @@ export function pieData(items: Value | undefined, x: string, y: string): PieData
 }
 
 
-/** A pie's diameter for a width: a little smaller than a plot, and never wider than the box. */
-const pieSize = (w: number) => Math.min(w, Math.round(Math.max(140, Math.min(220, w * 0.45))));
+/** The largest a pie or donut is drawn, in pixels: bigger only adds empty ring, not information. */
+export const MAX_ROUND_SIZE = 160;
+/** The narrowest legend that goes beside a pie or donut; narrower, it goes under. */
+const MIN_SIDE_LEGEND = 160;
+/** The widest a legend beside a pie or donut grows, so values stay near their names. */
+const MAX_SIDE_LEGEND = 280;
+/** A pie's diameter for a width: a little smaller than a plot, at most MAX_ROUND_SIZE, and never wider than the box. */
+const pieSize = (w: number) => Math.min(w, MAX_ROUND_SIZE, Math.round(Math.max(140, Math.min(220, w * 0.45))));
 /** A donut's hole as a share of its radius: a slim ring reads as more refined than a thick one. */
 const DONUT_INNER = 0.68;
 /**
@@ -216,17 +222,17 @@ const DONUT_INNER = 0.68;
  * right. As many equal columns as the widest entry allows, at least one;
  * when one column is too narrow, the name is cut first, then the numbers.
  */
-function gridLegend(entries: Array<{ label: string; detail: string; color: number }>, width: number, top: number, ctx: Ctx): { items: LegendItem[]; bottom: number } {
+function gridLegend(entries: Array<{ label: string; detail: string; color: number }>, width: number, top: number, ctx: Ctx, left = 0, maxCols = Infinity): { items: LegendItem[]; bottom: number } {
   const t = ctx.theme, m = ctx.measure;
   const font = themeFont(t, 400, t.text.caption + 1);
   const lh = Math.round((t.text.caption + 1) * 1.7);
   const lead = SWATCH + SWATCH_GAP, between = t.space.sm, colGap = t.space.md;
   const natural = Math.max(...entries.map((e) => lead + m.width(e.label, font) + between + m.width(e.detail, font)));
-  const cols = Math.max(1, Math.min(entries.length, Math.floor((width + colGap) / (Math.min(width, natural) + colGap))));
+  const cols = Math.max(1, Math.min(entries.length, maxCols, Math.floor((width + colGap) / (Math.min(width, natural) + colGap))));
   const colW = (width - colGap * (cols - 1)) / cols;
   const room = Math.max(0, colW - lead);
   const items = entries.map((e, i): LegendItem => {
-    const x = (i % cols) * (colW + colGap), y = top + Math.floor(i / cols) * lh;
+    const x = left + (i % cols) * (colW + colGap), y = top + Math.floor(i / cols) * lh;
     const dw = m.width(e.detail, font);
     // Keep the numbers whole when the name can still show a few letters beside them.
     const detail = dw + between + 24 <= room ? e.detail : fit(e.detail, room / 2, font, m);
@@ -462,7 +468,12 @@ function roundGeometry(box: { w: number }, d: PieData, kind: "pie" | "donut", fo
 
   const size = pieSize(box.w);
   const r = size / 2;
-  const cx = box.w / 2, cy = top + r;
+  // The legend goes beside the ring when both fit, the pair centred; under it otherwise.
+  const gap = t.space.lg;
+  const besideW = Math.min(MAX_SIDE_LEGEND, box.w - size - gap);
+  const beside = besideW >= MIN_SIDE_LEGEND;
+  const left = beside ? Math.round((box.w - (size + gap + besideW)) / 2) : 0;
+  const cx = beside ? left + r : box.w / 2, cy = top + r;
   let a = 0;
   const slices: PieSlice[] = d.slices.map((s, i) => {
     const share = s.value / d.total;
@@ -484,11 +495,16 @@ function roundGeometry(box: { w: number }, d: PieData, kind: "pie" | "donut", fo
     center = { text: ellipsize(text, width, font, m), font, caption, captionFont, lh: Math.round(fontSize * 1.2) };
   }
 
-  const legendTop = top + size + t.space.md;
-  const l = gridLegend(
-    slices.map((s) => ({ label: s.label, detail: `${valueText(s.value, format)} · ${shareText(s.share)}`, color: s.color })),
-    box.w, legendTop, ctx,
-  );
+  const entries = slices.map((s) => ({ label: s.label, detail: `${valueText(s.value, format)} · ${shareText(s.share)}`, color: s.color }));
+  let l: { items: LegendItem[]; bottom: number };
+  if (beside) {
+    // One column, centred on the ring's height.
+    const rows = gridLegend(entries, besideW, 0, ctx, left + size + gap, 1);
+    const shift = top + Math.max(0, Math.round((size - rows.bottom) / 2));
+    l = { items: rows.items.map((it) => ({ ...it, y: it.y + shift, swatch: { ...it.swatch, y: it.swatch.y + shift } })), bottom: Math.max(top + size, rows.bottom + shift) };
+  } else {
+    l = gridLegend(entries, box.w, top + size + t.space.md, ctx);
+  }
   return {
     g: {
       ...base,
@@ -1067,12 +1083,13 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           g.stroke();
         }
       });
-      // Dots: on every point when there's room, and always on a point with no neighbours.
-      const slotW = pw / Math.max(1, d.slots.length);
+      // Dots: only at each series' last point (and on a point with no neighbours, which has no
+      // line to show it); the hovered point gets its marker from paintChartHover.
       drawnSeries.forEach((runs, k) => {
+        const last = runs[runs.length - 1]?.[runs[runs.length - 1]!.length - 1];
         for (const run of runs) {
           for (const pt of run) {
-            if (slotW < 10 && run.length > 1) continue;
+            if (pt !== last && run.length > 1) continue;
             g.beginPath();
             g.arc(ox + pt.x, oy + pt.y, run.length === 1 ? 3.5 : 2.75, 0, Math.PI * 2);
             g.fillStyle = c.raised;

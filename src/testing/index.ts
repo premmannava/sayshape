@@ -55,6 +55,8 @@ export interface RenderOptions {
   animate?: boolean;
   /** As if the person prefers reduced motion: rules wait for a first press or key. Default false. */
   reducedMotion?: boolean;
+  /** The engine's bareRootCard option: a card that is the only top-level element draws no frame. Default false. */
+  bareRootCard?: boolean;
 }
 
 /** The test's clock: advance it to run rules' ticks and move scenes on, without waiting. */
@@ -214,6 +216,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     ...(opts.behavior ? { behavior: true } : {}),
     ...(manual ? { clock: manual } : {}),
     reducedMotion: !!opts.reducedMotion,
+    ...(opts.bareRootCard ? { bareRootCard: true } : {}),
     loadImage: opts.loadImage,
     onWarning: (m) => warnings.push(m),
     viewport: opts.viewport ? () => opts.viewport! : undefined,

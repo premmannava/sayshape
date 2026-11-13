@@ -163,11 +163,16 @@ card on=emit:open_order
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    stack(box, ctx, p.num("pad", ctx.theme.space.lg), p.num("gap", ctx.theme.space.md));
+    // The host already frames the view (bareRootCard): the one top-level card adds no padding.
+    const bare = ctx.bare?.(box.node) ?? false;
+    stack(box, ctx, bare ? 0 : p.num("pad", ctx.theme.space.lg), p.num("gap", ctx.theme.space.md));
+    if (bare) box.data = { ...box.data, bare: true };
     markTablesInsideCard(box);
   },
   surface(box, ctx) {
     const c = ctx.theme.colors;
+    // A bare card has no fill: what's in it sits on the page.
+    if (box.data?.bare) return c.surface;
     const variant = ctx.props(box.node).oneOf("variant", CARD_VARIANTS, "raised");
     // An outline card has no fill: what's in it sits on the page.
     if (variant === "outline") return c.surface;
@@ -177,6 +182,11 @@ card on=emit:open_order
     return mixColors(c.raised, mixColors(c.accent, c.accent2, 0.5) ?? c.accent, tint.wash) ?? undefined;
   },
   paint(box, ctx) {
+    // No border, shadow or fill: the chat app around the view is the frame.
+    if (box.data?.bare) {
+      if (ctx.props(box.node).has("on")) ctx.addHit(box);
+      return;
+    }
     const { g, theme } = ctx;
     const c = theme.colors;
     const p = ctx.props(box.node);

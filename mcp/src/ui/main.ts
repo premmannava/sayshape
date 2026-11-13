@@ -21,7 +21,7 @@ import type { Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
 import { eventDelivery, FIXING_SPEC, imageName, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
-import { COPY_ACTION, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
+import { COPY_ACTION, interfaceTheme, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
 import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
 import { readViewOptions } from "./view-options";
@@ -161,7 +161,7 @@ async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
   // or making the entire iframe opaque.
   canvas.style.backgroundColor = theme.colors.surface;
   bar.style.backgroundColor = theme.colors.surface;
-  sayshape?.setTheme(theme);
+  sayshape?.setTheme(interfaceTheme(theme));
   themePicker?.setTheme(theme);
   return theme;
 }
@@ -405,7 +405,9 @@ async function start(): Promise<void> {
   sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
     ...(viewOptions.behavior ? { behavior: true } : {}),
-    theme,
+    theme: interfaceTheme(theme),
+    // The chat app already boxes the view: a card that is the whole interface draws no frame of its own.
+    bareRootCard: true,
     // Only the hosts the server was started with (--image-hosts). The view has no origin of
     // its own to load from, and the server asks the chat app's sandbox to allow just these.
     imageHosts: viewOptions.imageHosts ?? [],

@@ -104,6 +104,11 @@ export interface LayoutContext {
    * call ctx.relayout(). Missing in contexts with no engine (pure layout).
    */
   view?(node: SayShapeNode): ElementView;
+  /**
+   * Whether this element is the spec's only top-level card and the host asked
+   * for it bare (the engine's bareRootCard option): no frame and no padding.
+   */
+  bare?(node: SayShapeNode): boolean;
 }
 
 /**

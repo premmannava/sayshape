@@ -362,28 +362,17 @@ export function flowLegend(entries: Array<{ label: string; color: number }>, wid
 export type PaintCtx = Parameters<NonNullable<ComponentDef["paint"]>>[1];
 
 /**
- * Paint a refined color surface in the existing bar path.
- * The strong color is at the free edge and softens gently toward the baseline;
- * the origin and the rounded free end still match the real data geometry.
- * We use the original series color as the first gradient stop so custom themes
- * and accessible category colors stay authoritative.
+ * Fill the existing bar path in its series color, solid (no gradient), with a
+ * soft tint and outline under the pointer. The direction is kept so callers
+ * stay unchanged; a solid fill looks the same whichever way the bar grows.
  */
 export function paintPremiumBar(
   ctx: PaintCtx, rect: Rect, color: string,
-  direction: "up" | "down" | "left" | "right", hover = 0,
+  _direction: "up" | "down" | "left" | "right", hover = 0,
 ): void {
   const { g, theme } = ctx;
-  const endColor = mixColors(color, theme.colors.raised, 0.27) ?? color;
-  const gradient = direction === "up"
-    ? g.createLinearGradient(0, rect.y, 0, rect.y + rect.h)
-    : direction === "down"
-      ? g.createLinearGradient(0, rect.y + rect.h, 0, rect.y)
-      : direction === "right"
-        ? g.createLinearGradient(rect.x + rect.w, 0, rect.x, 0)
-        : g.createLinearGradient(rect.x, 0, rect.x + rect.w, 0);
-  gradient.addColorStop(0, color);
-  gradient.addColorStop(1, endColor);
-  g.fillStyle = gradient;
+  // A solid fill: flat bars read cleaner at chat sizes than a fade toward the surface.
+  g.fillStyle = color;
   g.fill();
   // Subtle edge definition and hover emphasis, without changing hit geometry.
   if (hover > 0) {

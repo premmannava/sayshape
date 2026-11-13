@@ -142,6 +142,12 @@ export interface SayShapeOptions {
    * With it, rules don't start until the person first presses or types something here.
    */
   reducedMotion?: boolean;
+  /**
+   * Draw a card that is the spec's only top-level element without its border,
+   * shadow and padding, for hosts that already frame the view (chat apps).
+   * Nested cards keep their frame. Default false.
+   */
+  bareRootCard?: boolean;
 }
 
 /** The widest picture() draws, in CSS pixels, so a very wide table can't make a huge image. */
@@ -505,6 +511,12 @@ export class SayShape {
     const lv = this.loadingView();
     const scope = this.state.scope;
     const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.warnOnce(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
+    if (this.opts.bareRootCard) {
+      const root = this.parsed.root;
+      const top = ctx.visibleChildren(root).filter((n) => !this.registry.get(n.type)?.overlay);
+      const only = top.length === 1 && top[0]!.type === "card" ? top[0]! : null;
+      ctx.bare = (n) => n === only;
+    }
     this.rootBox = ctx.layout(this.parsed.root, 0, 0, width);
     let height = Math.max(this.rootBox.h, this.opts.minHeight ?? 0);
     // An open overlay floats centred in what's in sight. One at a time: if several are open,
