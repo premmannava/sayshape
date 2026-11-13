@@ -7,7 +7,7 @@ import { darkTheme, lightTheme } from "../../src/theme";
 import { CHAT_TOKENS, interfaceTheme, themeForPreset } from "../src/ui/theme-selection";
 
 describe("MCP view theme", () => {
-  it("overrides display text, large spacing and control height, and nothing else", () => {
+  it("overrides display, title and lead text, large spacing and control height, and nothing else", () => {
     for (const { id } of PRESETS) {
       for (const scheme of ["light", "dark"] as const) {
         const preset = themeForPreset(id, scheme);
@@ -16,16 +16,22 @@ describe("MCP view theme", () => {
         expect(view.space.lg).toBe(16);
         expect(view.control.height).toBe(32);
         expect({ ...view, text: preset.text, space: preset.space, control: preset.control }).toEqual(preset);
-        expect(view.text.title).toBe(preset.text.title);
+        expect(view.text.title).toBe(17);
+        expect(view.text.lead).toBe(15);
+        // Body text stays as it is.
+        expect(view.text.body).toBe(preset.text.body);
+        expect(view.text.caption).toBe(preset.text.caption);
         expect(view.space.md).toBe(preset.space.md);
       }
     }
-    expect(CHAT_TOKENS).toEqual({ text: { display: 24 }, space: { lg: 16 }, control: { height: 32 } });
+    expect(CHAT_TOKENS).toEqual({ text: { display: 24, title: 17, lead: 15 }, space: { lg: 16 }, control: { height: 32 } });
   });
 
   it("leaves the library's base themes as they are", () => {
     interfaceTheme(lightTheme);
     expect(lightTheme.text.display).toBe(30);
+    expect(lightTheme.text.title).toBe(20);
+    expect(lightTheme.text.lead).toBe(16);
     expect(lightTheme.space.lg).toBe(22);
     expect(lightTheme.control.height).toBe(40);
     expect(darkTheme.control.height).toBe(40);

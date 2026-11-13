@@ -85,10 +85,10 @@ export function themeForPreset(preset: PresetId, scheme: Scheme, read?: ReadVar,
 
 /**
  * Tighter tokens for the interface inside a chat app, which already frames it
- * and gives it little room: a smaller display size, less large spacing and
+ * and gives it little room: smaller display, title and lead sizes, less large spacing and
  * shorter controls. The toolbar keeps the preset's own sizes.
  */
-export const CHAT_TOKENS = { text: { display: 24 }, space: { lg: 16 }, control: { height: 32 } } as const;
+export const CHAT_TOKENS = { text: { display: 24, title: 17, lead: 15 }, space: { lg: 16 }, control: { height: 32 } } as const;
 
 /** The theme the view draws the interface with: the resolved preset with CHAT_TOKENS over it. */
 export function interfaceTheme(theme: Theme): Theme {

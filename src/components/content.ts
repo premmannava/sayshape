@@ -282,7 +282,7 @@ stat label="Total" value="\${price*qty}"`,
     const p = ctx.props(node);
     const label = p.str("label");
     const labelW = textWidth(ctx, label, 400, STAT_LABEL);
-    const valueW = textWidth(ctx, p.str("value"), STAT_WEIGHT, STAT_SIZES[STAT_SIZES.length - 1]!);
+    const valueW = textWidth(ctx, p.str("value"), STAT_WEIGHT, statSizes(ctx.theme).at(-1)!);
     return Math.max(40, Math.min(110, Math.max(labelW, valueW)));
   },
   paint(box, ctx) {
@@ -380,6 +380,16 @@ function formatStatNumber(text: string, value: number): string {
 
 /** Value sizes a stat tries, largest first, before it wraps the value at the smallest. */
 const STAT_SIZES = [28, 24, 20, 18];
+
+/**
+ * The value sizes a stat tries with this theme: none larger than its display size, so a
+ * compact theme (display 24) tries 24, 20, 18 while the base themes (display 30) still start at 28.
+ * A function declaration, so chart.ts can use it although this module imports from chart.ts.
+ */
+export function statSizes(theme: Theme): number[] {
+  const top = Math.min(STAT_SIZES[0]!, theme.text.display);
+  return [top, ...STAT_SIZES.filter((s) => s < top)];
+}
 /** Figures are semibold: confident without the heaviness of bold at display sizes. */
 const STAT_WEIGHT = 600;
 /** The label is a quiet sentence-case caption above the figure. */
@@ -395,9 +405,10 @@ interface StatLayout { label: string[]; value: string[]; size: number; valueLH: 
 export function statLayout(label: string, value: string, width: number, theme: Theme, m: TextMeasurer): StatLayout {
   const w = Math.max(20, width);
   const labelLines = label ? fitLines(label, w, themeFont(theme, 400, STAT_LABEL), m, 2) : [];
-  let size = STAT_SIZES[STAT_SIZES.length - 1]!;
+  const sizes = statSizes(theme);
+  let size = sizes[sizes.length - 1]!;
   let lines: string[] | null = null;
-  for (const s of STAT_SIZES) {
+  for (const s of sizes) {
     if (m.width(value, themeFont(theme, STAT_WEIGHT, s)) <= w) { size = s; lines = [value]; break; }
   }
   lines ??= fitLines(value, w, themeFont(theme, STAT_WEIGHT, size), m, 3);
