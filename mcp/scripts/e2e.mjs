@@ -256,19 +256,27 @@ try {
   await branded.screenshot({ path: out + "9-accent-dark.png" });
   check(await colorPixels(brandedFrame, "#sayshape", [223, 79, 69]) > 500, "--accent is lightened to stay readable in dark mode");
   await branded.close();
-  const cardPixel = await styledFrame.evaluate(() => {
+  // A pixel at a point in CSS pixels, read from the canvas bitmap.
+  const pixelAt = (frame, x, y) => frame.evaluate(({ x, y }) => {
     const c = document.querySelector("#sayshape");
-    // A point inside the card, left of the title and above it.
-    const d = c.getContext("2d").getImageData(Math.round(c.width * 0.1), Math.round(c.height * 0.06), 1, 1).data;
-    return [d[0], d[1], d[2]];
-  });
-  // Cards follow the host's background with a 4.5% lift toward its ink in
-  // dark mode. The old E2E expected the raw background and was inconsistent
-  // with the intentionally raised surfaces and the host-theme unit tests.
+    const dpr = c.width / c.clientWidth;
+    const d = c.getContext("2d").getImageData(Math.round(x * dpr), Math.round(y * dpr), 1, 1).data;
+    return [d[0], d[1], d[2], d[3]];
+  }, { x, y });
+  // The spec's only top-level element is a card, and the chat app already frames the view, so
+  // the card draws no fill of its own: beside the title the host surface shows through.
+  const bareCard = await pixelAt(styledFrame, 600, 30);
+  check(bareCard[3] === 0, `a card that is the whole interface draws no frame of its own (alpha ${bareCard[3]} beside the title)`);
+  // With another top-level element the card keeps its frame. Cards follow the host's background
+  // with a 4.5% lift toward its ink in dark mode.
+  await styled.evaluate((spec) => window.host.bridge.sendToolInput({ arguments: { spec } }), SPEC + 'text "Plans save to your trip list." tone=muted\n');
+  await styled.waitForTimeout(500);
+  // Inside the card's padding, 6px in from its top-left corner (the card starts at the 20px root padding).
+  const cardPixel = await pixelAt(styledFrame, 26, 26);
   const expectedRaised = [48, 48, 46].map((channel, i) =>
     Math.round(channel + ([250, 249, 245][i] - channel) * 0.045));
-  check(cardPixel.every((channel, i) => Math.abs(channel - expectedRaised[i]) <= 3),
-    `the card matches the raised host light-dark() surface (expected rgb(${expectedRaised.join(", ")}), got rgb(${cardPixel.join(", ")})`);
+  check(cardPixel.slice(0, 3).every((channel, i) => Math.abs(channel - expectedRaised[i]) <= 3),
+    `a framed card matches the raised host light-dark() surface (expected rgb(${expectedRaised.join(", ")}), got rgb(${cardPixel.slice(0, 3).join(", ")})`);
 
   // A view whose result says the spec needs fixing folds into a short note, and comes back on request;
   // one whose result says it repeats the interface above folds into a single line.
