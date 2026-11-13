@@ -30,15 +30,15 @@ The picture is one request, answered by the same model in two formats and replay
 
 ## Why not let the model write HTML?
 
-Models can write HTML, and it works for a demo. It is harder to put in front of customers.
+Models can write good HTML. SayShape takes a different route: rendering, styling, interactions and validation are built into the engine, so the model only has to describe the interface. Your theme decides how it looks, and the engine decides how it behaves.
 
-| | Model-written HTML | SayShape |
+| | Model-generated HTML/CSS/JavaScript | SayShape |
 |---|---|---|
-| **Safety** | The answer is code. A poisoned request can make it send data out, so it needs a sandbox. | The answer is a description. It can't run code, images load only from hosts you allow, and links are handed to your app, never opened. |
-| **Looks** | Every answer picks its own colors, fonts and spacing. | The model picks roles such as `style=title`. Your theme decides how they look, so every answer matches your product. |
-| **Speed and cost** | A full page of markup, styles and scripts for each answer. | A few lines. Less to write, so it is on screen sooner and costs fewer output tokens. |
-| **Mistakes** | A broken page, or a blank one. | A bad line is skipped and reported with its line number and how to fix it. The rest still draws, and the model can correct itself. |
-| **Streaming** | Usable when the last tag arrives. | Every finished line draws at once. |
+| **Execution** | Generated JavaScript needs controlled execution or a sandbox. | Specs describe UI through supported elements, expressions and actions. They can't run arbitrary JavaScript, images load only from hosts you allow, and links are handed to your app, never opened. |
+| **Design consistency** | Consistency depends on the styling instructions and on what each answer generates. | Standard elements use your theme automatically. The model picks semantic roles such as `style=title`. |
+| **Generation size** | The model may need to write markup, styles and interaction code. | Rendering and interactions are built in, so the model describes the interface in a compact spec. |
+| **Error handling** | Validation and recovery depend on the host integration. | Built-in validation reports problems with their line numbers and how to fix them, skips what is invalid and draws the rest, so the model can correct itself. |
+| **Streaming** | HTML can render progressively; interactivity depends on when the scripts and handlers it needs are ready. | Each complete, valid line can draw during generation, with its interactions already implemented by the engine. |
 
 ## What a model writes
 
