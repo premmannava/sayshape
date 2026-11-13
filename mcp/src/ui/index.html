@@ -14,11 +14,11 @@
          A hidden body overflow leaves scrollHeight > clientHeight but prevents
          the document from moving, trapping the wheel in the iframe. */
       body { overflow-x: hidden; overflow-y: auto; }
-      #wrap { width: 100%; }
+      #wrap { width: 100%; position: relative; }
       canvas { display: block; }
-      /* The view's own tools: a slim strip with its controls at the right, above the interface. */
+      /* The view's own tools: a slim strip over the interface's top-right corner, so it takes no height. */
       /* Its right edge lines up with the interface's: the toolbar's own 4px padding plus 16 makes the engine's 20. */
-      #bar { display: flex; justify-content: flex-end; padding-right: 16px; }
+      #bar { display: flex; justify-content: flex-end; position: absolute; top: 0; right: 0; z-index: 1; padding-right: 16px; }
       #bar[hidden] { display: none; }
     </style>
   </head>

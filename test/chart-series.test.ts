@@ -181,10 +181,14 @@ describe("legend", () => {
     expect(g.legend.map((l) => [l.shownLabel, l.detail])).toEqual([["Rent", "$1,500 · 75%"], ["Food", "$500 · 25%"]]);
   });
 
-  it("uses columns when there's room and one column when there isn't", () => {
-    const cols = (w: number) => new Set(geo(render(SPECS["pie with 9 items"]!, { width: w })).legend.map((l) => l.swatch.x)).size;
-    expect(cols(240)).toBe(1);
-    expect(cols(600)).toBeGreaterThan(1);
+  it("lists slices in one column: under the ring when narrow, beside it when there's room", () => {
+    const at = (w: number) => geo(render(SPECS["pie with 9 items"]!, { width: w }));
+    const cols = (g: ChartGeometry) => new Set(g.legend.map((l) => l.swatch.x)).size;
+    const narrow = at(240), wide = at(600);
+    expect(cols(narrow)).toBe(1);
+    expect(narrow.legend[0]!.swatch.y).toBeGreaterThan(narrow.pie!.cy + narrow.pie!.r);
+    expect(cols(wide)).toBe(1);
+    expect(wide.legend[0]!.swatch.x).toBeGreaterThan(wide.pie!.cx + wide.pie!.r);
   });
 });
 

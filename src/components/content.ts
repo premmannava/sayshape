@@ -580,35 +580,13 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     const points = s.points.map((pt, i) => ({
       x: pt.x, y: ctx.tween(box.node, `stat:spark:y:${i}`, pt.y, 440),
     }));
-    const first = points[0]!, end = points[points.length - 1]!;
-    const floor = box.y + s.y + s.h;
-    const gradient = g.createLinearGradient(0, box.y + s.y, 0, floor);
-    gradient.addColorStop(0, color);
-    gradient.addColorStop(1, theme.colors.raised);
-    // Curve through real values, with a faint wash that doesn't obscure text.
-    g.beginPath();
-    traceSmoothLine(g, points, box.x, box.y);
-    g.lineTo(box.x + end.x, floor);
-    g.lineTo(box.x + first.x, floor);
-    g.closePath();
-    g.save();
-    g.fillStyle = gradient;
-    g.globalAlpha *= 0.13;
-    g.fill();
-    g.restore();
-    // Glow is limited to the final point and doesn't require a running loop.
+    const end = points[points.length - 1]!;
+    // A flat line: no wash under it and no glow, only a small dot at the latest value.
     g.beginPath();
     traceSmoothLine(g, points, box.x, box.y);
     g.strokeStyle = color;
     g.lineWidth = 2.15;
     g.stroke();
-    g.beginPath();
-    g.arc(box.x + end.x, box.y + end.y, 6, 0, Math.PI * 2);
-    g.save();
-    g.globalAlpha *= 0.15;
-    g.fillStyle = color;
-    g.fill();
-    g.restore();
     g.beginPath();
     g.arc(box.x + end.x, box.y + end.y, 2.5, 0, Math.PI * 2);
     g.fillStyle = color;

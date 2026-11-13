@@ -24,6 +24,8 @@ import type { ChartKindDef } from "./types";
 
 /** The narrowest slot per point before the chart says it's too narrow. */
 const MIN_AREA_SLOT = 3;
+/** The radius of the dot at each series' last point, as on a line chart. */
+const LAST_DOT = 2.75;
 
 export interface AreaGeometry {
   /** For each series, its runs of neighbouring points (broken at gaps), relative to the box. */
@@ -178,6 +180,19 @@ export const area: ChartKindDef = {
         g.lineWidth = 2.25;
         g.stroke();
       }
+    });
+    // A dot only at each series' last point, as a line chart has; the hovered point gets its own below.
+    drawn.forEach((runs, k) => {
+      const run = runs[runs.length - 1];
+      const last = run?.[run.length - 1];
+      if (!last) return;
+      g.beginPath();
+      g.arc(ox + last.x, oy + last.y, LAST_DOT, 0, Math.PI * 2);
+      g.fillStyle = c.raised;
+      g.fill();
+      g.lineWidth = 1.75;
+      g.strokeStyle = colorOf(k);
+      g.stroke();
     });
     g.restore();
 
