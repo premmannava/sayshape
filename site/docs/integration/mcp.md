@@ -108,7 +108,7 @@ The public server reads only the specs it's sent and keeps nothing between reque
 To run it yourself, start it on a host that puts its own HTTPS proxy in front, such as Google Cloud Run or Render, with an exact version:
 
 ```bash
-npx -y sayshape-mcp@0.2.0 --http --host 0.0.0.0 --trust-proxy
+npx -y sayshape-mcp@0.2.1 --http --host 0.0.0.0 --trust-proxy
 ```
 
 On Cloud Run, [`deploy/cloud-run/Dockerfile`](https://github.com/premmannava/sayshape/tree/main/deploy/cloud-run/Dockerfile) does this. Your address is then your host's address plus `/mcp`, such as `https://your-domain.example/mcp`; add it the same way. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#host-it-publicly) explains each flag, the rate limit, the health check at `/`, and what the server logs. Don't add `--data` there: on a public address it would let anyone read the whole database, so the server refuses it.
