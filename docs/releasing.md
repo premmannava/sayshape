@@ -28,6 +28,19 @@ npm run verify:pack -- --registry next      # what npm serves for a tag or versi
 5. It then installs both from npm into clean projects and runs `verify:pack -- --registry <version>`.
 6. When that passes, run the workflow by hand (Actions → Publish to npm → Run workflow) with the version and **promote** ticked. It checks the version from npm once more and, after approval, moves `latest` to it.
 
+### The hosted server
+
+The public MCP server (`deploy/cloud-run/Dockerfile`, behind the Worker in `deploy/cloudflare`) installs an exact `sayshape-mcp` version from npm, so it can only be built once that version is published. Its Cloud Build trigger is set to manual for that reason: a push deploys nothing.
+
+Before step 1, change the version in `deploy/cloud-run/Dockerfile` along with the others. After step 6, in the Google Cloud console open Cloud Build → Triggers and press **Run** on the `sayshape` trigger (branch `main`). Then check what the server reports:
+
+```bash
+curl -s -X POST https://mcp.sayshape.workers.dev/mcp -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"check","version":"1"}}}' | grep -o '"version":"[^"]*"'
+```
+
+Chat apps keep the tool description they read when the connector was added, so reconnect the connector to see a new one.
+
 ### The engine version the text-only page loads
 
 `show_interface` gives chat apps that can't draw MCP Apps views an HTML page that loads `sayshape@<version>/dist/sayshape.global.js` from jsDelivr. The version is `PAGE_ENGINE_VERSION` in `mcp/src/fallback.ts`, pinned exactly, and it is **not** the version being released: some chat apps only let a page load a package version from a CDN once it has been public for two weeks, so a page pointing at a release published the same day would fail right when people install it.

@@ -101,7 +101,7 @@ Add it:
 - **Claude:** as a custom connector. On Pro and Max, that's Customize → Connectors → Add, then Add custom connector; on Team and Enterprise, an owner adds it for the organization. Free plans can add one custom connector. Claude connects from Anthropic's servers, so the address must be reachable from the internet.
 - **ChatGPT:** turn on developer mode (Settings → Apps → Advanced settings), then create an app with the address (Apps → Create). Developer mode is a beta on the web, for Pro, Business, Enterprise and Edu plans; on Business, Enterprise and Edu an admin may need to allow it.
 
-The public server reads only the specs it's sent and keeps nothing between requests. It has a rate limit per caller, and it may change address or version while SayShape is a prototype.
+The public server reads only the specs it's sent and keeps nothing between requests ([privacy](/privacy)). It has a rate limit per caller. The address is meant to stay the same; the version behind it moves to each new release, and may change what interfaces look like while SayShape is a prototype.
 
 #### Host your own {#host-your-own}
 

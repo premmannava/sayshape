@@ -135,7 +135,7 @@ export default defineConfig({
     outline: { level: [2, 3] },
     editLink: { pattern: `${REPO}/edit/main/site/:path`, text: "Suggest a change to this page" },
     footer: {
-      message: `SayShape v0.1 is an early prototype under the MIT License. <a href="${BASE}docs/architecture/limitations.html">Status</a> · <a href="${REPO}">GitHub</a>`,
+      message: `SayShape v0.1 is an early prototype under the MIT License. <a href="${BASE}docs/architecture/limitations.html">Status</a> · <a href="${BASE}privacy.html">Privacy</a> · <a href="${REPO}">GitHub</a>`,
     },
   },
   markdown: {
