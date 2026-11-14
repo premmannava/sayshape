@@ -19,6 +19,9 @@
  *   sayshape-mcp --widget-dir <folder>  for chat apps that can't draw MCP Apps views but can show a widget
  *                                made from a file: write each interface there as one self-contained file
  *                                (stdio only; not with --http)
+ *   sayshape-mcp --widget-dir <folder> --widget-host muse
+ *                                with --widget-dir: hook that chat app's adapter into each file, so
+ *                                emit: presses and the interface's state are saved for the model's next turn
  *   sayshape-mcp --http [port]   Streamable HTTP on /mcp, for clients that connect to a URL
  *                                (port: the flag, else PORT, else 3001). Put it behind HTTPS
  *                                before exposing it beyond this computer.
@@ -49,6 +52,7 @@ import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
 import { createHttp, dataRefusal, listen, parseHttpArgs, startupLine } from "./http";
 import { loadPackedEngine } from "./widget-engine";
+import { WIDGET_HOST_NAMES, isWidgetHost, widgetHostRefusal, type WidgetHostName } from "./widget-hosts";
 
 // dist/server.js and dist/ui.html sit side by side.
 const UI_PATH = fileURLToPath(new URL("./ui.html", import.meta.url));
@@ -77,11 +81,13 @@ async function main(): Promise<void> {
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color]",
       "                    [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--slides] [--logo <https url>]",
-      "                    [--image-hosts host1,host2,...] [--widget-dir folder]",
+      "                    [--image-hosts host1,host2,...] [--widget-dir folder [--widget-host name]]",
       "",
       "  --widget-dir <folder>  for chat apps that can't draw interfaces but can show a widget made from a file:",
       "                      write each interface there as one self-contained file, named by a hash of the",
       "                      spec and settings (the newest 50 are kept); stdio only, refused with --http",
+      `  --widget-host <name>  with --widget-dir: hook a chat app's adapter into each file so emit: presses and the`,
+      "                      interface's state are saved for the model's next turn; hosts: " + WIDGET_HOST_NAMES.join(", "),
       "  --http [port]       Streamable HTTP on /mcp instead of stdio; port from the flag, else PORT, else 3001",
       "  --host <address>    where to listen: 127.0.0.1 by default, else HOST if it's an IP address;",
       "                      0.0.0.0 to take requests from other machines (behind an HTTPS proxy)",
@@ -117,6 +123,15 @@ async function main(): Promise<void> {
   const httpAt = args.indexOf("--http");
   const widgetAt = args.indexOf("--widget-dir");
   let widgetDir: string | undefined;
+  const hostAt = args.indexOf("--widget-host");
+  let widgetHost: WidgetHostName | undefined;
+  if (hostAt >= 0) {
+    const refusal = widgetHostRefusal(args[hostAt + 1], widgetAt >= 0);
+    if (refusal) throw new Error(refusal);
+    const name = args[hostAt + 1];
+    if (name === undefined || !isWidgetHost(name)) throw new Error("unreachable: widgetHostRefusal checked the name");
+    widgetHost = name;
+  }
   if (widgetAt >= 0) {
     if (httpAt >= 0) throw new Error("--widget-dir can't be used with --http: it writes files on this computer for a chat app on this computer to read, and an HTTP server's callers can't read them.");
     const raw = args[widgetAt + 1];
@@ -130,7 +145,7 @@ async function main(): Promise<void> {
       throw new Error(`--widget-dir ${widgetDir} can't be written to: ${e instanceof Error ? e.message : String(e)}`);
     }
     await loadPackedEngine();
-    console.error(`SayShape: chat apps that can't draw interfaces get a widget file in ${widgetDir}`);
+    console.error(`SayShape: chat apps that can't draw interfaces get a widget file in ${widgetDir}${widgetHost ? `, hooked to ${widgetHost}` : ""}`);
   }
   if (httpAt < 0) {
     for (const flag of ["--host", "--rate-limit", "--trust-proxy", "--allow-public-data"]) {
@@ -181,7 +196,7 @@ async function main(): Promise<void> {
     return;
   }
   // stdout carries the protocol, so anything for people goes to stderr.
-  await logClient(createServer({ uiHtml, data, mcpResults, view, ...(widgetDir ? { widgetDir } : {}) })).connect(new StdioServerTransport());
+  await logClient(createServer({ uiHtml, data, mcpResults, view, ...(widgetDir ? { widgetDir } : {}), ...(widgetHost ? { widgetHost: { name: widgetHost, ignoreAppColors: args.includes("--theme") || args.includes("--accent") } } : {}) })).connect(new StdioServerTransport());
 }
 
 main().catch((e) => {

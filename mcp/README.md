@@ -43,6 +43,7 @@ When none is on, there's no toolbar at all. Whoever installs the server chooses,
 | `--behavior` | **Experimental.** Turn on behavior: things that change by themselves on a timer (a countdown, a simulation) and, together with `--scene`, shapes people drag (off by default). Rules only change the interface's own values; they still can't run code. Chat apps that can't draw views don't get it. |
 | `--image-hosts cdn.example.com,*.img.example.com` | Hosts `image` elements may load from, comma-separated; `*.example.com` allows its subdomains. None by default, so no images show. See [Images](#images). |
 | `--widget-dir <folder>` | For chat apps that can't draw MCP Apps views but can show a widget made from a file: write each interface there as one self-contained file (stdio only; refused with `--http`). Off by default. See [Chat apps that show widgets from files](#chat-apps-that-show-widgets-from-files). |
+| `--widget-host <name>` | With `--widget-dir` only: hook that chat app's adapter into every file, so `emit:` presses (and the interface's state) are saved for the model's next turn. Names: `muse`. An unknown name, or no `--widget-dir`, stops the server with a message. Off by default. See [Adapting a file to a chat app](#adapting-a-file-to-a-chat-app---widget-host). |
 
 ```json
 "sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--theme", "blue", "--theme-picker"] }
@@ -106,9 +107,21 @@ Start the server with `--widget-dir <folder>` and, for a client that announces n
 - **The name is a hash** of the spec and everything that changes the file (the settings below and the engine), so the same interface reuses one file. The folder keeps the newest 50 (`sayshape-<16 hex digits>.html`); older ones are deleted, and nothing else in the folder is ever touched.
 - **The server's settings reach the file.** `--theme`, `--accent`, `--image-hosts` (and `--logo`), `--scene`, `--behavior` and `--slides` all apply, and unlike the page, behavior and decks work, because the file carries this server's engine and not an older pinned one. (Images from other hosts can't load in a sandbox like Muse's, so an `image` shows its description there.) Fonts: the file draws in the system font where Instrument Sans or Inter isn't installed.
 - **Light and dark** follow `data-theme="light|dark"` on the root element and the system's `prefers-color-scheme`, and changes to either.
-- **As on the page:** interfaces that load datasets are refused with the same message, `emit:` is refused and removed by the model first (a widget has no chat to send to yet), and links pressed in `rich=true` text open in a new tab (https only).
+- **As on the page:** interfaces that load datasets are refused with the same message, `emit:` is refused and removed by the model first (a widget has no chat to send to yet; see `--widget-host` below for the way around that), and links pressed in `rich=true` text open in a new tab (https only).
 
-The fragment builder (`mcp/src/widget-file.ts`) also takes a `host` option for an app's own adapter: the source of a function that the loader calls once after the first draw, as `(source)(ui, sayshape, root)`, which may return `{ emit(action) }` to receive the actions that aren't links. No flag sets it yet.
+### Adapting a file to a chat app (`--widget-host`)
+
+The fragment builder (`mcp/src/widget-file.ts`) takes a `host` option: the source of a function the loader calls once after the first draw, as `(source)(ui, sayshape, root)`, which may return `{ emit(action) }` to receive the actions that aren't links. `--widget-host <name>` sets it to one of the adapters in `mcp/src/widget-hosts/`; `muse` is the only one so far. It only works together with `--widget-dir`:
+
+```json
+"sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--widget-dir", "/Users/you/sayshape-widgets", "--widget-host", "muse"] }
+```
+
+What changes with it, for clients that get a file:
+
+- **The file carries the adapter.** The Muse adapter keeps `emit:` actions in a short list in the widget's state bridge, next to the interface's own state (saved without passwords, and skipped when it is large), and puts that state back when the widget is mounted again. If `--theme` or `--accent` was given, the adapter ignores the chat app's colors and the interface keeps its own; otherwise it follows the app's.
+- **`emit:` is allowed.** The quick start no longer says not to use it, and a line with `emit:` is no longer a problem to fix. It says that presses are saved for the model's next turn instead: after the person's next message, the model reads the widget's state, where `actions` lists what they pressed (name, value, time). The result for a spec that uses `emit:` says the same.
+- **Nothing else changes.** Without the flag, `emit:` is handled exactly as above; clients that draw MCP Apps views get the same tools, docs and results with or without it.
 
 ## Tokens
 

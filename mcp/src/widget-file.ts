@@ -278,6 +278,19 @@ export function widgetText(path: string, bytes: number): string {
   );
 }
 
+/**
+ * With a host adapter (--widget-host): what the quick start says about emit:. A press can't reach the model
+ * while it is answering, but the adapter keeps it in the widget's state.
+ */
+export const PRESSES_SAVED =
+  "on=emit:name saves a press for your next turn: this chat app can't send it to you as it happens. " +
+  "After the person's next message, read the widget's state: its actions list holds what they pressed (name, value, time) and its state holds the interface's values. " +
+  "Don't wait for a press; also update the screen in the same on=, e.g. on=set:sel:{x.name};emit:pick:{x.name}.";
+
+/** The same, added to the result for a spec that uses emit:. */
+export const PRESSES_SAVED_RESULT =
+  "This interface has buttons that use emit:. Presses are saved for your next turn, not sent now: after the person's next message, read the widget's state, where its actions list holds what they pressed.";
+
 /** The lead when there are problems to fix first: no file is made until there are none. */
 export const widgetFixLead = (n: number) =>
   `${n} problem${n === 1 ? "" : "s"} leave${n === 1 ? "s" : ""} part of this interface wrong or missing, and this chat app can't draw interfaces, so nothing is showing yet. ` +
