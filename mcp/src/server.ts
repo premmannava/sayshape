@@ -54,7 +54,7 @@ import { PRESSES_SAVED, PRESSES_SAVED_RESULT, widgetFailedText, widgetFixLead, W
 import { adapterSource, type WidgetHostName } from "./widget-hosts";
 import { loadPackedEngine, type PackedEngine } from "./widget-engine";
 
-export const VERSION = "0.2.1";
+export const VERSION = "0.2.2";
 export const UI_URI = "ui://sayshape/interface.html";
 /** Longer specs are refused: they're slow to stream and nobody reads them in a chat. */
 export const MAX_SPEC_CHARS = 20_000;
