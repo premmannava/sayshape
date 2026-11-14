@@ -132,8 +132,8 @@ describe("waterfall", () => {
     expect(d.slots.map((s) => s.label)).toEqual(["Revenue", "Costs", "Salaries", "Other", "Net income"]);
     expect(d.slots[4]!.value).toBe(172000);
     expect((d.custom as WaterfallGeometry).bars[4]!.tone).toBe("total");
-    expect(d.slots[4]!.notes).toEqual(["Total: $172,000.00"]);
-    expect(d.slots[1]!.notes).toEqual(["Change: -$190,000.00", "Running total: $290,000.00"]);
+    expect(d.slots[4]!.notes).toEqual(["Total: $172,000"]);
+    expect(d.slots[1]!.notes).toEqual(["Change: -$190,000", "Running total: $290,000"]);
   });
 
   it("labels bars in one style, signed for changes", () => {
@@ -193,7 +193,7 @@ describe("stacked", () => {
     const ui = stackedChart(SALES, `labels="Hardware,Software,Services" format=money`);
     const d = geo(ui);
     expect((d.custom as StackedGeometry).totals).toEqual(["$24K", "$28K", "$28K"]);
-    expect(d.slots[0]!.notes).toEqual(["Hardware: $12,000.00", "Software: $8,000.00", "Services: $4,000.00", "Total: $24,000.00"]);
+    expect(d.slots[0]!.notes).toEqual(["Hardware: $12,000", "Software: $8,000", "Services: $4,000", "Total: $24,000"]);
     expect(d.slots[0]!.noteSeries).toEqual([0, 1, 2, null]);
     const bar = d.slots[1]!.bar!;
     expect(chartHoverAt(d, bar.x + bar.w / 2, bar.y + 2)).toEqual({ kind: "slot", index: 1 });
@@ -320,7 +320,7 @@ describe("bullet", () => {
 
   it("puts actual, target and the share of it in the tooltip, for the whole row", () => {
     const d = geo(bullet(KPIS, "format=money"));
-    expect(d.slots[1]!.notes).toEqual(["Actual: $182.00", "Target: $200.00", "91% of target"]);
+    expect(d.slots[1]!.notes).toEqual(["Actual: $182", "Target: $200", "91% of target"]);
     const row = d.slots[2]!.bars![0]!;
     expect(chartHoverAt(d, row.x + 4, row.y + row.h / 2)).toEqual({ kind: "slot", index: 2 });
     expect(d.noHoverOutline).toBe(true);
@@ -420,7 +420,7 @@ describe("heatmap", () => {
   it("puts the cell's row, column and exact number in the tooltip", () => {
     const d = geo(heat(SALES, "format=money"));
     expect(d.slots[1]!.label).toBe("West · Q2");
-    expect(d.slots[1]!.notes).toEqual(["$910.00"]);
+    expect(d.slots[1]!.notes).toEqual(["$910"]);
     const r = d.slots[2]!.bars![0]!;
     expect(chartHoverAt(d, r.x + r.w / 2, r.y + r.h / 2)).toEqual({ kind: "slot", index: 2 });
   });

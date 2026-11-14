@@ -419,7 +419,7 @@ ELEMENTS
   table-column "<text>"  — One column of a table: its header and the field it shows.
     "<text>"  The header. Defaults to the field name.
     field=<name, required>  The field of each record to show, e.g. field=price.
-    format=<text|number|money>  text, number (1,200.5) or money ($1,200.00, US dollars). number and money show only numbers; other values show —.
+    format=<text|number|money>  text, number (1,200.5) or money ($1,200, US dollars, with cents when an amount has them). number and money show only numbers; other values show —.
     align=<left|right>  left or right. Default: right for number and money, left for text.
     only inside: table
     example:
@@ -1069,8 +1069,9 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 
 RULES
 - Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.
-- Use cards to group related content, not around every title or section. Keep page headings outside a decorative hero card.
-- Dashboards: put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Avoid wrapping an already framed table inside another card unless it also needs controls.
+- Use cards to group related content, not around every title, element or section, and never a card inside a card. Keep page headings outside cards.
+- Dashboards: a title with its filters just under it, a few meaningful KPIs (3 or 4 stats), one main chart, then supporting detail (a smaller chart or a table). The design is built in: write plain elements, not extra props for looks.
+- Put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls.
 - Keep screens focused: one task per screen, short labels, real-looking values.
 - Screens may be narrow (a phone, a chat). For side-by-side figures use grid min=140 rather than row. Keep stat values short: compact() for large numbers.
 - For several screens, write the starting screen first: it shows as soon as it arrives.

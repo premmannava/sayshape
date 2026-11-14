@@ -291,9 +291,10 @@ export function valueText(v: number, format: Format): string {
   }
 }
 
-/** A value exactly, for a tooltip: 172,000 or $172,000.5, never shortened to $172K. */
+/** A value exactly, for a tooltip: 172,000, $172,000 or $172,000.50, never shortened to $172K. */
 export function preciseText(v: number, format: Format): string {
-  const opts: Intl.NumberFormatOptions = { maximumFractionDigits: 6 };
+  // Whole amounts read $51,200, not $51,200.00; cents only when there are some.
+  const opts: Intl.NumberFormatOptions = { maximumFractionDigits: 6, ...(format === "money" ? { minimumFractionDigits: Number.isInteger(v) ? 0 : 2 } : {}) };
   try {
     return formatter(format, opts).format(v);
   } catch {
@@ -621,6 +622,9 @@ export function smoothLineControls(points: readonly { x: number; y: number }[]):
   });
 }
 
+/** Below this many pixels between points, a line is drawn straight from point to point. */
+export const DENSE_POINT_GAP = 14;
+
 export function traceSmoothLine(
   g: CanvasRenderingContext2D,
   run: readonly { x: number; y: number }[],
@@ -628,6 +632,12 @@ export function traceSmoothLine(
 ): void {
   if (!run.length) return;
   g.moveTo(ox + run[0]!.x, oy + run[0]!.y);
+  // Points closer than this are joined straight: curves between dense points
+  // read as wiggles the data doesn't have.
+  if (run.length > 2 && (run[run.length - 1]!.x - run[0]!.x) / (run.length - 1) < DENSE_POINT_GAP) {
+    for (const pt of run.slice(1)) g.lineTo(ox + pt.x, oy + pt.y);
+    return;
+  }
   for (const s of smoothLineControls(run)) {
     g.bezierCurveTo(ox + s.cx1, oy + s.cy1, ox + s.cx2, oy + s.cy2, ox + s.x, oy + s.y);
   }

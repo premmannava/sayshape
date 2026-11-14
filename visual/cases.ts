@@ -62,6 +62,51 @@ table "Six money columns" items=wide
   table-column "Jun" field=f format=money
 `,
   },
+  // A short, ordinary dashboard spec of the kind a model writes: a title with
+  // its filters, KPIs, one primary chart, a supporting chart and a table. The
+  // visual design is judged on this (scripts/review-shots.ts captures it).
+  {
+    name: "review-dashboard",
+    spec: `state region="All" period="Quarter" by="revenue" dir="desc" picked="" months=[{m: "Jul", web: 42000, retail: 31000, partner: 12000}, {m: "Aug", web: 45500, retail: 29800, partner: 14500}, {m: "Sep", web: 39800, retail: 33500, partner: 15100}, {m: "Oct", web: 51200, retail: 34800}, {m: "Nov", web: 56900, retail: 38200, partner: 17900}, {m: "Dec", web: 63400, retail: 41100, partner: 21000}] regions=[{name: "West Coast and Pacific Northwest", revenue: 98200}, {name: "Northeast", revenue: 71500}, {name: "South", revenue: 64300}, {name: "Midwest", revenue: 38900}, {name: "Online only", revenue: 26400}] accounts=[{id: "a1", name: "Fernwood Freight", owner: "Ada Park", revenue: 48200, growth: 12.4}, {id: "a2", name: "Harbor & Pine Outfitters International", owner: "Ben Ortiz", revenue: 39150, growth: -3.1}, {id: "a3", name: "Summit Labs", owner: "Chloe Wu", revenue: 27800, growth: 8}, {id: "a4", name: "Atlas Coffee", owner: "Dev Rao", revenue: 9120, growth: 0}]
+text "Sales overview" style=title
+row
+  segmented bind=period options="Month,Quarter,Year" label="Period"
+  select items={["All", "West", "Northeast", "South"]} bind=region
+row
+  stat label="Revenue" value="$1.24M" change="+12.4%" spark={[31, 35, 33, 39, 42, 47]}
+  stat label="Orders" value="8,214" change="+3.1%"
+  stat label="Refund rate" value="2.4%" change="-0.6%" good=down
+  stat label="Avg. order" value="$151" change="0%" trend=flat
+card
+  chart "Revenue by channel" kind=line items=months x=m y=web,retail,partner labels="Web,Retail,Partner" format=money
+    chart-rule "Target" y=50000
+    chart-note "Holiday sale" at="Nov"
+row align=top
+  card
+    chart "Revenue by region" kind=hbar items=regions x=name y=revenue format=money
+  card
+    chart "Monthly web revenue" kind=bar items=months x=m y=web format=money
+table "Top accounts" items={sort(accounts, by, dir)} key=id bind=picked sort=by direction=dir
+  table-column "Account" field=name
+  table-column "Owner" field=owner
+  table-column "Revenue" field=revenue format=money
+  table-column "Growth %" field=growth format=number
+row
+  button "Export report"
+  button "Share" variant=secondary
+  button "Archive" variant=secondary disabled=true
+`,
+  },
+  // Dense data and long labels: many bars and lines, crowded legends.
+  {
+    name: "review-dense",
+    spec: `state days=[${Array.from({ length: 45 }, (_, i) => `{d: "Day ${i + 1}", a: ${1200 + ((i * 37) % 23) * 90}, b: ${900 + ((i * 53) % 19) * 70}, c: ${400 + ((i * 29) % 17) * 60}}`).join(", ")}] teams=[{t: "Customer success and onboarding", q1: 82000, q2: 91000, q3: 87000}, {t: "Enterprise sales (North America)", q1: 140000, q2: 128000, q3: 151000}, {t: "Self-serve growth", q1: 61000, q2: 74000, q3: 80500}, {t: "Partnerships", q1: 33000, q2: 29000, q3: 41000}]
+chart "Daily active users by plan over 45 days" kind=line items=days x=d y=a,b,c labels="Business plan,Professional plan,Starter plan"
+chart "Bookings by team and quarter" kind=bar items=teams x=t y=q1,q2,q3 labels="First quarter,Second quarter,Third quarter" format=money
+chart "Daily signups" kind=bar items=days x=d y=c
+chart "Share of bookings" kind=donut items=teams x=t y=q3 format=money
+`,
+  },
 ];
 
 export const THEMES = ["light", "dark"] as const;

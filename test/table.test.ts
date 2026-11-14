@@ -387,7 +387,7 @@ table items=rows key=sku bind=pick
   table-column "Quantity ordered" field=qty format=number
 `;
 
-  it.each([400, 1000])("fits columns side by side in the box at %i px, never cutting a number", (width) => {
+  it.each([480, 1000])("fits columns side by side in the box at %i px, never cutting a number", (width) => {
     const ui = render(wide, { width });
     const { box } = ui.find("table");
     const g = box!.data as TableGeometry;

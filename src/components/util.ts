@@ -102,7 +102,9 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
     // a shorter card. Explicit top/bottom alignment still takes precedence.
     if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
       for (const kb of placed) kb.h = tallest;
-    } else if (align !== "top") {
+    } else if (align !== "top" && !(align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "stat"))) {
+      // (Skipped for a row of only KPIs: their labels and values stay on shared
+      // lines when one has a sparkline or a wrapped change, so it's top-aligned.)
       for (const kb of placed) {
         const d = tallest - kb.h;
         if (d > 0) ctx.shift(kb, 0, align === "center" ? d / 2 : d);
