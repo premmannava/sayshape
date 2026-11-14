@@ -141,11 +141,15 @@ export function imageCsp(hosts: readonly string[]): { resourceDomains: string[] 
   return hosts.length ? { resourceDomains: hosts.map((h) => `https://${h}`) } : undefined;
 }
 
+/** What the chat notes say about emit: where the view sends it to the model as it happens (MCP Apps clients). */
+const CHAT_EMIT =
+  'When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.';
+
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
 const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
 Keep it to one focused screen: a card or column with a title, then the content. Prefer row and grid for side-by-side numbers; avoid more than three columns.
 Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption.
-When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.
+${CHAT_EMIT}
 Output only the spec in show_interface's spec argument, with no Markdown fences.`;
 
 /** How to show a database's rows, added to the guide when the server has one. */
@@ -175,7 +179,10 @@ function sectionsOf(mode: "full" | "compact"): ReturnType<typeof guideSections> 
 const sectionText = (mode: "full" | "compact", name: string) => sectionsOf(mode).find((sec) => sec.name === name)?.text ?? "";
 
 /** Parts of the guide a model can ask for by name, all generated (DATA_NOTES only with a database). */
-function topics(withData: boolean, withMcp = false, textOnly = false, fileMode = false): Record<string, string> {
+function topics(withData: boolean, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): Record<string, string> {
+  // A client that can't draw views is told the truth about emit: here too, as in its quick start:
+  // it is saved for the next turn with a host adapter, and can't be used without one.
+  const emitLine = textOnly ? (pressesSaved ? PRESSES_SAVED : NO_EMIT) : CHAT_EMIT;
   return {
     expressions: sectionText("full", "expressions"),
     actions: sectionText("full", "actions"),
@@ -183,7 +190,7 @@ function topics(withData: boolean, withMcp = false, textOnly = false, fileMode =
     lists: sectionText("full", "data"),
     rules: sectionText("full", "rules"),
     examples: sectionText("full", "example"),
-    chat: CHAT_NOTES.split("\n").slice(1).join("\n"),
+    chat: CHAT_NOTES.split("\n").slice(1).map((line) => (line === CHAT_EMIT ? emitLine : line)).join("\n"),
     ...(withData ? { database: DATA_NOTES } : {}),
     ...(withMcp ? { datasets: MCP_NOTES } : {}),
   };
@@ -238,7 +245,7 @@ function arrivesWithParent(c: ComponentDef): boolean {
 /** Docs for exactly what was asked for, plus what it depends on. */
 export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): string {
   const parts: string[] = [];
-  const t = topics(withData, withMcp, textOnly, fileMode);
+  const t = topics(withData, withMcp, textOnly, fileMode, pressesSaved);
   if (elements.length) {
     const { text, unknown } = elementGuide(registry, elements, { behavior: behaviorFor(textOnly, fileMode) });
     if (text) parts.push(`ELEMENTS\n${text}`);
