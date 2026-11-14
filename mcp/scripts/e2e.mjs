@@ -276,11 +276,18 @@ try {
       await p.evaluate((spec) => window.host.bridge.sendToolInputPartial({ arguments: { colors: ["#d93025"], spec } }), lines.slice(0, n).join("\n") + "\n");
       await p.waitForTimeout(40);
     }
-    await p.waitForTimeout(200);
-    const early = await colorPixels(f, "#sayshape", [217, 48, 37]);
+    // Streamed lines draw in over a short animation and paint on the next frame, so how long that takes
+    // depends on the machine: wait for the pixels (still before the call is complete), not a fixed time.
+    // A page that ignores the colors never reaches the threshold, so it just waits out the time.
+    const settle = async (atLeast) => {
+      const until = Date.now() + 4000;
+      let n = await colorPixels(f, "#sayshape", [217, 48, 37]);
+      while (n <= atLeast && Date.now() < until) { await p.waitForTimeout(50); n = await colorPixels(f, "#sayshape", [217, 48, 37]); }
+      return n;
+    };
+    const early = await settle(50);
     await p.evaluate((spec) => window.host.bridge.sendToolInput({ arguments: { colors: ["#d93025"], spec } }), SPEC);
-    await p.waitForTimeout(500);
-    return { p, early, final: await colorPixels(f, "#sayshape", [217, 48, 37]) };
+    return { p, early, final: await settle(500) };
   };
   const conversation = await colorsPage("picker=0&theme=teal&accent=2e86ab&save=1&copy=1");
   await conversation.p.screenshot({ path: out + "10-colors-argument.png" });
