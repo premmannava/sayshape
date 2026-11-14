@@ -39,6 +39,7 @@ import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { sceneComponents, reviewScenes } from "../../src/components/scene";
+import { slideComponents } from "../../src/components/slides";
 import type { ComponentDef } from "../../src/component";
 import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PICKS_HEADING, PICKS_HEADING_SHORT } from "../../src/prompt";
 import type { Diagnostic } from "../../src/types";
@@ -60,6 +61,7 @@ const MAX_REPORTED = 12;
 let components: ComponentDef[] = [...coreComponents, ...mapComponents];
 let registry = new Registry(components);
 let scenesOn = false;
+let slidesOn = false;
 let behaviorOn = false;
 let imageHosts: readonly string[] = [];
 /**
@@ -75,11 +77,32 @@ const sectionsCache = new Map<"full" | "compact", ReturnType<typeof guideSection
  * before createServer; main.ts does, from the command line.
  */
 export function setScenes(on: boolean): void {
-  components = [...coreComponents, ...mapComponents, ...(on ? sceneComponents : [])];
-  registry = new Registry(components);
   scenesOn = on;
+  register();
+}
+
+/**
+ * --slides: turn the experimental slide elements (deck, slide) on (off by
+ * default). With them off they're unknown elements and models aren't told
+ * about them. Text-only clients get no page for a deck: their page loads a
+ * pinned engine from before slides existed. Call before createServer; main.ts does.
+ */
+export function setSlides(on: boolean): void {
+  slidesOn = on;
+  register();
+}
+
+/** The elements the flags leave on, for the parser, the docs and the quick start. */
+function register(): void {
+  components = [...coreComponents, ...mapComponents, ...(scenesOn ? sceneComponents : []), ...(slidesOn ? slideComponents : [])];
+  registry = new Registry(components);
   sectionsCache.clear();
 }
+
+/** What a text-only client is told in place of a page when the spec is a deck. */
+const PAGE_DECK_TEXT = "The deck is written correctly, but this app can't show slide decks yet, so there is no page to open. Tell the person it needs a chat app that draws SayShape views.";
+/** Whether a spec uses the experimental deck element. */
+const usesDeck = (spec: string): boolean => /^\s*deck\b/m.test(spec);
 
 /**
  * --behavior: turn experimental behavior on (off by default): `every` rules
@@ -184,6 +207,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false):
     // every call, so each new element's pick fits.
     `${PICKS_HEADING_SHORT}\n${pickList(components).replace(/, such as [^:\n]*(?=: )/g, "").replace(/ \((?![^)\n]*=)[^)\n]*\)(?=: )/g, "")}`,
     "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
+    ...(slidesOn ? ["A PRESENTATION: a deck at the top level, not inside a card; a slide per idea, its title in the slide's own text."] : []),
     `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp, textOnly)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");
@@ -502,7 +526,10 @@ export function createServer(opts: ServerOptions): McpServer {
       // Docs for the lines that went wrong; an emit: line needs no element docs to fix.
       const failing = elementsOnLines(spec, [...parsed.errors, ...parsed.warnings].filter((d) => !isHarmless(d)));
       if (failing.length) notes.push(`\nDocs for ${failing.join(", ")}:\n${elementGuide(registry, failing).text}`);
-      const withPage = textOnly && toFix === 0;
+      // The page's pinned engine has no slides, so a deck gets a plain sentence instead of a page that can't draw it.
+      const deckOnly = textOnly && toFix === 0 && slidesOn && usesDeck(spec);
+      const withPage = textOnly && toFix === 0 && !deckOnly;
+      if (deckOnly) notes.push(PAGE_DECK_TEXT);
       if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn })));
       const said = [describeCheck(check, textOnly), ...notes].join("\n");
       if (textOnly) return text(said);

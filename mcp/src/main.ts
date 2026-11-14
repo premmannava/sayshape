@@ -11,6 +11,8 @@
  *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --no-copy-text  hide the Copy text button
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
+ *   sayshape-mcp --slides        experimental: slide decks, deck and slide (off by default)
+ *   sayshape-mcp --logo https://cdn.example.com/logo.png   with --slides: a logo in the corner of every slide
  *   sayshape-mcp --behavior      experimental: rules that tick and, with --scene, shapes people drag (off by default)
  *   sayshape-mcp --image-hosts cdn.example.com,*.images.example.com
  *                                hosts images may load from (none by default; https only)
@@ -37,7 +39,7 @@ import { fileURLToPath } from "node:url";
 import { basename } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { cannotDrawViews, createServer, setBehavior, setImageHosts, setScenes } from "./server";
+import { cannotDrawViews, createServer, setBehavior, setImageHosts, setScenes, setSlides } from "./server";
 import { accentNotes, parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
@@ -69,7 +71,7 @@ async function main(): Promise<void> {
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color]",
-      "                    [--no-save-image] [--no-copy-text] [--scene] [--behavior]",
+      "                    [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--slides] [--logo <https url>]",
       "                    [--image-hosts host1,host2,...]",
       "",
       "  --http [port]       Streamable HTTP on /mcp instead of stdio; port from the flag, else PORT, else 3001",
@@ -88,6 +90,8 @@ async function main(): Promise<void> {
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
       "  --no-copy-text   hide the Copy text button",
       "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",
+      "  --slides         experimental: slide decks, a deck of 16:9 slides shown one at a time (off by default)",
+      "  --logo <url>     with --slides: an https image drawn small in the corner of every slide (its host is allowed like --image-hosts)",
       "  --behavior       experimental: rules that tick (timers, simulations) and, with --scene, dragging (off by default)",
       "  --image-hosts    hosts images may load from, comma-separated; *.example.com allows its subdomains",
       "                   (none by default; https only, and the host must send CORS headers)",
@@ -99,6 +103,7 @@ async function main(): Promise<void> {
   // Experimental scenes: the server's parser and docs and the view must agree.
   setScenes(view.scene === true);
   setBehavior(view.behavior === true);
+  setSlides(view.slides === true);
   // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.
   setImageHosts(view.imageHosts ?? []);
   const httpAt = args.indexOf("--http");

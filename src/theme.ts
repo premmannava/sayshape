@@ -75,6 +75,19 @@ export interface Theme {
     /** A slide's own title: the opening slide's (layout=title), and every other slide's. */
     heading: { cover: number; slide: number };
   };
+  /**
+   * Experimental (sayshape/slides): what a host sets for every deck. logo is
+   * an image address (from the page's own origin or imageHosts) drawn small in
+   * each slide's bottom left corner; square draws slides without their rounded
+   * frame, for pictures that fill a page.
+   */
+  deck?: { logo?: string; square?: boolean };
+  /**
+   * Experimental (sayshape/slides): set on the theme inside a slide, never by
+   * a host: how much larger than the screen's its type is. Elements with sizes
+   * of their own (a stat's figure) draw that much larger there.
+   */
+  zoom?: number;
 }
 
 const base = {

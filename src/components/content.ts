@@ -1,7 +1,7 @@
 import type { ComponentDef, LayoutContext, PaintContext } from "../component";
 import type { TextMeasurer } from "../text";
 import type { Theme } from "../theme";
-import type { Box, Rect, Value } from "../types";
+import type { Box, Rect, SayShapeNode, Value } from "../types";
 import { isList, isRecord } from "../data";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
@@ -267,7 +267,7 @@ stat label="Total" value="\${price*qty}"`,
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    const d = statLayout(p.str("label"), p.str("value"), box.w, ctx.theme, ctx.measure);
+    const d = statLayout(p.str("label"), p.str("value"), box.w, ctx.theme, ctx.measure, statHint.get(box.node));
     if (!p.has("change") && !p.has("spark") && !p.has("trend")) {
       box.data = { ...d };
       box.h = d.height;
@@ -390,6 +390,44 @@ export function statSizes(theme: Theme): number[] {
   const top = Math.min(STAT_SIZES[0]!, theme.text.display);
   return [top, ...STAT_SIZES.filter((s) => s < top)];
 }
+/**
+ * How a stat should match the stats beside it: no figure larger than size,
+ * and its figure placed as if its label had labelLines lines. Set by a
+ * container that lines its stats up (a slide), read at layout.
+ */
+export interface StatHint { size?: number; labelLines?: number }
+export const statHint = new WeakMap<SayShapeNode, StatHint>();
+
+// Inside a slide (theme.zoom) a stat's own sizes are too small beside slide-sized text: it's laid
+// out at its usual sizes in a narrower box and drawn scaled up about its top left, so every part
+// of it (label, figure, change, sparkline) grows together.
+const statZoom = (t: Theme): number => (t.zoom !== undefined && t.zoom > 1 ? t.zoom : 1);
+{
+  const layoutAt = stat.layout, paintAt = stat.paint, loadingAt = stat.paintLoading, minAt = stat.minWidth;
+  stat.layout = (box, ctx) => {
+    const z = statZoom(ctx.theme);
+    if (z === 1 || !layoutAt) { layoutAt?.(box, ctx); return; }
+    const inner: Box = { ...box, w: box.w / z };
+    layoutAt(inner, ctx);
+    box.data = inner.data;
+    box.h = inner.h * z;
+  };
+  const zoomed = (draw: typeof paintAt): typeof paintAt => draw && ((box, ctx) => {
+    const z = statZoom(ctx.theme);
+    if (z === 1) { draw(box, ctx); return; }
+    const g = ctx.g;
+    g.save();
+    g.translate(box.x, box.y);
+    g.scale(z, z);
+    g.translate(-box.x, -box.y);
+    draw({ ...box, w: box.w / z, h: box.h / z }, ctx);
+    g.restore();
+  });
+  stat.paint = zoomed(paintAt);
+  stat.paintLoading = zoomed(loadingAt);
+  if (typeof minAt === "function") stat.minWidth = (node, ctx) => minAt(node, ctx) * statZoom(ctx.theme);
+}
+
 /** Figures are semibold: confident without the heaviness of bold at display sizes. */
 const STAT_WEIGHT = 600;
 /** The label is a quiet sentence-case caption above the figure. */
@@ -402,10 +440,12 @@ interface StatLayout { label: string[]; value: string[]; size: number; valueLH: 
  * the largest size that fits on one line, or wrapped at the smallest (at most
  * three lines). With a one-line label and value at full size it's 54 px tall.
  */
-export function statLayout(label: string, value: string, width: number, theme: Theme, m: TextMeasurer): StatLayout {
+export function statLayout(label: string, value: string, width: number, theme: Theme, m: TextMeasurer, like?: StatHint): StatLayout {
   const w = Math.max(20, width);
   const labelLines = label ? fitLines(label, w, themeFont(theme, 400, STAT_LABEL), m, 2) : [];
-  const sizes = statSizes(theme);
+  const all = statSizes(theme);
+  const capped = like?.size ? all.filter((s) => s <= like.size!) : all;
+  const sizes = capped.length ? capped : [all[all.length - 1]!];
   let size = sizes[sizes.length - 1]!;
   let lines: string[] | null = null;
   for (const s of sizes) {
@@ -413,7 +453,7 @@ export function statLayout(label: string, value: string, width: number, theme: T
   }
   lines ??= fitLines(value, w, themeFont(theme, STAT_WEIGHT, size), m, 3);
   const valueLH = Math.round(size * 1.3);
-  const valueTop = 12 + Math.max(0, labelLines.length - 1) * STAT_LABEL_LH;
+  const valueTop = 12 + Math.max(0, Math.max(labelLines.length, like?.labelLines ?? 0) - 1) * STAT_LABEL_LH;
   return { label: labelLines, value: lines, size, valueLH, valueTop, height: valueTop + lines.length * valueLH + 6 };
 }
 
@@ -472,7 +512,46 @@ export function changeDirection(text: string): Trend | null {
   if (!m) return null;
   const n = Number(m[2]!.replace(/,/g, ""));
   if (!Number.isFinite(n) || n === 0) return "flat";
-  return m[1] === "-" || m[1] === "−" ? "down" : "up";
+  if (m[1]) return m[1] === "+" ? "up" : "down";
+  // No sign, but words that say which way: "0.25 below target" went down.
+  if (/\b(below|under|down|behind|short|less|fewer|lower)\b/i.test(text)) return "down";
+  return "up";
+}
+
+/**
+ * Just the figure in a change, with its sign, currency and unit: "1.35h" from
+ * "1.35h over target", "98.1%" from "98.1% of opened". What a pill shows when
+ * the whole text doesn't fit: a whole figure reads better than words cut short.
+ * Null when it holds no number.
+ */
+export function changeFigure(text: string): string | null {
+  const m = /[+\-−]?\s*[$€£¥]?\s*(?:\d[\d,]*(?:\.\d+)?|\.\d+)\s?(?:%|(?:days?|hours?|hrs?|mins?|minutes?|weeks?|months?|years?|points?|pts)(?![A-Za-z])|[A-Za-z]{1,3}(?![A-Za-z]))?/i.exec(text);
+  return m ? m[0].trim() : null;
+}
+
+/** From here up, a number in a change is written short (1.2M), like the numbers on charts. */
+const CHANGE_SHORT_FROM = 100_000;
+
+/**
+ * A change as its pill shows it: a big number written short ("+$1,234,567 vs
+ * last year" reads "+$1.2M vs last year") and a long fraction kept to two
+ * places ("+12.3456%" reads "+12.35%"). A pill is a glance at how far it
+ * moved; screen readers and Copy text keep the number as written.
+ */
+export function roundChange(text: string): string {
+  const m = /(\d[\d,]*(?:\.\d+)?|\.\d+)/.exec(text);
+  if (!m) return text;
+  const n = Number(m[1]!.replace(/,/g, ""));
+  if (!Number.isFinite(n)) return text;
+  const after = text.slice(m.index + m[1]!.length);
+  let shown: string | null = null;
+  // Already short as written (1,200K): left alone.
+  if (n >= CHANGE_SHORT_FROM && !/^\s?(?:[KMBT]|k|bn|mn)(?![A-Za-z])/.test(after)) {
+    try { shown = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n); } catch { shown = null; }
+  } else if (/\.\d{3,}$/.test(m[1]!)) {
+    shown = String(Math.round(n * 100) / 100);
+  }
+  return shown === null ? text : text.slice(0, m.index) + shown + after;
 }
 
 /** The arrow shown before a change. */
@@ -495,13 +574,18 @@ function statExtras(box: Box, d: StatLayout, ctx: LayoutContext): StatExtras & {
   if (p.has("change") && (raw || loading)) {
     const font = themeFont(t, 600, STAT_PILL_TEXT);
     const arrow = dir ? ARROWS[dir] : "";
-    const full = raw ? (arrow ? `${arrow} ${raw}` : raw) : "";
+    const rounded = roundChange(raw);
+    const full = rounded ? (arrow ? `${arrow} ${rounded}` : rounded) : "";
     // While loading, the size the placeholders take.
     const valueW = loading ? Math.min(w, Math.max(56, d.size * 3.2)) : m.width(d.value[0] ?? "", themeFont(t, STAT_WEIGHT, d.size));
     // The change sits in a tinted pill, so it reads as one figure beside the value.
     const natural = loading ? 48 : m.width(full, font) + STAT_PILL_X * 2;
     const inline = d.value.length === 1 && w >= STAT_INLINE_MIN && valueW + STAT_CHANGE_GAP + natural <= w;
-    const text = inline ? full : ellipsize(full, w - STAT_PILL_X * 2, font, m);
+    // Too long for its pill: the figure alone, whole, before cutting anything short.
+    const room = w - STAT_PILL_X * 2;
+    const figure = !inline && raw && m.width(full, font) > room ? changeFigure(rounded) : null;
+    const short = figure ? (arrow ? `${arrow} ${figure}` : figure) : full;
+    const text = inline ? full : ellipsize(short, room, font, m);
     const width = loading ? natural : m.width(text, font) + STAT_PILL_X * 2;
     // y is the pill's middle. Beside the value it lines up with the middle of the value's capitals.
     if (inline) change = { text, width, valueW, inline, y: bottom - d.size * 0.36 };

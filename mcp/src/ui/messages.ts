@@ -102,15 +102,15 @@ export function outcomeOf(result: { isError?: boolean; structuredContent?: unkno
 
 /**
  * A file name for an interface saved as an image, from its first title: the
- * first quoted text of a title or display text, else of a chart, table or
- * meter, else "sayshape". Lower case, words joined with "-", at most 60
+ * first quoted text of a title or display text, else of a chart, table,
+ * meter or slide, else "sayshape". Lower case, words joined with "-", at most 60
  * characters, so it's safe on every file system.
  */
 export function imageName(spec: string): string {
   const quoted = (line: string) => /^\s*[a-z-]+\s+"((?:[^"\\]|\\.)*)"/.exec(line)?.[1];
   const lines = spec.split("\n");
   const title = lines.find((l) => /^\s*text\s+"/.test(l) && /\bstyle=(title|display)\b/.test(l))
-    ?? lines.find((l) => /^\s*(chart|table|meter)\s+"/.test(l));
+    ?? lines.find((l) => /^\s*(chart|table|meter|slide)\s+"/.test(l));
   const slug = (title ? quoted(title) ?? "" : "")
     .toLowerCase()
     .replace(/\{[^}]*\}/g, "")
