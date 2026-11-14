@@ -20,6 +20,7 @@ npm run dev        # opens the playground
 | `npm run bench` | Benchmarks parse, layout and paint on 1,000- and 5,000-element specs |
 | `npm run eval` | Scores a real model on 60 requests ([Measure it](model.md#measure-it)) |
 | `npm run pick-eval` | Scores whether a model picks the representation that shows the data best ([Check the picks](model.md#check-the-picks)) |
+| `npm run colors-eval` | Scores whether models keep the colors a person named across a conversation, and invent none ([Check that models keep the colors](model.md#check-that-models-keep-the-colors)) |
 | `npm run guide:size` | Measures the model guide by section, per mode and profile |
 | `npm run typecheck` | Type-checks everything |
 | `npm run build` | Builds the library into `dist/`: ES modules, and `sayshape.global.js` and `sayshape-map.global.js` for a plain `<script src>` (they define the globals `sayshape` and `sayshapeMap`) |
