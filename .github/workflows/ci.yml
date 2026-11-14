@@ -137,8 +137,14 @@ jobs:
           retention-days: 90
 
   visual:
-    name: Visual regression
+    name: Visual regression (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    # The same tests in the same image, split across four machines so the wait is a
+    # quarter as long. Every part runs to the end, so one failure doesn't hide another.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     # A label event only matters for the update label; don't re-run for others.
     if: github.event.action != 'labeled' || github.event.label.name == 'update-visual-baselines'
     # Baselines are made in this same image (npm run test:visual:docker), so fonts render identically.
@@ -163,12 +169,13 @@ jobs:
       - run: npm ci
       - name: Compare with baselines
         if: env.UPDATE != 'true'
-        run: npx playwright test
+        run: npx playwright test --shard=${{ matrix.shard }}/4
+      # Regenerating runs every test on one machine, so there is one commit to push.
       - name: Regenerate baselines
-        if: env.UPDATE == 'true'
+        if: env.UPDATE == 'true' && matrix.shard == 1
         run: npx playwright test --update-snapshots
       - name: Commit regenerated baselines
-        if: env.UPDATE == 'true'
+        if: env.UPDATE == 'true' && matrix.shard == 1
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config user.name "github-actions[bot]"
@@ -182,14 +189,14 @@ jobs:
             echo "Committed regenerated baselines. Review the images in the pull request diff." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Remove the update label, so later pushes are compared again
-        if: env.UPDATE == 'true' && github.event_name == 'pull_request'
+        if: env.UPDATE == 'true' && matrix.shard == 1 && github.event_name == 'pull_request'
         run: |
           curl -fsS -X DELETE -H "Authorization: Bearer ${{ github.token }}" -H "Accept: application/vnd.github+json" \
             "${{ github.api_url }}/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels/update-visual-baselines" || true
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: visual-diffs
+          name: visual-diffs-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
