@@ -27,7 +27,7 @@ import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
 import { deflated, fromDataUrl, pdfOf, pptxOf, rgbOf, toBase64, type SlidePicture } from "./deck-file";
 import { readViewOptions } from "./view-options";
-import { announce, brandColorFor, chosenColors } from "./host-brand";
+import { announce, brandColorFor, chosenColors, colorsArrival, sameColors, toolColors } from "./host-brand";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
 
@@ -45,6 +45,16 @@ let activePreset = viewOptions.theme;
 let presetPicked = false;
 /** The chat app's brand color, from the name it announced in the handshake. */
 let hostBrand: string | undefined;
+/**
+ * This call's colors argument (the conversation's colors), above every other source of colors. Each
+ * show_interface call gets a view of its own, so a call without colors starts from the operator's, a picked
+ * preset's or the chat app's again; nothing here outlives the view. Ignored with --no-model-colors.
+ */
+let conversationColors: string[] | undefined;
+/** Counts changes to conversationColors, so a theme worked out before one isn't painted after it. */
+let colorsVersion = 0;
+/** Whether the console has been told when the colors arrived (once per view). */
+let colorsLogged = false;
 /** The spec text the engine has been given so far in the current stream. */
 let shown = "";
 /** Input that arrived before the engine was ready. */
@@ -134,7 +144,7 @@ function domReader(dark: boolean): ReadVar {
   };
 }
 
-/** The selected SayShape preset in the host's mode, with the server's --colors (or --accent) or else the chat app's brand color (see chosenColors), adjusted to the host's shared colors, fonts and radii. */
+/** The selected SayShape preset in the host's mode, with the call's colors argument, else the server's --colors (or --accent), else the chat app's brand color (see chosenColors), adjusted to the host's shared colors, fonts and radii. */
 function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const dark = ctx?.theme ? ctx.theme === "dark" : prefersDark();
   const root = document.documentElement;
@@ -142,7 +152,7 @@ function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const styles = ctx?.styles;
   if (styles?.css?.fonts) applyHostFonts(styles.css.fonts);
   if (styles?.variables) applyHostStyleVariables(styles.variables);
-  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined, chosenColors({ operatorColors: viewOptions.colors, picked: presetPicked, startupPreset: viewOptions.theme, brand: hostBrand }));
+  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined, chosenColors({ conversationColors, operatorColors: viewOptions.colors, picked: presetPicked, startupPreset: viewOptions.theme, brand: hostBrand }));
 }
 
 /** Canvas text doesn't trigger font loading, so load the theme's faces before drawing with them. */
@@ -159,8 +169,16 @@ async function loadFaces(theme: Theme): Promise<void> {
 }
 
 async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
-  const theme = themeFor(ctx);
+  const version = colorsVersion;
+  let theme = themeFor(ctx);
   await loadFaces(theme);
+  // Colors arrived while the fonts loaded: paint with them, not the theme from before.
+  if (version !== colorsVersion) theme = themeFor(ctx);
+  paintTheme(theme);
+  return theme;
+}
+
+function paintTheme(theme: Theme): void {
   // The engine clears its bitmap to transparency each frame and leaves 20px
   // around the content. In an MCP iframe, that transparent gutter can expose
   // a black host surface even beside a light card. Paint the canvas element's
@@ -170,8 +188,29 @@ async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
   bar.style.backgroundColor = theme.colors.surface;
   sayshape?.setTheme(faceTheme(theme));
   themePicker?.setTheme(theme);
-  return theme;
 }
+
+/**
+ * Use the tool call's colors argument. Called as the arguments stream in, so the first lines already draw
+ * in the colors when the chat app sends them before the spec. A change only repaints: setTheme lays out
+ * again and keeps the stream, state and everything drawn so far. The fonts don't change with the colors,
+ * so there's nothing to wait for.
+ */
+function useConversationColors(list: string[] | undefined): void {
+  if (sameColors(list, conversationColors)) return;
+  if (list && !colorsLogged) {
+    colorsLogged = true;
+    // For checking in a real chat app whether the colors come before the spec.
+    console.info(colorsArrival(list, shown));
+  }
+  conversationColors = list;
+  colorsVersion++;
+  // Before start() has painted, its own applyTheme picks them up.
+  if (sayshape || themePicker) paintTheme(themeFor(app.getHostContext()));
+}
+
+/** Whether the server lets the conversation choose colors (not --no-model-colors). */
+const modelColors = viewOptions.modelColors !== false;
 
 /** The theme interfaces are drawn in, with the logo the server was started with (--logo) for slides. */
 let face: Theme | null = null;
@@ -280,12 +319,17 @@ function specOf(args: Record<string, unknown> | undefined): string | null {
 // Tidied the way the server checks it (fences, typographic quotes). While streaming,
 // only complete lines are tidied and shown, so each step extends the last one.
 app.ontoolinputpartial = (p) => {
+  // Colors first: they're declared before spec, so they usually arrive before its first line.
+  const colors = toolColors(p.arguments, modelColors, true);
+  if (colors) useConversationColors(colors);
   const spec = specOf(p.arguments);
   // Until the data argument arrives, a name with no value yet may be a dataset: wait for it.
   if (!awaiting) { awaiting = true; syncLoading(); }
   if (spec !== null) show(tidySpec(spec.slice(0, spec.lastIndexOf("\n") + 1)), false);
 };
 app.ontoolinput = (p) => {
+  // The complete arguments are the truth, colors or none.
+  useConversationColors(toolColors(p.arguments, modelColors));
   const spec = specOf(p.arguments);
   const data = dataOf(p.arguments);
   // The names are known now: only datasets still to fetch wait as placeholders.

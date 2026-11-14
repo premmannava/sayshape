@@ -10,6 +10,8 @@
  *                                in light and dark; says so at startup when it had to change it)
  *   sayshape-mcp --colors "#e4572e,#2e86ab"  up to six brand colors: the first is the accent, the rest
  *                                follow as chart series, and series not covered are worked out from the first
+ *   sayshape-mcp --no-model-colors  no colors argument on show_interface, so the conversation can't change
+ *                                the colors (the operator's --colors, the theme or the chat app's stay)
  *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --no-copy-text  hide the Copy text button
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
@@ -82,7 +84,7 @@ async function main(): Promise<void> {
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color | --colors list]",
-      "                    [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--slides] [--logo <https url>]",
+      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--slides] [--logo <https url>]",
       "                    [--image-hosts host1,host2,...] [--widget-dir folder [--widget-host name]]",
       "",
       "  --widget-dir <folder>  for chat apps that can't draw interfaces but can show a widget made from a file:",
@@ -107,6 +109,9 @@ async function main(): Promise<void> {
       "                   --colors \"#e4572e,#2e86ab,#f2c14e\". The first is the accent and the first chart",
       "                   series, the rest are the next series, and any series the list doesn't cover are",
       "                   worked out from the first. --accent is the same with one color; use one of the two",
+      "  --no-model-colors  take away show_interface's colors argument, which a model sends when the person",
+      "                   (or its instructions) named colors to use; without it, only the server's colors,",
+      "                   the theme and the chat app's own color apply",
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
       "  --no-copy-text   hide the Copy text button",
       "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",

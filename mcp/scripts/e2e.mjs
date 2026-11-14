@@ -256,6 +256,40 @@ try {
   await branded.screenshot({ path: out + "9-accent-dark.png" });
   check(await colorPixels(brandedFrame, "#sayshape", [223, 79, 69]) > 500, "--accent is lightened to stay readable in dark mode");
   await branded.close();
+  // show_interface's colors argument, streamed before the spec (it's declared first): the first lines
+  // already draw in it, over the operator's --accent "#2e86ab". With --no-model-colors (model=0) the
+  // view ignores colors a chat app passes on anyway, and the operator's accent stays.
+  const colorsPage = async (meta) => {
+    const p = await browser.newPage({ viewport: { width: 680, height: 700 }, deviceScaleFactor: 2 });
+    p.on("pageerror", (e) => errors.push(e.message));
+    p.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+    await p.setContent(`<!doctype html><body><script>${hostJs}</script></body>`);
+    await p.evaluate((html) => window.TestHost.mount(html, "light"), uiHtml.replace(/<head>/i, `<head><meta name="sayshape-view" content="${meta}">`));
+    await p.evaluate(() => window.host.ready);
+    const f = p.frames().find((x) => x !== p.mainFrame());
+    // A tool call whose colors arrive whole before any of the spec, then the spec a line at a time.
+    await p.evaluate(() => window.host.bridge.sendToolInputPartial({ arguments: { colors: ["#d93025"] } }));
+    const lines = SPEC.split("\n");
+    // Up to the stat in tone=accent, the first line drawn in the accent.
+    const upTo = lines.findIndex((l) => l.includes("tone=accent")) + 1;
+    for (let n = 1; n <= upTo; n++) {
+      await p.evaluate((spec) => window.host.bridge.sendToolInputPartial({ arguments: { colors: ["#d93025"], spec } }), lines.slice(0, n).join("\n") + "\n");
+      await p.waitForTimeout(40);
+    }
+    await p.waitForTimeout(200);
+    const early = await colorPixels(f, "#sayshape", [217, 48, 37]);
+    await p.evaluate((spec) => window.host.bridge.sendToolInput({ arguments: { colors: ["#d93025"], spec } }), SPEC);
+    await p.waitForTimeout(500);
+    return { p, early, final: await colorPixels(f, "#sayshape", [217, 48, 37]) };
+  };
+  const conversation = await colorsPage("picker=0&theme=teal&accent=2e86ab&save=1&copy=1");
+  await conversation.p.screenshot({ path: out + "10-colors-argument.png" });
+  check(conversation.early > 50, `the colors argument colors the first streamed lines, over the operator's --accent (${conversation.early} pixels)`);
+  check(conversation.final > 500, `and the whole interface once the call is complete (${conversation.final} pixels)`);
+  await conversation.p.close();
+  const lockedPage = await colorsPage("picker=0&theme=teal&accent=2e86ab&save=1&copy=1&model=0");
+  check(lockedPage.early === 0 && lockedPage.final === 0, `with --no-model-colors the view ignores colors sent anyway (${lockedPage.final} pixels)`);
+  await lockedPage.p.close();
   // A pixel at a point in CSS pixels, read from the canvas bitmap.
   const pixelAt = (frame, x, y) => frame.evaluate(({ x, y }) => {
     const c = document.querySelector("#sayshape");
