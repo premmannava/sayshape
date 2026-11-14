@@ -4,11 +4,11 @@ import { DESIGN_H, DESIGN_W, MIN_FIT, slideComponents } from "../src/components/
 import { render } from "../src/testing";
 import type { Box, HitRegion } from "../src/types";
 import { walkBoxes } from "../src/layout";
-import { lightTheme } from "../src/theme";
+import { darkTheme, lightTheme } from "../src/theme";
 import { Q3_REVIEW } from "../playground/slides-samples";
 
-const ALL = [...coreComponents, ...slideComponents];
-const on = (spec: string, width = 600) => render(spec, { components: ALL, width });
+// Slides are in coreComponents: nothing else is registered.
+const on = (spec: string, width = 600) => render(spec, { components: coreComponents, width });
 
 const boxesOf = (root: Box, type: string): Box[] => {
   const out: Box[] = [];
@@ -30,12 +30,25 @@ const errors = (ui: ReturnType<typeof on>) => ui.diagnostics.filter((d) => d.sev
 const items = (n: number) => Array.from({ length: n }, (_, i) => `      list-item "Item ${i + 1}" detail="Something about it"`).join("\n");
 const deckOf = (body: string) => `state page=0\ndeck bind=page\n${body}`;
 
-describe("slides behind their flag", () => {
-  it("leaves deck and slide unknown when slideComponents aren't registered", () => {
-    const ui = render(Q3_REVIEW, { components: coreComponents });
-    const unknown = ui.diagnostics.filter((d) => /unknown element/i.test(d.message));
-    expect(unknown.some((d) => d.message.includes('"deck"'))).toBe(true);
-    ui.destroy();
+describe("slides are ordinary elements", () => {
+  it("are in coreComponents, and the slides entry point lists the same two", () => {
+    expect(coreComponents.filter((c) => c.type === "deck" || c.type === "slide").map((c) => c.type).sort()).toEqual(["deck", "slide"]);
+    expect(slideComponents.map((c) => c.type)).toEqual(["deck", "slide"]);
+    for (const c of slideComponents) expect(coreComponents).toContain(c);
+  });
+
+  it("draw a deck with only coreComponents, in light and dark", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const ui = render(Q3_REVIEW, { components: coreComponents, width: 600, theme });
+      try {
+        expect(ui.diagnostics).toEqual([]);
+        expect(boxesOf(ui.sayshape.boxes!, "deck")).toHaveLength(1);
+        expect(boxesOf(ui.sayshape.boxes!, "slide")).toHaveLength(1);
+        expect(ui.text().join(" ")).toContain("Q3 business review");
+      } finally {
+        ui.destroy();
+      }
+    }
   });
 
   it("parses a deck with no diagnostics", () => {
@@ -339,7 +352,7 @@ describe("what a slide draws besides its title", () => {
 
   it("draws a stat larger on a slide than on the screen", () => {
     const stat = `stat label="Revenue" value="$4.8M"`;
-    const screen = render(stat, { components: ALL, width: DESIGN_W });
+    const screen = render(stat, { components: coreComponents, width: DESIGN_W });
     const slide = on(deckOf(`  slide "Numbers"\n    ${stat}`), DESIGN_W + 40);
     const h = (ui: ReturnType<typeof on>) => boxesOf(ui.sayshape.boxes!, "stat")[0]!.h;
     expect(h(slide)).toBeGreaterThan(h(screen) * 1.5);
@@ -363,7 +376,7 @@ describe("what a slide draws besides its title", () => {
     const spec = deckOf(`  slide "One"\n    text "a"`);
     const strokes = (ui: ReturnType<typeof on>) => ui.drawOps.filter((o) => o.op === "stroke").length;
     const round = on(spec);
-    const square = render(spec, { components: ALL, width: 600, theme: { ...lightTheme, deck: { square: true } } });
+    const square = render(spec, { components: coreComponents, width: 600, theme: { ...lightTheme, deck: { square: true } } });
     expect(errors(square)).toEqual([]);
     // The frame's outline is the one line a bare slide draws.
     expect(strokes(square)).toBe(strokes(round) - 1);

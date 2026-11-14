@@ -3,7 +3,7 @@
 <!-- CATEGORIES:START (generated from src/components) -->
 | Category | Components |
 |---|---|
-| Layout | [`column`](#column), [`row`](#row), [`overlap`](#overlap), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll) |
+| Layout | [`column`](#column), [`row`](#row), [`overlap`](#overlap), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll), [`deck`](#deck), [`slide`](#slide) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon), [`tile`](#tile) |
 | Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`chart-line`](#chart-line), [`chart-rule`](#chart-rule), [`chart-note`](#chart-note), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented), [`menu`](#menu), [`menu-item`](#menu-item) |
@@ -1163,6 +1163,55 @@ Only inside: `menu`.
 
 ```
 menu-item "Duplicate" icon=copy on=emit:duplicate
+```
+
+### `deck`
+
+A slide deck: slides shown one at a time, with arrows and dots to move between them (and a sideways swipe on a touch screen), for presenting a story in a few steps, like a business review; put a slide per step inside it. State is shared by every slide, so one control, such as a segmented for the region, can change what all of them show, and a button with on=set:page:3 jumps to the fourth slide.
+
+| Prop | Type | Description |
+|---|---|---|
+| `bind` | state, required | The state name holding the slide shown, starting at 0. |
+| `numbers` | boolean | Show the slide's number, like 2 / 4, in its corner. |
+| `footer` | string | A short line in the bottom left of every slide, e.g. footer="Northwind · Confidential". |
+| `progress` | boolean | true draws a thin bar along the bottom of each slide showing how far through the deck it is. |
+| `transition` | `fade` / `none` | fade (a slide fades in when moved to) or none. |
+| `on` | action | Actions to run after the slide changes, e.g. emit:changed. Separate several with ; |
+
+Children: `slide`.
+
+```
+state page=0
+deck bind=page
+  slide "Q3 business review" layout=title
+    text "Revenue is up 18% on last year" style=lead tone=muted
+  slide "Three numbers that sum up the quarter"
+    grid min=220
+      stat label="Revenue" value="$4.82M" change="+18%"
+      stat label="New customers" value="312" change="+9%"
+```
+
+### `slide`
+
+One 16:9 slide in a deck, with its title drawn large at the top and the slide's content under it: keep each to one idea, and write the title as the point it makes, not a label. What doesn't fit is shrunk, then cut off, and a table or list shows about five rows, so show the top few with take() and sort(), a total or a chart in place of every row; write money one way through the deck, and a stat's change= as a short signed figure such as change="+1.4 h", with good=down where lower is better (costs, reply time).
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The slide's title, e.g. Three numbers that sum up the quarter. |
+| `layout` | `title` / `content` / `agenda` | title for the opening slide (a large title with its children under it, centred on the slide), content for the rest (title at the top, children below), agenda for a slide that lists the other slides' titles by itself. |
+| `eyebrow` | string | A few words above the title, in the accent color, e.g. eyebrow="Q3 2026" or the section's name. |
+| `subtitle` | string | A quieter line under the title, e.g. subtitle="Prepared for the board". |
+| `appendix` | boolean | true for a backup slide after the main ones: it's left out of the slide count and the agenda, and numbered as Appendix. |
+
+Children: any elements.
+
+Only inside: `deck`.
+
+```
+slide "What we do next"
+  list
+    list-item "Hire two in support"
+    list-item "Open the Denver office"
 ```
 
 ### `map`

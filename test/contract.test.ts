@@ -19,7 +19,8 @@ import type { Box } from "../src/types";
 import { exampleSpec as exampleOf } from "./examples";
 import { textOverflows } from "./overflow";
 
-const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneComponents, ...slideComponents];
+// deck and slide are in coreComponents; the slides entry point lists the same two.
+const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneComponents];
 
 /**
  * Experimental scenes are where the model paints: their colors are the spec's,
@@ -27,7 +28,7 @@ const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneCompon
  * they draw through a transform (scaled to fit), which the text check can't follow.
  */
 const SCENE_TYPES = new Set(sceneComponents.map((c) => c.type));
-/** Experimental slides draw a slide, and everything on it, scaled to fit (childTransform), which the text check can't follow either. */
+/** Slides draw a slide, and everything on it, scaled to fit (childTransform), which the text check can't follow either. */
 const SLIDE_TYPES = new Set(slideComponents.map((c) => c.type));
 const registry = new Registry(ALL);
 const WIDTHS = [320, 600, 1024];

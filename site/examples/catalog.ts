@@ -540,6 +540,30 @@ dialog "Cancel {target}?" bind=confirm size=sm
     button "Cancel order" variant=danger on="emit:cancel:{target};set:confirm:false"`,
 };
 
-export const examples: readonly Example[] = [tip, sales, pipeline, funds, costs, funding, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator, booking, storeOrders];
+const quarterlyReview: Example = {
+  id: "quarterly-review",
+  title: "Quarterly review deck",
+  prompt: "A short slide deck for our Q3 business review: the headline, the key numbers, revenue against target by month and what we do next",
+  category: "Dashboards",
+  look: { preset: "teal", scheme: "light" },
+  spec: `state page=0 months=[{month: "Jul", revenue: 1.48, target: 1.4}, {month: "Aug", revenue: 1.59, target: 1.5}, {month: "Sep", revenue: 1.75, target: 1.6}]
+deck bind=page footer="Northwind Outfitters"
+  slide "Q3 business review" layout=title eyebrow="Q3 2026"
+    text "Revenue is up 18% on last year, and every month beat its target." style=lead tone=muted
+  slide "Three numbers that sum up the quarter"
+    grid min=220
+      stat label="Revenue" value="$4.82M" change="+18%"
+      stat label="New customers" value="312" change="+9%"
+      stat label="Churn" value="2.1%" change="-0.4 pts" good=down
+  slide "Every month beat its target"
+    chart kind=bar items=months x=month y=revenue,target labels="Revenue ($M),Target ($M)"
+  slide "What we do next"
+    timeline
+      step "Hire two in support" time="Nov" status=current
+      step "Open the Denver warehouse" time="Dec" status=upcoming
+      step "Launch the winter line" time="Jan" status=upcoming`,
+};
+
+export const examples: readonly Example[] = [tip, sales, pipeline, funds, costs, funding, cabin, org, claimFlow, launch, trip, laptop, cinema, coffee, grocery, tracking, budget, configurator, booking, storeOrders, quarterlyReview];
 
 export const exampleById = (id: string): Example | undefined => examples.find((e) => e.id === id);

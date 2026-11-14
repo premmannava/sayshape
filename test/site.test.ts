@@ -62,6 +62,21 @@ describe("gallery examples", () => {
     });
   }
 
+  it("quarterly review deck: shows one slide at a time and moves with its controls", () => {
+    const ui = render(ex("quarterly-review"), { width: 720 });
+    expect(shown(ui)).toContain("Q3 business review");
+    expect(shown(ui)).not.toContain("Three numbers");
+    ui.set("page", 1);
+    expect(ui.isShown({ text: "Three numbers that sum up the quarter" })).toBe(true);
+    expect(shown(ui)).toContain("$4.82M");
+    ui.set("page", 2);
+    expect(ui.isShown({ type: "chart" })).toBe(true);
+    const next = ui.hits.find((h) => h.box.node.type === "deck" && h.detail === "next")!;
+    ui.click(next.box.x + next.box.w / 2, next.box.y + next.box.h / 2);
+    expect(ui.state.page).toBe(3);
+    expect(shown(ui)).toContain("Hire two in support");
+  });
+
   it("tip calculator: totals follow the inputs", () => {
     const ui = render(ex("tip-calculator"));
     expect(shown(ui)).toContain("$15.48"); // 18% of $86

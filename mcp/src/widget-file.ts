@@ -22,7 +22,7 @@
  * The fragment draws like the page for text-only apps (fallback.ts), which
  * stays as it is: the same loader steps, but with the engine from the package,
  * and with the server's own settings (--theme, --accent or --colors, --image-hosts,
- * --scene, --behavior, --slides) carried across.
+ * --scene, --behavior) carried across.
  */
 import { createHash } from "node:crypto";
 import { mkdir, readdir, rename, stat, unlink, utimes, writeFile } from "node:fs/promises";
@@ -47,12 +47,11 @@ export interface WidgetOptions {
   colors?: readonly string[];
   /** --image-hosts: the hosts the engine may load images from. */
   imageHosts?: readonly string[];
-  /** --logo (with --slides): drawn in the corner of every slide. */
+  /** --logo: drawn in the corner of every slide of a deck. */
   logo?: string;
-  /** --scene, --behavior, --slides: the experimental elements the engine registers. */
+  /** --scene, --behavior: the experimental elements the engine registers. */
   scenes?: boolean;
   behavior?: boolean;
-  slides?: boolean;
   /**
    * The JavaScript source of a function expression for a host (a chat app) to hook in. The loader calls it
    * once, after the first setSpec, as `(SOURCE)(ui, S, root)`: ui is the SayShape instance, S is the engine's
@@ -103,7 +102,6 @@ function body(o: WidgetOptions, { id }: Parts): string {
   const components =
     "S.coreComponents" +
     (o.scenes ? ".concat(S.sceneComponents)" : "") +
-    (o.slides ? ".concat(S.slideComponents)" : "") +
     (map ? ".concat(window.sayshapeMap ? window.sayshapeMap.mapComponents : [])" : "");
   // The host's function sits in a script of its own, so even source that doesn't parse can't stop the main one.
   const hostScript = o.host === undefined ? "" : `<script>\ndocument.getElementById(${scriptJson(id)}).sayshapeHost = (\n${inertSource(o.host)}\n);\n</script>\n`;

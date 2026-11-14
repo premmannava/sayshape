@@ -10,7 +10,7 @@ import { isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer, setBehavior, setScenes, setSlides } from "../src/server";
+import { createServer, setBehavior, setScenes } from "../src/server";
 import { NOTHING_SENT, PAGE_DATASETS_TEXT, PAGE_TEXT } from "../src/fallback";
 import { McpResultStore } from "../src/mcp-results";
 import { NO_START, NO_UNPACK, pruneWidgets, WIDGET_FILE, WIDGET_KEEP, WIDGET_MAX_BYTES, widgetFileName, widgetFragment, writeWidget, type WidgetOptions } from "../src/widget-file";
@@ -41,7 +41,7 @@ const STAND_IN: PackedEngine = {
   SayShape.prototype.setTheme = function (t) { w.__themes.push(t); };
   SayShape.prototype.setSpec = function (s) { w.__spec = s; w.__order.push("setSpec"); };
   SayShape.prototype.notify = function (t) { w.__notes.push(t); };
-  w.sayshape = { SayShape: SayShape, coreComponents: ["core"], sceneComponents: ["scene"], slideComponents: ["slides"] };
+  w.sayshape = { SayShape: SayShape, coreComponents: ["core"], sceneComponents: ["scene"] };
 })();`),
   map: pack('window.sayshapeMap = { mapComponents: ["map"] };'),
 };
@@ -161,10 +161,10 @@ describe("the widget fragment", () => {
     expect("behavior" in r.g.__opts).toBe(false);
   });
 
-  it("carries the server's settings: theme, accent, image hosts, scenes, behavior and slides", async () => {
-    const html = widgetFragment(base({ theme: "purple", colors: ["#e4572e"], imageHosts: ["cdn.example.com", "*.img.example.com"], scenes: true, behavior: true, slides: true, logo: "https://cdn.example.com/logo.png" }));
+  it("carries the server's settings: theme, accent, image hosts, scenes and behavior", async () => {
+    const html = widgetFragment(base({ theme: "purple", colors: ["#e4572e"], imageHosts: ["cdn.example.com", "*.img.example.com"], scenes: true, behavior: true, logo: "https://cdn.example.com/logo.png" }));
     const r = await run(html);
-    expect(r.g.__opts.components).toEqual(["core", "scene", "slides"]);
+    expect(r.g.__opts.components).toEqual(["core", "scene"]);
     expect(r.g.__opts.behavior).toBe(true);
     expect(r.g.__opts.imageHosts).toEqual(["cdn.example.com", "*.img.example.com"]);
     const light = resolveTheme("purple", "light", ["#e4572e"]).theme;
@@ -175,7 +175,7 @@ describe("the widget fragment", () => {
     const darkRun = await run(html, { dark: true });
     expect(darkRun.g.__opts.theme.colors.accent).toBe(dark.colors.accent);
     expect(darkRun.g.__opts.theme.colors.accent).not.toBe(light.colors.accent);
-    // Scenes, behavior and slides are off unless asked for.
+    // Scenes and behavior are off unless asked for; slides are in the core list.
     expect((await run(widgetFragment(base()))).g.__opts.components).toEqual(["core"]);
   });
 
@@ -307,10 +307,9 @@ describe("the files", () => {
       widgetFileName(base({ imageHosts: ["cdn.example.com"] })),
       widgetFileName(base({ scenes: true })),
       widgetFileName(base({ behavior: true })),
-      widgetFileName(base({ slides: true })),
       widgetFileName(base({ engine: { ...STAND_IN, engine: pack("window.sayshape = {};") } })),
     ]);
-    expect(names.size).toBe(9);
+    expect(names.size).toBe(8);
   });
 
   it("write the fragment, once: the same interface reuses its file", async () => {
@@ -388,7 +387,7 @@ describe("show_interface with --widget-dir", () => {
   let dir = "";
   beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), "sayshape-widgets-")); });
   afterAll(async () => { await rm(dir, { recursive: true, force: true }); });
-  afterEach(() => { setScenes(false); setSlides(false); setBehavior(false); });
+  afterEach(() => { setScenes(false); setBehavior(false); });
 
   type Result = { content: Array<{ text: string }>; structuredContent?: unknown };
   async function connect(client: ConstructorParameters<typeof Client>[1], withDir = true, extra: Record<string, unknown> = {}) {
@@ -476,7 +475,6 @@ describe("show_interface with --widget-dir", () => {
 
   it("gives these clients behavior and decks, which the CDN page can't draw, and passes the settings through", async () => {
     setBehavior(true);
-    setSlides(true);
     setScenes(true);
     const rule = 'state n=0 running=true\ncard\n  every 1s if={running} do=inc:n\n  stat label="n" value={n}\n  button "Pause" on=toggle:running\n';
     const deck = 'state page=0\ndeck bind=page\n  slide "One" layout=title\n    text "Hello"\n';
@@ -487,10 +485,11 @@ describe("show_interface with --widget-dir", () => {
     const html = await file(ruled);
     expect(html).toContain("behavior: true");
     expect(html).toContain("S.sceneComponents");
-    expect(html).toContain("S.slideComponents");
     expect(html).toContain("cdn.example.com");
-    // A deck is fine here: the file's engine has the slide elements.
-    expect(await file(await show(c, { spec: deck }))).toContain("S.slideComponents");
+    // A deck is fine here: the file carries this server's own engine, which has the slide elements.
+    const deckFile = await file(await show(c, { spec: deck }));
+    expect(deckFile).toContain("S.coreComponents");
+    expect(deckFile).toContain("https://cdn.example.com/l.png");
     // The CDN page (no --widget-dir) still refuses both, as before.
     const cdn = await connect(undefined, false);
     expect((await show(cdn, { spec: rule })).content[0]!.text).toMatch(/Unknown element "every"/);
@@ -520,7 +519,6 @@ describe("the real packed engine", () => {
       expect(code).not.toMatch(/\beval\(|new Function/);
     }
     const engine = gunzipSync(Buffer.from(real.engine.base64, "base64")).toString("utf8");
-    expect(engine).toMatch(/slideComponents/);
     expect(engine).toMatch(/sceneComponents/);
   });
 
@@ -529,9 +527,10 @@ describe("the real packed engine", () => {
     for (const script of [real.engine, real.map]) runInContext(gunzipSync(Buffer.from(script.base64, "base64")).toString("utf8"), ctx);
     const names = (expr: string) => runInContext(`${expr}.map(function (c) { return c.type; })`, ctx) as string[];
     expect(runInContext("typeof sayshape.SayShape", ctx)).toBe("function");
-    expect(names("sayshape.slideComponents")).toEqual(["deck", "slide"]);
     expect(names("sayshape.sceneComponents")).toContain("scene");
     expect(names("sayshape.coreComponents")).toContain("card");
+    // deck and slide come with the core list: no flag, no separate list.
+    expect(names("sayshape.coreComponents")).toEqual(expect.arrayContaining(["deck", "slide"]));
     expect(names("sayshapeMap.mapComponents")).toContain("map");
     expect(runInContext("typeof sayshape.lightTheme.colors.surface", ctx)).toBe("string");
   });

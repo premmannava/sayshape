@@ -25,6 +25,8 @@ import { tile } from "./tile";
 import { scroll } from "./scroll";
 import { dialog } from "./dialog";
 import { menu, menuItem } from "./menu";
+import { deck } from "./slides/deck";
+import { slide } from "./slides/slide";
 
 export {
   column, row, overlap, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
@@ -42,6 +44,8 @@ export {
   dialog,
   menu,
   menuItem,
+  deck,
+  slide,
 };
 
 /** The built-in components (everything except the map, which is a separate entry). */
@@ -61,4 +65,6 @@ export const coreComponents: ComponentDef[] = [
   dialog,
   menu,
   menuItem,
+  deck,
+  slide,
 ];

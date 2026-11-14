@@ -16,13 +16,12 @@ import { SayShape } from "../../../src/engine";
 import { coreComponents } from "../../../src/components";
 import { mapComponents } from "../../../src/components/map";
 import { sceneComponents } from "../../../src/components/scene";
-import { slideComponents } from "../../../src/components/slides";
 import type { Theme } from "../../../src/theme";
 import type { Box, Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
 import { eventDelivery, FIXING_SPEC, imageName, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
-import { COPY_ACTION, DECK_ACTION, PRESENT_ACTION, interfaceTheme, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
+import { COPY_ACTION, DECK_ACTION, DEFAULT_PRESET, PRESENT_ACTION, interfaceTheme, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset, type Tools } from "./theme-selection";
 import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
 import { deflated, fromDataUrl, pdfOf, pptxOf, rgbOf, toBase64, type SlidePicture } from "./deck-file";
@@ -224,7 +223,7 @@ function faceTheme(theme: Theme): Theme {
 const isFull = (): boolean => app.getHostContext()?.displayMode === "fullscreen";
 
 /**
- * Present (--slides): ask the chat app to show the view full screen, or to
+ * Present: ask the chat app to show the view full screen, or to
  * put it back. Full screen, the deck is as wide as lets a whole slide and
  * its bar fit the height, in the middle.
  */
@@ -260,14 +259,14 @@ function show(spec: string, final: boolean): void {
     // The streamed text can differ from the final arguments (healed JSON); the final spec wins.
     if (sayshape.spec !== spec) { sayshape.setSpec(spec, { resetState: true }); applyHostData(); }
   }
-  // Slides on: the toolbar offers PDF and PowerPoint while a deck is showing.
-  if (viewOptions.slides) {
-    const deck = showsDeck();
-    themePicker?.state.set("deck", deck);
-    // A slide fills the width up to its corner, so the tools get a row of their own above it instead of sitting over it.
-    bar.parentElement?.classList.toggle("deck", deck);
-    fitScreen();
-  }
+  // The toolbar offers PDF and PowerPoint while a deck is showing.
+  const deck = showsDeck();
+  // The toolbar starts without the deck tools, so a view that never shows a deck looks as it always did.
+  if (deck && !toolbarHasDeck) buildToolbar(true);
+  themePicker?.state.set("deck", deck);
+  // A slide fills the width up to its corner, so the tools get a row of their own above it instead of sitting over it.
+  bar.parentElement?.classList.toggle("deck", deck);
+  fitScreen();
 }
 
 function applyHostData(): void {
@@ -354,9 +353,9 @@ app.onhostcontextchanged = () => {
   // getHostContext() holds the whole context with this change merged in.
   void applyTheme(app.getHostContext());
   // The chat app may leave full screen by itself (Escape, its own button).
-  if (viewOptions.slides) fitScreen();
+  fitScreen();
 };
-if (viewOptions.slides) window.addEventListener("resize", () => fitScreen());
+window.addEventListener("resize", () => fitScreen());
 app.onteardown = async () => {
   sayshape?.destroy();
   sayshape = null;
@@ -420,9 +419,9 @@ async function saveImage(): Promise<void> {
   }
 }
 
-/** Whether the interface showing is a slide deck (--slides), which saves as a file of slides, not one image. */
+/** Whether the interface showing is a slide deck, which saves as a file of slides, not one image. */
 function showsDeck(): boolean {
-  return !!viewOptions.slides && !!sayshape && !introShowing && folded === null && /^\s*deck\b/m.test(sayshape.spec);
+  return !!sayshape && !introShowing && folded === null && /^\s*deck\b/m.test(sayshape.spec);
 }
 
 /** The width decks are drawn at for a file: a slide's own design width plus the view's padding, so nothing is scaled down. */
@@ -438,7 +437,7 @@ const DECK_FILES = {
 
 /**
  * Save the deck as a PDF or a PowerPoint file with a page per slide
- * (experimental, --slides). Each slide is drawn by the engine on a copy, as
+ * Each slide is drawn by the engine on a copy, as
  * it is now, after anything the person changed, and goes in as a picture: the
  * file looks exactly like the chat, and nothing in it can be edited. Nothing
  * goes to the model.
@@ -539,6 +538,55 @@ function toggleMotion(): void {
   themePicker?.state.set("paused", motionPaused);
 }
 
+/** The tools the toolbar was last built with (set in start). */
+let tools: Tools = { picker: false, copy: false, save: false, theme: DEFAULT_PRESET };
+let toolbarHasDeck = false;
+
+/**
+ * Draw the toolbar. With deck tools (PowerPoint, Present, a PDF in place of the image) it is wider, so it is
+ * built that way only once a deck shows, and then again from scratch with them; state the person changed in it
+ * (the theme picked, motion paused) carries over.
+ */
+function buildToolbar(deck: boolean): void {
+  themePicker?.destroy();
+  themePicker = null;
+  toolbarHasDeck = deck;
+  tools = {
+    ...tools,
+    deck,
+    present: deck && !!app.getHostContext()?.availableDisplayModes?.includes("fullscreen"),
+  };
+  const toolbar = toolbarSpec(tools);
+  if (!toolbar) return;
+  bar.hidden = false;
+  themePicker = new SayShape(themeCanvas, {
+    components: [...coreComponents, toolButton],
+    theme: themeFor(app.getHostContext()),
+    width: toolbarWidth(tools),
+    padding: TOOLBAR_PADDING,
+    imageHosts: [],
+    onWarning: () => {},
+  });
+  themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
+    if (name === SAVE_ACTION) { void saveImage(); return; }
+    if (name === DECK_ACTION) { void saveDeck("pptx"); return; }
+    if (name === PRESENT_ACTION) { void togglePresent(); return; }
+    if (name === COPY_ACTION) { void copyText(); return; }
+    if (name === MOTION_ACTION) { toggleMotion(); return; }
+    if (name !== "theme") return;
+    if (!isPresetId(value)) {
+      themePicker?.state.set("preset", activePreset);
+      return;
+    }
+    activePreset = value;
+    presetPicked = true;
+    void applyTheme(app.getHostContext());
+  });
+  themePicker.setSpec(toolbar);
+  if (motionPaused) themePicker.state.set("paused", true);
+  if (tools.picker) themePicker.state.set("preset", activePreset);
+}
+
 async function start(): Promise<void> {
   await app.connect();
   // One line per connection, so the table of brand colors can be corrected from what real apps say.
@@ -548,46 +596,19 @@ async function start(): Promise<void> {
   const theme = await applyTheme(app.getHostContext());
   // The theme selector only when the server was started with --theme-picker; the copy
   // button unless --no-copy-text; the download button unless --no-save-image, and only
-  // where the chat app can download files.
-  const tools = {
+  // where the chat app can download files. The deck tools join when a deck first shows.
+  tools = {
     picker: viewOptions.themePicker,
     copy: viewOptions.copyText,
     save: viewOptions.saveImage && !!app.getHostCapabilities()?.downloadFile,
     theme: viewOptions.theme,
     motion: !!viewOptions.behavior,
-    deck: !!viewOptions.slides,
-    present: !!viewOptions.slides && !!app.getHostContext()?.availableDisplayModes?.includes("fullscreen"),
+    deck: false,
+    present: false,
   };
-  const toolbar = toolbarSpec(tools);
-  if (toolbar) {
-    bar.hidden = false;
-    themePicker = new SayShape(themeCanvas, {
-      components: [...coreComponents, toolButton],
-      theme,
-      width: toolbarWidth(tools),
-      padding: TOOLBAR_PADDING,
-      imageHosts: [],
-      onWarning: () => {},
-    });
-    themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
-      if (name === SAVE_ACTION) { void saveImage(); return; }
-      if (name === DECK_ACTION) { void saveDeck("pptx"); return; }
-      if (name === PRESENT_ACTION) { void togglePresent(); return; }
-      if (name === COPY_ACTION) { void copyText(); return; }
-      if (name === MOTION_ACTION) { toggleMotion(); return; }
-      if (name !== "theme") return;
-      if (!isPresetId(value)) {
-        themePicker?.state.set("preset", activePreset);
-        return;
-      }
-      activePreset = value;
-      presetPicked = true;
-      void applyTheme(app.getHostContext());
-    });
-    themePicker.setSpec(toolbar);
-  }
+  buildToolbar(false);
   sayshape = new SayShape(canvas, {
-    components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : []), ...(viewOptions.slides ? slideComponents : [])],
+    components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
     ...(viewOptions.behavior ? { behavior: true } : {}),
     theme: faceTheme(theme),
     // The chat app already boxes the view: a card that is the whole interface draws no frame of its own.
