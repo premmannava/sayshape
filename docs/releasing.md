@@ -49,6 +49,8 @@ At each release, before step 1: set `PAGE_ENGINE_VERSION` to the newest `sayshap
 
 The page also needs `extendTheme` from that build: with brand colors it lays the accent and chart series the server worked out over `lightTheme` and `darkTheme` (`mcp/src/fallback.ts`), and falls back to the plain themes without it. 0.1.1 has it.
 
+Slide decks are the visible case of that trade-off. The pinned build predates `deck` and `slide`, so for a deck `show_interface` writes a plain sentence in place of a page (`deckOnly` and `PAGE_DECK_TEXT` in `mcp/src/server.ts`). Once `PAGE_ENGINE_VERSION` is a release that includes slides, delete `deckOnly` and the sentence, so decks get a page like any other interface.
+
 The trade-off: the page can draw with an engine one release older than the server that checked the spec, so an element added in the newest release may not draw on the page yet.
 
 ### The engine inside the widget file

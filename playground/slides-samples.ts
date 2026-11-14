@@ -1,7 +1,4 @@
-/**
- * Samples that need the experimental deck and slide elements: the playground
- * offers them only with ?slides=1, where slideComponents are registered.
- */
+/** Samples for the deck and slide elements, shown in the playground with no query parameter. */
 import type { Sample } from "./samples";
 
 /** A quarterly business review in five slides: stats, a chart, a list and a timeline. */

@@ -15,8 +15,8 @@
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
  *   --no-copy-text      hide the "Copy text" button (shown by default)
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
- *   --slides            turn on experimental slide decks: deck and slide (off by default)
- *   --logo <https url>  with --slides: a logo in the corner of every slide; its host is added to --image-hosts
+ *   --logo <https url>  a logo in the corner of every slide of a deck; its host is added to --image-hosts
+ *   --slides            accepted and ignored: slide decks are always on
  *   --behavior          turn on experimental behavior: rules that tick, and dragging in scenes (off by default)
  *   --image-hosts <list>  hosts images may load from, comma-separated: cdn.example.com,*.images.example.com (none by default)
  *
@@ -47,8 +47,6 @@ export interface ViewOptions {
   scene?: boolean;
   /** Experimental behavior: rules and scene dragging (the server must agree: setBehavior). Absent means off. */
   behavior?: boolean;
-  /** Experimental slide decks are registered (the server must agree: setSlides). Absent means off. */
-  slides?: boolean;
   /** A logo drawn in the corner of every slide (an https address; its host is in imageHosts). Absent means none. */
   logo?: string;
   /**
@@ -85,7 +83,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   if (args.includes("--no-model-colors")) out.modelColors = false;
   if (args.includes("--scene")) out.scene = true;
   if (args.includes("--behavior")) out.behavior = true;
-  if (args.includes("--slides")) out.slides = true;
+  // --slides is still accepted so existing setups keep starting, but decks no longer need it.
   const at = args.indexOf("--theme");
   if (at >= 0) {
     const name = args[at + 1];
@@ -213,7 +211,7 @@ export function encodeViewOptions(o: ViewOptions): string {
   // so a tag written before lists existed reads the same way; several are colors=rrggbb,rrggbb.
   const list = colorList(o.colors).map((c) => c.slice(1));
   const accent = list.length === 1 ? `&accent=${list[0]}` : list.length ? `&colors=${list.join(",")}` : "";
-  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.modelColors === false ? "&model=0" : ""}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.slides ? "&slides=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
+  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.modelColors === false ? "&model=0" : ""}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
 }
 
 /** The settings from encodeViewOptions; anything missing or unknown keeps its default. */
@@ -227,7 +225,6 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   if (p.get("model") === "0") out.modelColors = false;
   if (p.get("scene") === "1") out.scene = true;
   if (p.get("behavior") === "1") out.behavior = true;
-  if (p.get("slides") === "1") out.slides = true;
   const images = p.get("images");
   const hosts = images ? hostList(images) : null;
   if (hosts) out.imageHosts = hosts;

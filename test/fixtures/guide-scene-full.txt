@@ -101,7 +101,7 @@ EVERY ELEMENT ACCEPTS
     tip=<string>  A short explanation shown on hover, keyboard focus or a tap, e.g. tip="Orders not yet shipped": for a term or a number some people won't know, instead of more words on screen. It makes the element a Tab stop if it isn't one.
 
 ELEMENTS AT A GLANCE
-- layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll
+- layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll, deck, slide
 - content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient
 - data: stat, rating, chart, chart-line, chart-rule, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
@@ -800,6 +800,38 @@ ELEMENTS
     example:
       menu-item "Duplicate" icon=copy on=emit:duplicate
 
+  deck  — A slide deck: slides shown one at a time, with arrows and dots to move between them (and a sideways swipe on a touch screen), for presenting a story in a few steps, like a business review; put a slide per step inside it. State is shared by every slide, so one control, such as a segmented for the region, can change what all of them show, and a button with on=set:page:3 jumps to the fourth slide.
+    bind=<state, required>  The state name holding the slide shown, starting at 0.
+    numbers=<boolean>  Show the slide's number, like 2 / 4, in its corner.
+    footer=<string>  A short line in the bottom left of every slide, e.g. footer="Northwind · Confidential".
+    progress=<boolean>  true draws a thin bar along the bottom of each slide showing how far through the deck it is.
+    transition=<fade|none>  fade (a slide fades in when moved to) or none.
+    on=<action>  Actions to run after the slide changes, e.g. emit:changed. Separate several with ;
+    children: slide
+    example:
+      state page=0
+      deck bind=page
+        slide "Q3 business review" layout=title
+          text "Revenue is up 18% on last year" style=lead tone=muted
+        slide "Three numbers that sum up the quarter"
+          grid min=220
+            stat label="Revenue" value="$4.82M" change="+18%"
+            stat label="New customers" value="312" change="+9%"
+
+  slide "<text>"  — One 16:9 slide in a deck, with its title drawn large at the top and the slide's content under it: keep each to one idea, and write the title as the point it makes, not a label. What doesn't fit is shrunk, then cut off, and a table or list shows about five rows, so show the top few with take() and sort(), a total or a chart in place of every row; write money one way through the deck, and a stat's change= as a short signed figure such as change="+1.4 h", with good=down where lower is better (costs, reply time).
+    "<text>"  The slide's title, e.g. Three numbers that sum up the quarter.
+    layout=<title|content|agenda>  title for the opening slide (a large title with its children under it, centred on the slide), content for the rest (title at the top, children below), agenda for a slide that lists the other slides' titles by itself.
+    eyebrow=<string>  A few words above the title, in the accent color, e.g. eyebrow="Q3 2026" or the section's name.
+    subtitle=<string>  A quieter line under the title, e.g. subtitle="Prepared for the board".
+    appendix=<boolean>  true for a backup slide after the main ones: it's left out of the slide count and the agenda, and numbered as Appendix.
+    children: any elements
+    only inside: deck
+    example:
+      slide "What we do next"
+        list
+          list-item "Hire two in support"
+          list-item "Open the Denver office"
+
   scene "<text>"  — EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.
     "<text>" (required)  What the picture shows, in a few words, for screen readers.
     w=<number>  Width of the drawing area, in scene pixels. Shapes use these coordinates; the scene is scaled to fit the screen.
@@ -1053,6 +1085,7 @@ PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, pr
 - steps in order with their status, such as a delivery: timeline holding step status=done|current|upcoming
 - cards to page through, such as photos: carousel bind=page
 - a long list inside a card, such as messages or activity: scroll size=md
+- a presentation or slide deck, one idea per slide: deck bind=page
 - the one takeaway or warning to notice first: callout tone=warn
 - playing cards, seats, dice or keys: tile "A" icon=spade
 - a picture or animation no other element can show: scene "A rabbit hopping across a meadow" w=600 h=340 duration=3

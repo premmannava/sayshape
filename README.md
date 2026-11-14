@@ -102,6 +102,8 @@ ui.on("action", ({ name, value }) => console.log(name, value));
 
 To have a model write the spec, `sayshape/model` streams it from any OpenAI-compatible endpoint into `ui.push()`, checks it with the parser and asks once for a fix. See [Connecting a model](docs/model.md).
 
+A spec can also be a presentation: `deck` and `slide` show 16:9 slides one at a time, in every theme, with no flag to turn on ([slide decks](docs/language.md#slide-decks)).
+
 ## Experimental: drawing and behavior
 
 Two features are **experimental and off by default**. They work, they have tests, and they may still change. Turn them on only where you want them.

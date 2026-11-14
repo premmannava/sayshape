@@ -1,5 +1,5 @@
 /**
- * A deck as a file to send around (experimental, with --slides): a PDF or a
+ * A deck as a file to send around: a PDF or a
  * PowerPoint file with one page per slide, each a picture of the slide as
  * the engine draws it. Pictures, so nothing in the file can be edited, and
  * it looks exactly as it did in the chat.

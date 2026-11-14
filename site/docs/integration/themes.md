@@ -59,3 +59,44 @@ The [playground](/playground) can preview a spec in four color styles and in lig
 ## Contrast
 
 SayShape's default text and accent colors meet 4.5:1 against their surfaces, and its control outlines, focus ring and chart colors meet the 3:1 that WCAG asks of control boundaries. Check contrast for any custom accent or `control` color you choose, in both light and dark. In Windows Contrast Themes SayShape uses the person's colors instead ([Accessibility](../architecture/accessibility)).
+
+## Slide tokens {#slides}
+
+A [`slide`](../elements/slide) is laid out 960 px wide and 540 px tall, then drawn scaled to the space it has. So that a slide's type reads at presentation size, a theme carries a second set of size tokens, `slide`, used inside a slide and nowhere else. The colors are the theme's own: the slide's face is `raised`, its frame `line`, its title `ink`, its eyebrow, opening rule and progress bar `accent`.
+
+| Token | Holds |
+|---|---|
+| `slide.space` | The spacing steps `xs` to `xl` inside a slide (the default `xl`, 48, is a slide's margin) |
+| `slide.radius` | Corner radii `sm`, `md`, `lg` (the slide's own frame uses `lg`) |
+| `slide.text` | The type sizes `caption`, `body`, `lead`, `title` and `display`, in design pixels (body 24, display 52 in the default themes) |
+| `slide.control` | The control `height` (56 in the default themes) |
+| `slide.heading` | The size of a slide's title: `cover` for the opening slide (`layout=title`) and `slide` for every other |
+
+`lightTheme`, `darkTheme` and the Studio themes set all of these. To change them, patch the whole group you mean to change:
+
+```ts
+import { extendTheme, lightTheme } from "sayshape";
+
+const bigger = extendTheme(lightTheme, {
+  slide: { heading: { cover: 72, slide: 48 } },
+});
+```
+
+### A theme without slide tokens
+
+`slide` is optional. A theme built by hand without it still draws decks: the engine scales the theme's own `space`, `radius`, `text` and `control` up by 1.6 (the opening title is 2.0 times the theme's `display` size, other titles 1.36 times) with `slideTokens` from `sayshape/slides`, so slides look like a larger copy of the screen's type. Add `slide` only to tune it.
+
+### Deck settings for hosts
+
+`theme.deck` is for the app around the engine, never for a spec:
+
+| Setting | Effect |
+|---|---|
+| `logo` | An image address, from the page's own origin or one of your `imageHosts`, drawn small at the bottom left of every slide |
+| `square` | `true` draws slides without their rounded frame, for pictures that fill a page |
+
+```ts
+ui.setTheme({ ...lightTheme, deck: { logo: "https://cdn.example.com/logo.png" } });
+```
+
+The [MCP server](./mcp#slide-decks) sets `logo` from its `--logo` option.

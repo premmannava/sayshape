@@ -332,6 +332,39 @@ screen name=cart title="Your cart"
 
 State is shared by every screen. Screens only go at the top level, and their names are plain words (letters, digits and `_`). `go:` to a screen that doesn't exist does nothing. A screen written without `name=` gets a warning but still shows when it's the first, so a lone `screen title="Team hours"` isn't left blank; it can't be the target of `go:`. Your app can move between screens too, with `ui.go("cart")` and `ui.back()`, and hears every move through the `navigate` event.
 
+## Slide decks
+
+`deck` shows its `slide`s one at a time, with arrows and a dot per slide under it. The slide shown is a number in state, starting at 0, named by `bind=` (the way a `carousel` keeps its page). Write a deck at the top level, not inside a card, and a slide per idea, with the slide's title as the point it makes:
+
+```
+state page=0
+deck bind=page footer="Northwind · Confidential"
+  slide "Q3 business review" layout=title eyebrow="Q3 2026"
+    text "Revenue is up 18% on last year" style=lead tone=muted
+  slide "Three numbers that sum up the quarter"
+    grid min=220
+      stat label="Revenue" value="$4.82M" change="+18%"
+      stat label="New customers" value="312" change="+9%"
+  slide "What we do next"
+    timeline
+      step "Hire two in support" time="Nov" status=current
+      step "Open the Denver warehouse" time="Dec" status=upcoming
+```
+
+The props are in the [reference](components.md#deck) and [for slides](components.md#slide), generated from the definitions. How decks behave:
+
+- **A slide is always 16:9.** It is as wide as its space and laid out at 960 by 540, then drawn scaled to fit, so it looks the same at every size. Its quoted text is its title, which it draws itself; everything indented under it goes below the title, centred in what is left. On a `layout=title` slide the title and what is under it sit together in the middle.
+- **Too much on a slide shrinks it, then cuts it off.** Content that is too tall is laid out wider and drawn smaller, down to 60% of its size. Past that it is cut off at the bottom, and a warning names the slide and says to split it in two. A `table` or `list` shows about five rows on a slide, so show the top few with `take()` and `sort()`, a total, or a chart.
+- **Props that fill in the slide.** `eyebrow=` is a few words above the title in the accent color, `subtitle=` a quieter line under it, `footer=` on the deck a short line at the bottom left of every slide, `numbers=false` takes away the number in the corner (2 / 4) and `progress=true` draws a thin bar along the bottom showing how far through the deck it is.
+- **Agenda and backup slides.** A `layout=agenda` slide lists the other slides' titles by itself (not the opening slide, itself or backup slides): up to six lines, then "and N more". `appendix=true` marks a backup slide after the main ones: it is left out of the count and the agenda and is numbered "Appendix 1 / 2".
+- **State is shared.** Every slide reads and writes the same state, so a `segmented` for the region can change what every slide shows, and a button with `on=set:page:3` jumps to the fourth slide. `on=` on the deck runs after the slide changes.
+- **Only the slide shown exists.** The others are neither drawn, pressed nor read out, and a slide still being written draws what has arrived so far, so a deck streams in a slide at a time.
+- **Moving.** The arrows, the dots, Left, Right, Home and End (while one of the deck's controls has focus) and a sideways swipe move between slides. `transition=fade` (the default) fades a new slide in, `none` doesn't; with reduced motion nothing fades.
+- **Screen readers** hear a region called a slide deck, named by the slide shown ("Slide 2 of 4"), with the arrows and dots as buttons, and each slide as a group named by its title. Copy text gives the slide shown.
+- **No colors or sizes.** A slide uses the theme's slide tokens ([Themes](engine.md#slides)), so the same deck matches every brand. A host can show a logo in every slide's corner (`theme.deck.logo`).
+
+A `slide` outside a `deck` is an error and is skipped, and so is anything but a `slide` written directly inside a `deck`. A `deck` without `bind=` gets a warning.
+
 ## Conditions
 
 Every element accepts `if=`. The element (and everything inside it) is shown only while the condition is true.

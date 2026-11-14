@@ -125,6 +125,7 @@ Add them after `"sayshape-mcp"` in `args`:
 | `--no-model-colors` | Keep the colors to the ones above. Without it, when you ask in the conversation for an interface in certain colors, the model passes them along with the interface, and is reminded to keep sending them for the rest of the conversation |
 | `--theme-picker` | A theme selector in the interface's toolbar |
 | `--scene` | Experimental scenes, off unless you ask for them |
+| `--logo https://cdn.example.com/logo.png` | A small logo in the corner of every slide of a deck. Its host is allowed to load images, like `--image-hosts` |
 | `--data db.sqlite` | Answers from a SQLite database (needs Node.js 22.13 or later) |
 
 ### If it doesn't start
@@ -134,6 +135,14 @@ Add them after `"sayshape-mcp"` in `args`:
 - **Still nothing:** run `npx -y sayshape-mcp --help` in a terminal. It should print the options. Apps also keep MCP logs (Claude Desktop: Settings → Developer).
 
 The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#readme) has every option and how to run it from source.
+
+## Slide decks {#slide-decks}
+
+Ask for a presentation and the model writes a [`deck`](../language/slides) of slides, shown one at a time in the conversation with arrows, dots and the keyboard. There is no flag to turn on: the quick start tells every model about decks. (`--slides`, which an earlier version needed, is still accepted and does nothing, so existing setups keep starting.) Start the server with `--logo` to put your logo in the corner of every slide.
+
+Where the chat app can download files, the toolbar saves a deck as a **PDF** or a **PowerPoint file**, with a page per slide. Each page is a picture of the slide as the engine draws it, so the file looks exactly like the chat, and nothing in it can be edited. In chat apps that can show full screen, **Present** fills the screen with the deck.
+
+Coding agents and other text-only clients get no page for a deck. The page they would be given loads an engine from a CDN that is kept a couple of weeks behind the newest release, so it cannot draw slides yet. Instead the model gets the usual check of its spec and a plain sentence saying the deck is written correctly but this app can't show it, so it can tell the person to use a chat app that draws SayShape views. (A server started with `--widget-dir` carries its own engine in the file it writes, so decks work there.) The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#slide-decks) has the details.
 
 ## Compared with the website
 

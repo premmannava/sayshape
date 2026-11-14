@@ -10,7 +10,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 ## Built
 
 - The engine: parser, expressions, actions, layout, painting, hit testing, keyboard focus (including parts of elements), popups and the inspector.
-- 60 elements ([reference](../components/)): layout, content (including callout, tiles for cards, seats and keys, scrolling regions, dialogs and menus), data (stat with a change and sparkline, rating, details for one record, charts: multi-series bar, horizontal bar and line, stacked bars, area, pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey, meters as a ring or a gauge, tables with sorting and selection, schedules of shifts, bookings and Gantt-style plans, boards of cards by stage, trees (lists that open and close, and org charts), flows laid out automatically, the world map), input (buttons, checks, switches, radios, select, date picker, stepper, slider, text input), navigation (screens, tabs, breadcrumb, pagination) and feedback (progress, skeleton, empty).
+- 66 elements ([reference](../components/)): layout (including slide decks), content (including callout, tiles for cards, seats and keys, scrolling regions, dialogs and menus), data (stat with a change and sparkline, rating, details for one record, charts: multi-series bar, horizontal bar and line, stacked bars, area, pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey, meters as a ring or a gauge, tables with sorting and selection, schedules of shifts, bookings and Gantt-style plans, boards of cards by stage, trees (lists that open and close, and org charts), flows laid out automatically, the world map), input (buttons, checks, switches, radios, select, date picker, stepper, slider, text input), navigation (screens, tabs, breadcrumb, pagination) and feedback (progress, skeleton, empty).
 - State with lists and records, host data, `each` with keys and nesting, `bind=` and actions on paths, `add`, `remove` and `clear`, `if` blocks, `derive` lines, list and formatting functions, screens with `go:` and `back`, `notify:` messages, and images from allowed hosts.
 - The model guide (full and compact, with profiles), `sayshape/model` (streaming, cleaning, checking, one repair, bounded refinement), an evaluation script, and `sayshape/testing`.
 - Accessibility: a hidden mirror of the canvas for screen readers, keyboard focus that follows it, chart and map text alternatives, contrast, high-contrast mode and reduced motion ([Accessibility](./accessibility)).
@@ -40,6 +40,7 @@ SayShape is an **early prototype, version 0.1**. This page separates what's buil
 | `select` options | 200, eight shown at once |
 | `table` | 200 rows and 64 columns; a message instead of more. Columns that don't fit scroll sideways |
 | `chart` | 200 items, 6 series, 6 pie or donut slices (the rest summed into Other) |
+| `slide` | Laid out at 960 by 540 and scaled; tall content shrinks to 60%, then is cut off with a warning to split the slide. An agenda lists six titles at most, then "and N more" |
 
 Numbers, money and dates are formatted in US English. Weeks start on Sunday.
 

@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { UI_CLIENT } from "./clients";
-import { checkSpec, createServer, quickStart, setSlides } from "../src/server";
+import { checkSpec, createServer, quickStart } from "../src/server";
 import { decodeViewOptions, encodeViewOptions, parseViewArgs } from "../src/ui/view-options";
 
 const SPEC = `state page=0
@@ -23,15 +23,7 @@ async function show(capabilities: object): Promise<unknown> {
 }
 
 describe("slide decks in the MCP server", () => {
-  afterEach(() => setSlides(false));
-
-  it("are off unless --slides turned them on", () => {
-    expect(checkSpec(SPEC).errors[0]?.message).toMatch(/Unknown element "deck"/);
-    expect(quickStart()).not.toMatch(/\bdeck\b/);
-  });
-
-  it("parse cleanly and are in the quick start when on", async () => {
-    setSlides(true);
+  it("are on with no flag: they parse cleanly and are in the quick start", async () => {
     const c = checkSpec(SPEC);
     expect([...c.errors, ...c.warnings]).toEqual([]);
     expect(quickStart()).toMatch(/deck bind=page/);
@@ -41,14 +33,13 @@ describe("slide decks in the MCP server", () => {
   });
 
   it("give a text-only client a plain sentence, not a page that can't draw a deck", async () => {
-    setSlides(true);
     const said = textOf(await show({}));
     expect(said).toMatch(/can't show slide decks yet/);
     expect(said).not.toMatch(/<html|<script/i);
   });
 
   it("take a logo for every slide, and allow its host like any image host", () => {
-    const view = parseViewArgs(["--slides", "--image-hosts", "cdn.example.com", "--logo", "https://brand.example.com/logo.png?v=2"]);
+    const view = parseViewArgs(["--image-hosts", "cdn.example.com", "--logo", "https://brand.example.com/logo.png?v=2"]);
     expect(view.logo).toBe("https://brand.example.com/logo.png?v=2");
     expect(view.imageHosts).toEqual(["cdn.example.com", "brand.example.com"]);
     const back = decodeViewOptions(encodeViewOptions(view));
@@ -60,15 +51,19 @@ describe("slide decks in the MCP server", () => {
     }
     expect(() => parseViewArgs(["--logo"])).toThrow(/--logo needs/);
     // A logo whose host isn't allowed is dropped, as the engine would refuse it anyway.
-    expect(decodeViewOptions("slides=1&logo=https%3A%2F%2Fother.example.com%2Fa.png&images=cdn.example.com").logo).toBeUndefined();
+    expect(decodeViewOptions("logo=https%3A%2F%2Fother.example.com%2Fa.png&images=cdn.example.com").logo).toBeUndefined();
     expect(parseViewArgs([]).logo).toBeUndefined();
   });
 
-  it("reach the view through its options", () => {
-    const view = parseViewArgs(["--slides"]);
-    expect(view.slides).toBe(true);
-    expect(decodeViewOptions(encodeViewOptions(view)).slides).toBe(true);
-    expect(decodeViewOptions(encodeViewOptions(parseViewArgs([]))).slides).toBeUndefined();
+  it("still accept --slides, which does nothing", () => {
+    expect(parseViewArgs(["--slides"])).toEqual(parseViewArgs([]));
+    expect(encodeViewOptions(parseViewArgs(["--slides"]))).toBe(encodeViewOptions(parseViewArgs([])));
     expect(encodeViewOptions(parseViewArgs([]))).not.toMatch(/slides/);
+    // An old tag that still says slides=1 reads the same as one without it.
+    expect(decodeViewOptions("picker=0&theme=teal&slides=1")).toEqual(decodeViewOptions("picker=0&theme=teal"));
+  });
+
+  it("take a logo without --slides", () => {
+    expect(parseViewArgs(["--image-hosts", "cdn.example.com", "--logo", "https://cdn.example.com/logo.png"]).logo).toBe("https://cdn.example.com/logo.png");
   });
 });

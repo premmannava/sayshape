@@ -350,7 +350,7 @@ export interface ComponentDef {
    */
   clipChildren?(box: Box): Rect | null;
   /**
-   * Experimental (slides): for an element that lays its children out at a size
+   * For an element that lays its children out at a size
    * of its own and draws them scaled to fit its box. Maps a point where the
    * children were laid out to the screen: screen = point * scale + (dx, dy).
    * The engine paints the children through it, maps their hit regions, focus
@@ -360,7 +360,7 @@ export interface ComponentDef {
    */
   childTransform?(box: Box): ChildTransform | null;
   /**
-   * Experimental (slides): the theme this element and everything inside it
+   * The theme this element and everything inside it
    * is laid out and painted with, made from the screen's theme (a slide's
    * larger type and spacing). Return the same theme to change nothing.
    */

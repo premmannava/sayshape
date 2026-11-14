@@ -10,6 +10,8 @@
  * test/fixtures/main/ holds the same two files as they were recorded from
  * main before the colors argument existed. They're never recorded again: a
  * server started with --no-model-colors must still give exactly them.
+ * (One exception, on purpose: the two tools files changed when slide decks
+ * stopped being behind a flag, which adds deck to the quick start and the docs.)
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

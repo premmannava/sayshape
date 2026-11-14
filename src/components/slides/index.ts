@@ -1,7 +1,7 @@
 /**
- * Slides (experimental, opt-in): `deck` and `slide`, for writing a slide
- * deck. Off unless a host registers slideComponents (the playground with
- * ?slides=1): without them, deck and slide are unknown elements.
+ * Slides: `deck` and `slide`, for writing a slide deck. Both are in
+ * coreComponents like any other element; slideComponents (this entry point,
+ * `sayshape/slides`) lists the same two for hosts that import them on their own.
  *
  *   state page=0
  *   deck bind=page
@@ -11,9 +11,9 @@
  *       timeline
  *         step "Hire two in support" time="Nov" status=current
  *
- * A trial: everything it needs is in this folder, plus two optional engine
- * hooks (ComponentDef.childTransform and ComponentDef.theme) and the theme's
- * optional slide tokens, which do nothing when no slide is registered.
+ * Everything they need is in this folder, plus two optional engine hooks
+ * (ComponentDef.childTransform and ComponentDef.theme) and the theme's
+ * optional slide tokens, which do nothing outside a slide.
  */
 import type { ComponentDef } from "../../component";
 import { deck } from "./deck";

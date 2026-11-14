@@ -139,6 +139,21 @@ With `behavior: true`, a spec can have things that change by themselves, and (wi
 
 The playground's behavior samples (`?behavior=1`, and `&scene=1` for the last two): a countdown, stock running down with Play and Pause, a falling ball, and a point on a curve. Design and limits: [docs/plans/behavior.md](plans/behavior.md); validation: [docs/plans/behavior-validation.md](plans/behavior-validation.md).
 
+## Slides
+
+`deck` and `slide` are ordinary elements, in `coreComponents` like `carousel` or `dialog`, with no flag to turn on ([the language](language.md#slide-decks)). `sayshape/slides` exports the same two as `slideComponents`, for hosts that import them on their own; registering them twice does no harm, since a registry keeps one definition per type.
+
+A slide is the first element whose height doesn't come from what's in it, and the first that draws its children at a size of its own. Two optional hooks on `ComponentDef` make that possible, and any element may use them:
+
+- **`childTransform(box)`** says how an element's children are drawn: the engine lays them out where they are, then paints them through `screen = point * scale + (dx, dy)`. The same map carries their hit regions, the focus ring, the accessibility mirror's rectangles and the inspector's boxes to the screen, and press, drag, wheel and `hitTest` handlers are given the child's own laid-out box with the pointer in the same space. Return `null` (or leave the hook out) and children are drawn as laid out. A slide lays its children out 960 px wide and 540 px tall (`DESIGN_W`, `DESIGN_H`), shrinks tall content to fit (to 60% at the least, `MIN_FIT`) and returns the transform that scales it all to the slide's real width.
+- **`theme(theme)`** returns the theme the element and everything inside it is laid out and painted with, made from the screen's. A slide returns a theme with its larger type, spacing, corners and control height (below). Return the same theme to change nothing; the engine remembers the result per theme, so layout reuses its context.
+
+Both hooks are free for every other element: the engine does nothing extra when they're missing.
+
+**The theme's slide tokens.** `Theme.slide` holds `space`, `radius`, `text` and `control` (the same shapes as the theme's own, but larger, because a slide is laid out 960 px wide and then scaled), and `heading`, the size of the opening slide's title (`cover`) and of every other slide's (`slide`). A theme without `slide` isn't broken: `slideTokens(theme)` (from `sayshape/slides`) scales the theme's own tokens up by 1.6 (headings 2.0 and 1.36 times the display size). `lightTheme` and `darkTheme` (which share the base tokens: body 24, display 52) and the Studio themes (display 54) all set their own; the website's Themes page lists them. Inside a slide the theme also carries `zoom` (how much larger than the screen's its type is), which elements with sizes of their own, such as a stat's figure, scale by; hosts never set it.
+
+**Host options for decks.** `theme.deck` is for hosts: `logo` is an image address (from the page's origin or `imageHosts`) drawn small at the bottom left of every slide, and `square: true` draws slides without their rounded frame, for pictures that fill a page. To save a deck as pages, `picture({ width, state, frame, theme })` draws a copy of the screen at another width, with other state (`{ page: 3 }`) and cut down to the first element `frame` accepts, in another theme: the MCP view saves a PDF or a PowerPoint file this way, a picture of each slide. The options are described in the comment on `picture()` in `src/engine.ts`.
+
 ## Images
 
 A spec can name any image URL, and a model writes specs, so SayShape only loads images from your own site (the page's origin) and from hosts you list. Anything else, including `data:` and `javascript:` URLs, is blocked: the `image` shows its description instead, and the console says which host to allow.

@@ -10,9 +10,9 @@ export const SAVE_ACTION = "save_image";
 export const COPY_ACTION = "copy_text";
 /** The action the toolbar's Pause/Resume button sends to the view (behavior on; never to the model). */
 export const MOTION_ACTION = "pause_motion";
-/** The action the toolbar's PowerPoint button sends to the view (slides on, a deck showing; never to the model). */
+/** The action the toolbar's PowerPoint button sends to the view (a deck showing; never to the model). */
 export const DECK_ACTION = "save_powerpoint";
-/** The action the toolbar's Present button sends to the view (slides on, a deck showing, a chat app with a full-screen mode; never to the model). */
+/** The action the toolbar's Present button sends to the view (a deck showing, a chat app with a full-screen mode; never to the model). */
 export const PRESENT_ACTION = "present";
 
 /** Which tools the toolbar shows: decided by the server's flags and what the chat app can do. */
@@ -31,12 +31,12 @@ export interface Tools {
    */
   motion?: boolean;
   /**
-   * Deck files (--slides, where the chat app can download). While a deck is
+   * Deck files (where the chat app can download). While a deck is
    * showing (toolbar state deck), the download button saves a PDF and a
    * second button saves a PowerPoint file.
    */
   deck?: boolean;
-  /** Present (--slides, where the chat app has a full-screen mode): shown while a deck is, it fills the screen and back (toolbar state full). */
+  /** Present (where the chat app has a full-screen mode): shown while a deck is, it fills the screen and back (toolbar state full). */
   present?: boolean;
 }
 

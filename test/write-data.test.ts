@@ -78,6 +78,7 @@ describe("bind= inside each, for every component that binds", () => {
     ["flow", `flow items={[{id: "a", label: "Start"}]} bind=r.v`, "v", "", "press"],
     ["carousel", `carousel bind=r.v min=400\n      card\n        text "a"\n      card\n        text "b"`, "v", 0, "last"],
     ["dialog", `dialog "About {r.name}" bind=r.v\n      text "Inside"`, "v", true, "press"],
+    ["deck", `deck bind=r.v\n      slide "One"\n        text "a"\n      slide "Two"\n        text "b"`, "v", 0, "last"],
   ];
 
   it("covers all of them", () => {

@@ -62,7 +62,7 @@ export interface Theme {
   text: { caption: number; body: number; lead: number; title: number; display: number };
   control: { height: number };
   /**
-   * Experimental (sayshape/slides): the type, spacing, corners and control
+   * For slides: the type, spacing, corners and control
    * height inside a slide, which is laid out 960 px wide and then scaled to
    * fit its space, so these are larger than the screen's. Missing: slides
    * scale the screen's own tokens up.
@@ -76,14 +76,14 @@ export interface Theme {
     heading: { cover: number; slide: number };
   };
   /**
-   * Experimental (sayshape/slides): what a host sets for every deck. logo is
+   * For slides: what a host sets for every deck. logo is
    * an image address (from the page's own origin or imageHosts) drawn small in
    * each slide's bottom left corner; square draws slides without their rounded
    * frame, for pictures that fill a page.
    */
   deck?: { logo?: string; square?: boolean };
   /**
-   * Experimental (sayshape/slides): set on the theme inside a slide, never by
+   * For slides: set on the theme inside a slide, never by
    * a host: how much larger than the screen's its type is. Elements with sizes
    * of their own (a stat's figure) draw that much larger there.
    */
