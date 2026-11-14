@@ -3,7 +3,7 @@
  * TextMeasurer, so it runs (and is tested) without a canvas.
  */
 import { localToday } from "./dates";
-import { PropReader, type ElementView, type LayoutContext } from "./component";
+import { PropReader, type ChildTransform, type ElementView, type LayoutContext } from "./component";
 import { eachInstances, MAX_EACH_ELEMENTS, scopeOf, type EachBudget } from "./each";
 import { bareExpression, evaluate, type Scope } from "./expr";
 import type { Registry } from "./registry";
@@ -79,16 +79,7 @@ export function createLayoutContext(
       return r;
     },
     layout(node, x, y, width) {
-      if (screen < 0) screen = Math.max(0, width);
-      const box: Box = { node, x, y, w: Math.max(0, width), h: 0, children: [] };
-      const def = registry.get(node.type);
-      laying.push(node);
-      try {
-        if (def) def.layout(box, ctx);
-      } finally {
-        laying.pop();
-      }
-      return box;
+      return layoutIn(ctx, node, x, y, width);
     },
     visibleChildren(node) {
       let k = kids.get(node);
@@ -111,6 +102,42 @@ export function createLayoutContext(
       return k;
     },
     minWidth(node) {
+      return minWidthIn(ctx, node);
+    },
+    screenWidth: () => Math.max(0, screen),
+    shift: shiftBox,
+    warn,
+    today,
+    ...(isLoading ? { isLoading } : {}),
+  };
+  /** The context an element and what's inside it work in: its own theme, when it has one (a slide's). */
+  const themed = new WeakMap<Theme, LayoutContext>();
+  const within = (c: LayoutContext, node: SayShapeNode): LayoutContext => {
+    const own = registry.get(node.type)?.theme;
+    if (!own) return c;
+    const t = own(c.theme);
+    if (t === c.theme) return c;
+    let d = themed.get(t);
+    if (!d) {
+      const inner: LayoutContext = { ...c, theme: t, layout: (n, x, y, w) => layoutIn(inner, n, x, y, w), minWidth: (n) => minWidthIn(inner, n) };
+      themed.set(t, (d = inner));
+    }
+    return d;
+  };
+  function layoutIn(outer: LayoutContext, node: SayShapeNode, x: number, y: number, width: number): Box {
+    if (screen < 0) screen = Math.max(0, width);
+    const box: Box = { node, x, y, w: Math.max(0, width), h: 0, children: [] };
+    const def = registry.get(node.type);
+    laying.push(node);
+    try {
+      if (def) def.layout(box, within(outer, node));
+    } finally {
+      laying.pop();
+    }
+    return box;
+  }
+  function minWidthIn(outer: LayoutContext, node: SayShapeNode): number {
+      const ctx = within(outer, node);
       let w = mins.get(node);
       if (w === undefined) {
         const def = registry.get(node.type);
@@ -125,14 +152,40 @@ export function createLayoutContext(
         mins.set(node, w);
       }
       return w;
-    },
-    screenWidth: () => Math.max(0, screen),
-    shift: shiftBox,
-    warn,
-    today,
-    ...(isLoading ? { isLoading } : {}),
-  };
+  }
   return ctx;
+}
+
+/** A point or rect through a ChildTransform, from where it was laid out to the screen. */
+export function applyTransform<R extends { x: number; y: number; w: number; h: number }>(r: R, t: ChildTransform): R {
+  return { ...r, x: r.x * t.scale + t.dx, y: r.y * t.scale + t.dy, w: r.w * t.scale, h: r.h * t.scale };
+}
+
+/** T applied after inner: a child's transform inside its parent's. */
+export function composeTransform(outer: ChildTransform, inner: ChildTransform): ChildTransform {
+  return { scale: outer.scale * inner.scale, dx: inner.dx * outer.scale + outer.dx, dy: inner.dy * outer.scale + outer.dy };
+}
+
+export const IDENTITY: ChildTransform = { scale: 1, dx: 0, dy: 0 };
+
+/**
+ * The box tree as it sits on the screen: the same tree when no element draws
+ * its children through a transform (ComponentDef.childTransform, a slide's),
+ * otherwise a copy with those children's rects mapped to where they're drawn.
+ * Each copy keeps its node and data, so it's matched to regions by node id.
+ */
+export function screenBoxes(root: Box, registry: Registry): Box {
+  let any = false;
+  walkBoxes(root, (b) => { if (!any && registry.get(b.node.type)?.childTransform?.(b)) any = true; });
+  if (!any) return root;
+  const map = (b: Box, t: ChildTransform | null): Box => {
+    const own = registry.get(b.node.type)?.childTransform?.(b) ?? null;
+    const inner = own ? (t ? composeTransform(t, own) : own) : t;
+    const placed = t ? applyTransform(b, t) : { ...b };
+    placed.children = b.children.map((k) => map(k, inner));
+    return placed;
+  };
+  return map(root, null);
 }
 
 /** Lay out a whole tree. */

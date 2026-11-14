@@ -61,6 +61,20 @@ export interface Theme {
   font: { family: string; mono: string };
   text: { caption: number; body: number; lead: number; title: number; display: number };
   control: { height: number };
+  /**
+   * Experimental (sayshape/slides): the type, spacing, corners and control
+   * height inside a slide, which is laid out 960 px wide and then scaled to
+   * fit its space, so these are larger than the screen's. Missing: slides
+   * scale the screen's own tokens up.
+   */
+  slide?: {
+    space: { xs: number; sm: number; md: number; lg: number; xl: number };
+    radius: { sm: number; md: number; lg: number };
+    text: { caption: number; body: number; lead: number; title: number; display: number };
+    control: { height: number };
+    /** A slide's own title: the opening slide's (layout=title), and every other slide's. */
+    heading: { cover: number; slide: number };
+  };
 }
 
 const base = {
@@ -72,6 +86,13 @@ const base = {
   },
   text: { caption: 12, body: 14, lead: 16, title: 20, display: 30 },
   control: { height: 40 },
+  slide: {
+    space: { xs: 6, sm: 12, md: 22, lg: 34, xl: 48 },
+    radius: { sm: 10, md: 12, lg: 18 },
+    text: { caption: 18, body: 24, lead: 28, title: 34, display: 52 },
+    control: { height: 56 },
+    heading: { cover: 64, slide: 44 },
+  },
 };
 
 export const lightTheme: Theme = {
@@ -154,6 +175,13 @@ const studioBase = {
   },
   text: { caption: 12, body: 14, lead: 16, title: 20, display: 32 },
   control: { height: 40 },
+  slide: {
+    space: { xs: 6, sm: 12, md: 22, lg: 36, xl: 48 },
+    radius: { sm: 12, md: 14, lg: 22 },
+    text: { caption: 18, body: 24, lead: 28, title: 34, display: 54 },
+    control: { height: 56 },
+    heading: { cover: 66, slide: 44 },
+  },
 };
 
 export const studioLightTheme: Theme = {

@@ -65,6 +65,12 @@ export interface HitRegion {
   drags?: boolean;
   /** A drag here moves up or down: a touch that starts on it takes vertical swipes from the page (behavior's scene drag). */
   claimsSwipe?: boolean;
+  /**
+   * Inside an element that draws its children scaled (ComponentDef.childTransform, a slide):
+   * box is where the region is on the screen, and this is the box as laid out with the
+   * transform from there to the screen. Handlers get the laid-out box and the pointer mapped back.
+   */
+  local?: { box: Box; transform: { scale: number; dx: number; dy: number } };
 }
 
 /** What the pointer or keyboard focus is currently on. */

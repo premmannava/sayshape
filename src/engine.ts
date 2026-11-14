@@ -11,14 +11,14 @@
 import { parseActions, runActions } from "./actions";
 import { MAX_RULE_LIST, realClock, RULE_OPS, RuleRunner, type Clock, type RuleDef } from "./behavior";
 import { RULE_FUNCTIONS } from "./math";
-import { PropReader, type ComponentDef, type DragContext, type ElementView, type LayoutContext, type PaintContext, type PopupContext, type PressContext } from "./component";
+import { PropReader, type ChildTransform, type ComponentDef, type DragContext, type ElementView, type LayoutContext, type PaintContext, type PopupContext, type PressContext } from "./component";
 import { Emitter } from "./emitter";
 import { locateOf, scopeOf } from "./each";
 import { domEditorHost } from "./dom-editor";
 import { noEditor, valueStamp, type EditorHost, type EditorSpec } from "./editor";
 import { isList, makeList } from "./data";
 import { findItem, getIn, PATH, placeOf, setIn, type Locate, type Place } from "./paths";
-import { createLayoutContext, isVisible, walkBoxes } from "./layout";
+import { applyTransform, composeTransform, createLayoutContext, isVisible, screenBoxes, walkBoxes } from "./layout";
 import { Loading, type LoadingView } from "./loading";
 import { MotionValues } from "./motion";
 import { easeOut, paintGenericGhost } from "./ghost";
@@ -173,6 +173,10 @@ export class SayShape {
   private hits: HitRegion[] = [];
   /** While painting the children of elements that scroll: what each shows, innermost last. */
   private clips: Array<{ rect: Rect; owner: Box }> = [];
+  /** While painting inside an element that draws its children scaled (a slide): from there to the screen. */
+  private xform: ChildTransform | null = null;
+  /** The box trees as they sit on the screen (screenBoxes), worked out once per layout. */
+  private screen: { root: Box | null; modal: Box | null; at: { root: Box | null; modal: Box | null } } | null = null;
   /** The open overlay (a dialog), laid out on its own over the screen, or null. */
   private modal: Box | null = null;
   /** Where the open overlay's hit regions start in this.hits (only those take presses and Tab). */
@@ -356,7 +360,7 @@ export class SayShape {
 
   /** The laid-out boxes; while an overlay is open, it's the root's last child (drawn on top). */
   get boxes(): Box | null {
-    const root = this.rootBox, m = this.modal;
+    const { root, modal: m } = this.screenTree();
     if (!root || !m) return root;
     return { ...root, h: Math.max(root.h, m.y + m.h), children: [...root.children, m] };
   }
@@ -375,9 +379,10 @@ export class SayShape {
    * name and state, in reading order (src/a11y). Null before the first frame.
    */
   accessibilityTree(): AccessibleNode | null {
-    if (!this.rootBox) return null;
+    const screen = this.screenTree();
+    if (!screen.root) return null;
     // While an overlay is open, it's all a screen reader (and Copy text) gets: what's behind is inert.
-    const root = this.modal ? { ...this.rootBox, children: [this.modal] } : this.rootBox;
+    const root = screen.modal ? { ...screen.root, children: [screen.modal] } : screen.root;
     return buildAccessibilityTree({
       root,
       hits: this.hits,
@@ -594,7 +599,8 @@ export class SayShape {
     for (const target of targets) {
       const wheel = this.registry.get(target.node.type)?.wheel;
       if (!wheel) continue;
-      if (wheel({ ...this.pressContext(target), x, y, deltaY, deltaX, ...mods })) {
+      const [lx, ly] = this.toLocal(target, x, y);
+      if (wheel({ ...this.pressContext(target), x: lx, y: ly, deltaY, deltaX, ...mods })) {
         this.invalidate("layout");
         return true;
       }
@@ -817,10 +823,12 @@ export class SayShape {
       },
       font: (w, s) => fontString(w, s, theme.font.family),
       roundRect: (x, y, w, h, r) => roundRectPath(g, x, y, w, h, r),
-      addHit: (box, o = {}) => {
+      addHit: (laid, o = {}) => {
         const focusable = o.focusable ?? true;
         const clip = this.clips[this.clips.length - 1];
-        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
+        const xf = this.xform;
+        const box = xf ? applyTransform(laid, xf) : laid;
+        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(xf ? { local: { box: laid, transform: xf } } : {}), ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
       },
       isHovered: (n, d) => same(this.hover, n, d),
       isFocused: (n, d) => this.keyboardMode && same(this.focus, n, d),
@@ -853,11 +861,13 @@ export class SayShape {
     };
   }
 
-  private paintBox(box: Box, ctx: PaintContext, parentAlpha: number): void {
+  private paintBox(box: Box, outerCtx: PaintContext, parentAlpha: number): void {
     const def = this.registry.get(box.node.type);
+    const own = def?.theme?.(outerCtx.theme);
+    const ctx = own && own !== outerCtx.theme ? { ...outerCtx, theme: own } : outerCtx;
     // A leaf without its own draw-in fades in when its data arrives; containers leave it to their children.
-    const own = !def?.paintLoading && !box.children.length;
-    const alpha = parentAlpha * ctx.appear(box.node) * (own ? easeOut(ctx.reveal(box.node) * 2) : 1);
+    const leaf = !def?.paintLoading && !box.children.length;
+    const alpha = parentAlpha * ctx.appear(box.node) * (leaf ? easeOut(ctx.reveal(box.node) * 2) : 1);
     ctx.g.save();
     ctx.g.globalAlpha = alpha;
     const loading = !!def && ctx.isLoading(box.node);
@@ -869,19 +879,33 @@ export class SayShape {
     ctx.g.restore();
     const clipHere = this.clips[this.clips.length - 1];
     const under = def?.surface?.(box, ctx);
-    const inner = under && under !== ctx.theme.colors.raised ? { ...ctx, theme: { ...ctx.theme, colors: { ...ctx.theme.colors, raised: under } } } : ctx;
+    let inner = under && under !== ctx.theme.colors.raised ? { ...ctx, theme: { ...ctx.theme, colors: { ...ctx.theme.colors, raised: under } } } : ctx;
     // An element that scrolls its children shows them through its own box only.
     const clip = def?.clipChildren?.(box) ?? null;
+    const xf = this.xform;
     if (clip) {
+      // Clips are kept in screen pixels, for the pointer; drawn in the space being painted.
       const outer = this.clips[this.clips.length - 1]?.rect;
-      const rect = outer ? intersectRect(clip, outer) : clip;
+      const onScreen = xf ? applyTransform(clip, xf) : clip;
+      const rect = outer ? intersectRect(onScreen, outer) : onScreen;
+      const drawn = xf ? { x: (rect.x - xf.dx) / xf.scale, y: (rect.y - xf.dy) / xf.scale, w: rect.w / xf.scale, h: rect.h / xf.scale } : rect;
       ctx.g.save();
       ctx.g.beginPath();
-      ctx.g.rect(rect.x, rect.y, rect.w, rect.h);
+      ctx.g.rect(drawn.x, drawn.y, drawn.w, drawn.h);
       ctx.g.clip();
       this.clips.push({ rect, owner: box });
     }
+    // An element that draws its children scaled (a slide): paint them through its transform.
+    const tr = box.children.length ? def?.childTransform?.(box) ?? null : null;
+    if (tr) {
+      ctx.g.save();
+      ctx.g.transform(tr.scale, 0, 0, tr.scale, tr.dx, tr.dy);
+      this.xform = xf ? composeTransform(xf, tr) : tr;
+      const p = inner.pointer;
+      if (p) inner = { ...inner, pointer: { x: (p.x - tr.dx) / tr.scale, y: (p.y - tr.dy) / tr.scale } };
+    }
     for (const k of box.children) this.paintBox(k, inner, alpha);
+    if (tr) { this.xform = xf; ctx.g.restore(); }
     if (clip) { this.clips.pop(); ctx.g.restore(); }
     if (def?.paintOver && !(loading && (def.paintLoading || !box.children.length))) {
       ctx.g.save();
@@ -895,7 +919,8 @@ export class SayShape {
     if (box.node.props.tip !== undefined && !loading && !def?.provides && this.tipOf(box.node)) {
       // Parts there only for a child's tip ("tip:…") don't count: the element's own tip still needs its stop.
       const own = this.hits.slice(before).some((h) => h.box.node.id === box.node.id && !isTipPart(h.detail));
-      this.hits.splice(before, 0, { box: own ? box : atLeastTarget(box), detail: TIP, focusable: !own, ...(clipHere ? { clip: clipHere.rect, clipOwner: clipHere.owner } : {}) });
+      const placed = xf ? applyTransform(box, xf) : box;
+      this.hits.splice(before, 0, { box: own ? placed : atLeastTarget(placed), detail: TIP, focusable: !own, ...(xf ? { local: { box, transform: xf } } : {}), ...(clipHere ? { clip: clipHere.rect, clipOwner: clipHere.owner } : {}) });
     }
   }
 
@@ -1084,7 +1109,8 @@ export class SayShape {
       if (h.clip && (x < h.clip.x || x > h.clip.x + h.clip.w || y < h.clip.y || y > h.clip.y + h.clip.h)) continue;
       const def = this.registry.get(b.node.type);
       if (def?.hitTest) {
-        const r = def.hitTest(b, x, y, h.detail);
+        const l = h.local;
+        const r = l ? def.hitTest(l.box, (x - l.transform.dx) / l.transform.scale, (y - l.transform.dy) / l.transform.scale, h.detail) : def.hitTest(b, x, y, h.detail);
         if (!r) continue;
         return { node: b.node, box: b, detail: r.detail };
       }
@@ -1093,8 +1119,11 @@ export class SayShape {
     return null;
   }
 
-  private pressContext(target: HitTarget): PressContext {
+  private pressContext(screenTarget: HitTarget): PressContext {
     const readers = new WeakMap<SayShapeNode, PropReader>();
+    // Inside a scaled slide, handlers work with the box as it was laid out.
+    const local = screenTarget.layer ? undefined : this.hits.find((h) => sameRegion(h, screenTarget))?.local;
+    const target = local ? { ...screenTarget, box: local.box } : screenTarget;
     return {
       target,
       scope: scopeOf(target.node, this.state.scope),
@@ -1275,7 +1304,8 @@ export class SayShape {
     const def = this.registry.get(target.node.type);
     // Writes in the end phase (putting things back on cancel) still count as held, until it's done.
     if (phase === "end") this.dragging = target;
-    const relayout = def?.drag?.({ ...this.pressContext(target), x, y, phase, ...(cancelled ? { cancelled } : {}) });
+    const [lx, ly] = this.toLocal(target, x, y);
+    const relayout = def?.drag?.({ ...this.pressContext(target), x: lx, y: ly, phase, ...(cancelled ? { cancelled } : {}) });
     if (phase === "end") { this.dragging = null; this.dragHeld = []; }
     this.invalidate(relayout ? "layout" : "paint");
   }
@@ -1740,11 +1770,12 @@ export class SayShape {
   /** After layout, point hover/focus at the new boxes for the same nodes. */
   private refreshTargets(): void {
     const find = (t: HitTarget | null): HitTarget | null => {
-      if (!t || !this.rootBox) return null;
+      const screen = this.screenTree();
+      if (!t || !screen.root) return null;
       let found: Box | null = null;
       const walk = (b: Box) => { if (found) return; if (b.node.id === t.node.id) found = b; else b.children.forEach(walk); };
-      walk(this.rootBox);
-      if (this.modal) walk(this.modal);
+      walk(screen.root);
+      if (screen.modal) walk(screen.modal);
       if (!found || !this.isShown((found as Box).node)) return null;
       return { node: (found as Box).node, box: found, detail: t.detail };
     };
@@ -1769,9 +1800,40 @@ export class SayShape {
   private boxOf(node: SayShapeNode): Box | null {
     let found: Box | null = null;
     const walk = (b: Box) => { if (found) return; if (b.node.id === node.id) found = b; else b.children.forEach(walk); };
-    if (this.rootBox) walk(this.rootBox);
-    if (this.modal) walk(this.modal);
+    const { root, modal } = this.screenTree();
+    if (root) walk(root);
+    if (modal) walk(modal);
     return found;
+  }
+
+  /** The laid-out boxes as they sit on the screen: the same trees unless something draws its children scaled. */
+  private screenTree(): { root: Box | null; modal: Box | null } {
+    const s = this.screen;
+    if (s && s.at.root === this.rootBox && s.at.modal === this.modal) return s;
+    const root = this.rootBox && screenBoxes(this.rootBox, this.registry);
+    const modal = this.modal && screenBoxes(this.modal, this.registry);
+    this.screen = { root, modal, at: { root: this.rootBox, modal: this.modal } };
+    return this.screen;
+  }
+
+  /** The theme an element is laid out and painted with: the screen's, or the one an element around it gives (ComponentDef.theme, a slide's). */
+  private themeAt(node: SayShapeNode): Theme {
+    let found: Theme | null = null;
+    const walk = (b: Box, t: Theme) => {
+      if (found) return;
+      const own = this.registry.get(b.node.type)?.theme?.(t) ?? t;
+      if (b.node.id === node.id) { found = own; return; }
+      for (const k of b.children) walk(k, own);
+    };
+    if (this.rootBox) walk(this.rootBox, this.theme);
+    if (!found && this.modal) walk(this.modal, this.theme);
+    return found ?? this.theme;
+  }
+
+  /** A pointer position in the space the target's element was laid out in (a slide's, when it's inside one). */
+  private toLocal(target: HitTarget, x: number, y: number): [number, number] {
+    const t = target.layer ? undefined : this.hits.find((h) => sameRegion(h, target))?.local?.transform;
+    return t ? [(x - t.dx) / t.scale, (y - t.dy) / t.scale] : [x, y];
   }
 
   /** How the text box for a field should look, or null if it can't be typed in right now. */
@@ -1781,7 +1843,9 @@ export class SayShape {
     if (!def?.editor || !box || !node.props.bind) return null;
     const p = new PropReader(node, scopeOf(node, this.state.scope));
     if (p.cond("disabled")) return null;
-    const spec = def.editor(box, p, this.theme);
+    // Inside a scaled slide: worked out as laid out, with the slide's theme, then put where it's drawn.
+    const local = this.hits.find((h) => h.box.node.id === node.id && h.local)?.local;
+    const spec = local ? scaledEditor(def.editor(local.box, p, this.themeAt(node)), local.transform) : def.editor(box, p, this.theme);
     // Keep what the person typed while the stored value is still what it wrote.
     if (this.typed && p.bound() === this.typed.value) spec.value = this.typed.text;
     return spec;
@@ -2312,6 +2376,16 @@ function cameFromAfter(canvas: HTMLCanvasElement, from: EventTarget | null, a11y
 }
 
 /** Whether a hit region is the one a target refers to (same element, same part). */
+/** A text box worked out where a field was laid out, moved and scaled to where it's drawn (inside a slide). */
+function scaledEditor(spec: EditorSpec, t: ChildTransform): EditorSpec {
+  return {
+    ...spec,
+    rect: applyTransform(spec.rect, t),
+    font: spec.font.replace(/(\d+(?:\.\d+)?)px/, (_, n: string) => `${Number(n) * t.scale}px`),
+    ...(spec.lineHeight !== undefined ? { lineHeight: spec.lineHeight * t.scale } : {}),
+  };
+}
+
 function sameRegion(h: HitRegion, t: HitTarget): boolean {
   return h.box.node.id === t.node.id && h.detail === t.detail;
 }
