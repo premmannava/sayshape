@@ -47,6 +47,8 @@ Chat apps keep the tool description they read when the connector was added, so r
 
 At each release, before step 1: set `PAGE_ENGINE_VERSION` to the newest `sayshape` version that has been on npm for at least 14 days (`npm view sayshape time`), never later than the version being released. If none is old enough yet, leave it. `verify:pack -- --registry <version>` checks that the pinned version is on npm with `dist/sayshape.global.js` and says how old it is. The first version with that file is 0.1.1, so until 0.1.1 has been out for two weeks the page works in browsers (once 0.1.1 is published) but not in chat apps with that rule.
 
+The page also needs `extendTheme` from that build: with brand colors it lays the accent and chart series the server worked out over `lightTheme` and `darkTheme` (`mcp/src/fallback.ts`), and falls back to the plain themes without it. 0.1.1 has it.
+
 The trade-off: the page can draw with an engine one release older than the server that checked the spec, so an element added in the newest release may not draw on the page yet.
 
 ### The engine inside the widget file

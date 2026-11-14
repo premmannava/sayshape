@@ -597,10 +597,11 @@ export function createServer(opts: ServerOptions): McpServer {
       if (textOnly) {
         // Rows never go through the conversation, and a page outside the chat can't fetch them.
         if (names.length) return text(PAGE_DATASETS_TEXT);
-        if (repeat) return text(fileMode ? WIDGET_REPEAT_TEXT : PAGE_REPEAT_TEXT);
       }
-      // Only the view draws in them for now (a text-only client's page doesn't yet), so only its results say so.
-      const colorLine = colors.length && !textOnly ? `\n${colorsNote(colors)}` : "";
+      // The view and the page draw in the colors the conversation sent, so their results say so and the model keeps
+      // sending them. A widget file (--widget-dir) doesn't: it carries the operator's colors only, so no note there.
+      const colorLine = colors.length && !fileMode ? `\n${colorsNote(colors)}` : "";
+      if (textOnly && repeat) return text((fileMode ? WIDGET_REPEAT_TEXT : PAGE_REPEAT_TEXT) + colorLine);
       if (repeat) {
         return {
           content: [{ type: "text", text: REPEAT_TEXT + colorLine }],
@@ -615,7 +616,8 @@ export function createServer(opts: ServerOptions): McpServer {
       const deckOnly = textOnly && !fileMode && toFix === 0 && slidesOn && usesDeck(spec);
       const withPage = textOnly && !fileMode && toFix === 0 && !deckOnly;
       if (deckOnly) notes.push(PAGE_DECK_TEXT);
-      if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn })));
+      // The conversation's colors, else the operator's (--colors, --accent); the page works out light and dark itself.
+      if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn, colors: colors.length ? colors : (opts.view?.colors ?? null) })));
       let widget = "";
       if (fileMode && toFix === 0) {
         try {
@@ -640,7 +642,8 @@ export function createServer(opts: ServerOptions): McpServer {
         }
       }
       const said = [describeCheck(check, textOnly, fileMode, widget), ...notes].join("\n");
-      if (textOnly) return text(said);
+      // A deck has no page to draw in colors, so there is nothing to keep up.
+      if (textOnly) return text(deckOnly ? said : said + colorLine);
       return {
         content: [{ type: "text", text: said + colorLine }],
         structuredContent: {
