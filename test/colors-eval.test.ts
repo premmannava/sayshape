@@ -429,7 +429,8 @@ describe("the scripted model over HTTP", () => {
   it("answers the chat client with tool calls, then words, and a whole conversation runs through it", async () => {
     const stub = await startStub("keeper");
     try {
-      const chat = openAiChat({ url: stub.url, model: "stub" });
+      // Short retry delays: the real 2 s and 6 s would turn one dropped connection into a timeout instead of an answer.
+      const chat = openAiChat({ url: stub.url, model: "stub", retryDelays: [20, 20] });
       const first = await chat([{ role: "user", content: "Make a funnel. Use #0b6e4f." }], []);
       expect(first.message.tool_calls![0]!.function.name).toBe("sayshape_docs");
       expect(first.usage.promptTokens).toBeGreaterThan(0);
