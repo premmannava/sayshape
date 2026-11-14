@@ -9,6 +9,8 @@
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
  *   --no-copy-text      hide the "Copy text" button (shown by default)
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
+ *   --slides            turn on experimental slide decks: deck and slide (off by default)
+ *   --logo <https url>  with --slides: a logo in the corner of every slide; its host is added to --image-hosts
  *   --behavior          turn on experimental behavior: rules that tick, and dragging in scenes (off by default)
  *   --image-hosts <list>  hosts images may load from, comma-separated: cdn.example.com,*.images.example.com (none by default)
  *
@@ -31,6 +33,10 @@ export interface ViewOptions {
   scene?: boolean;
   /** Experimental behavior: rules and scene dragging (the server must agree: setBehavior). Absent means off. */
   behavior?: boolean;
+  /** Experimental slide decks are registered (the server must agree: setSlides). Absent means off. */
+  slides?: boolean;
+  /** A logo drawn in the corner of every slide (an https address; its host is in imageHosts). Absent means none. */
+  logo?: string;
   /**
    * Hosts images may load from (the engine's imageHosts; the server must agree:
    * setImageHosts, and the view resource's CSP). Absent means none: the view has
@@ -64,6 +70,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   if (args.includes("--no-copy-text")) out.copyText = false;
   if (args.includes("--scene")) out.scene = true;
   if (args.includes("--behavior")) out.behavior = true;
+  if (args.includes("--slides")) out.slides = true;
   const at = args.indexOf("--theme");
   if (at >= 0) {
     const name = args[at + 1];
@@ -86,7 +93,30 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
     }
     out.imageHosts = hosts;
   }
+  const logoAt = args.indexOf("--logo");
+  if (logoAt >= 0) {
+    const raw = args[logoAt + 1];
+    const logo = raw && !raw.startsWith("--") ? logoAddress(raw) : null;
+    if (!logo) throw new Error(`--logo needs the https address of an image, such as https://cdn.example.com/logo.png${raw && !raw.startsWith("--") ? `; got "${raw}"` : ""}.`);
+    const host = new URL(logo).hostname;
+    const hosts = [...new Set([...(out.imageHosts ?? []), host])];
+    if (hosts.length > MAX_IMAGE_HOSTS) throw new Error(`--logo's host, ${host}, would be one more than the ${MAX_IMAGE_HOSTS} hosts --image-hosts allows.`);
+    out.logo = logo;
+    // The logo loads like any image: the engine and the chat app's sandbox must allow its host.
+    out.imageHosts = hosts;
+  }
   return out;
+}
+
+/** An https address with a plain host name and nothing that could break out of the view's settings; null otherwise. */
+function logoAddress(raw: string): string | null {
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== "https:" || u.username || u.password || !HOST.test(u.hostname) || u.hostname.includes("*")) return null;
+    return u.href.length <= 500 ? u.href : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -109,7 +139,7 @@ export function encodeViewOptions(o: ViewOptions): string {
   const images = o.imageHosts?.length ? `&images=${o.imageHosts.join(",")}` : "";
   // Without its #, so the value is plain letters and digits.
   const accent = o.accent ? `&accent=${o.accent.slice(1)}` : "";
-  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${images}`;
+  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.slides ? "&slides=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
 }
 
 /** The settings from encodeViewOptions; anything missing or unknown keeps its default. */
@@ -122,9 +152,14 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   if (p.get("copy") === "0") out.copyText = false;
   if (p.get("scene") === "1") out.scene = true;
   if (p.get("behavior") === "1") out.behavior = true;
+  if (p.get("slides") === "1") out.slides = true;
   const images = p.get("images");
   const hosts = images ? hostList(images) : null;
   if (hosts) out.imageHosts = hosts;
+  const logo = p.get("logo");
+  const address = logo ? logoAddress(logo) : null;
+  // Only with its host allowed: without that the engine would refuse it anyway.
+  if (address && out.imageHosts?.includes(new URL(address).hostname)) out.logo = address;
   const theme = p.get("theme");
   if (isPreset(theme)) out.theme = theme;
   // Six hex digits only: anything else would reach the canvas as a color.

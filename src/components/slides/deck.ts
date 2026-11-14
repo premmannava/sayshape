@@ -7,12 +7,12 @@
  * Only the slide shown is laid out, so the others are neither drawn, pressed
  * nor read out.
  */
-import type { ComponentDef, PressContext } from "../../component";
+import type { ComponentDef, DragContext, PressContext } from "../../component";
 import { toNumber } from "../../data";
 import { drawIcon } from "../../icons";
 import type { Box, SayShapeNode } from "../../types";
 import { fillTint, onProp, partBox, runOn } from "../util";
-import { placeOf } from "./slide";
+import { fadeOf, placeOf } from "./slide";
 
 interface DeckData {
   [key: string]: unknown;
@@ -26,6 +26,13 @@ interface DeckData {
 
 /** Slides per deck, from its last layout, for the keys. */
 const countOf = new WeakMap<SayShapeNode, number>();
+/** Where a sideways swipe over a deck's slide started, while the finger or pointer is down. */
+const swipeFrom = new WeakMap<SayShapeNode, number>();
+/** How far sideways counts as a swipe to the next or previous slide, in pixels. */
+export const SWIPE_DISTANCE = 48;
+const TRANSITIONS = ["fade", "none"] as const;
+/** How long a slide takes to fade in, in milliseconds. */
+const FADE_MS = 260;
 
 const dataOf = (b: Box): DeckData | undefined => b.data as DeckData | undefined;
 
@@ -48,10 +55,13 @@ function goTo(ctx: PressContext, page: number): void {
 export const deck: ComponentDef = {
   type: "deck",
   category: "layout",
-  description: "A slide deck: slides shown one at a time, with arrows and dots to move between them. For presenting a story in a few steps, like a business review; put a slide per step inside it.",
+  description: "A slide deck: slides shown one at a time, with arrows and dots to move between them (and a sideways swipe on a touch screen), for presenting a story in a few steps, like a business review; put a slide per step inside it. State is shared by every slide, so one control, such as a segmented for the region, can change what all of them show, and a button with on=set:page:3 jumps to the fourth slide.",
   props: {
     bind: { type: "state", required: true, description: "The state name holding the slide shown, starting at 0." },
     numbers: { type: "boolean", default: true, description: "Show the slide's number, like 2 / 4, in its corner." },
+    footer: { type: "string", description: "A short line in the bottom left of every slide, e.g. footer=\"Northwind · Confidential\"." },
+    progress: { type: "boolean", default: false, description: "true draws a thin bar along the bottom of each slide showing how far through the deck it is." },
+    transition: { type: "enum", values: TRANSITIONS, default: "fade", description: "fade (a slide fades in when moved to) or none." },
     on: onProp("after the slide changes"),
   },
   children: ["slide"],
@@ -79,7 +89,21 @@ deck bind=page
     const shown = slides[page];
     let h = 0;
     if (shown) {
-      placeOf.set(shown, { index: page, count, numbers });
+      // Backup slides (appendix=true) are numbered apart, so "3 / 5" counts the slides people are taken through.
+      const backup = slides.map((s) => ctx.props(s).bool("appendix", false));
+      const mainCount = backup.filter((b) => !b).length, backupCount = count - mainCount;
+      const before = backup.slice(0, page + 1).filter((b) => b === backup[page]).length;
+      const label = backup[page] ? `Appendix ${before} / ${backupCount}` : `${before} / ${mainCount}`;
+      // An agenda lists the slides people are taken through: not the opening slide, itself or the backup ones.
+      const agenda = slides
+        .filter((s, i) => !backup[i] && !["title", "agenda"].includes(ctx.props(s).str("layout")) && ctx.props(s).text().trim())
+        .map((s) => ctx.props(s).text().trim());
+      const footer = p.has("footer") ? p.str("footer").trim() : "";
+      placeOf.set(shown, {
+        index: page, count, numbers, label, agenda,
+        ...(footer ? { footer } : {}),
+        ...(p.bool("progress", false) && mainCount > 1 && !backup[page] ? { progress: before / mainCount } : {}),
+      });
       const sb = ctx.layout(shown, box.x, box.y, box.w);
       box.children.push(sb);
       h = sb.h;
@@ -109,7 +133,17 @@ deck bind=page
   },
   paint(box, ctx) {
     const d = dataOf(box);
-    if (!d || !d.barH) return;
+    if (!d) return;
+    const shown = box.children[0];
+    if (shown) {
+      // The page as a number that takes a moment to arrive: while it's on its way, the new slide is still covered.
+      const fade = ctx.props(box.node).oneOf("transition", TRANSITIONS, "fade") === "fade";
+      const at = fade ? ctx.tween(box.node, "page", d.page, FADE_MS) : d.page;
+      fadeOf.set(shown.node, Math.min(1, Math.abs(at - d.page)));
+      // Under everything on the slide: a sideways swipe or drag over it moves between slides.
+      if (d.count > 1) ctx.addHit(partBox(box, shown.x, shown.y, shown.w, shown.h), { detail: "swipe", focusable: false });
+    }
+    if (!d.barH) return;
     const { g, theme } = ctx;
     const c = theme.colors;
     const size = d.barH, y = d.barY;
@@ -125,7 +159,7 @@ deck bind=page
       const icon = size * 0.45;
       drawIcon(g, dir === "left" ? "arrow-left" : "arrow-right", x + (size - icon) / 2, y + (size - icon) / 2, icon, enabled ? c.ink : c.control);
       // Kept as a Tab stop at the ends too, so focus stays put; pressing it there does nothing.
-      ctx.addHit(partBox(box, x, y, size, size), { detail });
+      ctx.addHit(partBox(box, x, y, size, size), { detail, drags: false });
     };
     arrow(box.x, "left", d.page > 0);
     arrow(box.x + box.w - size, "right", d.page < d.count - 1);
@@ -143,7 +177,7 @@ deck bind=page
       ctx.roundRect(x, y + size / 2 - dot / 2, w, dot, dot / 2);
       g.fillStyle = i === d.page ? c.accent : hovered ? c.muted : c.control;
       g.fill();
-      ctx.addHit(partBox(box, x - gap / 2, y, w + gap, size), { detail: `slide:${i}` });
+      ctx.addHit(partBox(box, x - gap / 2, y, w + gap, size), { detail: `slide:${i}`, drags: false });
       x += w + gap;
     }
   },
@@ -154,6 +188,19 @@ deck bind=page
     if (d === "prev") goTo(ctx, page - 1);
     else if (d === "next") goTo(ctx, page + 1);
     else if (typeof d === "string" && d.startsWith("slide:")) goTo(ctx, Number(d.slice(6)));
+  },
+  // Only the slide's own area is dragged (the arrows and dots are pressed): a swipe far enough sideways moves a slide.
+  drag(ctx: DragContext) {
+    const node = ctx.target.node;
+    if (ctx.phase === "start") { swipeFrom.set(node, ctx.x); return; }
+    if (ctx.phase !== "end") return;
+    const from = swipeFrom.get(node);
+    swipeFrom.delete(node);
+    if (from === undefined || ctx.cancelled) return;
+    const moved = ctx.x - from;
+    if (Math.abs(moved) < SWIPE_DISTANCE) return;
+    const page = pageOf(ctx.props(node).bound(), countOf.get(node) ?? 1);
+    goTo(ctx, moved < 0 ? page + 1 : page - 1);
   },
   key(ctx, k) {
     const node = ctx.target.node;

@@ -31,7 +31,7 @@ export function slideTheme(t: Theme): Theme {
   let s = made.get(t);
   if (!s) {
     const k = slideTokens(t);
-    s = { ...t, space: k.space, radius: k.radius, text: k.text, control: k.control };
+    s = { ...t, space: k.space, radius: k.radius, text: k.text, control: k.control, zoom: k.text.body / Math.max(1, t.text.body) };
     made.set(t, s);
     // A slide inside a slide keeps the same sizes.
     made.set(s, s);

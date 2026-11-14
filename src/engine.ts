@@ -950,16 +950,24 @@ export class SayShape {
    * screen's width (a wide table), the picture is drawn wider, up to
    * MAX_PICTURE_WIDTH, until everything shows. widen: false keeps the
    * screen's width. Browsers only: it needs a document to make the canvas.
+   *
+   * For saving part of a screen in another state (each slide of a deck):
+   * width draws at that width instead of the screen's, state sets values on
+   * the copy only, and frame cuts the picture down to the first element it
+   * accepts (the whole screen when it accepts none). theme draws the copy
+   * in another theme (a deck's slides without their rounded frame).
    */
-  async picture(opts: { pixelRatio?: number; background?: boolean; widen?: boolean } = {}): Promise<HTMLCanvasElement> {
-    let width = this.metrics.width || this.opts.width || 600;
+  async picture(opts: { pixelRatio?: number; background?: boolean; widen?: boolean; width?: number; state?: Record<string, Value>; frame?: (box: Box) => boolean; theme?: Theme } = {}): Promise<HTMLCanvasElement> {
+    const theme = opts.theme ?? this.theme;
+    let width = opts.width ?? (this.metrics.width || this.opts.width || 600);
+    let cut: Rect | null = null;
     let out!: HTMLCanvasElement;
     let copy!: SayShape;
     for (let attempt = 0; ; attempt++) {
       out = document.createElement("canvas");
       copy = new SayShape(out, {
         ...this.opts,
-        theme: this.theme,
+        theme,
         width,
         pixelRatio: opts.pixelRatio ?? 2,
         animate: false,
@@ -969,6 +977,7 @@ export class SayShape {
       copy.setSpec(this.source);
       // Every value, including which screen is showing, before the copy's first frame.
       for (const [key, value] of Object.entries(this.state.snapshot())) copy.state.set(key, value);
+      for (const [key, value] of Object.entries(opts.state ?? {})) copy.state.set(key, value);
       // The first frame lays everything out and asks for the images it shows.
       copy.renderNow();
       const more = opts.widen === false ? 0 : copy.hiddenWidth();
@@ -980,6 +989,10 @@ export class SayShape {
     try {
       // The second frame draws the images once they've settled.
       await copy.imagesLoaded();
+      const frame = opts.frame;
+      if (frame && copy.rootBox) {
+        walkBoxes(copy.rootBox, (b) => { if (!cut && frame(b)) cut = { x: b.x, y: b.y, w: b.w, h: b.h }; });
+      }
     } finally {
       copy.destroy();
     }
@@ -990,10 +1003,19 @@ export class SayShape {
         g.setTransform(1, 0, 0, 1, 0, 0);
         // Under what's drawn, so the transparent gutter and gaps take the surface color.
         g.globalCompositeOperation = "destination-over";
-        g.fillStyle = this.theme.colors.surface;
+        g.fillStyle = theme.colors.surface;
         g.fillRect(0, 0, out.width, out.height);
         g.restore();
       }
+    }
+    const part = cut as Rect | null;
+    if (part) {
+      const k = opts.pixelRatio ?? 2;
+      const only = document.createElement("canvas");
+      only.width = Math.max(1, Math.round(part.w * k));
+      only.height = Math.max(1, Math.round(part.h * k));
+      only.getContext("2d")?.drawImage(out, Math.round(part.x * k), Math.round(part.y * k), only.width, only.height, 0, 0, only.width, only.height);
+      return only;
     }
     return out;
   }

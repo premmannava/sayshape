@@ -16,14 +16,16 @@ import { SayShape } from "../../../src/engine";
 import { coreComponents } from "../../../src/components";
 import { mapComponents } from "../../../src/components/map";
 import { sceneComponents } from "../../../src/components/scene";
+import { slideComponents } from "../../../src/components/slides";
 import type { Theme } from "../../../src/theme";
-import type { Value } from "../../../src/types";
+import type { Box, Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
 import { eventDelivery, FIXING_SPEC, imageName, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
-import { COPY_ACTION, interfaceTheme, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
+import { COPY_ACTION, DECK_ACTION, PRESENT_ACTION, interfaceTheme, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset } from "./theme-selection";
 import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
+import { deflated, fromDataUrl, pdfOf, pptxOf, rgbOf, toBase64, type SlidePicture } from "./deck-file";
 import { readViewOptions } from "./view-options";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
@@ -161,9 +163,46 @@ async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
   // or making the entire iframe opaque.
   canvas.style.backgroundColor = theme.colors.surface;
   bar.style.backgroundColor = theme.colors.surface;
-  sayshape?.setTheme(interfaceTheme(theme));
+  sayshape?.setTheme(faceTheme(theme));
   themePicker?.setTheme(theme);
   return theme;
+}
+
+/** The theme interfaces are drawn in, with the logo the server was started with (--logo) for slides. */
+let face: Theme | null = null;
+function faceTheme(theme: Theme): Theme {
+  const t = interfaceTheme(theme);
+  face = viewOptions.logo ? { ...t, deck: { ...t.deck, logo: viewOptions.logo } } : t;
+  return face;
+}
+
+/** Whether the chat app is showing this view full screen. */
+const isFull = (): boolean => app.getHostContext()?.displayMode === "fullscreen";
+
+/**
+ * Present (--slides): ask the chat app to show the view full screen, or to
+ * put it back. Full screen, the deck is as wide as lets a whole slide and
+ * its bar fit the height, in the middle.
+ */
+async function togglePresent(): Promise<void> {
+  const mode = isFull() ? "inline" : "fullscreen";
+  if (!app.getHostContext()?.availableDisplayModes?.includes(mode)) { sayshape?.notify("This app can't show it full screen"); return; }
+  try { await app.requestDisplayMode({ mode }); } catch { sayshape?.notify("Couldn't change to full screen"); }
+  fitScreen();
+}
+
+/** Room above and below a slide for the tools and the deck's bar, full screen, in pixels. */
+const PRESENT_CHROME = 130;
+function fitScreen(): void {
+  const wrap = bar.parentElement;
+  if (!wrap) return;
+  const full = isFull() && showsDeck();
+  // The height the chat app gives the view, when it says: the view's own window grows with what's in it, so it can't be trusted here.
+  const dims = app.getHostContext()?.containerDimensions as { height?: number; maxHeight?: number } | undefined;
+  const height = dims?.height ?? dims?.maxHeight ?? window.innerHeight;
+  wrap.style.maxWidth = full ? `${Math.max(320, Math.round((height - PRESENT_CHROME) * (16 / 9)))}px` : "";
+  wrap.style.margin = full ? "0 auto" : "";
+  themePicker?.state.set("full", isFull());
 }
 
 function show(spec: string, final: boolean): void {
@@ -176,6 +215,14 @@ function show(spec: string, final: boolean): void {
     if (sayshape.isStreaming) sayshape.endStream();
     // The streamed text can differ from the final arguments (healed JSON); the final spec wins.
     if (sayshape.spec !== spec) { sayshape.setSpec(spec, { resetState: true }); applyHostData(); }
+  }
+  // Slides on: the toolbar offers PDF and PowerPoint while a deck is showing.
+  if (viewOptions.slides) {
+    const deck = showsDeck();
+    themePicker?.state.set("deck", deck);
+    // A slide fills the width up to its corner, so the tools get a row of their own above it instead of sitting over it.
+    bar.parentElement?.classList.toggle("deck", deck);
+    fitScreen();
   }
 }
 
@@ -257,7 +304,10 @@ app.ontoolresult = (r) => {
 app.onhostcontextchanged = () => {
   // getHostContext() holds the whole context with this change merged in.
   void applyTheme(app.getHostContext());
+  // The chat app may leave full screen by itself (Escape, its own button).
+  if (viewOptions.slides) fitScreen();
 };
+if (viewOptions.slides) window.addEventListener("resize", () => fitScreen());
 app.onteardown = async () => {
   sayshape?.destroy();
   sayshape = null;
@@ -302,6 +352,7 @@ async function deliver(name: string, value: Value | undefined, state: Record<str
 async function saveImage(): Promise<void> {
   if (!sayshape) return;
   if (introShowing || folded !== null) { sayshape.notify("There's no interface to save yet"); return; }
+  if (showsDeck()) { await saveDeck("pdf"); return; }
   let blob = "";
   try {
     const picture = await sayshape.picture({ pixelRatio: 2 });
@@ -317,6 +368,81 @@ async function saveImage(): Promise<void> {
     sayshape.notify(r.isError ? "The image wasn't saved" : "Image saved");
   } catch {
     sayshape.notify("Couldn't save the image");
+  }
+}
+
+/** Whether the interface showing is a slide deck (--slides), which saves as a file of slides, not one image. */
+function showsDeck(): boolean {
+  return !!viewOptions.slides && !!sayshape && !introShowing && folded === null && /^\s*deck\b/m.test(sayshape.spec);
+}
+
+/** The width decks are drawn at for a file: a slide's own design width plus the view's padding, so nothing is scaled down. */
+const DECK_FILE_WIDTH = 1000;
+/** Device pixels per CSS pixel in a file's pictures: 2880 by 1620 a slide, sharp on a large screen and when zoomed in. */
+const DECK_FILE_SHARPNESS = 3;
+/** The most slides a file holds; a longer deck is saved up to here. */
+const MAX_FILE_SLIDES = 60;
+const DECK_FILES = {
+  pdf: { ext: "pdf", mime: "application/pdf", name: "PDF" },
+  pptx: { ext: "pptx", mime: "application/vnd.openxmlformats-officedocument.presentationml.presentation", name: "PowerPoint file" },
+} as const;
+
+/**
+ * Save the deck as a PDF or a PowerPoint file with a page per slide
+ * (experimental, --slides). Each slide is drawn by the engine on a copy, as
+ * it is now, after anything the person changed, and goes in as a picture: the
+ * file looks exactly like the chat, and nothing in it can be edited. Nothing
+ * goes to the model.
+ */
+async function saveDeck(kind: keyof typeof DECK_FILES): Promise<void> {
+  if (!sayshape) return;
+  const file = DECK_FILES[kind];
+  const engine = sayshape;
+  let key = "", count = 0, titles: string[] = [];
+  // The first deck's slide; the deck's box is met first and says where its page lives and how many slides it has.
+  const frame = (b: Box): boolean => {
+    if (b.node.type === "deck" && !count) {
+      key = b.node.props.bind ?? "";
+      const d = b.data as { count?: number; titles?: string[] } | undefined;
+      count = d?.count ?? 0;
+      titles = d?.titles ?? [];
+    }
+    return b.node.type === "slide";
+  };
+  const draw = async (state?: Record<string, Value>): Promise<SlidePicture> => {
+    // Pages have square corners: the slide's rounded frame would leave the page's own corners showing.
+    const square = face ? { theme: { ...face, deck: { ...face.deck, square: true } } } : {};
+    const c = await engine.picture({ pixelRatio: DECK_FILE_SHARPNESS, width: DECK_FILE_WIDTH, widen: false, frame, ...square, ...(state ? { state } : {}) });
+    const size = { width: c.width, height: c.height };
+    // Without loss, so text keeps its edges: a PNG for PowerPoint, the pixels themselves for a PDF.
+    if (kind === "pptx") return { data: fromDataUrl(c.toDataURL("image/png")), format: "png", ...size };
+    const pixels = c.getContext("2d")?.getImageData(0, 0, c.width, c.height).data;
+    const packed = pixels ? await deflated(rgbOf(pixels)) : null;
+    if (packed) return { data: packed, format: "rgb", ...size };
+    return { data: fromDataUrl(c.toDataURL("image/jpeg", 0.95)), format: "jpeg", ...size };
+  };
+  let blob = "";
+  try {
+    engine.notify(`Making the ${file.name}…`);
+    const first = await draw();
+    const slides: SlidePicture[] = [];
+    // A page kept somewhere a plain name can't reach (t.page) can't be set on the copy: the slide showing is saved.
+    if (count > 1 && /^[A-Za-z_][\w-]*$/.test(key)) {
+      for (let i = 0; i < Math.min(count, MAX_FILE_SLIDES); i++) slides.push(await draw({ [key]: i }));
+    } else {
+      slides.push(first);
+    }
+    if (slides.every((s) => s.data.length > 0)) blob = toBase64(kind === "pdf" ? pdfOf(slides) : pptxOf(slides, titles));
+  } catch {
+    blob = "";
+  }
+  if (!blob) { engine.notify(`Couldn't make the ${file.name}`); return; }
+  try {
+    const name = imageName(engine.spec).replace(/\.png$/, `.${file.ext}`);
+    const r = await app.downloadFile({ contents: [{ type: "resource", resource: { uri: `file:///${name}`, mimeType: file.mime, blob } }] });
+    engine.notify(r.isError ? `The ${file.name} wasn't saved` : `${kind === "pdf" ? "PDF" : "PowerPoint file"} saved`);
+  } catch {
+    engine.notify(`Couldn't save the ${file.name}`);
   }
 }
 
@@ -376,6 +502,8 @@ async function start(): Promise<void> {
     save: viewOptions.saveImage && !!app.getHostCapabilities()?.downloadFile,
     theme: viewOptions.theme,
     motion: !!viewOptions.behavior,
+    deck: !!viewOptions.slides,
+    present: !!viewOptions.slides && !!app.getHostContext()?.availableDisplayModes?.includes("fullscreen"),
   };
   const toolbar = toolbarSpec(tools);
   if (toolbar) {
@@ -390,6 +518,8 @@ async function start(): Promise<void> {
     });
     themePicker.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
       if (name === SAVE_ACTION) { void saveImage(); return; }
+      if (name === DECK_ACTION) { void saveDeck("pptx"); return; }
+      if (name === PRESENT_ACTION) { void togglePresent(); return; }
       if (name === COPY_ACTION) { void copyText(); return; }
       if (name === MOTION_ACTION) { toggleMotion(); return; }
       if (name !== "theme") return;
@@ -403,9 +533,9 @@ async function start(): Promise<void> {
     themePicker.setSpec(toolbar);
   }
   sayshape = new SayShape(canvas, {
-    components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
+    components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : []), ...(viewOptions.slides ? slideComponents : [])],
     ...(viewOptions.behavior ? { behavior: true } : {}),
-    theme: interfaceTheme(theme),
+    theme: faceTheme(theme),
     // The chat app already boxes the view: a card that is the whole interface draws no frame of its own.
     bareRootCard: true,
     // Only the hosts the server was started with (--image-hosts). The view has no origin of
