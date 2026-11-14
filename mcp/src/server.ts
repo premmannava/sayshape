@@ -33,7 +33,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getUiCapability, registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { DEFAULT_VIEW_OPTIONS, withViewOptions, type ViewOptions } from "./ui/view-options";
+import { colorEntries, DEFAULT_VIEW_OPTIONS, withViewOptions, type ViewOptions } from "./ui/view-options";
 import { colorList } from "../../playground/appearance/color";
 import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
@@ -424,8 +424,13 @@ export function interfaceKey(spec: string, data: Record<string, string>, colors:
 export const COLORS_DESCRIPTION =
   'Brand colors as hex, most important first, such as ["#e4572e", "#2e86ab"]: send them only when the person, or the instructions you were given, named colors to use.';
 
-/** The colors argument's schema: loose (any strings, generously many), so a sloppy value is ignored by colorList instead of refused. */
-const colorsArgument = z.array(z.string().max(1000)).max(1000).optional().describe(COLORS_DESCRIPTION);
+/**
+ * The colors argument's schema. Advertised as a list of strings, but it never refuses a call: whatever
+ * arrives goes through colorEntries first (a string is read as comma-separated colors, anything else that
+ * isn't a list is none, entries that aren't strings are dropped), and colorList then keeps the hex colors.
+ * So a sloppy value is ignored, never a reason for the model to try again.
+ */
+const colorsArgument = z.preprocess((raw) => (raw === undefined ? undefined : colorEntries(raw)), z.array(z.string()).optional()).describe(COLORS_DESCRIPTION);
 
 /**
  * The note that ends a result drawn in the conversation's colors, so the model keeps sending them: nothing

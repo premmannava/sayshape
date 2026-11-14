@@ -10,6 +10,7 @@
  */
 import { DEFAULT_PRESET } from "./theme-selection";
 import { colorList } from "../../../playground/appearance/color";
+import { colorEntries } from "./view-options";
 import type { PresetId } from "../../../playground/appearance/presets";
 
 /** Host name fragments to a brand color, in the order they are tried. */
@@ -68,20 +69,15 @@ export function chosenColors(c: ColorChoice): readonly string[] | undefined {
 
 /**
  * The usable colors in a tool call's arguments (show_interface's colors), or undefined when there are none:
- * not sent, not a list, nothing in it a hex color, or --no-model-colors (allowed false). Sloppy entries are
- * dropped and extras past six ignored (colorList), as the server does, so both agree on what was used.
+ * not sent, neither a list nor a comma-separated string, nothing in it a hex color, or --no-model-colors
+ * (allowed false). The shapes are read by colorEntries, which the server's schema uses too, and sloppy
+ * entries are dropped and extras past six ignored (colorList), so both agree on what was used.
  *
- * partial: the arguments are still streaming in (ontoolinputpartial), so the last entry may be cut short,
- * and "#e45" could be the start of "#e4572e": it counts only once it has all six digits, so the drawing
- * never shows a color that is about to change.
+ * partial: the arguments are still streaming in (ontoolinputpartial): see colorEntries.
  */
 export function toolColors(args: Record<string, unknown> | undefined, allowed: boolean, partial = false): string[] | undefined {
-  const raw = args?.colors;
-  if (!allowed || !Array.isArray(raw)) return undefined;
-  const strings = raw.filter((c): c is string => typeof c === "string");
-  const last = strings[strings.length - 1];
-  if (partial && last !== undefined && !/^#?[0-9a-f]{6}$/i.test(last.trim())) strings.pop();
-  const list = colorList(strings);
+  if (!allowed) return undefined;
+  const list = colorList(colorEntries(args?.colors, partial));
   return list.length ? list : undefined;
 }
 

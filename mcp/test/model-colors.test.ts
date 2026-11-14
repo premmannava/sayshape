@@ -70,6 +70,23 @@ describe("the colors argument", () => {
     expect(text(r)).toMatch(/Colors: #ee4455, #2e86ab, #f2c14e, #111111, #222222, #333333\. Pass/);
   });
 
+  it.each<[string, unknown, string | null]>([
+    ["a string", "#e4572e", "#e4572e"],
+    ["a comma-separated string with spaces", " #E4572E ,  2e86ab,teal, ", "#e4572e, #2e86ab"],
+    ["a list with things that aren't strings", [4, "#e4572e", null, { c: "#fff" }, ["#000"], "#2e86ab", true], "#e4572e, #2e86ab"],
+    ["a number", 0xe4572e, null],
+    ["an object", { primary: "#e4572e" }, null],
+    ["null", null, null],
+    ["a boolean", true, null],
+    ["an empty string", "", null],
+  ])("takes %s without an error or a problem to fix", async (_, colors, named) => {
+    const r = await show(await connect(), { colors, spec: GOOD });
+    expect(r.isError).toBeFalsy();
+    expect(r.structuredContent).toMatchObject({ errors: 0, warnings: 0, toFix: 0, repeat: false, diagnostics: [] });
+    if (named) expect(text(r)).toMatch(new RegExp(`\\nColors: ${named}\\. Pass the same colors`));
+    else expect(text(r)).not.toMatch(/Colors:/);
+  });
+
   it("keeps the note on a result with problems to fix, so the retry keeps the colors", async () => {
     const r = await show(await connect(), { colors: ["#e4572e"], spec: 'card\n  txet "Typo"\n' });
     expect(r.structuredContent).toMatchObject({ toFix: 1 });
@@ -131,6 +148,12 @@ describe("--no-model-colors", () => {
     const colored = await show(client, { colors: ["#e4572e"], spec: GOOD.replace("hike", "trip") });
     expect(colored.isError).toBeFalsy();
     expect(text(colored)).toBe(text(plain));
+    // Any shape at all is dropped without an error.
+    for (const [i, stray] of ["#e4572e", 7, null, { a: 1 }, [1, "#fff"]].entries()) {
+      const r = await show(client, { colors: stray, spec: GOOD.replace("hike", `walk ${i}`) });
+      expect(r.isError).toBeFalsy();
+      expect(text(r)).toBe(text(plain));
+    }
   });
 });
 
@@ -139,7 +162,11 @@ describe("the view's colors", () => {
     expect(toolColors({ colors: ["#E45", "teal", 4, null, "#2e86ab"], spec: "card\n" }, true)).toEqual(["#ee4455", "#2e86ab"]);
     expect(toolColors({ colors: ["#e4572e"] }, false)).toBeUndefined();
     expect(toolColors({ spec: "card\n" }, true)).toBeUndefined();
-    expect(toolColors({ colors: "#e4572e" }, true)).toBeUndefined();
+    // The same shapes the server takes: a string is comma-separated colors; anything else that isn't a list is none.
+    expect(toolColors({ colors: "#e4572e" }, true)).toEqual(["#e4572e"]);
+    expect(toolColors({ colors: " #E4572E ,  2e86ab,teal, " }, true)).toEqual(["#e4572e", "#2e86ab"]);
+    for (const colors of [0xe4572e, { primary: "#e4572e" }, null, true, ""]) expect(toolColors({ colors }, true)).toBeUndefined();
+    expect(toolColors({ colors: "#e4572e" }, false)).toBeUndefined();
     expect(toolColors({ colors: ["red", ""] }, true)).toBeUndefined();
     expect(toolColors(undefined, true)).toBeUndefined();
     expect(toolColors({ colors: Array.from({ length: 9 }, () => "#e4572e") }, true)).toHaveLength(6);
@@ -154,6 +181,12 @@ describe("the view's colors", () => {
     // The complete arguments take a short color as it is.
     expect(toolColors({ colors: ["#e45"] }, true)).toEqual(["#ee4455"]);
     expect(toolColors({ colors: ["#e4572e"] }, false, true)).toBeUndefined();
+    // A string streaming in: entries before the last comma, and the last only once it has six digits.
+    expect(toolColors({ colors: "#e45" }, true, true)).toBeUndefined();
+    expect(toolColors({ colors: "#e4572e, #2e" }, true, true)).toEqual(["#e4572e"]);
+    expect(toolColors({ colors: "#e4572e, #2e86ab" }, true, true)).toEqual(["#e4572e", "#2e86ab"]);
+    expect(toolColors({ colors: "#e4572e, " }, true, true)).toEqual(["#e4572e"]);
+    expect(toolColors({ colors: [4, "#e4572e", null] }, true, true)).toEqual(["#e4572e"]);
   });
 
   it("puts the conversation's colors over the operator's, a picked preset and the chat app's brand", () => {

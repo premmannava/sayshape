@@ -153,6 +153,24 @@ function parseColors(raw: string | undefined): string[] {
   return out;
 }
 
+/**
+ * The entries of show_interface's colors argument, whatever shape a model sent it in, so a sloppy value is
+ * ignored instead of refused (bad colors never cost a retry): a list keeps its strings and drops anything
+ * else in it; a string is read as comma-separated colors ("#e4572e, #2e86ab"); anything else (a number, an
+ * object, null) is no colors. The entries still have to be hex colors: colorList picks those out. The
+ * server's schema and the view both read the argument through this, so they agree on what was used.
+ *
+ * partial: the arguments are still streaming in (the view's ontoolinputpartial), so the last entry may be
+ * cut short, and "#e45" could be the start of "#e4572e": it counts only once it has all six digits, so the
+ * drawing never shows a color that is about to change. The entries before it are complete.
+ */
+export function colorEntries(raw: unknown, partial = false): string[] {
+  const entries = typeof raw === "string" ? raw.split(",") : Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
+  const last = entries[entries.length - 1];
+  if (partial && last !== undefined && !/^#?[0-9a-f]{6}$/i.test(last.trim())) entries.pop();
+  return entries;
+}
+
 /** An https address with a plain host name and nothing that could break out of the view's settings; null otherwise. */
 function logoAddress(raw: string): string | null {
   try {

@@ -46,11 +46,9 @@
           "properties": {
             "colors": {
               "description": "Brand colors as hex, most important first, such as [\"#e4572e\", \"#2e86ab\"]: send them only when the person, or the instructions you were given, named colors to use.",
-              "maxItems": 1000,
               "type": "array",
               "items": {
-                "type": "string",
-                "maxLength": 1000
+                "type": "string"
               }
             },
             "spec": {
@@ -158,11 +156,9 @@
           "properties": {
             "colors": {
               "description": "Brand colors as hex, most important first, such as [\"#e4572e\", \"#2e86ab\"]: send them only when the person, or the instructions you were given, named colors to use.",
-              "maxItems": 1000,
               "type": "array",
               "items": {
-                "type": "string",
-                "maxLength": 1000
+                "type": "string"
               }
             },
             "spec": {
