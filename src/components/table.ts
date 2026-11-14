@@ -27,7 +27,10 @@
  *   be selected. A selected key no row has selects nothing; state is left as
  *   it is.
  * - Width: columns get their natural widths, and text columns narrow (never
- *   below MIN_TEXT_COLUMN) to fit. When even that doesn't fit, the table
+ *   below MIN_TEXT_COLUMN) to fit. Text cells that no longer fit on one line
+ *   wrap to at most MAX_CELL_LINES lines, ending with "…" past that; a row is
+ *   as tall as its tallest cell (never shorter than one line), and numbers
+ *   stay on one line. When even the narrowest columns don't fit, the table
  *   scrolls sideways instead: every column keeps a readable width, the first
  *   column stays pinned at the left, and a scrollbar shows under the rows.
  *   It scrolls with a sideways swipe or Shift and the wheel, by dragging the
@@ -40,7 +43,7 @@ import type { PartSemantics } from "../a11y/semantics";
 import type { ComponentDef, ElementView, LayoutContext, PaintContext, PressContext, PropReader } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import type { TextMeasurer } from "../text";
-import { wrapText } from "../text";
+import { fitLines, wrapText } from "../text";
 import type { Theme } from "../theme";
 import type { Box, SayShapeNode, Value } from "../types";
 import { chevron, fillTint, onProp, partBox, runOn, themeFont } from "./util";
@@ -66,6 +69,11 @@ const LOCALE = "en-US";
 const MIN_TEXT_COLUMN = 72;
 /** Room for the sort arrow beside a header. */
 const ARROW = 14;
+/** A text cell wraps onto at most this many lines; past that it ends with an ellipsis. */
+export const MAX_CELL_LINES = 3;
+/** How visible a sortable header's neutral arrow is at rest, and under the pointer or focus. */
+const ARROW_REST = 0.4;
+const ARROW_HOVER = 0.8;
 /** When the table scrolls, text columns are at most this wide, so one long value doesn't take the screen. */
 const MAX_SCROLL_TEXT_COLUMN = 260;
 /** The pinned first column takes at most this share of the width, so there's room left to scroll. */
@@ -106,8 +114,8 @@ export interface TableRow {
   selected: boolean;
   /** The hit-region detail for a selectable row. */
   detail: string | null;
-  /** Each cell's text as drawn (cut to fit), and in full. */
-  cells: Array<{ text: string; full: string }>;
+  /** Each cell's lines as drawn (wrapped or cut to fit its column), and its text in full. */
+  cells: Array<{ lines: string[]; full: string }>;
 }
 
 /** Everything paint and press need, relative to the table's box. */
@@ -117,6 +125,8 @@ export type TableGeometry = {
   titleLH: number;
   headerFont: string;
   cellFont: string;
+  /** Height of one line of cell text. */
+  cellLH: number;
   /** Shown instead of rows and columns: too many, too narrow, no columns. */
   message?: string;
   /** The bordered area: header, rows and any empty message. */
@@ -301,7 +311,8 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
   const rowH = Math.round(t.text.body * 1.4) + 2 * t.space.sm;
   const title = p.text() ? wrapText(p.text(), box.w, titleFont, m) : [];
   const top = title.length ? title.length * titleLH + t.space.sm : 0;
-  const base: TableGeometry = { title, titleFont, titleLH, headerFont, cellFont, frame: { x: 0, y: top, w: box.w, h: 0 }, headerH, columns: [], rows: [], sortable: false };
+  const cellLH = Math.round(t.text.body * 1.4);
+  const base: TableGeometry = { title, titleFont, titleLH, headerFont, cellFont, cellLH, frame: { x: 0, y: top, w: box.w, h: 0 }, headerH, columns: [], rows: [], sortable: false };
   const say = (message: string): TableGeometry => ({ ...base, message, frame: { x: 0, y: top, w: box.w, h: Math.max(rowH * 2, 64) } });
 
   const specs = readColumns(box.node, ctx);
@@ -394,21 +405,32 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     return col;
   });
 
-  const rowsTop = top + headerH;
+  // Each row is as tall as its tallest cell, and never shorter than one line.
+  let rowY = top + headerH;
   const rows: TableRow[] = order.map((i, r) => {
     const key = usable[i] ? keys[i]! : null;
     const selectable = bindable && key !== null;
+    const cells = texts[r]!.map((full, ci) => {
+      const room = columns[ci]!.w - 2 * pad;
+      // Only text wraps; numbers keep to one line (their column is never narrower than they are).
+      const lines = columns[ci]!.format === "text" ? fitLines(full, room, cellFont, m, MAX_CELL_LINES) : [fit(full, room, cellFont, m)];
+      return { full, lines };
+    });
+    const h = Math.max(rowH, Math.max(1, ...cells.map((c) => c.lines.length)) * cellLH + 2 * t.space.sm);
+    const y = rowY;
+    rowY += h;
     return {
       index: i,
-      y: rowsTop + r * rowH,
-      h: rowH,
+      y,
+      h,
       key,
       selectable,
       selected: selectable && selectedValue === key,
       detail: selectable ? rowDetail(key) : null,
-      cells: texts[r]!.map((full, ci) => ({ full, text: fit(full, columns[ci]!.w - 2 * pad, cellFont, m) })),
+      cells,
     };
   });
+  const rowsH = rowY - top - headerH;
   const strip = scrollParts ? SCROLLBAR_STRIP : 0;
   const withBar = (frame: Rect): TableScroll | undefined =>
     scrollParts && { ...scrollParts, bar: { x: frame.x + scrollParts.pinned, y: frame.y + frame.h - strip, w: scrollParts.view, h: strip } };
@@ -417,7 +439,7 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     return { ...base, frame, columns, rows: [], sortable: false, loading: { rows: GHOST_ROWS, h: rowH }, scroll: withBar(frame) };
   }
   const emptyH = items.length ? 0 : rowH * 1.5;
-  const frame = { x: 0, y: top, w: box.w, h: headerH + rows.length * rowH + emptyH + strip };
+  const frame = { x: 0, y: top, w: box.w, h: headerH + rowsH + emptyH + strip };
   return {
     ...base,
     frame,
@@ -601,7 +623,8 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const hovered = d!.sortable && ctx.isHovered(box.node, detail);
     if (d!.sortable || col.tip) ctx.addHit(cell, { detail });
     // A sorted column says so quietly: its label in ink with a small arrow, no box
-    // or underline. Hover previews the same, with the arrow faint.
+    // or underline. Every other sortable header keeps a faint up-and-down arrow,
+    // since a phone has no hover to reveal that it can be pressed.
     const shown = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, MOTION.hover);
     g.font = d!.headerFont;
     g.fillStyle = col.sorted || hovered ? c.ink : c.muted;
@@ -616,11 +639,18 @@ function paintTable(box: Box, ctx: PaintContext): void {
       const lx = right ? tx - labelW : tx, ly = hy + d!.headerH / 2 + Math.round(d!.headerH / 4);
       for (let x = 0; x < labelW; x += 4) g.fillRect(lx + x, ly, 2, 1);
     }
-    if (shown > 0) {
+    if (d!.sortable) {
       const ax = right ? tx - labelW - 8 : tx + labelW + 8;
+      const ay = hy + d!.headerH / 2;
       g.save();
-      g.globalAlpha *= col.sorted ? shown : 0.45 * shown;
-      chevron(g, ax, hy + d!.headerH / 2, 7, col.sorted === "desc" ? "down" : "up", col.sorted ? c.ink : c.muted);
+      if (col.sorted) {
+        g.globalAlpha *= shown;
+        chevron(g, ax, ay, 7, col.sorted === "desc" ? "down" : "up", c.ink);
+      } else {
+        g.globalAlpha *= ARROW_REST + (ARROW_HOVER - ARROW_REST) * shown;
+        chevron(g, ax, ay - 3, 5, "up", c.muted);
+        chevron(g, ax, ay + 3, 5, "down", c.muted);
+      }
       g.restore();
     }
     if ((d!.sortable || col.tip) && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
@@ -692,7 +722,9 @@ function paintTable(box: Box, ctx: PaintContext): void {
         g.fillStyle = cell.full === EMPTY_CELL ? c.muted : tone === "negative" ? c.bad : tone === "positive" ? c.good : c.ink;
         const right = col.align === "right";
         g.textAlign = right ? "right" : "left";
-        g.fillText(cell.text, right ? x + col.w - pad : x + pad, ry + row.h / 2);
+        // Lines sit centred in the row, so a short cell next to a tall one lines up with its middle.
+        const top = ry + (row.h - cell.lines.length * d.cellLH) / 2;
+        cell.lines.forEach((line, li) => g.fillText(line, right ? x + col.w - pad : x + pad, top + li * d.cellLH + d.cellLH / 2));
       });
     });
     if (!last || s) rule(row.y + row.h);
