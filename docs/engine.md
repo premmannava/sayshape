@@ -272,6 +272,10 @@ The playground's **Appearance** button opens a small panel for previewing the cu
 
 The styles change colors only, through the same theme tokens every component reads; they're a playground feature, not part of the SayShape language, so models still can't choose colors. Teal, Purple and Blue keep SayShape's default field and divider lines, which are lighter than the 3:1 that WCAG asks of control boundaries; Neutral meets it.
 
+### Brand colors
+
+A host can give a brand color, or a list of up to six, instead of picking colors by hand: the first becomes the accent and the first chart series, the others the next series, series the list doesn't cover are worked out from the first, and every color is adjusted for light and dark so it stays readable. It is a host setting, never part of a spec, so models still can't choose colors (scenes are the one exception). The MCP server takes `--accent` or `--colors`, and a `colors` argument on `show_interface` when the person names colors; the code that works the colors out (`resolveTheme`, `deriveSeries`, in `playground/appearance/`) isn't exported from `sayshape`, so an app that embeds the engine sets the same tokens with `extendTheme`. The website's [Themes](https://premmannava.github.io/sayshape/docs/integration/themes#brand-colors) page explains what each color becomes, with an example, [`mcp/README.md`](../mcp/README.md) lists the options, and [Check that models keep the colors](model.md#check-that-models-keep-the-colors) describes `npm run colors-eval`.
+
 ## Accessibility
 
 A canvas is one picture to assistive technology, so SayShape keeps a hidden **accessibility mirror** beside it: an invisible DOM element over each element it draws, with a role, a name and a state, kept in step as the screen changes. Screen readers, keyboards and phones' touch exploration work through it. The plan and its design are in [`docs/plans/accessibility.md`](plans/accessibility.md).
