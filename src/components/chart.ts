@@ -67,6 +67,15 @@ export const MAX_HBAR_HEIGHT = 1200;
 export const HBAR_LABEL_SHARE = 0.4;
 /** Horizontal bars: the narrowest the bars' own area gets before the chart says it's too narrow. */
 const MIN_HBAR_AREA = 40;
+/**
+ * kind=bar narrower than this (a phone) draws its bars across, as kind=hbar
+ * does, when it can (see barsAcross). Measured in a browser: below 480 px,
+ * five to eight category labels (regions, products, teams, channels) are
+ * thinned out or cut under vertical bars and the bars are 16 to 37 px wide;
+ * every phone (up to 430 px) is under it, and tablets and desktop chat
+ * columns are over it, so those stay vertical.
+ */
+export const BARS_ACROSS_WIDTH = 480;
 /** Grouped bars: the narrowest bar, and the surface gap between bars in a group. */
 const MIN_GROUP_BAR = 3;
 const BAR_GAP = 2;
@@ -367,6 +376,48 @@ export function hbarRows(t: Theme, ns: number): { rowH: number; barH: number; gr
   const barH = ns === 1 ? Math.round(t.text.caption * 1.25) : t.text.caption;
   const group = ns * barH + (ns - 1) * BAR_GAP;
   return { barH, group, rowH: Math.max(Math.round((t.control.height * 2) / 3), group + t.space.sm) };
+}
+
+const MONTH = "(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\\.?";
+const WEEKDAY = "(mon(day)?|tue(s(day)?)?|wed(nesday)?|thu(r(s(day)?)?)?|fri(day)?|sat(urday)?|sun(day)?)\\.?";
+/** x labels that name points in time: dates, months, weekdays, quarters, years, weeks, times of day. */
+const TIME_LABEL = new RegExp(`^(${[
+  "\\d{4}-\\d{2}(-\\d{2})?",
+  `${MONTH}( \\d{1,2})?(,? '?\\d{2,4})?`,
+  `\\d{1,2} ${MONTH}( '?\\d{2,4})?`,
+  WEEKDAY,
+  "(\\d{4} )?q[1-4]( '?\\d{2,4})?",
+  "fy ?'?\\d{2}(\\d{2})?",
+  "(19|20|21)\\d{2}",
+  "(week|wk|w) ?\\d{1,2}",
+  "\\d{1,2}(:\\d{2} ?(am|pm)?| ?(am|pm))",
+].map((p) => `(${p})`).join("|")})$`, "i");
+const isTimeLabel = (s: string) => TIME_LABEL.test(s.trim());
+
+/**
+ * Whether items run in order through time, so vertical bars show a trend
+ * left to right: every x label names a time (Jan, 2024-03, Q1, Mon), or
+ * every x is a number and they rise. These stay vertical on a phone.
+ */
+export function inTimeOrder(items: Value | undefined, x: string): boolean {
+  if (!isList(items) || items.length < 2) return false;
+  const raw = items.map((it) => (isRecord(it) ? fieldOf(it, x) : undefined));
+  const nums = raw.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  if (nums.length === raw.length) return nums.every((v, i) => i === 0 || v > nums[i - 1]!);
+  return raw.every((v) => typeof v === "string" && isTimeLabel(v));
+}
+
+/**
+ * Whether a kind=bar chart this wide draws its bars across: only when it's
+ * narrower than BARS_ACROSS_WIDTH, has no layers (chart-line, chart-rule and
+ * chart-note are drawn on vertical bars only), its items aren't in time
+ * order, and every row fits MAX_HBAR_HEIGHT. hbarGeometry has the last word:
+ * when it can't fit them either, the bars stay vertical.
+ */
+function barsAcross(w: number, d: SeriesData, ns: number, layers: number, items: Value | undefined, x: string, t: Theme): boolean {
+  if (w >= BARS_ACROSS_WIDTH || layers > 0 || d.problem) return false;
+  if (d.slots.length * hbarRows(t, ns).rowH > MAX_HBAR_HEIGHT) return false;
+  return !inTimeOrder(items, x);
 }
 
 /** Rows a loading horizontal bar chart keeps room for. */
@@ -885,8 +936,18 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       const labels = labelsOf(p.str("labels"));
       const series = ys.map((field, k) => ({ field, label: labels[k] || field, color: k }));
       const data = chartSeries(items, x, ys);
+      // A bar chart on a phone tries its bars across first; its warnings wait until it's kept.
+      let across: { g: ChartGeometry; h: number } | null = null;
+      if (kind === "bar" && barsAcross(box.w, data, series.length, layerKids.length, items, x, ctx.theme)) {
+        const held: string[] = [];
+        const tried = hbarGeometry(box, data, series, format, p.text(), line, { theme: ctx.theme, measure: ctx.measure, warn: (w) => held.push(w) });
+        if (!tried.g.message) {
+          across = tried;
+          for (const w of held) ctx.warn?.(w);
+        }
+      }
       out = kind === "hbar" ? hbarGeometry(box, data, series, format, p.text(), line, ctx)
-        : axisGeometry(box, data, series, kind as AxisKind, format, p.text(), line, ctx, readLayers(layerKids, items, ctx.props, line, ctx.warn));
+        : across ?? axisGeometry(box, data, series, kind as AxisKind, format, p.text(), line, ctx, readLayers(layerKids, items, ctx.props, line, ctx.warn));
     }
     if (layerKids.length && kind !== "bar" && kind !== "line") {
       ctx.warn?.(`chart on line ${line}: chart-line, chart-rule and chart-note are drawn on kind=bar and kind=line only, so they were left out of this kind=${kind} chart`);

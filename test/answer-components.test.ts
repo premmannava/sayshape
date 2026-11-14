@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
+import { BLOCKS_WIDTH } from "../src/components/compare";
 import { render } from "../src/testing";
 import { lightTheme } from "../src/theme";
 
@@ -138,6 +139,113 @@ describe("compare", () => {
     expect(Number(at(narrow, "Price").args[2])).toBeLessThan(Number(at(narrow, "$19.00").args[2]) - 10);
     wide.destroy();
     narrow.destroy();
+  });
+
+  describe("on a phone", () => {
+    const TWO = `state plans=[{name: "Basic", price: 9, storage: 50, backup: false}, {name: "Pro", price: 19, storage: 500, backup: true}]
+compare items=plans pick="Pro"
+  compare-row "Price" field=price format=money best=low
+  compare-row "Storage" field=storage format=number best=high tip="Per account"
+  compare-row "Backup" field=backup
+`;
+    const FOUR = `state plans=[{name: "Basic", price: 9, storage: 50, support: "Email"}, {name: "Pro", price: 19, storage: 500, support: "Email and chat"}, {name: "Team", price: 49, storage: 2000, support: "Phone"}, {name: "Enterprise", price: 99, storage: 10000, support: "Dedicated manager"}]
+compare items=plans pick="Pro"
+  compare-row "Price a month" field=price format=money best=low
+  compare-row "Storage (GB)" field=storage format=number best=high
+  compare-row "Support" field=support
+`;
+    type Layout = { blocks: boolean; colW: number; labelW: number; rows: Array<{ y: number; h: number }> };
+    const layoutOf = (ui: ReturnType<typeof render>) => ui.find("compare").box!.data as Layout;
+    const at = (ui: ReturnType<typeof render>, t: string) => ui.drawOps.filter((o) => o.op === "fillText" && o.args[0] === t);
+
+    it("draws each row as a block on a phone, and side by side on a wide screen", () => {
+      for (const width of [360, 375]) {
+        const ui = render(TWO, { width });
+        expect(ui.find("compare").box!.w).toBeLessThan(BLOCKS_WIDTH);
+        const d = layoutOf(ui);
+        expect(d.blocks).toBe(true);
+        expect(d.labelW).toBe(0);
+        // The label heads its block, the values sit under it, each under its option's name.
+        const label = Number(at(ui, "Price")[0]!.args[2]);
+        const value = Number(at(ui, "$19.00")[0]!.args[2]);
+        const name = at(ui, "Pro").map((o) => Number(o.args[2])).filter((y) => y > label && y < value);
+        expect(name).toHaveLength(1);
+        // Each option's name: once at the top, and once over its value in each of the 3 blocks.
+        expect(at(ui, "Basic")).toHaveLength(4);
+        expect(at(ui, "Pro")).toHaveLength(4);
+        // The value is in its option's column.
+        expect(Number(at(ui, "$19.00")[0]!.args[1])).toBeCloseTo(Number(at(ui, "Pro")[0]!.args[1]), 0);
+        expect(ui.warnings).toEqual([]);
+        ui.destroy();
+      }
+      const wide = render(TWO, { width: 1000 });
+      const d = layoutOf(wide);
+      expect(d.blocks).toBe(false);
+      expect(d.labelW).toBeGreaterThan(0);
+      expect(at(wide, "Basic")).toHaveLength(1);
+      expect(Number(at(wide, "Price")[0]!.args[2])).toBeCloseTo(Number(at(wide, "$19.00")[0]!.args[2]), 0);
+      wide.destroy();
+    });
+
+    it("switches at BLOCKS_WIDTH, by the comparison's own width", () => {
+      const blocks = (w: number) => {
+        const ui = render(TWO, { width: w, padding: 0 });
+        const b = layoutOf(ui).blocks;
+        ui.destroy();
+        return b;
+      };
+      expect(blocks(BLOCKS_WIDTH - 1)).toBe(true);
+      expect(blocks(BLOCKS_WIDTH)).toBe(false);
+    });
+
+    it("keeps the recommended option and the best values marked", () => {
+      const ui = render(TWO, { width: 360 });
+      const c = lightTheme.colors;
+      expect(texts(ui)).toContain("RECOMMENDED");
+      // The recommended option's name over each of its values is in the accent; the others are muted.
+      expect(at(ui, "Pro").filter((o) => o.fillStyle === c.accent)).toHaveLength(3);
+      expect(at(ui, "Basic").filter((o) => o.fillStyle === c.muted)).toHaveLength(3);
+      // Its cells are outlined in the accent: the name at the top and one per block.
+      expect(ui.drawOps.filter((o) => o.op === "stroke" && o.strokeStyle === c.accent)).toHaveLength(4);
+      const best = ui.drawOps.filter((o) => o.op === "fillText" && o.fillStyle === c.good).map((o) => o.args[0]);
+      expect(best).toEqual(["$9.00", "500"]);
+      ui.destroy();
+    });
+
+    it("reads well with three and four options", () => {
+      for (const n of [3, 4]) {
+        const spec = n === 4 ? FOUR : SPEC;
+        const ui = render(spec, { width: 360 });
+        const d = layoutOf(ui);
+        expect(d.blocks).toBe(true);
+        expect(d.colW * n).toBeCloseTo(ui.find("compare").box!.w, 5);
+        expect(ui.warnings).toEqual([]);
+        if (n === 4) {
+          // Names aren't broken mid-word: a smaller font when a word wouldn't fit.
+          expect(texts(ui)).toContain("Enterprise");
+          expect(texts(ui)).toEqual(expect.arrayContaining(["$99.00", "10,000", "Dedicated", "manager"]));
+        }
+        ui.destroy();
+      }
+    });
+
+    it("keeps a row's tip pressable from its label", () => {
+      const ui = render(TWO, { width: 360 });
+      expect(ui.hits.some((h) => h.detail === "tip:1")).toBe(true);
+      ui.destroy();
+    });
+
+    it("reads and copies the same as side by side", () => {
+      for (const spec of [TWO, SPEC, FOUR]) {
+        const phone = render(spec, { width: 360 }), wide = render(spec, { width: 1000 });
+        expect(layoutOf(phone).blocks).toBe(true);
+        expect(layoutOf(wide).blocks).toBe(false);
+        expect(phone.accessibility()).toEqual(wide.accessibility());
+        expect(phone.copyText()).toBe(wide.copyText());
+        phone.destroy();
+        wide.destroy();
+      }
+    });
   });
 
   it("says so for too few or too many options", () => {
