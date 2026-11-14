@@ -223,15 +223,42 @@ describe("chart series from brand colors", () => {
     }
   });
 
-  it("drop a supplied color that looks like an earlier one, and derive in its place", () => {
+  // Changed from "drop a supplied color that looks like an earlier one, and derive in its place":
+  // a near copy now keeps its slot as a lighter or darker shade of the same color.
+  it("turn a supplied color that looks like an earlier one into a lighter or darker shade of itself", () => {
     for (const s of SCHEMES) {
       const out = deriveSeries(["#0066ff", "#0067fe", "#e8a33d"], surfaceOf(s), s);
       expect(out).toHaveLength(6);
       expect(out[0]).toBe(effectiveAccent("#0066ff", surfaceOf(s)).accent);
-      // The near copy is gone, so the third color given moves up to series2.
-      expect(colorDistance(out[1]!, "#e8a33d")).toBeLessThan(0.2);
-      expect(out).not.toContain("#0067fe");
+      // The near copy keeps series2, in the same hue; the third color given stays series3.
+      expect(hueGap(hexToOklch(out[1]!).h, hexToOklch("#0067fe").h), `${s} ${out[1]}`).toBeLessThan(6);
+      expect(out[1]).not.toBe("#0067fe");
+      expect(colorDistance(out[2]!, "#e8a33d")).toBeLessThan(0.2);
       expectApart(out, `near copies ${s}`);
+    }
+  });
+
+  it("make a navy's near-duplicate a lighter or darker navy, apart from the first and readable at 3:1", () => {
+    const navy = hexToOklch("#1f3a93").h;
+    for (const s of SCHEMES) {
+      const out = deriveSeries(["#1f3a93", "#22409a"], surfaceOf(s), s);
+      expect(hueGap(hexToOklch(out[1]!).h, navy), `${s} ${out[1]}`).toBeLessThan(5);
+      expect(colorDistance(out[0]!, out[1]!)).toBeGreaterThanOrEqual(MIN_SERIES_DISTANCE);
+      expect(contrast(out[1]!, surfaceOf(s))).toBeGreaterThanOrEqual(3);
+      expect(deriveSeries(["#1f3a93", "#22409a"], surfaceOf(s), s)).toEqual(out);
+      expectApart(out, `navy ${s}`);
+    }
+  });
+
+  it("derive in its place when no shade of a near-duplicate stands apart", () => {
+    const navies = ["#1f3a93", "#22409a", "#2040a0", "#1e3c98", "#213f9c", "#20399a"];
+    for (const s of SCHEMES) {
+      const out = deriveSeries(navies, surfaceOf(s), s);
+      expect(out).toHaveLength(6);
+      // Shades fill the navy's room; the last copy has none left, so it is a derived color of another hue.
+      expect(hueGap(hexToOklch(out[5]!).h, hexToOklch("#1f3a93").h), `${s} ${out[5]}`).toBeGreaterThan(30);
+      for (const c of out) expect(contrast(c, surfaceOf(s))).toBeGreaterThanOrEqual(3);
+      expectApart(out, `navies ${s}`);
     }
   });
 
