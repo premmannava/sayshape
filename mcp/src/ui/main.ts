@@ -27,7 +27,7 @@ import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
 import { deflated, fromDataUrl, pdfOf, pptxOf, rgbOf, toBase64, type SlidePicture } from "./deck-file";
 import { readViewOptions } from "./view-options";
-import { announce, brandColorFor, chosenAccent } from "./host-brand";
+import { announce, brandColorFor, chosenColors } from "./host-brand";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
 
@@ -134,7 +134,7 @@ function domReader(dark: boolean): ReadVar {
   };
 }
 
-/** The selected SayShape preset in the host's mode, with the server's --accent or else the chat app's brand color (see chosenAccent), adjusted to the host's shared colors, fonts and radii. */
+/** The selected SayShape preset in the host's mode, with the server's --colors (or --accent) or else the chat app's brand color (see chosenColors), adjusted to the host's shared colors, fonts and radii. */
 function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const dark = ctx?.theme ? ctx.theme === "dark" : prefersDark();
   const root = document.documentElement;
@@ -142,7 +142,7 @@ function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const styles = ctx?.styles;
   if (styles?.css?.fonts) applyHostFonts(styles.css.fonts);
   if (styles?.variables) applyHostStyleVariables(styles.variables);
-  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined, chosenAccent({ operatorAccent: viewOptions.accent, picked: presetPicked, startupPreset: viewOptions.theme, brand: hostBrand }));
+  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined, chosenColors({ operatorColors: viewOptions.colors, picked: presetPicked, startupPreset: viewOptions.theme, brand: hostBrand }));
 }
 
 /** Canvas text doesn't trigger font loading, so load the theme's faces before drawing with them. */

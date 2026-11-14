@@ -17,7 +17,7 @@ const emit = defineEmits<{ ready: [ui: SayShape]; action: [name: string, value: 
 const root = ref<HTMLElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
 const dark = ref(false);
-const theme = computed(() => resolveTheme(props.look.preset, props.look.scheme ?? (dark.value ? "dark" : "light"), props.look.accent ?? null).theme);
+const theme = computed(() => resolveTheme(props.look.preset, props.look.scheme ?? (dark.value ? "dark" : "light"), props.look.accent ? [props.look.accent] : null).theme);
 /** The surface behind the canvas takes the look's own page color, so a dark look sits on dark. */
 const surface = computed(() => theme.value.colors.surface);
 

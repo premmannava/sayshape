@@ -16,7 +16,7 @@ const emit = defineEmits<{ event: [e: HostEvent] }>();
 
 const root = ref<HTMLElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
-const theme = computed(() => resolveTheme(props.example.look.preset, props.example.look.scheme, props.example.look.accent ?? null).theme);
+const theme = computed(() => resolveTheme(props.example.look.preset, props.example.look.scheme, props.example.look.accent ? [props.example.look.accent] : null).theme);
 // The stage takes the example's own page color, so a dark example sits on dark.
 const stage = computed(() => ({ background: theme.value.colors.surface, "--dot": theme.value.colors.line }));
 

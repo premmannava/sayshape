@@ -45,7 +45,7 @@ export function setupAppearance(sayshape: SayShape): void {
   /** Show the current preferences everywhere: canvas, page and controls. */
   function apply(): void {
     const s = scheme();
-    const r = resolveTheme(prefs.preset, s, prefs.accent);
+    const r = resolveTheme(prefs.preset, s, prefs.accent ? [prefs.accent] : null);
     const root = document.documentElement;
     // The page follows the mode through its own data-theme styles.
     if (prefs.mode === "system") delete root.dataset.theme;

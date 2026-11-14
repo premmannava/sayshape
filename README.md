@@ -177,7 +177,7 @@ The experimental features ask more of a model. Drawing a scene means placing eve
 - **Errors that don't break the screen.** A bad line is skipped and reported with its line number and how to fix it; the rest still draws.
 - **A model guide that can't go stale.** Each component is defined once, and that definition drives validation, the docs and the prompt that teaches a model the language.
 - **Accessibility.** A hidden mirror gives screen readers, keyboards and phones a role, a name and a state for everything drawn.
-- **Themes.** Light and dark, your own tokens in code or CSS variables, or one brand color (`--accent` on the MCP server).
+- **Themes.** Light and dark, your own tokens in code or CSS variables, or your brand colors (`--accent` or `--colors` on the MCP server).
 - **Testing tools.** `sayshape/testing` runs the real engine in Node, so a generated screen can be pressed and checked without a browser.
 - **Any model, anywhere.** It works with any OpenAI-compatible endpoint, including one on your own servers.
 

@@ -44,7 +44,7 @@ export interface AdapterEngine {
 
 /** Settings the server bakes into the adapter's source (index.ts adapterSource). */
 export interface AdapterOptions {
-  /** The server was given --theme or --accent: keep the interface's own colors, ignore the app's. */
+  /** The server was given --theme, --accent or --colors: keep the interface's own colors, ignore the app's. */
   ignoreAppColors?: boolean;
   /** Skip saving the interface's state when it serializes to more bytes than this. Default STATE_LIMIT. */
   stateLimit?: number;

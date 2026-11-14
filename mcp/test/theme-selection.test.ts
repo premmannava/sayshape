@@ -5,7 +5,8 @@ import { coreComponents } from "../../src/components";
 import { optionKey } from "../../src/components/select";
 import { render } from "../../src/testing";
 import { darkTheme, lightTheme, seriesColors } from "../../src/theme";
-import { PRESETS } from "../../playground/appearance/presets";
+import { hexToOklch, hueGap } from "../../playground/appearance/color";
+import { PRESETS, resolveTheme } from "../../playground/appearance/presets";
 import type { ReadVar } from "../src/ui/host-theme";
 import { COPY_ACTION, DEFAULT_PRESET, isPresetId, SAVE_ACTION, toolbarSpec, toolbarWidth, TOOLBAR_PADDING, themeForPreset } from "../src/ui/theme-selection";
 import { toolButton } from "../src/ui/tool-button";
@@ -190,30 +191,31 @@ chart "Sales" kind=bar items=sales x=month y=n
 `;
 
     it("colors buttons, highlights and the first chart series, in light and dark", () => {
-      const light = themeForPreset("teal", "light", undefined, "#d93025");
+      const light = themeForPreset("teal", "light", undefined, ["#d93025"]);
       expect(light.colors.accent).toBe("#d93025");
       expect(light.colors.series1).toBe("#d93025");
-      expect(light.colors.series2).toBe(lightTheme.colors.series2);
+      // The other series are worked out from the color, not left at the preset's own.
+      expect(light.colors.series2).not.toBe(lightTheme.colors.series2);
       // Too dark to read on the dark background, so dark mode lightens it, and the chart follows.
-      const dark = themeForPreset("teal", "dark", undefined, "#d93025");
+      const dark = themeForPreset("teal", "dark", undefined, ["#d93025"]);
       expect(dark.colors.accent).toBe("#df4f45");
       expect(dark.colors.series1).toBe("#df4f45");
-      expect(dark.colors.series2).toBe(darkTheme.colors.series2);
-      const ui = render(CHART, { theme: themeForPreset("teal", "light", undefined, "#d93025") });
+      expect(dark.colors.series2).not.toBe(darkTheme.colors.series2);
+      const ui = render(CHART, { theme: themeForPreset("teal", "light", undefined, ["#d93025"]) });
       expect(drawnColors(ui.drawOps)).toContain("#d93025");
       ui.destroy();
     });
 
     it("makes a color that's hard to read readable on each mode's background", () => {
-      const light = themeForPreset("teal", "light", undefined, "#ffe066");
+      const light = themeForPreset("teal", "light", undefined, ["#ffe066"]);
       expect(light.colors.accent).not.toBe("#ffe066");
       expect(light.colors.series1).toBe(light.colors.accent);
-      expect(themeForPreset("teal", "dark", undefined, "#ffe066").colors.accent).toBe("#ffe066");
+      expect(themeForPreset("teal", "dark", undefined, ["#ffe066"]).colors.accent).toBe("#ffe066");
     });
 
     it("goes on top of any preset, and the host's colors still apply around it", () => {
-      expect(themeForPreset("studio", "light", undefined, "#d93025").font).toEqual(themeForPreset("studio", "light").font);
-      const host = themeForPreset("teal", "light", hostReader({ "--color-background-primary": "#faf9f5" }), "#d93025");
+      expect(themeForPreset("studio", "light", undefined, ["#d93025"]).font).toEqual(themeForPreset("studio", "light").font);
+      const host = themeForPreset("teal", "light", hostReader({ "--color-background-primary": "#faf9f5" }), ["#d93025"]);
       expect(host.colors.surface).toBe("#faf9f5");
       expect(host.colors.accent).toBe("#d93025");
     });
@@ -221,6 +223,49 @@ chart "Sales" kind=bar items=sales x=month y=n
     it("leaves every preset exactly as it was without one", () => {
       for (const { id } of PRESETS) {
         for (const scheme of ["light", "dark"] as const) expect(themeForPreset(id, scheme, undefined, undefined)).toEqual(themeForPreset(id, scheme));
+      }
+    });
+  });
+
+  describe("with the server's --colors", () => {
+    const LIST = ["#e4572e", "#2e86ab", "#f2c14e"];
+    const MANY = `state sales=[{m: "Jan", a: 10, b: 12, c: 9, d: 7, e: 5, f: 4}, {m: "Feb", a: 14, b: 11, c: 13, d: 8, e: 6, f: 5}]
+chart "Sales" kind=bar items=sales x=m y=a,b,c,d,e,f
+`;
+
+    it("puts the first color on the accent and the first series, and the next ones on the next series", () => {
+      for (const scheme of ["light", "dark"] as const) {
+        const t = themeForPreset("teal", scheme, undefined, LIST);
+        expect(t.colors.accent).toBe(t.colors.series1);
+        expect(t.colors.accent.toLowerCase()).toBe(resolveTheme("teal", scheme, ["#e4572e"]).theme.colors.accent.toLowerCase());
+        expect(hueGap(hexToOklch(t.colors.series2).h, hexToOklch("#2e86ab").h)).toBeLessThan(10);
+        expect(hueGap(hexToOklch(t.colors.series3).h, hexToOklch("#f2c14e").h)).toBeLessThan(15);
+        expect(new Set(seriesColors(t).map((c) => c.toLowerCase())).size).toBe(6);
+      }
+    });
+
+    it("draws a six-series chart in those colors, in light and dark", () => {
+      for (const scheme of ["light", "dark"] as const) {
+        const theme = themeForPreset("teal", scheme, undefined, LIST);
+        const ui = render(MANY, { theme });
+        const drawn = drawnColors(ui.drawOps).map((c) => c.toLowerCase());
+        for (const color of seriesColors(theme)) expect(drawn, `${scheme} ${color}`).toContain(color.toLowerCase());
+        ui.destroy();
+      }
+    });
+
+    it("changes nothing else, and leaves the host's colors, fonts and corners as they were", () => {
+      const read = hostReader({ "--color-background-primary": "#faf9f5", "--font-sans": "Georgia, serif", "--border-radius-md": "12px" });
+      const plain = themeForPreset("teal", "light", read);
+      const branded = themeForPreset("teal", "light", read, LIST);
+      expect({ ...branded, colors: undefined }).toEqual({ ...plain, colors: undefined });
+      expect(branded.colors.surface).toBe("#faf9f5");
+      expect(branded.colors.ink).toBe(plain.colors.ink);
+    });
+
+    it("gives a list of one the same accent as a longer list starting with that color", () => {
+      for (const scheme of ["light", "dark"] as const) {
+        expect(themeForPreset("teal", scheme, undefined, ["#e4572e"]).colors.accent).toBe(themeForPreset("teal", scheme, undefined, LIST).colors.accent);
       }
     });
   });

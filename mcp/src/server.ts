@@ -377,7 +377,7 @@ function describeCheck(c: SpecCheck, textOnly = false, fileMode = false, widget 
 export interface ServerOptions {
   /** The view's HTML: dist/ui.html, built by `npm run build`. */
   uiHtml: () => string | Promise<string>;
-  /** The view's own settings: --theme-picker, --theme, --accent, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
+  /** The view's own settings: --theme-picker, --theme, --accent, --colors, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
   view?: ViewOptions;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;
@@ -395,7 +395,7 @@ export interface ServerOptions {
   widgetEngine?: () => Promise<PackedEngine>;
   /**
    * With widgetDir (main.ts --widget-host): the chat app's adapter to hook into every file. Its presses are
-   * saved for the model's next turn, so emit: is allowed there. ignoreAppColors: --theme or --accent was given.
+   * saved for the model's next turn, so emit: is allowed there. ignoreAppColors: --theme, --accent or --colors was given.
    * Without it, emit: is handled as before.
    */
   widgetHost?: { name: WidgetHostName; ignoreAppColors?: boolean };
@@ -592,7 +592,7 @@ export function createServer(opts: ServerOptions): McpServer {
             imageHosts,
             ...(hostSource !== undefined ? { host: hostSource } : {}),
             ...(opts.view?.theme ? { theme: opts.view.theme } : {}),
-            ...(opts.view?.accent ? { accent: opts.view.accent } : {}),
+            ...(opts.view?.colors ? { colors: opts.view.colors } : {}),
             ...(opts.view?.logo ? { logo: opts.view.logo } : {}),
           });
           widget = written.ok ? widgetText(written.path, written.bytes) + (saved && emits.length ? ` ${PRESSES_SAVED_RESULT}` : "") : widgetFailedText(written.reason);

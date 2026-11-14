@@ -32,9 +32,9 @@ export function announce(host: { name?: unknown; version?: unknown } | undefined
   return `SayShape view: host announced name=${JSON.stringify(host?.name)} version=${JSON.stringify(host?.version)}`;
 }
 
-export interface AccentChoice {
-  /** --accent at server start (operator colors). */
-  operatorAccent?: string;
+export interface ColorChoice {
+  /** --colors (or --accent, a list of one) at server start (operator colors). */
+  operatorColors?: readonly string[];
   /** True once the person has chosen a preset in the toolbar's theme selector. */
   picked: boolean;
   /** The preset the server started with (--theme, else the default). */
@@ -44,17 +44,19 @@ export interface AccentChoice {
 }
 
 /**
- * The accent to lay over the preset, or undefined for the preset's own.
- * Highest first: the operator's --accent; a preset the person picked (its own
- * accent); the chat app's brand color; the default preset's accent.
+ * The brand colors to lay over the preset, or undefined for the preset's own.
+ * Highest first: the operator's --colors (or --accent); a preset the person
+ * picked (its own accent); the chat app's brand color, as a list of one so it
+ * gets chart series worked out from it like any first color; the default
+ * preset's accent.
  *
  * A preset other than the default at startup (--theme purple) is the
  * operator's choice of look, so it keeps its accent too; only the default
  * preset, which an operator who said nothing gets, gives way to the brand.
  * (--theme teal says the same as nothing, so it cannot be told apart.)
  */
-export function chosenAccent(c: AccentChoice): string | undefined {
-  if (c.operatorAccent) return c.operatorAccent;
+export function chosenColors(c: ColorChoice): readonly string[] | undefined {
+  if (c.operatorColors?.length) return c.operatorColors;
   if (c.picked || c.startupPreset !== DEFAULT_PRESET) return undefined;
-  return c.brand;
+  return c.brand ? [c.brand] : undefined;
 }

@@ -120,7 +120,8 @@ Add them after `"sayshape-mcp"` in `args`:
 | Option | What it does |
 |---|---|
 | `--theme studio` | The look interfaces use: `teal` (default), `purple`, `blue`, `neutral` or `studio` |
-| `--accent "#e4572e"` | Your brand color for buttons, highlights and charts, made readable in light and dark |
+| `--accent "#e4572e"` | Your brand color for buttons, highlights and charts, made readable in light and dark. The other chart colors are worked out from it |
+| `--colors "#e4572e,#2e86ab,#f2c14e"` | Up to six brand colors, most important first, as one quoted argument. The first is the accent and the first chart color, the rest are the next chart colors, and any the list does not cover are worked out from the first. Use this or `--accent`, not both |
 | `--theme-picker` | A theme selector in the interface's toolbar |
 | `--scene` | Experimental scenes, off unless you ask for them |
 | `--data db.sqlite` | Answers from a SQLite database (needs Node.js 22.13 or later) |
