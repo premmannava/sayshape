@@ -5,7 +5,11 @@
  *   --theme-picker      show a theme selector above the interface (off by default)
  *   --theme <name>      the theme interfaces start in: teal, purple, blue, neutral or studio
  *   --accent <color>    a brand color (#rrggbb or #rgb) for buttons, highlights and charts' first series;
- *                       made readable in light and dark (presets.ts resolveTheme)
+ *                       made readable in light and dark (presets.ts resolveTheme). The same as --colors
+ *                       with one color
+ *   --colors <list>     up to six brand colors, comma-separated, most important first: the first is the
+ *                       accent and the first chart series, the rest follow it as series, and series the list
+ *                       doesn't cover are worked out from the first (presets.ts resolveTheme, color.ts deriveSeries)
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
  *   --no-copy-text      hide the "Copy text" button (shown by default)
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
@@ -19,13 +23,16 @@
  * the view and the tests share it.
  */
 import { PRESETS, resolveTheme, type PresetId } from "../../../playground/appearance/presets";
-import { normalizeHex } from "../../../playground/appearance/color";
+import { colorList, MAX_COLORS, normalizeHex } from "../../../playground/appearance/color";
 
 export interface ViewOptions {
   themePicker: boolean;
   theme: PresetId;
-  /** A brand color as #rrggbb, laid over the theme in light and dark. Absent means the theme's own. */
-  accent?: string;
+  /**
+   * Brand colors as #rrggbb, 1 to 6, most important first, laid over the theme in light and dark
+   * (--colors, or --accent as a list of one). Absent means the theme's own.
+   */
+  colors?: string[];
   saveImage: boolean;
   /** The "Copy text" button: a canvas has no text to select, so this copies the screen's words instead. */
   copyText: boolean;
@@ -78,12 +85,17 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
     out.theme = name;
   }
   const accentAt = args.indexOf("--accent");
+  const colorsAt = args.indexOf("--colors");
+  if (accentAt >= 0 && colorsAt >= 0) {
+    throw new Error(`Use --colors or --accent, not both: --accent "#e4572e" is the same as --colors "#e4572e", and --colors takes up to ${MAX_COLORS} colors, such as --colors "#e4572e,#2e86ab".`);
+  }
   if (accentAt >= 0) {
     const raw = args[accentAt + 1];
     const accent = raw && !raw.startsWith("--") ? normalizeHex(raw) : null;
     if (!accent) throw new Error(`--accent needs a hex color, such as "#e4572e" or "#e45"${raw && !raw.startsWith("--") ? `; got "${raw}"` : ""}.`);
-    out.accent = accent;
+    out.colors = [accent];
   }
+  if (colorsAt >= 0) out.colors = parseColors(args[colorsAt + 1]);
   const hostsAt = args.indexOf("--image-hosts");
   if (hostsAt >= 0) {
     const raw = args[hostsAt + 1];
@@ -108,6 +120,31 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   return out;
 }
 
+/**
+ * The value of --colors: hex colors (#rrggbb or #rgb, # optional) separated by commas, spaces around them
+ * allowed, most important first. Throws, naming the entry, on one that isn't a color, an empty one, none at
+ * all, or more than six. (An operator starting a server should hear about a typo, so unlike the colors a
+ * model sends in a conversation, nothing here is silently ignored.)
+ */
+function parseColors(raw: string | undefined): string[] {
+  const about = `, such as --colors "#e4572e,#2e86ab,#f2c14e"`;
+  if (!raw || raw.startsWith("--")) throw new Error(`--colors needs up to ${MAX_COLORS} hex colors separated by commas, most important first${about}.`);
+  const entries = raw.split(",").map((e) => e.trim());
+  const out: string[] = [];
+  entries.forEach((entry, i) => {
+    const hex = normalizeHex(entry);
+    if (!hex) {
+      const what = entry ? `"${entry}" is not a hex color` : `entry ${i + 1} is empty`;
+      throw new Error(`--colors: ${what}. Write each color as #rrggbb or #rgb and separate them with commas${about}; got "${raw}".`);
+    }
+    out.push(hex);
+  });
+  if (out.length > MAX_COLORS) {
+    throw new Error(`--colors takes up to ${MAX_COLORS} colors (one per chart series); got ${out.length}. Remove the least important ones: the first is the accent.`);
+  }
+  return out;
+}
+
 /** An https address with a plain host name and nothing that could break out of the view's settings; null otherwise. */
 function logoAddress(raw: string): string | null {
   try {
@@ -120,25 +157,36 @@ function logoAddress(raw: string): string | null {
 }
 
 /**
- * What --accent becomes in each mode, for the startup message. Text in it
- * must read at 4.5:1 on the background, and no color does that on both white
- * and a near-black, so most brand colors are moved a little in one mode: a
- * pale one darkened for light mode, a deep one lightened for dark.
+ * What --accent or --colors becomes in each mode, for the startup message. Text in the
+ * first color (the accent) must read at 4.5:1 on the background, and no color does that on
+ * both white and a near-black, so most brand colors are moved a little in one mode: a pale
+ * one darkened for light mode, a deep one lightened for dark. For a list, the other colors
+ * are chart series, which need less (3:1), and the series the list doesn't cover are worked
+ * out from the first.
  */
-export function accentNotes(o: Pick<ViewOptions, "theme" | "accent">): string[] {
-  if (!o.accent) return [];
+export function accentNotes(o: Pick<ViewOptions, "theme" | "colors">): string[] {
+  const colors = colorList(o.colors);
+  if (!colors.length) return [];
+  const first = colors[0]!;
   const modes = (["light", "dark"] as const).map((scheme) => {
-    const r = resolveTheme(o.theme, scheme, o.accent!);
+    const r = resolveTheme(o.theme, scheme, colors);
     return r.accentAdjusted ? `${scheme} mode uses ${r.theme.colors.accent}` : `${scheme} mode uses it as is`;
   });
-  return [`accent ${o.accent}: ${modes.join("; ")}, so text in it stays readable.`];
+  if (colors.length === 1) return [`accent ${first}: ${modes.join("; ")}, so text in it stays readable.`];
+  const rest = MAX_COLORS - colors.length;
+  return [
+    `colors ${colors.join(", ")}: the first, ${first}, is the accent and the first chart series (${modes.join("; ")}, so text in it stays readable).`,
+    `The others are chart series in that order, darkened or lightened where they would be hard to see (one that looks too like an earlier one is replaced)${rest ? `; ${rest === 1 ? "the last series is" : `the last ${rest} series are`} worked out from the first color` : ""}.`,
+  ];
 }
 
 /** The settings as one short attribute value: "picker=0&theme=teal&save=1&copy=1". Host names need no escaping. */
 export function encodeViewOptions(o: ViewOptions): string {
   const images = o.imageHosts?.length ? `&images=${o.imageHosts.join(",")}` : "";
-  // Without its #, so the value is plain letters and digits.
-  const accent = o.accent ? `&accent=${o.accent.slice(1)}` : "";
+  // Without their #, so the values are plain letters and digits. One color keeps the old name, accent=rrggbb,
+  // so a tag written before lists existed reads the same way; several are colors=rrggbb,rrggbb.
+  const list = colorList(o.colors).map((c) => c.slice(1));
+  const accent = list.length === 1 ? `&accent=${list[0]}` : list.length ? `&colors=${list.join(",")}` : "";
   return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.slides ? "&slides=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
 }
 
@@ -162,9 +210,12 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   if (address && out.imageHosts?.includes(new URL(address).hostname)) out.logo = address;
   const theme = p.get("theme");
   if (isPreset(theme)) out.theme = theme;
-  // Six hex digits only: anything else would reach the canvas as a color.
+  // Six hex digits each, and no more than six colors: anything else would reach the canvas as a color.
+  const list = p.get("colors")?.split(",") ?? [];
+  const colors = list.length <= MAX_COLORS && list.every((c) => /^[0-9a-f]{6}$/.test(c)) ? list : [];
   const accent = p.get("accent");
-  if (accent && /^[0-9a-f]{6}$/.test(accent)) out.accent = "#" + accent;
+  if (!colors.length && accent && /^[0-9a-f]{6}$/.test(accent)) colors.push(accent);
+  if (colors.length) out.colors = colors.map((c) => "#" + c);
   return out;
 }
 

@@ -8,6 +8,8 @@
  *   sayshape-mcp --theme blue    the theme interfaces use: teal (default), purple, blue, neutral or studio
  *   sayshape-mcp --accent "#e4572e"  a brand color for buttons, highlights and charts (made readable
  *                                in light and dark; says so at startup when it had to change it)
+ *   sayshape-mcp --colors "#e4572e,#2e86ab"  up to six brand colors: the first is the accent, the rest
+ *                                follow as chart series, and series not covered are worked out from the first
  *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --no-copy-text  hide the Copy text button
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
@@ -79,7 +81,7 @@ async function main(): Promise<void> {
     console.error([
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
-      "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color]",
+      "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color | --colors list]",
       "                    [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--slides] [--logo <https url>]",
       "                    [--image-hosts host1,host2,...] [--widget-dir folder [--widget-host name]]",
       "",
@@ -101,6 +103,10 @@ async function main(): Promise<void> {
       "  --theme <name>   the theme interfaces use: teal (default), purple, blue, neutral or studio",
       "  --accent <color> a brand color, such as \"#e4572e\", for buttons, highlights and charts;",
       "                   darkened or lightened where it would be hard to read",
+      "  --colors <list>  up to six brand colors, comma-separated, most important first, in one argument:",
+      "                   --colors \"#e4572e,#2e86ab,#f2c14e\". The first is the accent and the first chart",
+      "                   series, the rest are the next series, and any series the list doesn't cover are",
+      "                   worked out from the first. --accent is the same with one color; use one of the two",
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
       "  --no-copy-text   hide the Copy text button",
       "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",
@@ -196,7 +202,7 @@ async function main(): Promise<void> {
     return;
   }
   // stdout carries the protocol, so anything for people goes to stderr.
-  await logClient(createServer({ uiHtml, data, mcpResults, view, ...(widgetDir ? { widgetDir } : {}), ...(widgetHost ? { widgetHost: { name: widgetHost, ignoreAppColors: args.includes("--theme") || args.includes("--accent") } } : {}) })).connect(new StdioServerTransport());
+  await logClient(createServer({ uiHtml, data, mcpResults, view, ...(widgetDir ? { widgetDir } : {}), ...(widgetHost ? { widgetHost: { name: widgetHost, ignoreAppColors: args.includes("--theme") || args.includes("--accent") || args.includes("--colors") } } : {}) })).connect(new StdioServerTransport());
 }
 
 main().catch((e) => {

@@ -256,6 +256,15 @@ describe("chart series from brand colors", () => {
     expect(contrast(out[1]!, "#ffffff")).toBeLessThan(3.3);
   });
 
+  it("make the first color readable on its own surface when one is given, and the rest on the surface", () => {
+    const raised = darkTheme.colors.raised, surface = darkTheme.colors.surface;
+    const out = deriveSeries(["#2e86ab", "#f2c14e"], raised, "dark", surface);
+    expect(out[0]).toBe(effectiveAccent("#2e86ab", surface).accent);
+    expect(contrast(out[1]!, raised)).toBeGreaterThanOrEqual(3);
+    // Not given, the first color is made readable on the same surface as the rest.
+    expect(deriveSeries(["#2e86ab", "#f2c14e"], raised, "dark")[0]).toBe(effectiveAccent("#2e86ab", raised).accent);
+  });
+
   it("ignore entries that aren't hex colors and anything past six", () => {
     expect(deriveSeries(["nope", "#0066ff"], "#ffffff", "light")).toEqual(deriveSeries(["#0066ff"], "#ffffff", "light"));
     const seven = ["#4f46e5", "#0e87a8", "#d63a7a", "#c2690a", "#0f8c63", "#8b5cf6", "#000000"];
@@ -296,8 +305,8 @@ describe("presets", () => {
   });
 
   it("resolve a custom accent per mode from the same request", () => {
-    const light = resolveTheme("purple", "light", "#ffff00");
-    const dark = resolveTheme("purple", "dark", "#ffff00");
+    const light = resolveTheme("purple", "light", ["#ffff00"]);
+    const dark = resolveTheme("purple", "dark", ["#ffff00"]);
     expect(light.accentAdjusted).toBe(true);
     expect(dark.accentAdjusted).toBe(false);
     expect(dark.theme.colors.accent).toBe("#ffff00");
@@ -306,7 +315,7 @@ describe("presets", () => {
   });
 
   it("only change colors, so sizes and fonts stay SayShape's", () => {
-    const t = resolveTheme("blue", "dark", "#123456").theme;
+    const t = resolveTheme("blue", "dark", ["#123456"]).theme;
     expect({ ...t, colors: undefined }).toEqual({ ...darkTheme, colors: undefined });
   });
 
@@ -314,10 +323,114 @@ describe("presets", () => {
     expect(resolveTheme("studio", "light", null).theme).toEqual(studioLightTheme);
     expect(resolveTheme("studio", "dark", null).theme).toEqual(studioDarkTheme);
     expect(resolveTheme("studio", "light", null).changes).toEqual({});
-    const t = resolveTheme("studio", "dark", "#0ea5e9").theme;
+    const t = resolveTheme("studio", "dark", ["#0ea5e9"]).theme;
     expect({ ...t, colors: undefined }).toEqual({ ...studioDarkTheme, colors: undefined });
     // A custom accent replaces the gradient with a flat accent rather than half of Studio's.
     expect(t.colors.accent2).toBe(t.colors.accent);
+  });
+});
+
+describe("presets with a list of brand colors", () => {
+  const SERIES = ["series1", "series2", "series3", "series4", "series5", "series6"] as const;
+  const seriesOf = (t: { colors: Record<(typeof SERIES)[number], string> }) => SERIES.map((k) => t.colors[k].toLowerCase());
+  const LISTS: string[][] = [["#e4572e"], ["#e4572e", "#2e86ab", "#f2c14e"], ["#0066ff", "#0067fe", "#e8a33d"], ["#4f46e5", "#0e87a8", "#d63a7a", "#c2690a", "#0f8c63", "#8b5cf6"], ["#ffe066", "#7fffd4"], ["#808080"]];
+
+  it("leave every preset as it is with no list, an empty one or one with nothing usable", () => {
+    for (const p of PRESETS) for (const s of SCHEMES) {
+      const plain = resolveTheme(p.id, s, null);
+      for (const none of [[], ["red"], ["", "rgb(1,2,3)", "#12"]]) {
+        expect(resolveTheme(p.id, s, none), `${p.id} ${s} ${JSON.stringify(none)}`).toEqual(plain);
+      }
+      expect(plain.requestedAccent).toBeNull();
+    }
+    expect(resolveTheme("teal", "light", []).theme).toEqual(lightTheme);
+    expect(resolveTheme("teal", "dark", []).changes).toEqual({});
+  });
+
+  it("make the first color do what an accent does: the accent, the text on it and the map's highlight", () => {
+    for (const p of PRESETS) for (const s of SCHEMES) for (const list of LISTS) {
+      const base = s === "dark" ? (p.id === "studio" ? studioDarkTheme : darkTheme) : p.id === "studio" ? studioLightTheme : lightTheme;
+      const r = resolveTheme(p.id, s, list);
+      const e = effectiveAccent(list[0]!, base.colors.surface);
+      const c = r.theme.colors;
+      const where = `${p.id} ${s} ${list.join(",")}`;
+      expect(c.accent.toLowerCase(), where).toBe(e.accent);
+      expect(c.onAccent.toLowerCase(), where).toBe(e.onAccent);
+      expect(c.landHighlight.toLowerCase(), where).toBe(mix(e.accent, base.colors.surface, s === "dark" ? 0.6 : 0.65));
+      // The first series is the accent, as it has always been for a rebranded theme.
+      expect(c.series1.toLowerCase(), where).toBe(e.accent);
+      expect(r.accentAdjusted, where).toBe(e.adjusted);
+      expect(r.requestedAccent, where).toBe(list[0]);
+    }
+  });
+
+  it("take the series from deriveSeries: the colors given, in order, then ones worked out from the first", () => {
+    for (const s of SCHEMES) {
+      const t = resolveTheme("teal", s, ["#e4572e", "#2e86ab", "#f2c14e"]).theme;
+      const series = seriesOf(t);
+      expect(series).toHaveLength(6);
+      expect(series).toEqual(deriveSeries(["#e4572e", "#2e86ab", "#f2c14e"], t.colors.raised === t.colors.surface ? t.colors.surface : t.colors.raised, s, t.colors.surface));
+      // The second and third are the blue and the yellow (made readable); the rest are not from the list.
+      expect(hueGap(hexToOklch(series[1]!).h, hexToOklch("#2e86ab").h)).toBeLessThan(10);
+      expect(hueGap(hexToOklch(series[2]!).h, hexToOklch("#f2c14e").h)).toBeLessThan(15);
+      expect(new Set(series).size).toBe(6);
+    }
+  });
+
+  it("keep the series readable at 3:1 on the surface and on raised cards, in light and dark, for every preset", () => {
+    for (const p of PRESETS) for (const s of SCHEMES) for (const list of LISTS) {
+      const t = resolveTheme(p.id, s, list).theme;
+      for (const bg of [t.colors.surface, t.colors.raised]) {
+        seriesOf(t).forEach((c, i) => expect(contrast(c, bg), `${p.id} ${s} ${list.join(",")} series${i + 1} on ${bg}`).toBeGreaterThanOrEqual(3));
+        // The accent is text and strokes, so it holds 4.5:1 on the surface.
+      }
+      expect(contrast(t.colors.accent, t.colors.surface)).toBeGreaterThanOrEqual(4.5);
+      // (A few accents land just under 4.5:1 for their button label, as they did before lists: effectiveAccent is unchanged and not what this checks.)
+      expect(auditTheme(t).filter((c) => !c.pass && c.name !== "Button label on the accent"), `${p.id} ${s} ${list.join(",")}`).toEqual([]);
+    }
+  });
+
+  it("hold the contrast on raised cards for a few hundred generated first colors in dark mode, where raised is lighter", () => {
+    let seed = 99;
+    const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    for (let i = 0; i < 300; i++) {
+      const hex = "#" + [0, 0, 0].map(() => Math.floor(rnd() * 256).toString(16).padStart(2, "0")).join("");
+      for (const preset of ["teal", "studio"] as const) {
+        const t = resolveTheme(preset, "dark", [hex]).theme;
+        for (const c of seriesOf(t)) expect(contrast(c, t.colors.raised), `${preset} ${hex} ${c}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("change only the accent, the text on it, the map's highlight and the series", () => {
+    for (const p of PRESETS) for (const s of SCHEMES) {
+      const plain = resolveTheme(p.id, s, null).theme;
+      const branded = resolveTheme(p.id, s, ["#e4572e", "#2e86ab"]).theme;
+      const touched = (Object.keys(plain.colors) as Array<keyof typeof plain.colors>).filter((k) => plain.colors[k] !== branded.colors[k]);
+      const allowed = new Set(["accent", "accent2", "onAccent", "landHighlight", ...SERIES]);
+      expect(touched.filter((k) => !allowed.has(k)), `${p.id} ${s}`).toEqual([]);
+      expect({ ...branded, colors: undefined }).toEqual({ ...plain, colors: undefined });
+    }
+  });
+
+  it("ignore entries that aren't hex colors and anything past six, as a model's sloppy list should be", () => {
+    for (const s of SCHEMES) {
+      const clean = resolveTheme("teal", s, ["#e4572e", "#2e86ab"]);
+      expect(resolveTheme("teal", s, ["nope", "#E4572E", "", "#2e86ab"])).toEqual(clean);
+      const six = ["#4f46e5", "#0e87a8", "#d63a7a", "#c2690a", "#0f8c63", "#8b5cf6"];
+      expect(resolveTheme("teal", s, [...six, "#000000", "#ffffff"])).toEqual(resolveTheme("teal", s, six));
+    }
+  });
+
+  it("make a list of one the same as an accent: the same accent, text on it and highlight as before lists existed", () => {
+    // These are the values the one-accent version of resolveTheme gave (the accent adjusted per mode).
+    const light = resolveTheme("teal", "light", ["#d93025"]).theme.colors;
+    const dark = resolveTheme("teal", "dark", ["#d93025"]).theme.colors;
+    expect([light.accent, light.onAccent.toLowerCase()]).toEqual(["#d93025", "#ffffff"]);
+    expect(dark.accent).toBe("#df4f45");
+    expect(light.series1).toBe(light.accent);
+    // What a list of one adds is series 2 to 6 worked out from the color, where there used to be the preset's own.
+    expect(light.series2.toLowerCase()).not.toBe(lightTheme.colors.series2.toLowerCase());
   });
 });
 
@@ -362,7 +475,7 @@ describe("theme code", () => {
   it("describes exactly the themes the playground shows", () => {
     for (const p of combos) {
       const plan = exportPlan(p);
-      const shown = (s: Scheme) => resolveTheme(p.preset, s, p.accent).theme;
+      const shown = (s: Scheme) => resolveTheme(p.preset, s, p.accent ? [p.accent] : null).theme;
       const studio = p.preset === "studio";
       const built = (s: Scheme, changes: object) => extendTheme(s === "dark" ? (studio ? studioDarkTheme : darkTheme) : (studio ? studioLightTheme : lightTheme), { colors: changes });
       if (plan.mode === "system") {
@@ -376,7 +489,7 @@ describe("theme code", () => {
 
   it("writes the adjusted colors, not the ones asked for", () => {
     const code = themeCode({ preset: "teal", mode: "light", accent: "#ffff00" });
-    const effective = resolveTheme("teal", "light", "#ffff00").theme.colors.accent;
+    const effective = resolveTheme("teal", "light", ["#ffff00"]).theme.colors.accent;
     expect(code).toContain(`accent: "${effective}"`);
     expect(code).not.toContain(`accent: "#ffff00"`);
   });

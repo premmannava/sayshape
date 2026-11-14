@@ -162,13 +162,13 @@ describe("the widget fragment", () => {
   });
 
   it("carries the server's settings: theme, accent, image hosts, scenes, behavior and slides", async () => {
-    const html = widgetFragment(base({ theme: "purple", accent: "#e4572e", imageHosts: ["cdn.example.com", "*.img.example.com"], scenes: true, behavior: true, slides: true, logo: "https://cdn.example.com/logo.png" }));
+    const html = widgetFragment(base({ theme: "purple", colors: ["#e4572e"], imageHosts: ["cdn.example.com", "*.img.example.com"], scenes: true, behavior: true, slides: true, logo: "https://cdn.example.com/logo.png" }));
     const r = await run(html);
     expect(r.g.__opts.components).toEqual(["core", "scene", "slides"]);
     expect(r.g.__opts.behavior).toBe(true);
     expect(r.g.__opts.imageHosts).toEqual(["cdn.example.com", "*.img.example.com"]);
-    const light = resolveTheme("purple", "light", "#e4572e").theme;
-    const dark = resolveTheme("purple", "dark", "#e4572e").theme;
+    const light = resolveTheme("purple", "light", ["#e4572e"]).theme;
+    const dark = resolveTheme("purple", "dark", ["#e4572e"]).theme;
     expect(r.g.__opts.theme.colors.accent).toBe(light.colors.accent);
     expect(r.g.__opts.theme.deck.logo).toBe("https://cdn.example.com/logo.png");
     // The dark one differs from the light one, as its own resolution.
@@ -177,6 +177,17 @@ describe("the widget fragment", () => {
     expect(darkRun.g.__opts.theme.colors.accent).not.toBe(light.colors.accent);
     // Scenes, behavior and slides are off unless asked for.
     expect((await run(widgetFragment(base()))).g.__opts.components).toEqual(["core"]);
+  });
+
+  it("carries a list of colors: the accent and all six series, in light and dark", async () => {
+    const colors = ["#e4572e", "#2e86ab", "#f2c14e"];
+    const html = widgetFragment(base({ colors }));
+    for (const dark of [false, true]) {
+      const run1 = await run(html, { dark });
+      const want = resolveTheme("teal", dark ? "dark" : "light", colors).theme.colors;
+      const got = run1.g.__opts.theme.colors;
+      for (const k of ["accent", "series1", "series2", "series3", "series4", "series5", "series6"] as const) expect(got[k], `${dark ? "dark" : "light"} ${k}`).toBe(want[k]);
+    }
   });
 
   it("follows the system's light or dark, and data-theme on the root over it, and changes to either", async () => {
@@ -292,7 +303,7 @@ describe("the files", () => {
       name,
       widgetFileName(base({ spec: SPEC + "\n  text \"x\"" })),
       widgetFileName(base({ theme: "blue" })),
-      widgetFileName(base({ accent: "#e4572e" })),
+      widgetFileName(base({ colors: ["#e4572e"] })),
       widgetFileName(base({ imageHosts: ["cdn.example.com"] })),
       widgetFileName(base({ scenes: true })),
       widgetFileName(base({ behavior: true })),
@@ -469,7 +480,7 @@ describe("show_interface with --widget-dir", () => {
     setScenes(true);
     const rule = 'state n=0 running=true\ncard\n  every 1s if={running} do=inc:n\n  stat label="n" value={n}\n  button "Pause" on=toggle:running\n';
     const deck = 'state page=0\ndeck bind=page\n  slide "One" layout=title\n    text "Hello"\n';
-    const c = await connect(undefined, true, { view: { themePicker: false, theme: "blue", accent: "#e4572e", saveImage: true, copyText: true, logo: "https://cdn.example.com/l.png", imageHosts: ["cdn.example.com"] } });
+    const c = await connect(undefined, true, { view: { themePicker: false, theme: "blue", colors: ["#e4572e"], saveImage: true, copyText: true, logo: "https://cdn.example.com/l.png", imageHosts: ["cdn.example.com"] } });
     const ruled = await show(c, { spec: rule });
     const file = async (r: Result) => readFile(/^(\/\S+\.html)$/m.exec(r.content[0]!.text)![1]!, "utf8");
     expect(ruled.content[0]!.text).toMatch(/Create the widget from that file/);

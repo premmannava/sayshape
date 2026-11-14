@@ -88,12 +88,14 @@ export function isPresetId(value: unknown): value is PresetId {
 }
 
 /**
- * A preset in the host's mode, with the server's --accent if it has one (made
- * readable on this scheme's surface; the first chart series follows it), then
- * the host's shared colors, fonts and radii. Hosts never send an accent.
+ * A preset in the host's mode, with brand colors if there are some (the server's
+ * --colors or --accent, or a chat app's brand color): the first is the accent and
+ * the first chart series, made readable on this scheme's surface, and the other
+ * series follow it. Then the host's shared colors, fonts and radii. Hosts never
+ * send an accent.
  */
-export function themeForPreset(preset: PresetId, scheme: Scheme, read?: ReadVar, accent?: string): Theme {
-  const theme = resolveTheme(preset, scheme, accent ?? null).theme;
+export function themeForPreset(preset: PresetId, scheme: Scheme, read?: ReadVar, colors?: readonly string[]): Theme {
+  const theme = resolveTheme(preset, scheme, colors ?? null).theme;
   return read ? hostTheme(theme, read) : theme;
 }
 

@@ -188,8 +188,19 @@ map bind=selected
     expect((contents[0] as { text: string }).text).toContain('content="picker=1&theme=neutral&save=0&copy=0"');
   });
 
+  it("passes the view its brand colors: one as accent=, a list as colors=", async () => {
+    for (const [colors, tag] of [[["#e4572e"], "accent=e4572e"], [["#e4572e", "#2e86ab", "#f2c14e"], "colors=e4572e,2e86ab,f2c14e"]] as const) {
+      const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: false, theme: "teal", colors: [...colors], saveImage: true, copyText: true } });
+      const client = new Client({ name: "test", version: "1.0.0" }, UI_CLIENT);
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await Promise.all([server.connect(a), client.connect(b)]);
+      const { contents } = await client.readResource({ uri: UI_URI });
+      expect((contents[0] as { text: string }).text).toContain(`content="picker=0&theme=teal&${tag}&save=1&copy=1"`);
+    }
+  });
+
   describe("--image-hosts", () => {
-    const HOSTS = ["images.unsplash.com", "*.img.example.com"];
+    const HOSTS =["images.unsplash.com", "*.img.example.com"];
 
     it("asks the chat app to allow images from just those hosts, and tells the view", async () => {
       const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: false, theme: "teal", saveImage: true, copyText: true, imageHosts: HOSTS } });

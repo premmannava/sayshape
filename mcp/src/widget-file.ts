@@ -21,7 +21,7 @@
  *
  * The fragment draws like the page for text-only apps (fallback.ts), which
  * stays as it is: the same loader steps, but with the engine from the package,
- * and with the server's own settings (--theme, --accent, --image-hosts,
+ * and with the server's own settings (--theme, --accent or --colors, --image-hosts,
  * --scene, --behavior, --slides) carried across.
  */
 import { createHash } from "node:crypto";
@@ -42,9 +42,9 @@ export interface WidgetOptions {
   spec: string;
   /** The packed engine (widget-engine.ts). */
   engine: PackedEngine;
-  /** --theme and --accent: the theme the interface draws in, resolved for light and dark. Default: teal. */
+  /** --theme and --accent or --colors: the theme the interface draws in, resolved for light and dark. Default: teal. */
   theme?: PresetId;
-  accent?: string;
+  colors?: readonly string[];
   /** --image-hosts: the hosts the engine may load images from. */
   imageHosts?: readonly string[];
   /** --logo (with --slides): drawn in the corner of every slide. */
@@ -95,8 +95,8 @@ interface Parts {
 function body(o: WidgetOptions, { id }: Parts): string {
   const map = usesMap(o.spec);
   const themes = {
-    light: resolveTheme(o.theme ?? "teal", "light", o.accent ?? null).theme,
-    dark: resolveTheme(o.theme ?? "teal", "dark", o.accent ?? null).theme,
+    light: resolveTheme(o.theme ?? "teal", "light", o.colors ?? null).theme,
+    dark: resolveTheme(o.theme ?? "teal", "dark", o.colors ?? null).theme,
   };
   if (o.logo) for (const t of [themes.light, themes.dark]) t.deck = { ...t.deck, logo: o.logo };
   const packs = [o.engine.engine.base64, ...(map ? [o.engine.map.base64] : [])];

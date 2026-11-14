@@ -205,6 +205,18 @@ export const DARK_MAX_LIGHTNESS = 0.8;
 /** The hues derived series may take: every HUE_STEP degrees around the first color's. */
 const HUE_STEP = 15;
 const SERIES_COUNT = 6;
+/** The most brand colors a list holds: one per chart series. */
+export const MAX_COLORS = SERIES_COUNT;
+
+/**
+ * The usable colors of a list that may be sloppy: the entries that are hex
+ * colors, as #rrggbb, in order, at most MAX_COLORS of them (anything past that,
+ * and anything that isn't a color, is ignored). Empty when there is nothing
+ * usable, which behaves as if no list was given.
+ */
+export function colorList(colors: readonly string[] | null | undefined): string[] {
+  return (colors ?? []).map((c) => normalizeHex(c)).filter((c): c is string => c !== null).slice(0, MAX_COLORS);
+}
 
 export type SeriesScheme = "light" | "dark";
 
@@ -225,16 +237,21 @@ export type SeriesScheme = "light" | "dark";
  * companion series for the scheme fill in, as they are: they're hand-tuned
  * and some sit closer than MIN_SERIES_DISTANCE, the one case that minimum
  * doesn't hold. The same input always gives the same output.
+ *
+ * Everything is made readable on surface. The first color alone may be made
+ * readable on firstSurface instead (surface when it isn't given): a theme
+ * whose accent is already fixed on its own surface asks for that, while the
+ * other series must read on the harder of the surfaces a chart can sit on.
  */
-export function deriveSeries(colors: readonly string[], surface: string, scheme: SeriesScheme): string[] {
-  const given = colors.map((c) => normalizeHex(c)).filter((c): c is string => c !== null).slice(0, SERIES_COUNT);
+export function deriveSeries(colors: readonly string[], surface: string, scheme: SeriesScheme, firstSurface: string = surface): string[] {
+  const given = colorList(colors);
   const theme = scheme === "dark" ? darkTheme : lightTheme;
   const c = theme.colors;
   // Nothing usable behaves as if nothing was sent: SayShape's own series.
   if (given.length === 0) return [c.series1, c.series2, c.series3, c.series4, c.series5, c.series6].map((x) => normalizeHex(x)!);
   const out: string[] = [];
   given.forEach((c, i) => {
-    const readable = readableOn(c, surface, i === 0 ? TEXT_CONTRAST : UI_CONTRAST);
+    const readable = i === 0 ? readableOn(c, firstSurface, TEXT_CONTRAST) : readableOn(c, surface, UI_CONTRAST);
     if (out.every((o) => colorDistance(o, readable) >= MIN_SERIES_DISTANCE)) out.push(readable);
   });
   const first = hexToOklch(out[0]!);
