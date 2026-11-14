@@ -12,7 +12,9 @@
  * load datasets can't be shown this way (the rows would have to go through
  * the conversation, which is what datasets exist to avoid).
  */
-import { lightTheme, darkTheme } from "../../src/theme";
+import { lightTheme, darkTheme, type Theme } from "../../src/theme";
+import { colorList } from "../../playground/appearance/color";
+import { resolveTheme } from "../../playground/appearance/presets";
 
 /**
  * The sayshape release the page loads, pinned exactly so a page keeps working
@@ -51,11 +53,40 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 /** Does the spec use the map, which is a second script (it carries the world's outlines)? */
 export const usesMap = (spec: string) => /^[ \t]*map(?=[ \t]|$)/m.test(spec);
 
+/**
+ * The color tokens the page sets for brand colors: the accent, the text on it, the map's highlight and the six
+ * chart series. Nothing else changes (resolveTheme changes nothing else for a color list either).
+ */
+export const PAGE_COLOR_TOKENS = ["accent", "onAccent", "landHighlight", "series1", "series2", "series3", "series4", "series5", "series6"] as const;
+export type PageColors = Record<"light" | "dark", Record<(typeof PAGE_COLOR_TOKENS)[number], string>>;
+
+/**
+ * The brand colors as theme values for the page, worked out here for light and dark (the page's engine is an
+ * older release that knows nothing of color lists, so it is only handed the results). They come from
+ * resolveTheme on SayShape's default look, because that is what the page draws on whatever --theme says: the
+ * colors are made readable on the surface the page actually has. Null when there's no usable color: the page
+ * is then exactly the one without colors.
+ */
+export function pageColors(colors: readonly string[] | null | undefined): PageColors | null {
+  const list = colorList(colors);
+  if (!list.length) return null;
+  const tokens = (scheme: "light" | "dark") => {
+    const c: Theme["colors"] = resolveTheme("teal", scheme, list).theme.colors;
+    return Object.fromEntries(PAGE_COLOR_TOKENS.map((k) => [k, c[k]])) as PageColors["light"];
+  };
+  return { light: tokens("light"), dark: tokens("dark") };
+}
+
 export interface PageOptions {
   spec: string;
   title?: string | null;
   /** The server was started with --scene, so the page registers scenes too. */
   scenes?: boolean;
+  /**
+   * Brand colors to draw in, up to six hex colors, most important first: the conversation's, else the
+   * operator's. Entries that aren't hex colors are ignored, and with none left the page has no colors.
+   */
+  colors?: readonly string[] | null;
   version?: string;
 }
 
@@ -63,11 +94,13 @@ export interface PageOptions {
  * The page: a canvas, the engine from jsDelivr, and the spec. It follows the
  * viewer's light or dark mode, and data-theme="light|dark" on the root element
  * when the page it's published in sets one; its background is the engine
- * theme's own surface. The engine sizes the canvas to the page's width, so it
+ * theme's own surface. With brand colors it lays the accent and chart series
+ * over those themes (S.extendTheme, which the pinned release has). The engine sizes the canvas to the page's width, so it
  * works on a phone with no sideways scrolling.
  */
-export function fallbackPage({ spec, title, scenes = false, version = PAGE_ENGINE_VERSION }: PageOptions): string {
+export function fallbackPage({ spec, title, scenes = false, colors, version = PAGE_ENGINE_VERSION }: PageOptions): string {
   const map = usesMap(spec);
+  const brand = pageColors(colors);
   const light = lightTheme.colors;
   const dark = darkTheme.colors;
   return `<!doctype html>
@@ -103,9 +136,15 @@ ${map ? `<script src="${engineScriptUrl("sayshape-map.global.js", version)}"></s
   }
   var components = S.coreComponents${scenes ? ".concat(S.sceneComponents)" : ""}${map ? ".concat(window.sayshapeMap ? window.sayshapeMap.mapComponents : [])" : ""};
   var media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-  function theme() {
+${brand ? `  // Brand colors: the server worked out the values for each mode; the engine only lays them over its own themes.
+  var brand = ${scriptJson(brand)};
+  var themes = {
+    light: S.extendTheme ? S.extendTheme(S.lightTheme, { colors: brand.light }) : S.lightTheme,
+    dark: S.extendTheme ? S.extendTheme(S.darkTheme, { colors: brand.dark }) : S.darkTheme
+  };
+` : ""}  function theme() {
     var chosen = root.getAttribute("data-theme");
-    return chosen === "dark" || (chosen !== "light" && media && media.matches) ? S.darkTheme : S.lightTheme;
+    return chosen === "dark" || (chosen !== "light" && media && media.matches) ? ${brand ? "themes.dark" : "S.darkTheme"} : ${brand ? "themes.light" : "S.lightTheme"};
   }
   var ui = new S.SayShape(document.getElementById("view"), { components: components, theme: theme() });
   function apply() {

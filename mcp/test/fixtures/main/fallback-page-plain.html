@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hike</title>
+<style>
+:root { color-scheme: light; --bg: #FFFFFF; --ink: #1B262A; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg: #12191C; --ink: #EDF2F1; } }
+:root[data-theme="dark"] { color-scheme: dark; --bg: #12191C; --ink: #EDF2F1; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { overflow-x: hidden; font: 15px/1.5 system-ui, sans-serif; }
+main { max-width: 760px; margin: 0 auto; }
+canvas { display: block; max-width: 100%; }
+#note { margin: 20px; }
+</style>
+</head>
+<body>
+<main><canvas id="view" aria-label="An interface drawn by SayShape"></canvas><p id="note" hidden></p></main>
+<script src="https://cdn.jsdelivr.net/npm/sayshape@0.1.1/dist/sayshape.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sayshape@0.1.1/dist/sayshape-map.global.js"></script>
+<script>
+(function () {
+  var spec = "state days=2\ncard\n  text \"Weekend hike\" style=title\n  stat label=\"Days\" value={days}\n  button \"Add day\" on=inc:days\n  map fit=pins\n    pin \"Tokyo\" lat=35.7 lon=139.7\n";
+  var S = window.sayshape, root = document.documentElement;
+  if (!S) {
+    var note = document.getElementById("note");
+    // A failed script can't tell a missing version from no connection, so say both.
+    note.textContent = "The SayShape engine (sayshape@0.1.1) didn't load from cdn.jsdelivr.net, so this interface can't be drawn. Either there's no internet connection, or that version isn't available from the CDN yet.";
+    note.hidden = false;
+    return;
+  }
+  var components = S.coreComponents.concat(S.sceneComponents).concat(window.sayshapeMap ? window.sayshapeMap.mapComponents : []);
+  var media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function theme() {
+    var chosen = root.getAttribute("data-theme");
+    return chosen === "dark" || (chosen !== "light" && media && media.matches) ? S.darkTheme : S.lightTheme;
+  }
+  var ui = new S.SayShape(document.getElementById("view"), { components: components, theme: theme() });
+  function apply() {
+    var t = theme();
+    root.style.setProperty("--bg", t.colors.surface);
+    root.style.setProperty("--ink", t.colors.ink);
+    ui.setTheme(t);
+  }
+  apply();
+  if (media && media.addEventListener) media.addEventListener("change", apply);
+  if (window.MutationObserver) new MutationObserver(apply).observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+  // This page is the host. A link the person presses in rich text (emit:link) opens in a new tab,
+  // https only, as any link on a web page would. Any other emit: has no chat to reach; the server
+  // asks for those to be removed, so this note is only a safety net.
+  ui.on("action", function (a) {
+    if (a.name === "link") {
+      var url = null;
+      try { url = new URL(String(a.value)); } catch (e) {}
+      if (url && url.protocol === "https:") window.open(url.href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    ui.notify("This page can't send that back to the chat. Tell the assistant in the chat instead.");
+  });
+  ui.setSpec(spec);
+})();
+</script>
+</body>
+</html>
