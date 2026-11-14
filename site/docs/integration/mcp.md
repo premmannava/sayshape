@@ -22,9 +22,24 @@ Nothing else leaves an interface. A spec can't run code, open links or make requ
 
 Start the server with `--data path/to/database.db` (SQLite, opened read-only) and the model gets three more tools. It looks at the tables (`describe_data`), runs one read-only `SELECT` (`query_data`), and shows the result by passing the dataset to `show_interface`. The model sees only the result's columns and a few sample rows. The interface fetches the rows itself, so the numbers on screen come straight from the database and never pass through the model. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#readme) has the details.
 
+## Brand colors {#brand-colors}
+
+Interfaces can be drawn in your brand's colors. Specs still never contain colors: they come from the server's options, from the chat app, or from a tool argument when the person names colors in the conversation, never from a line of a spec.
+
+Several sources can apply. The first one that gives colors wins:
+
+1. **The `colors` argument of `show_interface`.** A model sends a list of hex colors, most important first, only when the person (or the instructions it was given) named colors to use: *"make it in our brand colors, #e4572e and #2e86ab"*. They are drawn over everything below. Entries that aren't hex colors are ignored, and so is anything past six. Nothing stores them but the conversation, so every result drawn in them ends with a short reminder for the model to send the same colors on its later calls; asking to go back to the normal look stops it. `--no-model-colors` removes the argument.
+2. **The server's `--accent` or `--colors`.** The colors of the company that installed the server, for every conversation (the options table below).
+3. **The chat app's own brand color,** when neither of the above is set, `--theme` is left at its default and the person hasn't picked a theme in the selector: Claude, ChatGPT, VS Code, Gemini and Grok get their own accent, with chart colors worked out from it.
+4. Otherwise, the theme's own colors.
+
+What a list does is the same wherever it comes from: the first color is the accent and the first chart series, the others are the next chart series, any series the list doesn't cover are worked out from the first, a color too like an earlier one becomes a lighter or darker shade of itself, and every color is adjusted separately for light and dark so it stays readable. Only the accent and the chart series change; the chat app still decides the background, text and status colors. [Themes](./themes#brand-colors) has the details and an example. The server prints what each mode uses at startup, and stops with a message if `--colors` has a bad entry, an empty one or more than six.
+
+Chat apps that can't draw interfaces get their page in the same brand colors ([below](#coding-agents)), from the `colors` argument if the model sent it, else `--colors` or `--accent`; their own brand color doesn't apply to a page outside the chat. A `--widget-dir` file uses the server's colors but doesn't read the argument yet.
+
 ## In chat apps that can't draw interfaces {#coding-agents}
 
-Coding agents such as Claude Code, Codex and Antigravity call the server's tools but can't show MCP Apps views. For them, `show_interface` returns a small HTML page that draws the interface with the engine from a CDN, and tells the model to publish it as a page or save it as a file for you to open in a browser. Nothing on the page can send something back to the chat, so the model is told not to use `emit:` there (links in the text open in a new tab instead); Save image and Copy text aren't on it, it needs internet access, and interfaces that load database rows can't be shown. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#in-chat-apps-that-cant-draw-interfaces) has the details.
+Coding agents such as Claude Code, Codex and Antigravity call the server's tools but can't show MCP Apps views. For them, `show_interface` returns a small HTML page that draws the interface with the engine from a CDN, and tells the model to publish it as a page or save it as a file for you to open in a browser. Nothing on the page can send something back to the chat, so the model is told not to use `emit:` there (links in the text open in a new tab instead); Save image and Copy text aren't on it, it needs internet access, and interfaces that load database rows can't be shown. It does draw in your [brand colors](#brand-colors), and the result keeps reminding the model to send them. The [server's README](https://github.com/premmannava/sayshape/tree/main/mcp#in-chat-apps-that-cant-draw-interfaces) has the details.
 
 ## Install
 
