@@ -46,7 +46,7 @@ import { themeFont } from "./util";
 import { statSizes } from "./content";
 import { CHART_KINDS, paintSankeyHover, sankeyLinkAt, type SankeyGeometry } from "./chart-kinds";
 import {
-  barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
+  barPath, barText, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
   plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
   formatter, type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
 } from "./chart-kit";
@@ -502,7 +502,9 @@ function roundGeometry(box: { w: number }, d: PieData, kind: "pie" | "donut", fo
     center = { text: ellipsize(text, width, font, m), font, caption, captionFont, lh: Math.round(fontSize * 1.2) };
   }
 
-  const entries = slices.map((s) => ({ label: s.label, detail: `${valueText(s.value, format)} · ${shareText(s.share)}`, color: s.color }));
+  // One style for every slice (all $87K or all $87,000), as for bar labels.
+  const compact = slices.some((s) => Math.abs(s.value) >= 10_000);
+  const entries = slices.map((s) => ({ label: s.label, detail: `${barText(s.value, format, compact)} · ${shareText(s.share)}`, color: s.color }));
   let l: { items: LegendItem[]; bottom: number };
   if (beside) {
     // One column, centred on the ring's height.
@@ -1050,9 +1052,10 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       }));
       const drawnSeries = d.seriesSegments.map((runs) => runs.map((run) => run.map((pt) => drawnPoints.get(pt) ?? pt)));
       // Restrained vertical gradient fills use only existing theme colors.
-      // Limit overlapping washes to two series so larger comparisons stay clear.
-      if (drawnSeries.length <= 2) {
-        const floor = oy + d.plot.y + d.plot.h;
+      // Only for one series on a scale that starts at 0: a wash down to a cut-off
+      // axis would make the gap between values look larger than it is.
+      if (drawnSeries.length === 1 && d.zeroY !== null) {
+        const floor = oy + d.zeroY;
         drawnSeries.forEach((runs, k) => {
           const gradient = g.createLinearGradient(0, oy + d.plot.y, 0, floor);
           gradient.addColorStop(0, colorOf(k));
@@ -1066,7 +1069,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
             g.closePath();
             g.save();
             g.fillStyle = gradient;
-            g.globalAlpha *= drawnSeries.length === 1 ? 0.17 : 0.085;
+            g.globalAlpha *= 0.14;
             g.fill();
             g.restore();
           }

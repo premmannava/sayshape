@@ -62,8 +62,8 @@ const ALIGNS = ["left", "right"] as const;
 type Format = (typeof FORMATS)[number];
 type Align = (typeof ALIGNS)[number];
 const LOCALE = "en-US";
-/** Text columns shrink to this before the table gives up (numbers never shrink). */
-const MIN_TEXT_COLUMN = 72;
+/** Text columns shrink to this before the table scrolls instead (numbers never shrink): enough for a short name, not "Ac…". */
+const MIN_TEXT_COLUMN = 96;
 /** Room for the sort arrow beside a header. */
 const ARROW = 14;
 /** When the table scrolls, text columns are at most this wide, so one long value doesn't take the screen. */
@@ -157,10 +157,10 @@ const GHOST_ROWS = 5;
 
 // ---------------------------------------------------------------- cells
 
-function formatNumber(v: number, money: boolean): string {
+function formatNumber(v: number, money: boolean, cents = true): string {
   const huge = Math.abs(v) >= 1e15, tiny = !money && v !== 0 && Math.abs(v) < 0.01;
   // Very large or small numbers in scientific form, so they're never cut or shown as 0.
-  const opts: Intl.NumberFormatOptions = huge || tiny ? { notation: "scientific", maximumFractionDigits: 3 } : money ? {} : { maximumFractionDigits: 2 };
+  const opts: Intl.NumberFormatOptions = huge || tiny ? { notation: "scientific", maximumFractionDigits: 3 } : money ? (cents ? {} : { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : { maximumFractionDigits: 2 };
   if (money) Object.assign(opts, { style: "currency", currency: "USD" });
   // Say how many decimals money keeps in scientific form: engines resolve the
   // default differently (Node 22 gives -$1.00E300, Node 24 -$1E300).
@@ -168,8 +168,16 @@ function formatNumber(v: number, money: boolean): string {
   return new Intl.NumberFormat(LOCALE, opts).format(v);
 }
 
-/** A cell's text, and whether the value didn't suit its column (for one warning). */
-export function cellText(v: Value | undefined, format: Format): { text: string; incompatible: boolean } {
+/**
+ * Whether a money column needs cents: only when one of its values has them.
+ * Whole amounts ($48,200) read faster without a column of .00, and nothing is rounded.
+ */
+export function needsCents(values: ReadonlyArray<Value | undefined>): boolean {
+  return values.some((v) => typeof v === "number" && Number.isFinite(v) && Math.round(v * 100) % 100 !== 0);
+}
+
+/** A cell's text, and whether the value didn't suit its column (for one warning). cents: false drops .00 from whole money amounts. */
+export function cellText(v: Value | undefined, format: Format, cents = true): { text: string; incompatible: boolean } {
   if (v === undefined || v === null) return { text: EMPTY_CELL, incompatible: false };
   if (format === "text") {
     if (typeof v === "string") return { text: v, incompatible: false };
@@ -178,7 +186,7 @@ export function cellText(v: Value | undefined, format: Format): { text: string; 
     return { text: EMPTY_CELL, incompatible: true };
   }
   // A number column never reads text like "12" as a number.
-  if (typeof v === "number") return { text: formatNumber(v, format === "money"), incompatible: false };
+  if (typeof v === "number") return { text: formatNumber(v, format === "money", cents), incompatible: false };
   return { text: EMPTY_CELL, incompatible: true };
 }
 
@@ -347,11 +355,13 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
 
   // Cell text, in the order shown.
   let malformed = 0, incompatible = 0;
+  const valueAt = (item: Value | undefined, field: string) => (isRecord(item) ? fieldOf(item, field) : undefined);
+  const cents = specs.map((c) => c.format === "money" && needsCents(order.map((i) => valueAt(items[i], c.field))));
   const texts = order.map((i) => {
     const item = items[i]!;
     if (!isRecord(item)) malformed++;
-    return specs.map((c) => {
-      const r = cellText(isRecord(item) ? fieldOf(item, c.field) : undefined, c.format);
+    return specs.map((c, ci) => {
+      const r = cellText(valueAt(item, c.field), c.format, cents[ci]);
       if (r.incompatible && isRecord(item)) incompatible++;
       return r.text;
     });
@@ -933,7 +943,7 @@ export const tableColumn: ComponentDef = {
   text: { description: "The header. Defaults to the field name." },
   props: {
     field: { type: "name", required: true, description: "The field of each record to show, e.g. field=price." },
-    format: { type: "enum", values: FORMATS, default: "text", description: "text, number (1,200.5) or money ($1,200.00, US dollars). number and money show only numbers; other values show —." },
+    format: { type: "enum", values: FORMATS, default: "text", description: "text, number (1,200.5) or money ($1,200, US dollars, with cents when an amount has them). number and money show only numbers; other values show —." },
     align: { type: "enum", values: ALIGNS, description: "left or right. Default: right for number and money, left for text." },
   },
   parents: ["table"],

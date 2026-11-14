@@ -418,8 +418,9 @@ ${comps.map((c) => componentBlock(c, examples && ctx.valid(componentExampleSpec(
 
   const rules = [
     "- Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.",
-    ...(has("card") ? ["- Use cards to group related content, not around every title or section. Keep page headings outside a decorative hero card."] : []),
-    ...(has("card") && has("grid") ? ["- Dashboards: put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Avoid wrapping an already framed table inside another card unless it also needs controls."] : []),
+    ...(has("card") ? ["- Use cards to group related content, not around every title, element or section, and never a card inside a card. Keep page headings outside cards."] : []),
+    ...(has("stat") && has("chart") ? ["- Dashboards: a title with its filters just under it, a few meaningful KPIs (3 or 4 stats), one main chart, then supporting detail (a smaller chart or a table). The design is built in: write plain elements, not extra props for looks."] : []),
+    ...(has("card") && has("grid") ? ["- Put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls."] : []),
     "- Keep screens focused: one task per screen, short labels, real-looking values.",
     ...(has("grid") || has("stat") ? [`- Screens may be narrow (a phone, a chat).${has("grid") ? " For side-by-side figures use grid min=140 rather than row." : ""}${has("stat") ? " Keep stat values short: compact() for large numbers." : ""}`] : []),
   ];
@@ -502,8 +503,9 @@ ${comps.map((c) => `- ${compactLine(c)}${showExample(c) ? `\n    example:\n${ind
   if (picks) add("picks", `${PICKS_HEADING}\n${picks}`);
   const rules = [
     "- Use only these elements and props. No colors, sizes or fonts: choose roles with tone=, variant= and style=; for \"red\" or \"big\", use the closest role.",
-    `- ${has("card") ? "Cards group related content; leave page titles outside decorative cards. " : ""}One task per screen, short labels, realistic values.`,
-    ...(has("card") && has("grid") ? ["- Dashboards: grid min=170 gap=12 for peer KPI/chart cards (equal heights per row); card pad=18 gap=10 for tighter panels; avoid nested framed tables and giant outer wrapper cards."] : []),
+    `- ${has("card") ? "Cards group related content, never a card inside a card; leave page titles outside cards. " : ""}One task per screen, short labels, realistic values.`,
+    ...(has("stat") && has("chart") ? ["- Dashboards: title, filters under it, 3-4 KPIs, one main chart, then detail (smaller chart or table). Styling is built in."] : []),
+    ...(has("card") && has("grid") ? ["- grid min=170 gap=12 for peer KPI/chart cards (equal heights per row); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer."] : []),
     ...(has("grid") || has("stat") ? [`- Screens may be narrow.${has("grid") ? " Side-by-side figures: grid min=140, not row." : ""}${has("stat") ? " Short stat values: compact() for large numbers." : ""}`] : []),
     ...(has("screen") ? ["- For several screens, write the starting screen first."] : []),
     "- Label every control and title every chart (or put a text just above it): screen readers read them.",

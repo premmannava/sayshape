@@ -544,7 +544,7 @@ One column of a table: its header and the field it shows.
 |---|---|---|
 | `"text"` | text | The header. Defaults to the field name. |
 | `field` | name, required | The field of each record to show, e.g. field=price. |
-| `format` | `text` / `number` / `money` | text, number (1,200.5) or money ($1,200.00, US dollars). number and money show only numbers; other values show —. |
+| `format` | `text` / `number` / `money` | text, number (1,200.5) or money ($1,200, US dollars, with cents when an amount has them). number and money show only numbers; other values show —. |
 | `align` | `left` / `right` | left or right. Default: right for number and money, left for text. |
 
 Only inside: `table`.

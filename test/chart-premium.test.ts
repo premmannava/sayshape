@@ -150,7 +150,7 @@ describe("morphing pie/donut geometry", () => {
 
 describe("premium canvas chart treatments", () => {
   it.each([lightTheme, darkTheme].map((t) => [t.name, t] as const))("uses a subtle theme-derived gradient in %s", (_mode, theme) => {
-    const ui = render('state rows=[{k:"Jan",v:20},{k:"Feb",v:35},{k:"Mar",v:26}]\nchart kind=line items=rows x=k y=v', { theme });
+    const ui = render('state rows=[{k:"Jan",v:0},{k:"Feb",v:35},{k:"Mar",v:26}]\nchart kind=line items=rows x=k y=v', { theme });
     const fills = ui.drawOps.filter((op) => op.op === "fill" && op.gradientStops?.length === 2);
     expect(fills.length).toBeGreaterThan(0);
     expect(fills[0]!.gradientStops).toEqual([
@@ -159,6 +159,18 @@ describe("premium canvas chart treatments", () => {
     ]);
     expect(fills[0]!.globalAlpha).toBeLessThan(0.2);
     expect(ui.drawOps.some((op) => op.op === "stroke" && op.strokeStyle === theme.colors.accent)).toBe(true);
+    ui.destroy();
+  });
+
+  it("draws no wash down to an axis that doesn't start at 0, where it would exaggerate the gaps", () => {
+    const ui = render('state rows=[{k:"Jan",v:20},{k:"Feb",v:35},{k:"Mar",v:26}]\nchart kind=line items=rows x=k y=v');
+    expect(ui.drawOps.some((op) => op.gradientStops?.length)).toBe(false);
+    ui.destroy();
+  });
+
+  it("keeps multi-series comparison charts free from overlapping gradient washes", () => {
+    const ui = render('state rows=[{k:"Jan",a:0,b:5},{k:"Feb",a:7,b:2}]\nchart kind=line items=rows x=k y=a,b');
+    expect(ui.drawOps.some((op) => op.gradientStops?.length)).toBe(false);
     ui.destroy();
   });
 

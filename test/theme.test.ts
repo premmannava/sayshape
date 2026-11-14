@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { darkTheme, extendTheme, isDarkTheme, lightTheme, mixColors, parseColor, sliceColors, themeFromCSS } from "../src/theme";
+import { darkTheme, extendTheme, isDarkTheme, lightTheme, mixColors, parseColor, seriesColors, sliceColors, themeFromCSS } from "../src/theme";
 
 const luma = (c: string) => { const [r, g, b] = parseColor(c)!; return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
 
@@ -20,14 +20,24 @@ describe("theme surfaces", () => {
   });
 
   it("gives pies a coordinated muted palette in either theme", () => {
-    expect(sliceColors(lightTheme).slice(0, 4)).toEqual(["#346167", "#74909d", "#95ada3", "#c0b1a0"]);
-    expect(sliceColors(darkTheme).slice(0, 4)).toEqual(["#5ea199", "#9DB8C4", "#A6C4B1", "#CDBC9F"]);
+    expect(sliceColors(lightTheme).slice(0, 4)).toEqual(["#176661", "#c58451", "#6985c6", "#c1778c"]);
+    expect(sliceColors(darkTheme).slice(0, 4)).toEqual(["#5ea199", "#E8A46B", "#8FA8EE", "#EC93A9"]);
     for (const theme of [lightTheme, darkTheme]) {
       const shades = sliceColors(theme);
       expect(shades).toHaveLength(6);
       expect(new Set(shades).size).toBe(6);
       expect(shades).not.toContain(theme.colors.accent); // accent is reserved for hover
       for (const shade of shades) expect(parseColor(shade)).not.toBeNull();
+    }
+  });
+
+  it("keeps every pair of series colors clearly apart, so lines and bars can be told apart", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const rgb = seriesColors(theme).map((c) => parseColor(c)!);
+      for (let i = 0; i < rgb.length; i++) for (let j = i + 1; j < rgb.length; j++) {
+        const [a, b] = [rgb[i]!, rgb[j]!];
+        expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]), `${theme.name} series ${i + 1} and ${j + 1}`).toBeGreaterThan(40);
+      }
     }
   });
 

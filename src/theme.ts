@@ -44,10 +44,11 @@ export interface Theme {
     /** The dimming over the screen behind an open dialog: dark in every theme, so the dialog stands out. */
     scrim: string;
     /**
-     * Harmonized, low-saturation series for lines and bars. The first uses
-     * the accent; steel, sage, stone, blue and moss follow. Keep strokes
-     * visible against the chart surface, not pastel or rainbow-colored.
-     * Pie and donut charts soften these same families for broader segments.
+     * Series for lines and bars: the first is the accent; amber, blue, rose,
+     * violet and slate follow, ordered so neighbours differ most in hue and
+     * every pair stays apart for common color-vision differences. Muted
+     * enough to sit together, never neon. Pie and donut charts soften these
+     * same families for broader segments.
      */
     series1: string;
     series2: string;
@@ -98,11 +99,11 @@ export const lightTheme: Theme = {
     shadow: "rgba(25, 43, 45, 0.065)",
     scrim: "rgba(16, 26, 29, 0.45)",
     series1: "#176F69",
-    series2: "#557887",
-    series3: "#638777",
-    series4: "#967D61",
-    series5: "#5E798C",
-    series6: "#767F71",
+    series2: "#B8692B",
+    series3: "#4467B8",
+    series4: "#B0506B",
+    series5: "#7A5BB0",
+    series6: "#5F6E78",
   },
 };
 
@@ -130,11 +131,11 @@ export const darkTheme: Theme = {
     shadow: "rgba(0, 0, 0, 0.38)",
     scrim: "rgba(0, 0, 0, 0.62)",
     series1: "#72C6BB",
-    series2: "#9DB8C4",
-    series3: "#A6C4B1",
-    series4: "#CDBC9F",
-    series5: "#91B1C2",
-    series6: "#ADB8A0",
+    series2: "#E8A46B",
+    series3: "#8FA8EE",
+    series4: "#EC93A9",
+    series5: "#BBA3EA",
+    series6: "#A7B4BD",
   },
 };
 
@@ -230,30 +231,29 @@ export function seriesColors(theme: Theme): string[] {
 export const SERIES_COUNT = 6;
 
 /**
- * A little color, not a rainbow: one deep teal and supporting steel, sage,
- * warm stone, dusty blue and moss. The same six configurable series tokens
+ * A little color, not a rainbow: the accent and supporting amber, blue,
+ * rose, violet and slate. The same six configurable series tokens
  * feed every chart; broad pie slices are softer than thin line-chart strokes.
  * Hover still uses the unmuted accent, and custom host series colors follow.
  */
 export function sliceColors(theme: Theme): string[] {
-  const [accent, steel, sage, stone, blue, moss] = seriesColors(theme);
+  const [accent, amber, blue, rose, violet, slate] = seriesColors(theme);
   const { raised, ink } = theme.colors;
   // A theme with an accent gradient (Studio) is a vivid one: its slices are its series colors.
   if (theme.colors.accent2 !== theme.colors.accent) return seriesColors(theme);
   if (isDarkTheme(theme)) {
     return [
       mixColors(raised, accent!, 0.77) ?? accent!,
-      steel!, sage!, stone!, blue!, moss!,
+      amber!, blue!, rose!, violet!, slate!,
     ];
   }
-  const deep = mixColors(accent!, steel!, 0.6) ?? accent!;
   return [
-    mixColors(deep, ink, 0.25) ?? deep,
-    mixColors(steel!, raised, 0.18) ?? steel!,
-    mixColors(sage!, raised, 0.32) ?? sage!,
-    mixColors(stone!, raised, 0.40) ?? stone!,
-    mixColors(blue!, raised, 0.25) ?? blue!,
-    mixColors(moss!, raised, 0.24) ?? moss!,
+    mixColors(accent!, ink, 0.12) ?? accent!,
+    mixColors(amber!, raised, 0.18) ?? amber!,
+    mixColors(blue!, raised, 0.2) ?? blue!,
+    mixColors(rose!, raised, 0.22) ?? rose!,
+    mixColors(violet!, raised, 0.22) ?? violet!,
+    mixColors(slate!, raised, 0.2) ?? slate!,
   ];
 }
 
