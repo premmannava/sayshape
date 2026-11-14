@@ -27,6 +27,7 @@ import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
 import { deflated, fromDataUrl, pdfOf, pptxOf, rgbOf, toBase64, type SlidePicture } from "./deck-file";
 import { readViewOptions } from "./view-options";
+import { announce, brandColorFor, chosenAccent } from "./host-brand";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
 
@@ -40,6 +41,10 @@ const app = new App({ name: "SayShape", version: "0.2.2" }, {}, { autoResize: tr
 let sayshape: SayShape | null = null;
 let themePicker: SayShape | null = null;
 let activePreset = viewOptions.theme;
+/** True once the person picks a preset in the toolbar's selector (the one the server started with is not a pick). */
+let presetPicked = false;
+/** The chat app's brand color, from the name it announced in the handshake. */
+let hostBrand: string | undefined;
 /** The spec text the engine has been given so far in the current stream. */
 let shown = "";
 /** Input that arrived before the engine was ready. */
@@ -129,7 +134,7 @@ function domReader(dark: boolean): ReadVar {
   };
 }
 
-/** The selected SayShape preset in the host's mode, with the server's --accent, adjusted to the host's shared colors, fonts and radii. */
+/** The selected SayShape preset in the host's mode, with the server's --accent or else the chat app's brand color (see chosenAccent), adjusted to the host's shared colors, fonts and radii. */
 function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const dark = ctx?.theme ? ctx.theme === "dark" : prefersDark();
   const root = document.documentElement;
@@ -137,7 +142,7 @@ function themeFor(ctx: McpUiHostContext | undefined): Theme {
   const styles = ctx?.styles;
   if (styles?.css?.fonts) applyHostFonts(styles.css.fonts);
   if (styles?.variables) applyHostStyleVariables(styles.variables);
-  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined, viewOptions.accent);
+  return themeForPreset(activePreset, dark ? "dark" : "light", styles?.variables ? domReader(dark) : undefined, chosenAccent({ operatorAccent: viewOptions.accent, picked: presetPicked, startupPreset: viewOptions.theme, brand: hostBrand }));
 }
 
 /** Canvas text doesn't trigger font loading, so load the theme's faces before drawing with them. */
@@ -492,6 +497,10 @@ function toggleMotion(): void {
 
 async function start(): Promise<void> {
   await app.connect();
+  // One line per connection, so the table of brand colors can be corrected from what real apps say.
+  const host = app.getHostVersion();
+  console.info(announce(host));
+  hostBrand = brandColorFor(host?.name);
   const theme = await applyTheme(app.getHostContext());
   // The theme selector only when the server was started with --theme-picker; the copy
   // button unless --no-copy-text; the download button unless --no-save-image, and only
@@ -528,6 +537,7 @@ async function start(): Promise<void> {
         return;
       }
       activePreset = value;
+      presetPicked = true;
       void applyTheme(app.getHostContext());
     });
     themePicker.setSpec(toolbar);
