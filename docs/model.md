@@ -72,6 +72,23 @@ npm run pick-eval -- --answers kit/answers --out picks/  # put the report somewh
 
 An answer is read element by element: a multiple select is graded as a multiple select when the request lists one, not as a plain select. A request with no answer scores 0, so skipping doesn't help. Every answer is also rendered with the real engine; the report says whether it parsed without errors and drew without text spilling out of its box, and lists warnings separately. `--prompts` writes the quick start, the full guide, each element's docs and the requests to a folder, for running models by hand (it reads the MCP server's texts, so run `npm --prefix mcp install` first). Answers go back in as `answers/<model>-<setup>-r<run>/<id>.sayshape`, with no hyphen in the setup's name, or as `.jsonl` files of `{"id", "spec", "model", "setup", "run"}`. Reports go to `eval/results/picks-<date>/`, or to `--out`.
 
+## Check that models keep the colors
+
+In a chat app, a person can name colors for an interface (`show_interface`'s `colors` argument), and nothing remembers them but the conversation: the tool's result ends with a note telling the model to send the same colors again. `npm run colors-eval` asks whether models do. It gives a model the real `show_interface` and `sayshape_docs` tools, exactly as the MCP server advertises them to a chat app that draws views, runs multi-turn conversations with tool calls, and returns the server's own results. It scores only the `colors` argument of each `show_interface` call.
+
+```bash
+npm run colors-eval -- --models anthropic/claude-sonnet-5.5,openai/gpt-6.1-sol   # one endpoint, several models
+npm run colors-eval -- --models <id> --runs 5       # each conversation five times (default 3)
+npm run colors-eval -- --models <id> --sets coffee,purple --only A   # some prompt sets, one kind of conversation
+npm run colors-eval -- --dry-run                    # the plan and a cost estimate, no model called
+npm run colors-eval -- --stub mixed                 # a scripted model instead of a real one: no key, no cost
+npm run colors-eval -- --models <id> --note-variant explicit   # other wording for the result note, for an A/B run
+```
+
+Conversation A: the person names colors once, asks for three more interfaces without mentioning them, then asks to go back to the normal look and for one more. Per later call it counts colors sent, colors sent unchanged (the same list in the same order, however it was written), and each kind of change; the call made after "go back to normal" should send none. Conversation B: the person never mentions colors and asks for four interfaces; any colors sent are invented. Four prompt sets (`eval/colors/prompts.ts`) vary the colors (one to three, with and without `#`), the phrasing and the kinds of interface. The report shows a count beside every percentage, per model and per set, and the tokens and cost.
+
+The server's text is never changed. `--note-variant`, `--description-variant`, `--note-text` and `--description-text` swap the colors argument's description or the note at the end of a result in what the model sees, so two wordings can be compared on the same models. Each conversation stops at a cap (model requests per message, per conversation, and tokens per conversation: `--max-turn-requests`, `--max-requests`, `--max-tokens`) and says so in the report. `SAYSHAPE_MODEL_URL` must be set (a real run never quietly goes to a local server); `SAYSHAPE_API_KEY` and `SAYSHAPE_PROMPT_CACHE` work as for the other evaluations, a model on another endpoint takes `--endpoint <model>=<url>` and `--key-env <model>=<VARIABLE>`, and it needs the MCP server's packages (`npm install --prefix mcp`). Results go to `eval/results/colors-<date>/`: `report.md`, `results.json`, `tools.json` (the tools as the model saw them) and every conversation in full under `transcripts/`; no key is written.
+
 ## Compare it with HTML
 
 `npm run compare` asks each model for the same 30 requests twice, once in SayShape and once as an HTML fragment (markup, CSS and JavaScript, with Chart.js allowed for charts), and judges both the same way: by what's on screen and what happens when it's used.
