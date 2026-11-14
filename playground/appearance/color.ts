@@ -227,8 +227,10 @@ export type SeriesScheme = "light" | "dark";
  * The colors given come first, in their order, each made readable the way
  * effectiveAccent makes an accent readable: the first at 4.5:1, so it can be
  * the accent as well, the rest at the 3:1 chart series need. One that looks
- * too like an earlier one (closer than MIN_SERIES_DISTANCE) is dropped and
- * derived instead. The rest are derived from the first: hues stepped around
+ * too like an earlier one (closer than MIN_SERIES_DISTANCE) keeps its hue and
+ * becomes a clearly lighter or darker shade of itself (see shadeApart), so a
+ * near-duplicate navy turns into a lighter or darker navy; only when no shade
+ * stands apart is it dropped and derived instead. The rest are derived from the first: hues stepped around
  * it in OKLCH and kept away from good and bad, muted so the first stays the
  * strongest (and yellows and oranges more so on light surfaces), and
  * alternately darker and lighter, never near black on a light surface or
@@ -253,6 +255,11 @@ export function deriveSeries(colors: readonly string[], surface: string, scheme:
   given.forEach((c, i) => {
     const readable = i === 0 ? readableOn(c, firstSurface, TEXT_CONTRAST) : readableOn(c, surface, UI_CONTRAST);
     if (out.every((o) => colorDistance(o, readable) >= MIN_SERIES_DISTANCE)) out.push(readable);
+    else {
+      // Too like an earlier series: the same color, lighter or darker, before giving it up.
+      const shade = i === 0 ? null : shadeApart(c, readable, out, surface);
+      if (shade) out.push(shade);
+    }
   });
   const first = hexToOklch(out[0]!);
   if (first.C >= GREY_CHROMA) deriveFrom(first, out, surface, theme.colors);
@@ -262,6 +269,37 @@ export function deriveSeries(colors: readonly string[], surface: string, scheme:
     out.push(readableOn(normalizeHex(companion)!, surface, UI_CONTRAST));
   }
   return out;
+}
+
+/** How far each try moves a shade's OKLCH lightness, and the furthest it goes. */
+const SHADE_STEP = 0.02;
+const SHADE_REACH = 0.6;
+
+/**
+ * A lighter or darker shade of a supplied color: its OKLCH hue and chroma
+ * (as far as sRGB allows), lightness moved in small steps, the direction with
+ * more room first and then the other, to the nearest one that is readable
+ * (3:1) on the surface and at least MIN_SERIES_DISTANCE from every series so
+ * far. It stays within the lightness limits (LIGHT_MIN_LIGHTNESS,
+ * DARK_MAX_LIGHTNESS) when any shade does; null when none stands apart.
+ */
+function shadeApart(color: string, readable: string, out: string[], surface: string): string | null {
+  const { C, h } = hexToOklch(color);
+  const L0 = hexToOklch(readable).L;
+  const light = luminance(surface) > 0.5;
+  const ranges: [number, number][] = light ? [[LIGHT_MIN_LIGHTNESS, 1], [0.3, 1]] : [[0, DARK_MAX_LIGHTNESS], [0, 0.88]];
+  for (const [minL, maxL] of ranges) {
+    const upRoom = maxL - L0, downRoom = L0 - minL;
+    for (const dir of upRoom >= downRoom ? [1, -1] : [-1, 1]) {
+      for (let k = 1; k * SHADE_STEP <= SHADE_REACH; k++) {
+        const L = L0 + dir * k * SHADE_STEP;
+        if (L < minL || L > maxL) continue;
+        const hex = oklchToHex({ L, C, h });
+        if (contrast(hex, surface) >= UI_CONTRAST && out.every((o) => colorDistance(o, hex) >= MIN_SERIES_DISTANCE)) return hex;
+      }
+    }
+  }
+  return null;
 }
 
 /** Adds derived series to out until it holds six, or nothing more stands apart from what's there. */
