@@ -49,6 +49,10 @@ At each release, before step 1: set `PAGE_ENGINE_VERSION` to the newest `sayshap
 
 The trade-off: the page can draw with an engine one release older than the server that checked the spec, so an element added in the newest release may not draw on the page yet.
 
+### The engine inside the widget file
+
+With `--widget-dir`, the file `show_interface` writes carries its own engine, so nothing is pinned or fetched and there is no version to move at a release. `npm --prefix mcp run build` builds it from this repository's `src/` (`mcp/scripts/pack-widget-engine.mjs`, which runs between the view and the server bundle), gzips it with Node's zlib and writes `mcp/dist/widget-engine.json`, which ships in the `sayshape-mcp` package (`files` is `dist`) and which `verify:pack` requires next to `server.js` and `ui.html`. It is built from the same source as the server's parser, so the file always matches the version that checked the spec. The step needs only `src/` and the MCP package's own `vite`. The package grows by about 470 KB. `verify:pack` also runs `mcp/scripts/e2e-widget.mjs` against the installed copy.
+
 If one package publishes and the other fails, don't unpublish: fix the cause, bump the version for both and release again. npm never accepts the same version twice.
 
 ## One-time setup

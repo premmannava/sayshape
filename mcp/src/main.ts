@@ -16,6 +16,9 @@
  *   sayshape-mcp --behavior      experimental: rules that tick and, with --scene, shapes people drag (off by default)
  *   sayshape-mcp --image-hosts cdn.example.com,*.images.example.com
  *                                hosts images may load from (none by default; https only)
+ *   sayshape-mcp --widget-dir <folder>  for chat apps that can't draw MCP Apps views but can show a widget
+ *                                made from a file: write each interface there as one self-contained file
+ *                                (stdio only; not with --http)
  *   sayshape-mcp --http [port]   Streamable HTTP on /mcp, for clients that connect to a URL
  *                                (port: the flag, else PORT, else 3001). Put it behind HTTPS
  *                                before exposing it beyond this computer.
@@ -34,9 +37,10 @@
  * stderr when it connects, to see which chat apps announce MCP Apps
  * ("io.modelcontextprotocol/ui") and which get the text-only page.
  */
-import { readFile } from "node:fs/promises";
+import { access, mkdir, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { basename } from "node:path";
+import { basename, resolve } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { cannotDrawViews, createServer, setBehavior, setImageHosts, setScenes, setSlides } from "./server";
@@ -44,6 +48,7 @@ import { accentNotes, parseViewArgs, type ViewOptions } from "./ui/view-options"
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
 import { createHttp, dataRefusal, listen, parseHttpArgs, startupLine } from "./http";
+import { loadPackedEngine } from "./widget-engine";
 
 // dist/server.js and dist/ui.html sit side by side.
 const UI_PATH = fileURLToPath(new URL("./ui.html", import.meta.url));
@@ -72,8 +77,11 @@ async function main(): Promise<void> {
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color]",
       "                    [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--slides] [--logo <https url>]",
-      "                    [--image-hosts host1,host2,...]",
+      "                    [--image-hosts host1,host2,...] [--widget-dir folder]",
       "",
+      "  --widget-dir <folder>  for chat apps that can't draw interfaces but can show a widget made from a file:",
+      "                      write each interface there as one self-contained file, named by a hash of the",
+      "                      spec and settings (the newest 50 are kept); stdio only, refused with --http",
       "  --http [port]       Streamable HTTP on /mcp instead of stdio; port from the flag, else PORT, else 3001",
       "  --host <address>    where to listen: 127.0.0.1 by default, else HOST if it's an IP address;",
       "                      0.0.0.0 to take requests from other machines (behind an HTTPS proxy)",
@@ -107,6 +115,23 @@ async function main(): Promise<void> {
   // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.
   setImageHosts(view.imageHosts ?? []);
   const httpAt = args.indexOf("--http");
+  const widgetAt = args.indexOf("--widget-dir");
+  let widgetDir: string | undefined;
+  if (widgetAt >= 0) {
+    if (httpAt >= 0) throw new Error("--widget-dir can't be used with --http: it writes files on this computer for a chat app on this computer to read, and an HTTP server's callers can't read them.");
+    const raw = args[widgetAt + 1];
+    if (!raw || raw.startsWith("--")) throw new Error("--widget-dir needs the folder to write widget files into.");
+    widgetDir = resolve(raw);
+    // Fail now, not on the first interface: the folder must be writable and the engine for its files built.
+    try {
+      await mkdir(widgetDir, { recursive: true });
+      await access(widgetDir, constants.W_OK);
+    } catch (e) {
+      throw new Error(`--widget-dir ${widgetDir} can't be written to: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    await loadPackedEngine();
+    console.error(`SayShape: chat apps that can't draw interfaces get a widget file in ${widgetDir}`);
+  }
   if (httpAt < 0) {
     for (const flag of ["--host", "--rate-limit", "--trust-proxy", "--allow-public-data"]) {
       if (args.includes(flag)) throw new Error(`${flag} only applies with --http.`);
@@ -156,7 +181,7 @@ async function main(): Promise<void> {
     return;
   }
   // stdout carries the protocol, so anything for people goes to stderr.
-  await logClient(createServer({ uiHtml, data, mcpResults, view })).connect(new StdioServerTransport());
+  await logClient(createServer({ uiHtml, data, mcpResults, view, ...(widgetDir ? { widgetDir } : {}) })).connect(new StdioServerTransport());
 }
 
 main().catch((e) => {

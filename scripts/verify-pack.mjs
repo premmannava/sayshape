@@ -404,7 +404,7 @@ async function verifyMcp(browser) {
   const pkgDir = join(dir, "node_modules/sayshape-mcp");
   const installed = json(join(pkgDir, "package.json"));
   check(installed.version === want, `installed version is ${want}`, `got ${installed.version}`);
-  checkContents(pkgDir, "the package", ["package.json", "README.md", "LICENSE", "dist/server.js", "dist/ui.html"]);
+  checkContents(pkgDir, "the package", ["package.json", "README.md", "LICENSE", "dist/server.js", "dist/ui.html", "dist/widget-engine.json"]);
   check(readFileSync(join(pkgDir, "dist/server.js"), "utf8").startsWith("#!/usr/bin/env node\n"), "server.js starts with the Node shebang");
   for (const dep of Object.keys(installed.dependencies ?? {})) check(existsSync(join(dir, "node_modules", dep, "package.json")), `runtime dependency ${dep} was installed with it`);
   const bin = join(dir, "node_modules/.bin", process.platform === "win32" ? "sayshape-mcp.cmd" : "sayshape-mcp");
@@ -543,7 +543,7 @@ async function verifyMcp(browser) {
   }
 
   // The existing end-to-end checks, pointed at the installed copy.
-  const e2e = [["e2e-import.mjs", "--mcp-result import (no browser)", false], ["e2e.mjs", "the view in a sandboxed iframe: handshake, streaming, themes, an emit: action back to the chat", true], ["e2e-data.mjs", "--data from the model's query to the rows in the view", true], ["e2e-fallback.mjs", "the page for text-only chat apps, opened in Chromium in light and dark", true]];
+  const e2e = [["e2e-import.mjs", "--mcp-result import (no browser)", false], ["e2e.mjs", "the view in a sandboxed iframe: handshake, streaming, themes, an emit: action back to the chat", true], ["e2e-data.mjs", "--data from the model's query to the rows in the view", true], ["e2e-fallback.mjs", "the page for text-only chat apps, opened in Chromium in light and dark", true], ["e2e-widget.mjs", "the widget file for chat apps that show widgets from files, opened under a locked-down policy", true]];
   for (const [script, what, needsBrowser] of e2e) {
     if (needsBrowser && !browser) {
       console.log(`  - skipped ${script} (no browser)`);

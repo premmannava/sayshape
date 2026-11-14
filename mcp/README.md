@@ -42,6 +42,7 @@ When none is on, there's no toolbar at all. Whoever installs the server chooses,
 | `--scene` | **Experimental.** Turn on scenes: pictures and animations the model paints from shapes, with parts people can press and soft shadows, glow and shine for depth (off by default). Leave it out to turn them off again. |
 | `--behavior` | **Experimental.** Turn on behavior: things that change by themselves on a timer (a countdown, a simulation) and, together with `--scene`, shapes people drag (off by default). Rules only change the interface's own values; they still can't run code. Chat apps that can't draw views don't get it. |
 | `--image-hosts cdn.example.com,*.img.example.com` | Hosts `image` elements may load from, comma-separated; `*.example.com` allows its subdomains. None by default, so no images show. See [Images](#images). |
+| `--widget-dir <folder>` | For chat apps that can't draw MCP Apps views but can show a widget made from a file: write each interface there as one self-contained file (stdio only; refused with `--http`). Off by default. See [Chat apps that show widgets from files](#chat-apps-that-show-widgets-from-files). |
 
 ```json
 "sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--theme", "blue", "--theme-picker"] }
@@ -86,9 +87,28 @@ What doesn't work there:
 - **Interfaces that load datasets** (`--data`, `--mcp-result`) can't be shown: the page has no way to fetch rows, and the rows never go through the conversation. The model is told so and answers in text.
 - It uses the default Teal light and dark themes; `--theme`, `--theme-picker` and the chat app's own colors and fonts apply only to the view.
 - The engine version is pinned and moves at releases, so the page can be one release behind the server: an element added in the newest release may not draw there yet. ([Why](https://github.com/premmannava/sayshape/blob/main/docs/releasing.md#the-engine-version-the-text-only-page-loads).)
+- For chat apps whose sandbox blocks the CDN but can show a widget from a file, see [`--widget-dir`](#chat-apps-that-show-widgets-from-files).
 - In `--http` mode the server makes a new server for every request and never sees what the client announced, so it always answers as for a client that draws views.
 
 The same interface sent again gets no second page, and a spec with problems gets them to fix first, with no page. To see what a client announces, start the server with `SAYSHAPE_LOG_CLIENT=1` in its environment: each connection writes the client's name and capabilities to stderr.
+
+### Chat apps that show widgets from files
+
+Some chat apps show a widget built from a file on your computer, inside a sandbox that loads nothing from outside: no scripts from a CDN, no network requests, no remote images. The page above can't draw there, because it loads the engine from jsDelivr. Muse is the one this was tested in. What its sandbox allows is what such an app needs the file to be: inline scripts, `blob:` scripts and `DecompressionStream` work; the widget has to be an HTML fragment (no `<!doctype>`, `<html>`, `<head>` or `<body>`) under 1 MB, stored whole with the chat and run in its own frame, so nothing is shared between widgets; the app scans a widget's source for browser storage names; and the frame is about 656 px wide with Times as its default font.
+
+Start the server with `--widget-dir <folder>` and, for a client that announces no MCP Apps support, `show_interface` writes the interface into that folder and returns a short text result instead of a page: the file's absolute path, and an instruction to create the widget from that file exactly as it is, without reading or editing it. The engine is inside the file, so it never passes through the model's context. Problems to fix are reported as before, with no file. Clients that draw views, and every client when the flag is off, get what they got before.
+
+```json
+"sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--widget-dir", "/Users/you/sayshape-widgets"] }
+```
+
+- **One file, made from this server's own engine.** `npm run build` builds the engine from this repository's `src/` (`scripts/pack-widget-engine.mjs`: the same entry as the page's CDN build, plus the slide elements), gzips it with Node's zlib and ships it in the package as `dist/widget-engine.json`, so the file always matches the server that checked the spec. The fragment holds one wrapping `<div>` (full width, at most 760 px, with its own font), a canvas, the spec (as JSON with `<` escaped, so `</script>` in a spec stays inert), the packed engine and a loader: it decodes and unpacks the engine with `DecompressionStream` and runs it as a `blob:` script, so nothing is fetched and the engine still can't run anything a spec says. A spec that mentions a browser storage name has its first letter escaped, so the words never appear in the file. Where the engine can't be unpacked, a short plain note shows in place of the canvas. A plain interface makes a file of about 260 KB; one with a map about 480 KB (the map's outlines are a second packed script). If a file would reach 1 MB, none is written and the result says why.
+- **The name is a hash** of the spec and everything that changes the file (the settings below and the engine), so the same interface reuses one file. The folder keeps the newest 50 (`sayshape-<16 hex digits>.html`); older ones are deleted, and nothing else in the folder is ever touched.
+- **The server's settings reach the file.** `--theme`, `--accent`, `--image-hosts` (and `--logo`), `--scene`, `--behavior` and `--slides` all apply, and unlike the page, behavior and decks work, because the file carries this server's engine and not an older pinned one. (Images from other hosts can't load in a sandbox like Muse's, so an `image` shows its description there.) Fonts: the file draws in the system font where Instrument Sans or Inter isn't installed.
+- **Light and dark** follow `data-theme="light|dark"` on the root element and the system's `prefers-color-scheme`, and changes to either.
+- **As on the page:** interfaces that load datasets are refused with the same message, `emit:` is refused and removed by the model first (a widget has no chat to send to yet), and links pressed in `rich=true` text open in a new tab (https only).
+
+The fragment builder (`mcp/src/widget-file.ts`) also takes a `host` option for an app's own adapter: the source of a function that the loader calls once after the first draw, as `(source)(ui, sayshape, root)`, which may return `{ emit(action) }` to receive the actions that aren't links. No flag sets it yet.
 
 ## Tokens
 
@@ -247,6 +267,6 @@ npm run build
 npm run test:e2e   # the built view in Chromium, inside a sandboxed iframe driven by the MCP Apps host bridge
 ```
 
-`test:e2e` runs the browser canvas/host-action test, the database-to-interface test, the **text-only page test** (`scripts/e2e-fallback.mjs`: a client without MCP Apps gets a page, which is opened from a file in Chromium with the engine built from `../src` standing in for jsDelivr, and must paint in light, dark and `data-theme`, fit 400px and keep a spec containing `</script>` inert), and the **stdio MCP result import test** (`scripts/e2e-import.mjs`). The last one starts the built server with `--mcp-result`, lists the imported schema, calls `show_interface` and verifies the exact rows delivered by app-only `fetch_dataset`. Screenshots from the browser tests go to `e2e-output/`.
+`test:e2e` runs the browser canvas/host-action test, the database-to-interface test, the **text-only page test** (`scripts/e2e-fallback.mjs`: a client without MCP Apps gets a page, which is opened from a file in Chromium with the engine built from `../src` standing in for jsDelivr, and must paint in light, dark and `data-theme`, fit 400px and keep a spec containing `</script>` inert), the **widget file test** (`scripts/e2e-widget.mjs`: the file `--widget-dir` writes is opened in Chromium under a Content Security Policy that blocks every external script, connection and image, and must draw in light and dark, fit 400px, change on a press and keep a hostile spec inert), and the **stdio MCP result import test** (`scripts/e2e-import.mjs`). The last one starts the built server with `--mcp-result`, lists the imported schema, calls `show_interface` and verifies the exact rows delivered by app-only `fetch_dataset`. Screenshots from the browser tests go to `e2e-output/`.
 
 The server bundles the engine from `../src`, so the guide, the parser and the view always match the library they were built with. The MCP packages (`@modelcontextprotocol/sdk`, `@modelcontextprotocol/ext-apps`, `zod`) are dependencies of this package only. The SayShape library itself still has none.
