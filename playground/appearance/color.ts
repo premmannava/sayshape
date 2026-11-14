@@ -4,6 +4,8 @@
  * No DOM, so it's tested in Node.
  */
 
+import { darkTheme, lightTheme } from "../../src/theme";
+
 export interface RGB { r: number; g: number; b: number }
 
 /**
@@ -83,18 +85,234 @@ export interface EffectiveAccent {
  */
 export function effectiveAccent(requested: string, surface: string): EffectiveAccent {
   const want = normalizeHex(requested) ?? requested;
-  const result = (accent: string, adjusted: boolean): EffectiveAccent =>
-    ({ accent, onAccent: onColor(accent), adjusted, ratio: contrast(accent, surface) });
-  if (contrast(want, surface) >= TEXT_CONTRAST) return result(want, false);
+  const accent = readableOn(want, surface, TEXT_CONTRAST);
+  return { accent, onAccent: onColor(accent), adjusted: accent !== want, ratio: contrast(accent, surface) };
+}
+
+/**
+ * color, or if it's under min against surface, color darkened (on a light
+ * surface) or lightened (on a dark one) by the least amount that reaches min.
+ */
+function readableOn(color: string, surface: string, min: number): string {
+  if (contrast(color, surface) >= min) return color;
   const toward = luminance(surface) > 0.5 ? NEAR_BLACK : WHITE;
   let lo = 0, hi = 1;
   for (let i = 0; i < 30; i++) {
     const t = (lo + hi) / 2;
-    if (contrast(mix(want, toward, t), surface) >= TEXT_CONTRAST) hi = t;
+    if (contrast(mix(color, toward, t), surface) >= min) hi = t;
     else lo = t;
   }
-  let accent = mix(want, toward, hi);
+  let out = mix(color, toward, hi);
   // Rounding to whole channels can land just under the target: step on until it's met.
-  for (let t = hi; contrast(accent, surface) < TEXT_CONTRAST && t < 1; t = Math.min(1, t + 0.01)) accent = mix(want, toward, t);
-  return result(accent, true);
+  for (let t = hi; contrast(out, surface) < min && t < 1; t = Math.min(1, t + 0.01)) out = mix(color, toward, t);
+  return out;
+}
+
+// OKLab and OKLCH (Björn Ottosson's perceptual space), for stepping hues and
+// measuring how different two colors look.
+
+export interface OKLab { L: number; a: number; b: number }
+export interface OKLCH { L: number; C: number; h: number }
+
+const toLinear = (v: number) => { const s = v / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
+const fromLinear = (v: number) => 255 * (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+
+export function hexToOklab(hex: string): OKLab {
+  const { r, g, b } = hexToRgb(hex);
+  const R = toLinear(r), G = toLinear(g), B = toLinear(b);
+  const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B);
+  const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B);
+  const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B);
+  return {
+    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    a: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    b: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  };
+}
+
+/** Linear sRGB channels, each 0 to 1 when sRGB can show the color. */
+function oklabToLinear({ L, a, b }: OKLab): [number, number, number] {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ];
+}
+
+export function oklabToHex(lab: OKLab): string {
+  const [r, g, b] = oklabToLinear(lab);
+  const c = (v: number) => fromLinear(Math.max(0, Math.min(1, v)));
+  return rgbToHex({ r: c(r), g: c(g), b: c(b) });
+}
+
+export function hexToOklch(hex: string): OKLCH {
+  const { L, a, b } = hexToOklab(hex);
+  return { L, C: Math.hypot(a, b), h: ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360 };
+}
+
+const lchToLab = ({ L, C, h }: OKLCH): OKLab => ({ L, a: C * Math.cos((h * Math.PI) / 180), b: C * Math.sin((h * Math.PI) / 180) });
+
+/** An OKLCH color as hex, its chroma lowered (lightness and hue kept) until sRGB can show it. */
+export function oklchToHex(lch: OKLCH): string {
+  const fits = (C: number) => oklabToLinear(lchToLab({ ...lch, C })).every((v) => v >= -1e-4 && v <= 1 + 1e-4);
+  if (fits(lch.C)) return oklabToHex(lchToLab(lch));
+  let lo = 0, hi = lch.C;
+  for (let i = 0; i < 24; i++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+  return oklabToHex(lchToLab({ ...lch, C: lo }));
+}
+
+/** How different two colors look: their distance in OKLab (0 is the same, about 0.02 just noticeable). */
+export function colorDistance(x: string, y: string): number {
+  const p = hexToOklab(x), q = hexToOklab(y);
+  return Math.hypot(p.L - q.L, p.a - q.a, p.b - q.b);
+}
+
+/** The angle between two hues, 0 to 180 degrees. */
+export const hueGap = (x: number, y: number): number => { const d = Math.abs(x - y) % 360; return d > 180 ? 360 - d : d; };
+
+// Chart series from a list of brand colors.
+
+/** The least OKLab distance between any two series, so no two lines or bars are mistaken for each other. */
+export const MIN_SERIES_DISTANCE = 0.08;
+/** A first color with less OKLCH chroma than this is grey: it has no hue to step from. */
+export const GREY_CHROMA = 0.05;
+/** Derived series keep at least this many degrees of hue from the theme's good and bad colors, so a series never reads as a status. */
+export const STATUS_HUE_GAP = 30;
+/** Derived series take at most this share of the first color's chroma, and never more than MAX_DERIVED_CHROMA, so the first stays the strongest. */
+export const DERIVED_CHROMA_SHARE = 0.7;
+export const MAX_DERIVED_CHROMA = 0.07;
+/**
+ * On a light surface, derived yellows and oranges (OKLCH hues WARM_HUES) stay
+ * under this chroma: dark enough to read on white, they turn brown or olive
+ * when they're any stronger.
+ */
+export const WARM_LIGHT_CHROMA = 0.045;
+export const WARM_HUES: [number, number] = [45, 125];
+/** For a faint first color, where muted series sit too close together, derived series may reach this share of its chroma. */
+const FAINT_CHROMA_SHARE = 0.9;
+/** How far neighbouring derived series step in OKLCH lightness. */
+const LIGHTNESS_STEP = 0.08;
+/** The OKLCH lightness derived series centre on, on a light surface and on a dark one. */
+const LIGHT_SURFACE_BAND: [number, number] = [0.46, 0.6];
+const DARK_SURFACE_BAND: [number, number] = [0.62, 0.72];
+/** Derived series are never darker than this on a light surface (near black, every hue looks alike) ... */
+export const LIGHT_MIN_LIGHTNESS = 0.4;
+/** ... nor lighter than this on a dark one, where they'd turn to loud pastels. */
+export const DARK_MAX_LIGHTNESS = 0.8;
+/** The hues derived series may take: every HUE_STEP degrees around the first color's. */
+const HUE_STEP = 15;
+const SERIES_COUNT = 6;
+
+export type SeriesScheme = "light" | "dark";
+
+/**
+ * Six chart series colors for a list of brand colors (1 to 6, already valid
+ * hex, most important first), on a surface, in a scheme.
+ *
+ * The colors given come first, in their order, each made readable the way
+ * effectiveAccent makes an accent readable: the first at 4.5:1, so it can be
+ * the accent as well, the rest at the 3:1 chart series need. One that looks
+ * too like an earlier one (closer than MIN_SERIES_DISTANCE) is dropped and
+ * derived instead. The rest are derived from the first: hues stepped around
+ * it in OKLCH and kept away from good and bad, muted so the first stays the
+ * strongest (and yellows and oranges more so on light surfaces), and
+ * alternately darker and lighter, never near black on a light surface or
+ * pastel on a dark one. A grey first color (OKLCH
+ * chroma under GREY_CHROMA) has no hue to step from, so SayShape's own
+ * companion series for the scheme fill in, as they are: they're hand-tuned
+ * and some sit closer than MIN_SERIES_DISTANCE, the one case that minimum
+ * doesn't hold. The same input always gives the same output.
+ */
+export function deriveSeries(colors: readonly string[], surface: string, scheme: SeriesScheme): string[] {
+  const given = colors.map((c) => normalizeHex(c)).filter((c): c is string => c !== null).slice(0, SERIES_COUNT);
+  const theme = scheme === "dark" ? darkTheme : lightTheme;
+  const c = theme.colors;
+  // Nothing usable behaves as if nothing was sent: SayShape's own series.
+  if (given.length === 0) return [c.series1, c.series2, c.series3, c.series4, c.series5, c.series6].map((x) => normalizeHex(x)!);
+  const out: string[] = [];
+  given.forEach((c, i) => {
+    const readable = readableOn(c, surface, i === 0 ? TEXT_CONTRAST : UI_CONTRAST);
+    if (out.every((o) => colorDistance(o, readable) >= MIN_SERIES_DISTANCE)) out.push(readable);
+  });
+  const first = hexToOklch(out[0]!);
+  if (first.C >= GREY_CHROMA) deriveFrom(first, out, surface, theme.colors);
+  // A grey first color (or, as a safety net never seen in testing, one so faint too little derived from it stands apart): SayShape's companions, in order.
+  for (const companion of [c.series2, c.series3, c.series4, c.series5, c.series6]) {
+    if (out.length >= SERIES_COUNT) break;
+    out.push(readableOn(normalizeHex(companion)!, surface, UI_CONTRAST));
+  }
+  return out;
+}
+
+/** Adds derived series to out until it holds six, or nothing more stands apart from what's there. */
+function deriveFrom(first: OKLCH, out: string[], surface: string, colors: { good: string; bad: string }): void {
+  const status = [colors.good, colors.bad].map((c) => hexToOklch(normalizeHex(c)!).h);
+  const hues: number[] = [];
+  for (let step = HUE_STEP; step < 360; step += HUE_STEP) {
+    const h = (first.h + step) % 360;
+    if (status.every((s) => hueGap(s, h) >= STATUS_HUE_GAP)) hues.push(h);
+  }
+  const chroma = Math.min(MAX_DERIVED_CHROMA, first.C * DERIVED_CHROMA_SHARE);
+  const darken = luminance(surface) > 0.5;
+  const limits: Limits = darken ? { darken, minL: LIGHT_MIN_LIGHTNESS, maxL: 1, warm: true } : { darken, minL: 0, maxL: DARK_MAX_LIGHTNESS, warm: false };
+  // Derived series centre on the first color's lightness, held to a middle band so they're never near black or pastel.
+  const [low, high] = darken ? LIGHT_SURFACE_BAND : DARK_SURFACE_BAND;
+  const centre = Math.max(low, Math.min(high, first.L));
+  while (out.length < SERIES_COUNT) {
+    const prev = hexToOklch(out[out.length - 1]!);
+    // Alternate: after a lighter series a darker one, and back.
+    const sign = prev.L >= centre ? -1 : 1;
+    const steps = (ks: number[]) => ks.map((k) => centre + sign * k * LIGHTNESS_STEP);
+    const used = out.map((o) => hexToOklch(o).h);
+    const spread = (h: number) => Math.min(...used.map((u) => hueGap(u, h)));
+    // Hues farthest from every series so far first; ties to the one nearer the first color's hue, then the smaller angle.
+    const order = [...hues].sort((x, y) => spread(y) - spread(x) || hueGap(first.h, x) - hueGap(first.h, y) || x - y);
+    // Muted first; quieter still when that's too like a series already there; and for a faint first color, as strong as it allows.
+    const chromas = [chroma, chroma * 0.75, chroma * 0.5, Math.min(MAX_DERIVED_CHROMA, first.C * FAINT_CHROMA_SHARE)];
+    // Further from the centre only when nothing nearer stands apart, and past the lightness limits only when nothing within them
+    // does (in testing, a few faint first colors in ten thousand, mostly pale yellows on off-white surfaces).
+    const pick = findSeries(order, steps([1, 2, 0, -1, -2]), chromas, out, surface, limits)
+      ?? findSeries(order, steps([3, -3]), chromas, out, surface, limits)
+      ?? findSeries(order, steps([3, -3]), chromas, out, surface, { ...limits, minL: Math.min(limits.minL, 0.3), maxL: Math.max(limits.maxL, 0.88) });
+    if (!pick) return;
+    out.push(pick);
+  }
+}
+
+/** Where derived series may sit: which way contrast moves them, their lightness, and whether warm hues are held to WARM_LIGHT_CHROMA. */
+interface Limits { darken: boolean; minL: number; maxL: number; warm: boolean }
+
+const isWarm = (h: number) => h >= WARM_HUES[0] && h <= WARM_HUES[1];
+
+/** The first candidate, by chroma, then lightness, then hue, that's readable, within the limits and apart from every series so far. */
+function findSeries(hues: number[], lightness: number[], chromas: number[], out: string[], surface: string, limits: Limits): string | null {
+  for (const C of chromas) {
+    for (const want of lightness) {
+      const L = Math.max(limits.minL, Math.min(limits.maxL, want));
+      for (const h of hues) {
+        const hex = fitContrast({ L, C: limits.warm && isWarm(h) ? Math.min(C, WARM_LIGHT_CHROMA) : C, h }, surface, limits.darken);
+        if (!hex) continue;
+        const got = hexToOklch(hex).L;
+        if (got < limits.minL - 0.005 || got > limits.maxL + 0.005) continue;
+        if (out.every((o) => colorDistance(o, hex) >= MIN_SERIES_DISTANCE)) return hex;
+      }
+    }
+  }
+  return null;
+}
+
+/** The color at this OKLCH point with its lightness moved (hue and chroma kept) the least that reaches 3:1 on the surface, or null when nothing does. */
+function fitContrast(lch: OKLCH, surface: string, darken: boolean): string | null {
+  const at = (L: number) => oklchToHex({ ...lch, L });
+  if (contrast(at(lch.L), surface) >= UI_CONTRAST) return at(lch.L);
+  let lo = lch.L, hi = darken ? 0 : 1;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (contrast(at(mid), surface) >= UI_CONTRAST) hi = mid; else lo = mid;
+  }
+  const hex = at(hi);
+  return contrast(hex, surface) >= UI_CONTRAST ? hex : null;
 }
