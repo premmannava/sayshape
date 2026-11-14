@@ -3,7 +3,8 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { UI_CLIENT } from "./clients";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
+import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, NO_EMIT, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
+import { PRESSES_SAVED } from "../src/widget-file";
 
 async function connect(now?: () => number) {
   const server = createServer({ uiHtml: () => "<!doctype html><title>view</title>", now });
@@ -276,5 +277,28 @@ map bind=selected
       expect(interfaceKey("table items=s\n", { s: "d1" })).not.toBe(interfaceKey("table items=s\n", { s: "d2" }));
       expect(interfaceKey("a\n\n  b  \n", {})).toBe(interfaceKey("a\n  b\n", {}));
     });
+  });
+});
+
+describe("the chat topic and emit:", () => {
+  const SENT_NOW = /you also receive the exact action name/;
+
+  it("says a press reaches the model, for clients that draw views", () => {
+    expect(docsText([], ["chat"])).toMatch(SENT_NOW);
+  });
+
+  it("says not to use emit: for a client that can't draw views", () => {
+    const chat = docsText([], ["chat"], false, false, true);
+    expect(chat).toContain(NO_EMIT);
+    expect(chat).not.toMatch(SENT_NOW);
+    // The rest of the topic is unchanged.
+    expect(chat).toContain("Output only the spec");
+  });
+
+  it("says a press is saved for the next turn, with a host adapter", () => {
+    const chat = docsText([], ["chat"], false, false, true, true, true);
+    expect(chat).toContain(PRESSES_SAVED);
+    expect(chat).not.toContain(NO_EMIT);
+    expect(chat).not.toMatch(SENT_NOW);
   });
 });
