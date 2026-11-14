@@ -1,6 +1,6 @@
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { colorDistance, contrast, deriveSeries, effectiveAccent, GREY_CHROMA, hexToOklab, hexToOklch, hueGap, luminance, MAX_DERIVED_CHROMA, MIN_SERIES_DISTANCE, mix, normalizeHex, oklabToHex, oklchToHex, onColor, over, STATUS_HUE_GAP } from "../playground/appearance/color";
+import { colorDistance, contrast, DARK_MAX_LIGHTNESS, deriveSeries, effectiveAccent, GREY_CHROMA, hexToOklab, hexToOklch, hueGap, LIGHT_MIN_LIGHTNESS, luminance, MAX_DERIVED_CHROMA, MIN_SERIES_DISTANCE, mix, normalizeHex, oklabToHex, oklchToHex, onColor, over, STATUS_HUE_GAP, WARM_HUES, WARM_LIGHT_CHROMA } from "../playground/appearance/color";
 import { exportPlan, themeCode } from "../playground/appearance/export";
 import { auditTheme, lineContrast, PRESETS, resolveTheme, type PresetId, type Scheme } from "../playground/appearance/presets";
 import { DEFAULT_PREFS, loadPrefs, parsePrefs, savePrefs, STORAGE_KEY, type AppearancePrefs, type PrefStore } from "../playground/appearance/prefs";
@@ -131,6 +131,17 @@ describe("chart series from brand colors", () => {
       expect(d.C, `${label}: series${i + 1} is no stronger than the first`).toBeLessThanOrEqual(Math.min(first.C, MAX_DERIVED_CHROMA + 0.005));
       // Rounding to whole channels moves a hue a little; a nearly grey one, a lot, but then it has no hue to mistake.
       if (d.C > 0.03) for (const h of status) expect(hueGap(d.h, h), `${label}: series${i + 1} keeps off good and bad`).toBeGreaterThanOrEqual(STATUS_HUE_GAP - 3);
+      expectWithinLimits(d, s, `${label}: series${i + 1}`);
+    }
+  }
+
+  // Never near black on a light surface or pastel on a dark one, and no brown or olive yellows and oranges on light.
+  function expectWithinLimits(d: { L: number; C: number; h: number }, s: Scheme, label: string) {
+    if (s === "light") {
+      expect(d.L, `${label} lightness`).toBeGreaterThanOrEqual(LIGHT_MIN_LIGHTNESS - 0.005);
+      if (d.h >= WARM_HUES[0] + 3 && d.h <= WARM_HUES[1] - 3) expect(d.C, `${label} warm chroma`).toBeLessThanOrEqual(WARM_LIGHT_CHROMA + 0.005);
+    } else {
+      expect(d.L, `${label} lightness`).toBeLessThanOrEqual(DARK_MAX_LIGHTNESS + 0.005);
     }
   }
 
@@ -170,6 +181,20 @@ describe("chart series from brand colors", () => {
         for (const c of out) expect(contrast(c, surfaceOf(s))).toBeGreaterThanOrEqual(3);
         if (hexToOklch(out[0]!).C >= GREY_CHROMA) expectApart(out, `${list.join(",")} ${s}`);
       }
+    }
+  });
+
+  it("keep light first colors in dark mode from loud pastels, deep ones in light mode from near black, and light-mode yellows from brown", () => {
+    for (const hex of ["#ff9900", "#ffda1a", "#ff7900"]) {
+      const out = deriveSeries([hex], darkTheme.colors.surface, "dark");
+      for (const c of out.slice(1)) expect(hexToOklch(c).L, `${hex} ${c}`).toBeLessThanOrEqual(DARK_MAX_LIGHTNESS + 0.005);
+    }
+    const cadbury = deriveSeries(["#4b0082"], "#ffffff", "light");
+    for (const c of cadbury.slice(1)) expect(hexToOklch(c).L, c).toBeGreaterThanOrEqual(LIGHT_MIN_LIGHTNESS - 0.005);
+    for (const hex of ["#1877f2", "#e50914", "#00704a", "#9146ff"]) {
+      const warm = deriveSeries([hex], "#ffffff", "light").slice(1).map(hexToOklch).filter((d) => d.h >= WARM_HUES[0] && d.h <= WARM_HUES[1]);
+      expect(warm.length, hex).toBeGreaterThan(0);
+      for (const d of warm) expect(d.C, `${hex} warm series`).toBeLessThanOrEqual(WARM_LIGHT_CHROMA + 0.005);
     }
   });
 

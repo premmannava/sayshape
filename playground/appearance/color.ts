@@ -183,14 +183,25 @@ export const GREY_CHROMA = 0.05;
 export const STATUS_HUE_GAP = 30;
 /** Derived series take at most this share of the first color's chroma, and never more than MAX_DERIVED_CHROMA, so the first stays the strongest. */
 export const DERIVED_CHROMA_SHARE = 0.7;
-export const MAX_DERIVED_CHROMA = 0.12;
+export const MAX_DERIVED_CHROMA = 0.07;
+/**
+ * On a light surface, derived yellows and oranges (OKLCH hues WARM_HUES) stay
+ * under this chroma: dark enough to read on white, they turn brown or olive
+ * when they're any stronger.
+ */
+export const WARM_LIGHT_CHROMA = 0.045;
+export const WARM_HUES: [number, number] = [45, 125];
 /** For a faint first color, where muted series sit too close together, derived series may reach this share of its chroma. */
 const FAINT_CHROMA_SHARE = 0.9;
 /** How far neighbouring derived series step in OKLCH lightness. */
 const LIGHTNESS_STEP = 0.08;
 /** The OKLCH lightness derived series centre on, on a light surface and on a dark one. */
-const LIGHT_SURFACE_BAND: [number, number] = [0.42, 0.6];
-const DARK_SURFACE_BAND: [number, number] = [0.62, 0.78];
+const LIGHT_SURFACE_BAND: [number, number] = [0.46, 0.6];
+const DARK_SURFACE_BAND: [number, number] = [0.62, 0.72];
+/** Derived series are never darker than this on a light surface (near black, every hue looks alike) ... */
+export const LIGHT_MIN_LIGHTNESS = 0.4;
+/** ... nor lighter than this on a dark one, where they'd turn to loud pastels. */
+export const DARK_MAX_LIGHTNESS = 0.8;
 /** The hues derived series may take: every HUE_STEP degrees around the first color's. */
 const HUE_STEP = 15;
 const SERIES_COUNT = 6;
@@ -207,7 +218,9 @@ export type SeriesScheme = "light" | "dark";
  * too like an earlier one (closer than MIN_SERIES_DISTANCE) is dropped and
  * derived instead. The rest are derived from the first: hues stepped around
  * it in OKLCH and kept away from good and bad, muted so the first stays the
- * strongest, and alternately darker and lighter. A grey first color (OKLCH
+ * strongest (and yellows and oranges more so on light surfaces), and
+ * alternately darker and lighter, never near black on a light surface or
+ * pastel on a dark one. A grey first color (OKLCH
  * chroma under GREY_CHROMA) has no hue to step from, so SayShape's own
  * companion series for the scheme fill in, as they are: they're hand-tuned
  * and some sit closer than MIN_SERIES_DISTANCE, the one case that minimum
@@ -244,6 +257,7 @@ function deriveFrom(first: OKLCH, out: string[], surface: string, colors: { good
   }
   const chroma = Math.min(MAX_DERIVED_CHROMA, first.C * DERIVED_CHROMA_SHARE);
   const darken = luminance(surface) > 0.5;
+  const limits: Limits = darken ? { darken, minL: LIGHT_MIN_LIGHTNESS, maxL: 1, warm: true } : { darken, minL: 0, maxL: DARK_MAX_LIGHTNESS, warm: false };
   // Derived series centre on the first color's lightness, held to a middle band so they're never near black or pastel.
   const [low, high] = darken ? LIGHT_SURFACE_BAND : DARK_SURFACE_BAND;
   const centre = Math.max(low, Math.min(high, first.L));
@@ -258,20 +272,32 @@ function deriveFrom(first: OKLCH, out: string[], surface: string, colors: { good
     const order = [...hues].sort((x, y) => spread(y) - spread(x) || hueGap(first.h, x) - hueGap(first.h, y) || x - y);
     // Muted first; quieter still when that's too like a series already there; and for a faint first color, as strong as it allows.
     const chromas = [chroma, chroma * 0.75, chroma * 0.5, Math.min(MAX_DERIVED_CHROMA, first.C * FAINT_CHROMA_SHARE)];
-    // Further from the centre only when nothing nearer stands apart.
-    const pick = findSeries(order, steps([1, 2, 0, -1, -2]), chromas, out, surface, darken) ?? findSeries(order, steps([3, -3]), chromas, out, surface, darken);
+    // Further from the centre only when nothing nearer stands apart, and past the lightness limits only when nothing within them
+    // does (in testing, a few faint first colors in ten thousand, mostly pale yellows on off-white surfaces).
+    const pick = findSeries(order, steps([1, 2, 0, -1, -2]), chromas, out, surface, limits)
+      ?? findSeries(order, steps([3, -3]), chromas, out, surface, limits)
+      ?? findSeries(order, steps([3, -3]), chromas, out, surface, { ...limits, minL: Math.min(limits.minL, 0.3), maxL: Math.max(limits.maxL, 0.88) });
     if (!pick) return;
     out.push(pick);
   }
 }
 
-/** The first candidate, by chroma, then lightness, then hue, that's readable and stands apart from every series so far. */
-function findSeries(hues: number[], lightness: number[], chromas: number[], out: string[], surface: string, darken: boolean): string | null {
+/** Where derived series may sit: which way contrast moves them, their lightness, and whether warm hues are held to WARM_LIGHT_CHROMA. */
+interface Limits { darken: boolean; minL: number; maxL: number; warm: boolean }
+
+const isWarm = (h: number) => h >= WARM_HUES[0] && h <= WARM_HUES[1];
+
+/** The first candidate, by chroma, then lightness, then hue, that's readable, within the limits and apart from every series so far. */
+function findSeries(hues: number[], lightness: number[], chromas: number[], out: string[], surface: string, limits: Limits): string | null {
   for (const C of chromas) {
-    for (const L of lightness) {
+    for (const want of lightness) {
+      const L = Math.max(limits.minL, Math.min(limits.maxL, want));
       for (const h of hues) {
-        const hex = fitContrast({ L, C, h }, surface, darken);
-        if (hex && out.every((o) => colorDistance(o, hex) >= MIN_SERIES_DISTANCE)) return hex;
+        const hex = fitContrast({ L, C: limits.warm && isWarm(h) ? Math.min(C, WARM_LIGHT_CHROMA) : C, h }, surface, limits.darken);
+        if (!hex) continue;
+        const got = hexToOklch(hex).L;
+        if (got < limits.minL - 0.005 || got > limits.maxL + 0.005) continue;
+        if (out.every((o) => colorDistance(o, hex) >= MIN_SERIES_DISTANCE)) return hex;
       }
     }
   }
