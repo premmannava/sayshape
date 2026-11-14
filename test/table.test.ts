@@ -131,9 +131,10 @@ describe("cells", () => {
       ["0", "0"], ["No", EMPTY_CELL], ["-3", "-3"], [EMPTY_CELL, EMPTY_CELL], [EMPTY_CELL, EMPTY_CELL], [EMPTY_CELL, EMPTY_CELL],
       ["A very long piece of text that will not fit in a narrow column at all", EMPTY_CELL],
     ]);
+    // Long text wraps onto more lines, each inside its column.
     const long = g.rows[6]!.cells[0]!;
-    expect(long.text.endsWith("…")).toBe(true);
-    expect(monoWidth(long.text, g.cellFont)).toBeLessThanOrEqual(g.columns[0]!.w);
+    expect(long.lines.length).toBeGreaterThan(1);
+    for (const l of long.lines) expect(monoWidth(l, g.cellFont)).toBeLessThanOrEqual(g.columns[0]!.w);
     expect(ui.warnings).toEqual([
       "table on line 2: 1 items aren't records, so their cells show —",
       "table on line 2: 2 cells hold a value their column can't show (number and money columns need numbers), so they show —",
@@ -402,12 +403,12 @@ table items=rows key=sku bind=pick
     expect(x).toBeCloseTo(box!.w, 6);
     for (const row of g.rows) {
       row.cells.forEach((cell, ci) => {
-        expect(monoWidth(cell.text, g.cellFont), `${cell.text} fits`).toBeLessThanOrEqual(g.columns[ci]!.w);
-        if (g.columns[ci]!.format !== "text") expect(cell.text).toBe(cell.full);
+        for (const l of cell.lines) expect(monoWidth(l, g.cellFont), `${l} fits`).toBeLessThanOrEqual(g.columns[ci]!.w);
+        if (g.columns[ci]!.format !== "text") expect(cell.lines).toEqual([cell.full]);
       });
     }
-    if (width === 1000) expect(g.rows[0]!.cells[0]!.text).toBe(g.rows[0]!.cells[0]!.full);
-    else expect(g.rows[0]!.cells[0]!.text.endsWith("…")).toBe(true);
+    if (width === 1000) expect(g.rows[0]!.cells[0]!.lines).toEqual([g.rows[0]!.cells[0]!.full]);
+    else expect(g.rows[0]!.cells[0]!.lines.length).toBeGreaterThan(1);
     // Hit regions stay inside the table.
     for (const h of ui.hits) {
       expect(h.box.x).toBeGreaterThanOrEqual(box!.x - 1e-6);
@@ -434,7 +435,7 @@ table items=rows key=sku bind=pick
     expect(ui.warnings).toEqual([]);
     expect(g.columns).toHaveLength(6);
     // Numbers are never cut short.
-    expect(g.rows[0]!.cells.every((c) => c.text === c.full)).toBe(true);
+    expect(g.rows[0]!.cells.every((c) => c.lines.length === 1 && c.lines[0] === c.full)).toBe(true);
     expect(g.scroll).toBeDefined();
     expect(g.scroll!.max).toBeGreaterThan(0);
     expect(geo(simple(`[{v: 1234567}]`, "key=v bind=pick", cols, 1400)).scroll).toBeUndefined();
@@ -640,5 +641,131 @@ describe("sideways scrolling", () => {
       expect(ui.warnings).toEqual([]);
       expect(geo(ui).scroll).toBeDefined();
     }
+  });
+});
+
+describe("table cells that wrap", () => {
+  const phone = 360;
+  const three = `  table-column "Item" field=name\n  table-column "Note" field=note\n  table-column "Qty" field=qty format=number`;
+  const longNote = "A fairly long note about the item that cannot possibly fit on one line";
+  const rows = (note: string) =>
+    `[{id: "a", name: "Tent", note: "Light", qty: 2}, {id: "b", name: "Stove", note: ${JSON.stringify(note)}, qty: 1000000}, {id: "c", name: "Rope", note: "Strong", qty: 3}]`;
+  const rowHeight = (theme: typeof lightTheme) => Math.round(theme.text.body * 1.4) + 2 * theme.space.sm;
+  const lineHeight = (theme: typeof lightTheme) => Math.round(theme.text.body * 1.4);
+
+  it.each([["light", lightTheme], ["dark", darkTheme]] as const)("makes a row with long text taller and moves later rows down (%s)", (_, theme) => {
+    const ui = render(`state rows=${rows(longNote)} pick=""\ntable items=rows key=id bind=pick\n${three}\n`, { width: phone, theme });
+    const g = geo(ui);
+    const [a, b, c] = g.rows;
+    const note = b!.cells[1]!;
+    expect(note.lines.length).toBeGreaterThan(1);
+    expect(note.lines.length).toBeLessThanOrEqual(3);
+    for (const [ci, cell] of b!.cells.entries()) for (const l of cell.lines) expect(monoWidth(l, g.cellFont), l).toBeLessThanOrEqual(g.columns[ci]!.w - 2 * theme.space.md + 1e-6);
+    expect(a!.h).toBe(rowHeight(theme));
+    expect(b!.h).toBe(note.lines.length * lineHeight(theme) + 2 * theme.space.sm);
+    expect(b!.h).toBeGreaterThan(a!.h);
+    expect(b!.y).toBe(a!.y + a!.h);
+    expect(c!.y).toBe(b!.y + b!.h);
+    // The frame holds every row, and the table box ends with it.
+    const box = ui.find("table").box!;
+    expect(g.frame.y + g.frame.h).toBe(c!.y + c!.h);
+    expect(box.h).toBe(g.frame.y + g.frame.h);
+  });
+
+  it("shows at most three lines, the last ending in an ellipsis", () => {
+    const ui = render(`state rows=${rows("word ".repeat(80).trim())} pick=""\ntable items=rows key=id bind=pick\n${three}\n`, { width: phone });
+    const g = geo(ui);
+    const note = g.rows[1]!.cells[1]!;
+    expect(note.lines).toHaveLength(3);
+    expect(note.lines[2]!.endsWith("…")).toBe(true);
+    expect(note.lines[0]!.endsWith("…")).toBe(false);
+    expect(note.full).toBe("word ".repeat(80).trim());
+    for (const l of note.lines) expect(monoWidth(l, g.cellFont)).toBeLessThanOrEqual(g.columns[1]!.w);
+    expect(g.rows[1]!.h).toBe(3 * lineHeight(lightTheme) + 2 * lightTheme.space.sm);
+  });
+
+  it("keeps every row at one line's height when everything fits", () => {
+    for (const width of [360, 600]) {
+      const ui = render(`state rows=${rows("Short")} pick=""\ntable items=rows key=id bind=pick\n${three}\n`, { width });
+      const g = geo(ui);
+      g.rows.forEach((r, i) => {
+        expect(r.h).toBe(rowHeight(lightTheme));
+        expect(r.y).toBe(g.frame.y + g.headerH + i * rowHeight(lightTheme));
+        expect(r.cells.every((c) => c.lines.length === 1)).toBe(true);
+      });
+    }
+  });
+
+  it("never wraps numbers", () => {
+    const ui = render(`state rows=[{n: 1234567.5}, {n: 7}] pick=""\ntable items=rows\n  table-column "Name" field=n format=number\n  table-column "Other" field=n format=money\n`, { width: phone });
+    const g = geo(ui);
+    for (const r of g.rows) {
+      expect(r.h).toBe(rowHeight(lightTheme));
+      r.cells.forEach((c) => expect(c.lines).toEqual([c.full]));
+    }
+  });
+
+  it("selects a tall row from anywhere in it, including near its bottom edge", () => {
+    const ui = render(`state rows=${rows(longNote)} pick=""\ntable items=rows key=id bind=pick\n${three}\n`, { width: phone });
+    const g = geo(ui);
+    const box = ui.find("table").box!;
+    const tall = g.rows[1]!;
+    expect(tall.h).toBeGreaterThan(rowHeight(lightTheme));
+    const hit = ui.hits.find((h) => h.detail === tall.detail)!;
+    expect(hit.box.y).toBeCloseTo(box.y + tall.y, 6);
+    expect(hit.box.h).toBeCloseTo(tall.h, 6);
+    ui.click(box.x + 20, box.y + tall.y + tall.h - 2);
+    expect(ui.state.pick).toBe("b");
+    // The row after it is still its own target.
+    ui.click(box.x + 20, box.y + g.rows[2]!.y + 3);
+    expect(ui.state.pick).toBe("c");
+    ui.click(box.x + 20, box.y + tall.y + 2);
+    expect(ui.state.pick).toBe("b");
+  });
+
+  it("draws each line of a wrapped cell, centring short cells in a tall row", () => {
+    const ui = render(`state rows=${rows(longNote)} pick=""\ntable items=rows key=id bind=pick\n${three}\n`, { width: phone });
+    const g = geo(ui);
+    const box = ui.find("table").box!;
+    const tall = g.rows[1]!;
+    const note = tall.cells[1]!;
+    const ys = note.lines.map((l) => ui.drawOps.find((o) => o.op === "fillText" && o.args[0] === l)!.args[2] as number);
+    ys.forEach((y, i) => expect(y).toBeCloseTo(box.y + tall.y + (tall.h - note.lines.length * g.cellLH) / 2 + i * g.cellLH + g.cellLH / 2, 6));
+    const stove = ui.drawOps.find((o) => o.op === "fillText" && o.args[0] === "Stove")!;
+    expect(stove.args[2]).toBeCloseTo(box.y + tall.y + tall.h / 2, 6);
+  });
+
+  it("keeps the whole text for screen readers and copying", () => {
+    const ui = render(`state rows=${rows("word ".repeat(80).trim())} pick=""\ntable items=rows key=id bind=pick\n${three}\n`, { width: phone });
+    expect(ui.copyText()).toContain("word ".repeat(80).trim());
+  });
+});
+
+describe("table sort arrows", () => {
+  const arrows = (ui: Rendered, color: string) => ui.drawOps.filter((o) => o.op === "stroke" && o.strokeStyle === color);
+  const spec = (props: string) => `${equipment}\ntable items=equipment key=id ${props}\n${columns}\n`;
+
+  it("paints a faint neutral arrow on every header of a sortable table with nothing sorted", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const ui = render(`${equipment.replace('sortField="name"', 'sortField=""')}\ntable items=equipment key=id sort=sortField direction=sortDirection\n${columns}\n`, { theme, width: 360 });
+      const faint = arrows(ui, theme.colors.muted);
+      // An up and a down chevron on each of the three headers.
+      expect(faint).toHaveLength(6);
+      expect(faint.every((o) => o.globalAlpha > 0 && o.globalAlpha < 0.6)).toBe(true);
+      expect(arrows(ui, theme.colors.ink)).toHaveLength(0);
+    }
+  });
+
+  it("keeps a strong single arrow on the sorted header and a faint one on the others", () => {
+    const ui = render(spec("sort=sortField direction=sortDirection"), { width: 360 });
+    expect(arrows(ui, lightTheme.colors.ink)).toHaveLength(1);
+    expect(arrows(ui, lightTheme.colors.ink)[0]!.globalAlpha).toBe(1);
+    expect(arrows(ui, lightTheme.colors.muted)).toHaveLength(4);
+  });
+
+  it("paints no arrows when the table doesn't sort", () => {
+    const ui = render(spec("bind=selected"), { width: 360 });
+    expect(arrows(ui, lightTheme.colors.muted)).toHaveLength(0);
+    expect(arrows(ui, lightTheme.colors.ink)).toHaveLength(0);
   });
 });
