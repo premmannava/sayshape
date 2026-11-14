@@ -102,12 +102,25 @@ The website has its own dependencies in `site/package.json`; never add them to t
 
 ## Before you say a change is done
 
-1. `npm run typecheck` passes.
-2. `npm test` passes, with new tests for new behavior.
-3. `npm run build` passes.
-4. If a component's definition changed, `npm run docs:components` has been run.
-5. For anything visual, the change has been looked at in the playground in light and dark mode. Use the inspector's layout boxes to check sizes. If it changes how something looks, update the visual baselines in the same commit (Linux only: `VISUAL_ARGS=--update-snapshots npm run test:visual:docker`, or add the `update-visual-baselines` label to the pull request and CI commits them).
-6. Spec examples you add anywhere (component `example`, README, docs) parse with no diagnostics. `test/prompt.test.ts` checks component examples automatically.
+Check what the change could have broken, not everything every time. Find the change in this table and run that row while you work. Rows add up: a change that fits two rows runs both. If you can't tell which row a change belongs to, treat it as code.
+
+| The change | Run |
+|---|---|
+| Comments, or Markdown that holds no SayShape block | `npm run docs:check` |
+| Markdown, README or website text with a SayShape block | `npx vitest run test/site.test.ts test/prompt.test.ts` |
+| Any code in `src/`, `test/`, `eval/` or `scripts/` | `npm run typecheck` and the whole of `npm test`, with new tests for new behavior. The whole suite takes about 15 seconds, so never run only part of it |
+| A component's definition (props, description, example, picks) | The code row, plus `npm run docs:components` |
+| Anything that changes what is drawn | The code row, plus a look in the playground in light and dark mode. Use the inspector's layout boxes to check sizes |
+| `mcp/` | `npm --prefix mcp run typecheck` and `npm --prefix mcp test` |
+| `site/` | `npm run site:build` and `npm run site:check` |
+
+Then, once per pull request (not once per task, when several tasks share one):
+
+1. `npm run build` passes, if anything under `src/`, `scripts/` or the build settings changed.
+2. If it changes how something looks, update the visual baselines in the same pull request (Linux only: `VISUAL_ARGS=--update-snapshots npm run test:visual:docker`, or add the `update-visual-baselines` label to the pull request and CI commits them).
+3. Spec examples you add anywhere (component `example`, README, docs) parse with no diagnostics. `test/prompt.test.ts` checks component examples automatically.
+
+CI runs everything on every pull request whatever the change: four Node versions, the installed packages, the MCP server, benchmarks, the visual tests and the website in a browser. Don't repeat those locally (the visual tests, `verify:pack`, the MCP end-to-end tests, the website's browser check) unless you're chasing a failure there, and never merge before CI is green.
 
 ## How to add a component
 
