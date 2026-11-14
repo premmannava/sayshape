@@ -45,3 +45,18 @@ export function adapterSource(name: WidgetHostName, options: AdapterOptions = {}
   const json = JSON.stringify(settings);
   return `function (ui, S, root) { return (${WIDGET_HOSTS[name].source})(ui, S, root, ${json}); }`;
 }
+
+/** The names --widget-host accepts, for messages. */
+export const WIDGET_HOST_NAMES: string[] = Object.keys(WIDGET_HOSTS);
+
+/**
+ * Why --widget-host can't be used as given, in plain words, or null when it can. name: the word after the flag
+ * (undefined if there was none); hasDir: whether --widget-dir was given too.
+ */
+export function widgetHostRefusal(name: string | undefined, hasDir: boolean): string | null {
+  const valid = `Hosts: ${WIDGET_HOST_NAMES.join(", ")}.`;
+  if (name === undefined || name.startsWith("--")) return `--widget-host needs the name of a chat app. ${valid}`;
+  if (!isWidgetHost(name)) return `--widget-host doesn't know "${name}". ${valid}`;
+  if (!hasDir) return "--widget-host only applies with --widget-dir: it hooks an adapter into the widget files that flag writes.";
+  return null;
+}

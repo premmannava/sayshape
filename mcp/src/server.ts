@@ -50,7 +50,8 @@ import type { SayShapeNode } from "../../src/types";
 import { QueryError, summarize, type DataSource } from "./data";
 import { listMcpDatasets, type McpResultStore } from "./mcp-results";
 import { fallbackPage, fenced, PAGE_DATASETS_TEXT, PAGE_REPEAT_TEXT, PAGE_TEXT, pageFixLead } from "./fallback";
-import { widgetFailedText, widgetFixLead, WIDGET_REPEAT_TEXT, widgetText, writeWidget } from "./widget-file";
+import { PRESSES_SAVED, PRESSES_SAVED_RESULT, widgetFailedText, widgetFixLead, WIDGET_REPEAT_TEXT, widgetText, writeWidget } from "./widget-file";
+import { adapterSource, type WidgetHostName } from "./widget-hosts";
 import { loadPackedEngine, type PackedEngine } from "./widget-engine";
 
 export const VERSION = "0.2.1";
@@ -195,7 +196,7 @@ function topics(withData: boolean, withMcp = false, textOnly = false, fileMode =
  * rules for writing into a chat, and how to ask for more. Simple interfaces
  * need nothing else.
  */
-export function quickStart(withData = false, withMcp = false, textOnly = false, fileMode = false): string {
+export function quickStart(withData = false, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): string {
   return [
     "QUICK START",
     // The guide's "not JavaScript" line is left out to keep this short: show_interface returns
@@ -205,7 +206,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false, 
     "- Text and props show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
     "- Any element takes tip=\"…\": a short explanation shown on hover, focus or a tap: for a term or a number some people won't know, instead of more words on screen.",
     textOnly
-      ? `- ${NO_EMIT}`
+      ? `- ${pressesSaved ? PRESSES_SAVED : NO_EMIT}`
       : "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue'); within a budget: filter(rows, 'price', {to: budget})`,
     ...(behaviorFor(textOnly, fileMode) ? [sectionText("compact", "behavior")] : []),
@@ -235,7 +236,7 @@ function arrivesWithParent(c: ComponentDef): boolean {
 }
 
 /** Docs for exactly what was asked for, plus what it depends on. */
-export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false, fileMode = false): string {
+export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): string {
   const parts: string[] = [];
   const t = topics(withData, withMcp, textOnly, fileMode);
   if (elements.length) {
@@ -249,7 +250,7 @@ export function docsText(elements: readonly string[], topicNames: readonly strin
     const body = t[name];
     parts.push(body ? body : `No topic called ${name}. Topics: ${Object.keys(t).join(", ")}.`);
   }
-  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp, textOnly, fileMode);
+  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp, textOnly, fileMode, pressesSaved);
 }
 
 /** The elements on the lines that went wrong, so their docs can go back with the problems. */
@@ -385,6 +386,12 @@ export interface ServerOptions {
   widgetDir?: string;
   /** The packed engine for those files; by default dist/widget-engine.json, read when first needed. */
   widgetEngine?: () => Promise<PackedEngine>;
+  /**
+   * With widgetDir (main.ts --widget-host): the chat app's adapter to hook into every file. Its presses are
+   * saved for the model's next turn, so emit: is allowed there. ignoreAppColors: --theme or --accent was given.
+   * Without it, emit: is handled as before.
+   */
+  widgetHost?: { name: WidgetHostName; ignoreAppColors?: boolean };
 }
 
 /** How long after a good interface the same spec again counts as a repeat, not a new request. */
@@ -430,6 +437,9 @@ export function createServer(opts: ServerOptions): McpServer {
   const widgetEngine = opts.widgetEngine ?? loadPackedEngine;
   /** A client that can't draw views gets a file for a widget (--widget-dir) instead of the CDN page. HTTP never has one: main.ts refuses the pair. */
   const fileModeFor = (textOnly: boolean) => textOnly && widgetDir !== undefined;
+  // A host adapter in the files saves presses (emit:) for the model's next turn, so they are no longer a problem.
+  const hostSource = widgetDir !== undefined && opts.widgetHost ? adapterSource(opts.widgetHost.name, { ignoreAppColors: opts.widgetHost.ignoreAppColors === true }) : undefined;
+  const pressesSavedFor = (textOnly: boolean) => fileModeFor(textOnly) && hostSource !== undefined;
   // The last interface shown with nothing to fix. Smaller models often send the same one again
   // to "confirm" it, which would leave a second copy in the chat. Kept per server, so per
   // conversation over stdio; the stateless HTTP mode makes a server per request and never repeats.
@@ -466,7 +476,7 @@ export function createServer(opts: ServerOptions): McpServer {
     },
     async ({ elements, topics: names }) => {
       const textOnly = cannotDrawViews(server);
-      return text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults, textOnly, fileModeFor(textOnly)));
+      return text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults, textOnly, fileModeFor(textOnly), pressesSavedFor(textOnly)));
     },
   );
 
@@ -485,7 +495,7 @@ export function createServer(opts: ServerOptions): McpServer {
     (data ? " To show rows from the database, pass data={\"name\": \"d1\"} with a dataset id from query_data and use that name in the spec (items=name)." : "") +
     (mcpResults ? " For imported MCP results, call list_datasets then pass the selected id in data. The model never needs the full rows." : "") +
     "\n\n" +
-    quickStart(!!data, !!mcpResults, textOnly, fileModeFor(textOnly));
+    quickStart(!!data, !!mcpResults, textOnly, fileModeFor(textOnly), pressesSavedFor(textOnly));
 
   const showTool = registerAppTool(
     server,
@@ -524,8 +534,11 @@ export function createServer(opts: ServerOptions): McpServer {
       const textOnly = cannotDrawViews(server);
       const fileMode = fileModeFor(textOnly);
       const parsed = checkSpec(spec, names, textOnly, fileMode);
-      // On a page outside the chat emit: goes nowhere, so text-only clients fix it first. Clients that draw views never see this.
-      const check = textOnly ? { ...parsed, errors: [...parsed.errors, ...emitProblems(spec, names)].sort((a, b) => a.line - b.line) } : parsed;
+      // On a page outside the chat emit: goes nowhere, so text-only clients fix it first, unless a host adapter saves it.
+      // Clients that draw views never see this.
+      const saved = pressesSavedFor(textOnly);
+      const emits = textOnly ? emitProblems(spec, names) : [];
+      const check = textOnly && !saved ? { ...parsed, errors: [...parsed.errors, ...emits].sort((a, b) => a.line - b.line) } : parsed;
       // A state line would replace the rows the interface loads, so point it out.
       const declared = names.filter((n) => new RegExp(`^state\\b[^\\n]*\\b${n}=`, "m").test(spec));
       const notes = [
@@ -570,11 +583,12 @@ export function createServer(opts: ServerOptions): McpServer {
             behavior: behaviorOn,
             slides: slidesOn,
             imageHosts,
+            ...(hostSource !== undefined ? { host: hostSource } : {}),
             ...(opts.view?.theme ? { theme: opts.view.theme } : {}),
             ...(opts.view?.accent ? { accent: opts.view.accent } : {}),
             ...(opts.view?.logo ? { logo: opts.view.logo } : {}),
           });
-          widget = written.ok ? widgetText(written.path, written.bytes) : widgetFailedText(written.reason);
+          widget = written.ok ? widgetText(written.path, written.bytes) + (saved && emits.length ? ` ${PRESSES_SAVED_RESULT}` : "") : widgetFailedText(written.reason);
           // Nothing is showing, so a second call isn't a repeat.
           if (!written.ok) lastGood = null;
         } catch (e) {

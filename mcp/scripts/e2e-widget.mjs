@@ -5,7 +5,10 @@
 // every external script, connection and image, as such an app's sandbox does. It must draw in
 // light and dark (and follow data-theme), fit 400px with no sideways scrolling, change on a
 // press, keep a hostile spec inert, open a pressed link in a new tab, show a short note when
-// the engine can't be unpacked, and the server must refuse --widget-dir with --http.
+// the engine can't be unpacked, and the server must refuse --widget-dir with --http. With
+// --widget-host muse the file also hooks the Muse adapter in: an emit: button is accepted, and
+// pressing it with a fake state bridge on the page puts the action in the bridge's state; the flag's
+// own refusals (an unknown host, no --widget-dir) are checked too.
 //
 // Nothing here is served from a CDN: the engine is inside the file, unpacked by the loader.
 //
@@ -25,6 +28,7 @@ mkdirSync(out, { recursive: true });
 const dist = process.env.SAYSHAPE_MCP_DIST ?? here("../dist/");
 const server = join(dist, "server.js");
 const widgets = mkdtempSync(join(tmpdir(), "sayshape-widgets-"));
+const hosted = mkdtempSync(join(tmpdir(), "sayshape-widgets-host-"));
 
 const failures = [];
 const check = (ok, what) => { console.log(`${ok ? "✓" : "✗"} ${what}`); if (!ok) failures.push(what); };
@@ -33,6 +37,14 @@ const check = (ok, what) => { console.log(`${ok ? "✓" : "✗"} ${what}`); if (
 {
   const r = spawnSync(process.execPath, [server, "--http", "0", "--widget-dir", widgets], { encoding: "utf8", timeout: 20000 });
   check(r.status === 1 && /--widget-dir can't be used with --http/.test(r.stderr), `--widget-dir with --http is refused (exit ${r.status}: ${r.stderr.trim().split("\n")[0]})`);
+}
+
+// --widget-host is for --widget-dir only, and only for the hosts there's an adapter for.
+{
+  const unknown = spawnSync(process.execPath, [server, "--widget-dir", widgets, "--widget-host", "nope"], { encoding: "utf8", timeout: 20000 });
+  check(unknown.status === 1 && /doesn't know "nope"/.test(unknown.stderr) && /muse/.test(unknown.stderr), `an unknown --widget-host stops the server and lists the hosts (exit ${unknown.status}: ${unknown.stderr.trim().split("\n")[0]})`);
+  const alone = spawnSync(process.execPath, [server, "--widget-host", "muse"], { encoding: "utf8", timeout: 20000 });
+  check(alone.status === 1 && /only applies with --widget-dir/.test(alone.stderr), `--widget-host without --widget-dir is refused (exit ${alone.status}: ${alone.stderr.trim().split("\n")[0]})`);
 }
 
 // A client with no MCP Apps capability, as such chat apps connect.
@@ -71,9 +83,26 @@ check(sizes.chart < 1_000_000 && sizes.map < 1_000_000, "both files are under 1 
   const again = await client.callTool({ name: "show_interface", arguments: { spec: CHART.replace("Sales by month", "Sales by month!") } });
   check(/^(\/\S+\.html)$/m.test(again.content?.[0]?.text ?? ""), "another interface gets a file of its own");
 }
+const plainNoEmit = await client.callTool({ name: "show_interface", arguments: { spec: 'card\n  button "Send" on=emit:sent' } });
+check(/emit: can't reach you/.test(plainNoEmit.content?.[0]?.text ?? "") && !/\.html/.test(plainNoEmit.content?.[0]?.text ?? ""), "without --widget-host an emit: button is still a problem to fix");
 await client.close();
 
-const fragments = Object.fromEntries(Object.entries(files).map(([k, f]) => [k, readFileSync(f, "utf8")]));
+// With --widget-host muse: emit: is accepted, and the model is told presses are saved for its next turn.
+const ORDER = `card
+  text "Order" style=title
+  button "Place order" on=emit:submit_order
+`;
+const hostClient = new Client({ name: "e2e-widget-host", version: "1.0.0" });
+await hostClient.connect(new StdioClientTransport({ command: process.execPath, args: [server, "--widget-dir", hosted, "--widget-host", "muse"], stderr: "pipe" }));
+const hostDescription = (await hostClient.listTools()).tools.find((t) => t.name === "show_interface")?.description ?? "";
+check(/saves a press for your next turn/.test(hostDescription) && !/emit: can't reach you/.test(hostDescription), "with --widget-host the quick start says presses are saved, not that emit: is off");
+const hostResult = await hostClient.callTool({ name: "show_interface", arguments: { spec: ORDER, title: "Order" } });
+const hostText = hostResult.content?.[0]?.text ?? "";
+const hostFile = /^(\/\S+\.html)$/m.exec(hostText)?.[1] ?? "";
+check(!!hostFile && /Presses are saved for your next turn/.test(hostText), "with --widget-host a spec using emit: gets a file and the new wording");
+await hostClient.close();
+
+const fragments = Object.fromEntries(Object.entries({ ...files, order: hostFile }).map(([k, f]) => [k, readFileSync(f, "utf8")]));
 check(!/<!doctype|<html|<head|<body/i.test(fragments.chart) && !/localStorage|sessionStorage|indexedDB/i.test(fragments.chart), "the fragment has no document wrapper and no browser storage names");
 
 const LIGHT = "rgb(255, 255, 255)";
@@ -221,6 +250,36 @@ try {
     await page.screenshot({ path: join(out, "widget-map.png"), fullPage: true });
     await page.close();
   }
+  // The Muse adapter: a fake bridge on the page, a press of an emit: button, and the action in the bridge's state.
+  {
+    const bridge = () => {
+      window.__bridge = { state: null, writes: 0 };
+      window.hatchWidget = {
+        getState(defaults) { if (!window.__bridge.state) window.__bridge.state = JSON.parse(JSON.stringify(defaults)); return JSON.parse(JSON.stringify(window.__bridge.state)); },
+        setState(next) {
+          window.__bridge.state = JSON.parse(JSON.stringify(next));
+          window.__bridge.writes++;
+          setTimeout(() => window.dispatchEvent(new CustomEvent("hatch-widget-state", { detail: { state: JSON.parse(JSON.stringify(next)) } })), 0);
+        },
+      };
+    };
+    const { page, problems, requests } = await open(fragments.order, { width: 656, init: `(${bridge})()` });
+    const p = await painted(page, rgb(LIGHT));
+    check(p.ink > 500, `the hosted file paints (${p.ink} inked pixels)`);
+    check(await page.evaluate(() => typeof document.querySelector("div[id^=sw-]").sayshapeHost === "function"), "the file carries the host adapter");
+    const before = await page.evaluate(() => window.__bridge.state);
+    check(!!before && before.actions?.length === 0, `the bridge starts with no actions (${JSON.stringify(before?.actions)})`);
+    const box = await page.getByRole("button", { name: "Place order" }).boundingBox();
+    check(!!box, "the emit: button is reachable by a screen reader");
+    if (box) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForFunction(() => (window.__bridge.state?.actions?.length ?? 0) > 0, null, { timeout: 5000 }).catch(() => {});
+    const saved = await page.evaluate(() => window.__bridge.state);
+    check(saved?.actions?.length === 1 && saved.actions[0].name === "submit_order" && typeof saved.actions[0].at === "string", `the press is in the bridge's state (${JSON.stringify(saved?.actions)})`);
+    check(typeof saved?.spec === "string" && /^[0-9a-f]{8}-\d+$/.test(saved.spec), `the bridge state also holds the spec's fingerprint (${saved?.spec})`);
+    check(requests.length === 1 && problems.length === 0, `hosted: nothing requested but the page, no errors${problems.length ? `: ${problems.join("; ")}` : ""}`);
+    await page.screenshot({ path: join(out, "widget-hosted.png"), fullPage: true });
+    await page.close();
+  }
   // Where it can't unpack: a short plain note in place of the canvas, not a blank frame.
   {
     const { page } = await open(fragments.chart, { init: "delete window.DecompressionStream;" });
@@ -232,6 +291,7 @@ try {
 } finally {
   await browser.close();
   rmSync(widgets, { recursive: true, force: true });
+  rmSync(hosted, { recursive: true, force: true });
 }
 
 if (failures.length) {
