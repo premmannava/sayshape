@@ -50,6 +50,8 @@ import type { SayShapeNode } from "../../src/types";
 import { QueryError, summarize, type DataSource } from "./data";
 import { listMcpDatasets, type McpResultStore } from "./mcp-results";
 import { fallbackPage, fenced, PAGE_DATASETS_TEXT, PAGE_REPEAT_TEXT, PAGE_TEXT, pageFixLead } from "./fallback";
+import { widgetFailedText, widgetFixLead, WIDGET_REPEAT_TEXT, widgetText, writeWidget } from "./widget-file";
+import { loadPackedEngine, type PackedEngine } from "./widget-engine";
 
 export const VERSION = "0.2.1";
 export const UI_URI = "ui://sayshape/interface.html";
@@ -98,6 +100,13 @@ function register(): void {
   registry = new Registry(components);
   sectionsCache.clear();
 }
+
+/**
+ * Whether a client gets behavior (--behavior): the view always does; a text-only client's CDN page loads a
+ * pinned engine from before it existed, so it doesn't; a widget file carries this server's own engine, so
+ * it does (fileMode: --widget-dir).
+ */
+const behaviorFor = (textOnly: boolean, fileMode: boolean): boolean => behaviorOn && (!textOnly || fileMode);
 
 /** What a text-only client is told in place of a page when the spec is a deck. */
 const PAGE_DECK_TEXT = "The deck is written correctly, but this app can't show slide decks yet, so there is no page to open. Tell the person it needs a chat app that draws SayShape views.";
@@ -165,11 +174,11 @@ function sectionsOf(mode: "full" | "compact"): ReturnType<typeof guideSections> 
 const sectionText = (mode: "full" | "compact", name: string) => sectionsOf(mode).find((sec) => sec.name === name)?.text ?? "";
 
 /** Parts of the guide a model can ask for by name, all generated (DATA_NOTES only with a database). */
-function topics(withData: boolean, withMcp = false, textOnly = false): Record<string, string> {
+function topics(withData: boolean, withMcp = false, textOnly = false, fileMode = false): Record<string, string> {
   return {
     expressions: sectionText("full", "expressions"),
     actions: sectionText("full", "actions"),
-    ...(behaviorOn && !textOnly ? { behavior: sectionText("full", "behavior") } : {}),
+    ...(behaviorFor(textOnly, fileMode) ? { behavior: sectionText("full", "behavior") } : {}),
     lists: sectionText("full", "data"),
     rules: sectionText("full", "rules"),
     examples: sectionText("full", "example"),
@@ -186,7 +195,7 @@ function topics(withData: boolean, withMcp = false, textOnly = false): Record<st
  * rules for writing into a chat, and how to ask for more. Simple interfaces
  * need nothing else.
  */
-export function quickStart(withData = false, withMcp = false, textOnly = false): string {
+export function quickStart(withData = false, withMcp = false, textOnly = false, fileMode = false): string {
   return [
     "QUICK START",
     // The guide's "not JavaScript" line is left out to keep this short: show_interface returns
@@ -199,7 +208,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false):
       ? `- ${NO_EMIT}`
       : "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue'); within a budget: filter(rows, 'price', {to: budget})`,
-    ...(behaviorOn && !textOnly ? [sectionText("compact", "behavior")] : []),
+    ...(behaviorFor(textOnly, fileMode) ? [sectionText("compact", "behavior")] : []),
     `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
     // The same heading as the guides', in fewer words: this text goes out with every call.
     // Picks without their "such as …" examples or their "(…)" notes, except notes that teach a
@@ -208,7 +217,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false):
     `${PICKS_HEADING_SHORT}\n${pickList(components).replace(/, such as [^:\n]*(?=: )/g, "").replace(/ \((?![^)\n]*=)[^)\n]*\)(?=: )/g, "")}`,
     "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
     ...(slidesOn ? ["A PRESENTATION: a deck at the top level, not inside a card; a slide per idea, its title in the slide's own text."] : []),
-    `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp, textOnly)).join(", ")}.`,
+    `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp, textOnly, fileMode)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");
 }
@@ -226,11 +235,11 @@ function arrivesWithParent(c: ComponentDef): boolean {
 }
 
 /** Docs for exactly what was asked for, plus what it depends on. */
-export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false): string {
+export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false, fileMode = false): string {
   const parts: string[] = [];
-  const t = topics(withData, withMcp, textOnly);
+  const t = topics(withData, withMcp, textOnly, fileMode);
   if (elements.length) {
-    const { text, unknown } = elementGuide(registry, elements, { behavior: behaviorOn && !textOnly });
+    const { text, unknown } = elementGuide(registry, elements, { behavior: behaviorFor(textOnly, fileMode) });
     if (text) parts.push(`ELEMENTS\n${text}`);
     // Which hosts work, so a model asking about image doesn't write URLs the view can't load.
     if (imageHosts.length && elements.includes("image")) parts.push(sectionText("compact", "images"));
@@ -240,7 +249,7 @@ export function docsText(elements: readonly string[], topicNames: readonly strin
     const body = t[name];
     parts.push(body ? body : `No topic called ${name}. Topics: ${Object.keys(t).join(", ")}.`);
   }
-  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp, textOnly);
+  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp, textOnly, fileMode);
 }
 
 /** The elements on the lines that went wrong, so their docs can go back with the problems. */
@@ -298,8 +307,8 @@ export interface SpecCheck {
 }
 
 /** Parse a spec with the engine's own parser and components. Never throws. hostNames: state the interface fills in (datasets). */
-export function checkSpec(spec: string, hostNames: readonly string[] = [], textOnly = false): SpecCheck {
-  const behavior = behaviorOn && !textOnly;
+export function checkSpec(spec: string, hostNames: readonly string[] = [], textOnly = false, fileMode = false): SpecCheck {
+  const behavior = behaviorFor(textOnly, fileMode);
   const parsed = parse(spec, registry, { knownNames: hostNames, ...(behavior ? { behavior } : {}) });
   const { diagnostics } = parsed;
   return {
@@ -323,22 +332,23 @@ export const isHarmless = (d: Diagnostic) => d.severity !== "error" && HARMLESS.
  * is how the person sees it. Clients that draw views get the same text as
  * before the page existed (test/ui-results.test.ts).
  */
-function describeCheck(c: SpecCheck, textOnly = false): string {
+function describeCheck(c: SpecCheck, textOnly = false, fileMode = false, widget = ""): string {
   const all = [...c.errors, ...c.warnings];
   const drawing = c.drawing.map((d) => `line ${d.line}: ${d.message.replace(/^Drawing: /, "")}`);
   if (textOnly) {
+    // fileMode: the app shows a widget made from a file (--widget-dir); widget is what it's told about the file, in place of the page's text.
     const fix = all.filter((d) => !isHarmless(d));
     if (fix.length) {
       const listed = [...fix, ...all.filter(isHarmless)].slice(0, MAX_REPORTED).map((d) => `line ${d.line} (${isHarmless(d) ? "ignored" : d.severity}): ${d.message}`);
       if (all.length > MAX_REPORTED) listed.push(`…and ${all.length - MAX_REPORTED} more.`);
-      return `${pageFixLead(fix.length)}\n${listed.join("\n")}${drawing.length ? `\nAlso tidy the drawing:\n${drawing.join("\n")}` : ""}`;
+      return `${fileMode ? widgetFixLead(fix.length) : pageFixLead(fix.length)}\n${listed.join("\n")}${drawing.length ? `\nAlso tidy the drawing:\n${drawing.join("\n")}` : ""}`;
     }
     const minor = all.map((d) => `line ${d.line} (ignored): ${d.message}`);
     return [
-      PAGE_TEXT,
+      fileMode ? widget : PAGE_TEXT,
       ...(minor.length ? [`The parser ignored these small things, which change nothing on the page:\n${minor.join("\n")}`] : []),
       // A scene's drawing problems don't hold the page back: some, like small text on a phone, may not be worth another call.
-      ...(drawing.length ? [`Its drawing has problems the person can see. If you fix them, call show_interface again and use the new page instead:\n${drawing.join("\n")}`] : []),
+      ...(drawing.length ? [`Its drawing has problems the person can see. If you fix them, call show_interface again and use the new ${fileMode ? "file" : "page"} instead:\n${drawing.join("\n")}`] : []),
     ].join("\n");
   }
   if (!all.length && drawing.length) {
@@ -367,6 +377,14 @@ export interface ServerOptions {
   mcpResults?: McpResultStore;
   /** The clock, for tests of how long a repeat counts as one. */
   now?: () => number;
+  /**
+   * A folder to write widget files into (main.ts --widget-dir; stdio only). Clients that can't draw MCP Apps
+   * views get a file there, made from the spec with this server's own engine, in place of the CDN page.
+   * Without it, nothing changes.
+   */
+  widgetDir?: string;
+  /** The packed engine for those files; by default dist/widget-engine.json, read when first needed. */
+  widgetEngine?: () => Promise<PackedEngine>;
 }
 
 /** How long after a good interface the same spec again counts as a repeat, not a new request. */
@@ -408,6 +426,10 @@ export function createServer(opts: ServerOptions): McpServer {
   const hasDatasets = !!data || !!mcpResults;
   const findDataset = (id: string) => id.startsWith("m") ? mcpResults?.get(id) : data?.get(id);
   const now = opts.now ?? Date.now;
+  const widgetDir = opts.widgetDir;
+  const widgetEngine = opts.widgetEngine ?? loadPackedEngine;
+  /** A client that can't draw views gets a file for a widget (--widget-dir) instead of the CDN page. HTTP never has one: main.ts refuses the pair. */
+  const fileModeFor = (textOnly: boolean) => textOnly && widgetDir !== undefined;
   // The last interface shown with nothing to fix. Smaller models often send the same one again
   // to "confirm" it, which would leave a second copy in the chat. Kept per server, so per
   // conversation over stdio; the stateless HTTP mode makes a server per request and never repeats.
@@ -442,13 +464,18 @@ export function createServer(opts: ServerOptions): McpServer {
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ elements, topics: names }) => text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults, cannotDrawViews(server))),
+    async ({ elements, topics: names }) => {
+      const textOnly = cannotDrawViews(server);
+      return text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults, textOnly, fileModeFor(textOnly)));
+    },
   );
 
   const showDescription = (textOnly: boolean) =>
     (textOnly
       ? "Draws an interactive interface from a spec you write, with the SayShape engine. This chat app can't show it in the conversation, " +
-        "so when the spec has nothing to fix the result gives you a small web page that draws it, to publish or save for the person. " +
+        (fileModeFor(textOnly)
+          ? "so when the spec has nothing to fix the result gives you the path of a file that draws it, to create a widget from for the person. "
+          : "so when the spec has nothing to fix the result gives you a small web page that draws it, to publish or save for the person. ") +
         "Use it for every visual or interactive answer (charts, tables, dashboards, stat cards, forms, calculators, trackers) " +
         "rather than writing HTML, React, SVG or chart code. Specs can't run code or choose colors. "
       : "Shows an interactive interface inside the conversation, drawn by the SayShape engine from a spec you write. " +
@@ -458,7 +485,7 @@ export function createServer(opts: ServerOptions): McpServer {
     (data ? " To show rows from the database, pass data={\"name\": \"d1\"} with a dataset id from query_data and use that name in the spec (items=name)." : "") +
     (mcpResults ? " For imported MCP results, call list_datasets then pass the selected id in data. The model never needs the full rows." : "") +
     "\n\n" +
-    quickStart(!!data, !!mcpResults, textOnly);
+    quickStart(!!data, !!mcpResults, textOnly, fileModeFor(textOnly));
 
   const showTool = registerAppTool(
     server,
@@ -495,7 +522,8 @@ export function createServer(opts: ServerOptions): McpServer {
       }
       const names = Object.keys(datasets);
       const textOnly = cannotDrawViews(server);
-      const parsed = checkSpec(spec, names, textOnly);
+      const fileMode = fileModeFor(textOnly);
+      const parsed = checkSpec(spec, names, textOnly, fileMode);
       // On a page outside the chat emit: goes nowhere, so text-only clients fix it first. Clients that draw views never see this.
       const check = textOnly ? { ...parsed, errors: [...parsed.errors, ...emitProblems(spec, names)].sort((a, b) => a.line - b.line) } : parsed;
       // A state line would replace the rows the interface loads, so point it out.
@@ -515,7 +543,7 @@ export function createServer(opts: ServerOptions): McpServer {
       if (textOnly) {
         // Rows never go through the conversation, and a page outside the chat can't fetch them.
         if (names.length) return text(PAGE_DATASETS_TEXT);
-        if (repeat) return text(PAGE_REPEAT_TEXT);
+        if (repeat) return text(fileMode ? WIDGET_REPEAT_TEXT : PAGE_REPEAT_TEXT);
       }
       if (repeat) {
         return {
@@ -527,11 +555,34 @@ export function createServer(opts: ServerOptions): McpServer {
       const failing = elementsOnLines(spec, [...parsed.errors, ...parsed.warnings].filter((d) => !isHarmless(d)));
       if (failing.length) notes.push(`\nDocs for ${failing.join(", ")}:\n${elementGuide(registry, failing).text}`);
       // The page's pinned engine has no slides, so a deck gets a plain sentence instead of a page that can't draw it.
-      const deckOnly = textOnly && toFix === 0 && slidesOn && usesDeck(spec);
-      const withPage = textOnly && toFix === 0 && !deckOnly;
+      // A widget file carries this server's own engine, slides included, so a deck is fine there.
+      const deckOnly = textOnly && !fileMode && toFix === 0 && slidesOn && usesDeck(spec);
+      const withPage = textOnly && !fileMode && toFix === 0 && !deckOnly;
       if (deckOnly) notes.push(PAGE_DECK_TEXT);
       if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn })));
-      const said = [describeCheck(check, textOnly), ...notes].join("\n");
+      let widget = "";
+      if (fileMode && toFix === 0) {
+        try {
+          const written = await writeWidget(widgetDir!, {
+            spec,
+            engine: await widgetEngine(),
+            scenes: scenesOn,
+            behavior: behaviorOn,
+            slides: slidesOn,
+            imageHosts,
+            ...(opts.view?.theme ? { theme: opts.view.theme } : {}),
+            ...(opts.view?.accent ? { accent: opts.view.accent } : {}),
+            ...(opts.view?.logo ? { logo: opts.view.logo } : {}),
+          });
+          widget = written.ok ? widgetText(written.path, written.bytes) : widgetFailedText(written.reason);
+          // Nothing is showing, so a second call isn't a repeat.
+          if (!written.ok) lastGood = null;
+        } catch (e) {
+          widget = widgetFailedText(e instanceof Error ? e.message : String(e));
+          lastGood = null;
+        }
+      }
+      const said = [describeCheck(check, textOnly, fileMode, widget), ...notes].join("\n");
       if (textOnly) return text(said);
       return {
         content: [{ type: "text", text: said }],
