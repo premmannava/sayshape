@@ -44,6 +44,13 @@
         "inputSchema": {
           "type": "object",
           "properties": {
+            "colors": {
+              "description": "Brand colors as hex, most important first, such as [\"#e4572e\", \"#2e86ab\"]: send them only when the person, or the instructions you were given, named colors to use.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "spec": {
               "type": "string",
               "minLength": 1,
@@ -147,6 +154,13 @@
         "inputSchema": {
           "type": "object",
           "properties": {
+            "colors": {
+              "description": "Brand colors as hex, most important first, such as [\"#e4572e\", \"#2e86ab\"]: send them only when the person, or the instructions you were given, named colors to use.",
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "spec": {
               "type": "string",
               "minLength": 1,

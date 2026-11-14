@@ -9,6 +9,8 @@
  * corrected from what real apps say.
  */
 import { DEFAULT_PRESET } from "./theme-selection";
+import { colorList } from "../../../playground/appearance/color";
+import { colorEntries } from "./view-options";
 import type { PresetId } from "../../../playground/appearance/presets";
 
 /** Host name fragments to a brand color, in the order they are tried. */
@@ -33,6 +35,8 @@ export function announce(host: { name?: unknown; version?: unknown } | undefined
 }
 
 export interface ColorChoice {
+  /** The colors argument of this view's show_interface call (conversation colors), already through toolColors. */
+  conversationColors?: readonly string[];
   /** --colors (or --accent, a list of one) at server start (operator colors). */
   operatorColors?: readonly string[];
   /** True once the person has chosen a preset in the toolbar's theme selector. */
@@ -45,7 +49,8 @@ export interface ColorChoice {
 
 /**
  * The brand colors to lay over the preset, or undefined for the preset's own.
- * Highest first: the operator's --colors (or --accent); a preset the person
+ * Highest first: the colors argument of the tool call (the conversation's
+ * colors), over everything below, a picked preset included; the operator's --colors (or --accent); a preset the person
  * picked (its own accent); the chat app's brand color, as a list of one so it
  * gets chart series worked out from it like any first color; the default
  * preset's accent.
@@ -56,7 +61,33 @@ export interface ColorChoice {
  * (--theme teal says the same as nothing, so it cannot be told apart.)
  */
 export function chosenColors(c: ColorChoice): readonly string[] | undefined {
+  if (c.conversationColors?.length) return c.conversationColors;
   if (c.operatorColors?.length) return c.operatorColors;
   if (c.picked || c.startupPreset !== DEFAULT_PRESET) return undefined;
   return c.brand ? [c.brand] : undefined;
+}
+
+/**
+ * The usable colors in a tool call's arguments (show_interface's colors), or undefined when there are none:
+ * not sent, neither a list nor a comma-separated string, nothing in it a hex color, or --no-model-colors
+ * (allowed false). The shapes are read by colorEntries, which the server's schema uses too, and sloppy
+ * entries are dropped and extras past six ignored (colorList), so both agree on what was used.
+ *
+ * partial: the arguments are still streaming in (ontoolinputpartial): see colorEntries.
+ */
+export function toolColors(args: Record<string, unknown> | undefined, allowed: boolean, partial = false): string[] | undefined {
+  if (!allowed) return undefined;
+  const list = colorList(colorEntries(args?.colors, partial));
+  return list.length ? list : undefined;
+}
+
+/** Whether two color lists are the same (undefined is no list). */
+export function sameColors(a: readonly string[] | undefined, b: readonly string[] | undefined): boolean {
+  return (a ?? []).join(",") === (b ?? []).join(",");
+}
+
+/** The console line when a call's colors first arrive: before or after the spec's first line was drawn. */
+export function colorsArrival(colors: readonly string[], shownSoFar: string): string {
+  const lines = shownSoFar.split("\n").filter((l) => l.trim() !== "").length;
+  return `SayShape view: colors ${colors.join(", ")} arrived ${lines ? `after ${lines} line${lines === 1 ? "" : "s"} of the spec` : "before the spec's first line"}`;
 }

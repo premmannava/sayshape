@@ -33,7 +33,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getUiCapability, registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { DEFAULT_VIEW_OPTIONS, withViewOptions, type ViewOptions } from "./ui/view-options";
+import { colorEntries, DEFAULT_VIEW_OPTIONS, withViewOptions, type ViewOptions } from "./ui/view-options";
+import { colorList } from "../../playground/appearance/color";
 import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
@@ -377,7 +378,7 @@ function describeCheck(c: SpecCheck, textOnly = false, fileMode = false, widget 
 export interface ServerOptions {
   /** The view's HTML: dist/ui.html, built by `npm run build`. */
   uiHtml: () => string | Promise<string>;
-  /** The view's own settings: --theme-picker, --theme, --accent, --colors, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
+  /** The view's own settings: --theme-picker, --theme, --accent, --colors, --no-model-colors, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
   view?: ViewOptions;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;
@@ -404,12 +405,39 @@ export interface ServerOptions {
 /** How long after a good interface the same spec again counts as a repeat, not a new request. */
 export const REPEAT_WINDOW_MS = 10 * 60_000;
 
-/** What makes two calls the same interface: the spec without blank lines or trailing spaces, and the datasets it shows. */
-export function interfaceKey(spec: string, data: Record<string, string>): string {
+/**
+ * What makes two calls the same interface: the spec without blank lines or trailing spaces, the datasets it
+ * shows, and the colors it's drawn in (show_interface's colors argument, already made usable by colorList),
+ * so the same spec in new colors is a new interface.
+ */
+export function interfaceKey(spec: string, data: Record<string, string>, colors: readonly string[] = []): string {
   // trimEnd strips the same whitespace as /\s+$/, without its quadratic backtracking on a long run of spaces.
   const lines = spec.split("\n").map((l) => l.trimEnd()).filter((l) => l !== "");
   const sets = Object.keys(data).sort().map((k) => `${k}=${data[k]}`);
-  return `${lines.join("\n")}\n--\n${sets.join(",")}`;
+  return `${lines.join("\n")}\n--\n${sets.join(",")}${colors.length ? `\n--\n${colors.join(",")}` : ""}`;
+}
+
+/**
+ * show_interface's colors argument, as the model reads it: the one thing it's told about colors. Without
+ * --no-model-colors only; the quick start and sayshape_docs never mention it.
+ */
+export const COLORS_DESCRIPTION =
+  'Brand colors as hex, most important first, such as ["#e4572e", "#2e86ab"]: send them only when the person, or the instructions you were given, named colors to use.';
+
+/**
+ * The colors argument's schema. Advertised as a list of strings, but it never refuses a call: whatever
+ * arrives goes through colorEntries first (a string is read as comma-separated colors, anything else that
+ * isn't a list is none, entries that aren't strings are dropped), and colorList then keeps the hex colors.
+ * So a sloppy value is ignored, never a reason for the model to try again.
+ */
+const colorsArgument = z.preprocess((raw) => (raw === undefined ? undefined : colorEntries(raw)), z.array(z.string()).optional()).describe(COLORS_DESCRIPTION);
+
+/**
+ * The note that ends a result drawn in the conversation's colors, so the model keeps sending them: nothing
+ * remembers them but the conversation (the stateless HTTP mode has nowhere to keep them, and each call is a new view).
+ */
+export function colorsNote(colors: readonly string[]): string {
+  return `Colors: ${colors.join(", ")}. Pass the same colors on every later show_interface call in this conversation, unless the person asks to change them.`;
 }
 
 /** What the model is told when it sends an interface that is already showing. */
@@ -451,6 +479,8 @@ export function createServer(opts: ServerOptions): McpServer {
   // to "confirm" it, which would leave a second copy in the chat. Kept per server, so per
   // conversation over stdio; the stateless HTTP mode makes a server per request and never repeats.
   let lastGood: { key: string; at: number } | null = null;
+  // --no-model-colors: no colors argument and no note, so the tool is exactly what it was before it existed.
+  const modelColors = opts.view?.modelColors !== false;
   const server = new McpServer(
     { name: "sayshape", title: "SayShape", version: VERSION },
     {
@@ -511,6 +541,8 @@ export function createServer(opts: ServerOptions): McpServer {
       title: "Show an interface",
       description: showDescription(false),
       inputSchema: {
+        // Before spec, so a client streaming the arguments in order sends the colors first and the first lines already draw in them.
+        ...(modelColors ? { colors: colorsArgument } : {}),
         spec: z.string().min(1).max(MAX_SPEC_CHARS).describe("The SayShape spec: plain lines, no Markdown fences."),
         title: z.string().max(120).optional().describe("A short name for the interface, e.g. 'Paris 2024 medal table'."),
         ...(hasDatasets
@@ -554,7 +586,9 @@ export function createServer(opts: ServerOptions): McpServer {
       ];
       // A wrong guess comes back with the docs it needed, instead of the model reading every element up front.
       const toFix = [...check.errors, ...check.warnings].filter((d) => !isHarmless(d)).length;
-      const key = interfaceKey(spec, wanted);
+      // Sloppy entries are dropped and nothing usable counts as none sent: bad colors are never a problem to fix.
+      const colors = modelColors ? colorList((args as { colors?: string[] }).colors) : [];
+      const key = interfaceKey(spec, wanted, colors);
       const repeat = toFix === 0 && lastGood !== null && lastGood.key === key && now() - lastGood.at < REPEAT_WINDOW_MS;
       if (toFix === 0) lastGood = { key, at: now() };
       // The structured part is for the view. A client that can't draw one has no view to read it, and some
@@ -565,9 +599,11 @@ export function createServer(opts: ServerOptions): McpServer {
         if (names.length) return text(PAGE_DATASETS_TEXT);
         if (repeat) return text(fileMode ? WIDGET_REPEAT_TEXT : PAGE_REPEAT_TEXT);
       }
+      // Only the view draws in them for now (a text-only client's page doesn't yet), so only its results say so.
+      const colorLine = colors.length && !textOnly ? `\n${colorsNote(colors)}` : "";
       if (repeat) {
         return {
-          content: [{ type: "text", text: REPEAT_TEXT }],
+          content: [{ type: "text", text: REPEAT_TEXT + colorLine }],
           structuredContent: { datasets, title: title ?? null, errors: 0, warnings: check.warnings.length, toFix: 0, repeat: true, diagnostics: [] },
         };
       }
@@ -606,7 +642,7 @@ export function createServer(opts: ServerOptions): McpServer {
       const said = [describeCheck(check, textOnly, fileMode, widget), ...notes].join("\n");
       if (textOnly) return text(said);
       return {
-        content: [{ type: "text", text: said }],
+        content: [{ type: "text", text: said + colorLine }],
         structuredContent: {
           datasets,
           title: title ?? null,

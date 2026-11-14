@@ -10,6 +10,8 @@
  *   --colors <list>     up to six brand colors, comma-separated, most important first: the first is the
  *                       accent and the first chart series, the rest follow it as series, and series the list
  *                       doesn't cover are worked out from the first (presets.ts resolveTheme, color.ts deriveSeries)
+ *   --no-model-colors   no colors argument on show_interface: the conversation can't change the colors, and the
+ *                       view ignores any it is sent anyway
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
  *   --no-copy-text      hide the "Copy text" button (shown by default)
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
@@ -33,6 +35,11 @@ export interface ViewOptions {
    * (--colors, or --accent as a list of one). Absent means the theme's own.
    */
   colors?: string[];
+  /**
+   * False with --no-model-colors: show_interface has no colors argument, and the view ignores colors in a
+   * tool call's arguments even if a chat app passes them on. Absent means on.
+   */
+  modelColors?: boolean;
   saveImage: boolean;
   /** The "Copy text" button: a canvas has no text to select, so this copies the screen's words instead. */
   copyText: boolean;
@@ -75,6 +82,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   if (args.includes("--theme-picker")) out.themePicker = true;
   if (args.includes("--no-save-image")) out.saveImage = false;
   if (args.includes("--no-copy-text")) out.copyText = false;
+  if (args.includes("--no-model-colors")) out.modelColors = false;
   if (args.includes("--scene")) out.scene = true;
   if (args.includes("--behavior")) out.behavior = true;
   if (args.includes("--slides")) out.slides = true;
@@ -145,6 +153,24 @@ function parseColors(raw: string | undefined): string[] {
   return out;
 }
 
+/**
+ * The entries of show_interface's colors argument, whatever shape a model sent it in, so a sloppy value is
+ * ignored instead of refused (bad colors never cost a retry): a list keeps its strings and drops anything
+ * else in it; a string is read as comma-separated colors ("#e4572e, #2e86ab"); anything else (a number, an
+ * object, null) is no colors. The entries still have to be hex colors: colorList picks those out. The
+ * server's schema and the view both read the argument through this, so they agree on what was used.
+ *
+ * partial: the arguments are still streaming in (the view's ontoolinputpartial), so the last entry may be
+ * cut short, and "#e45" could be the start of "#e4572e": it counts only once it has all six digits, so the
+ * drawing never shows a color that is about to change. The entries before it are complete.
+ */
+export function colorEntries(raw: unknown, partial = false): string[] {
+  const entries = typeof raw === "string" ? raw.split(",") : Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string") : [];
+  const last = entries[entries.length - 1];
+  if (partial && last !== undefined && !/^#?[0-9a-f]{6}$/i.test(last.trim())) entries.pop();
+  return entries;
+}
+
 /** An https address with a plain host name and nothing that could break out of the view's settings; null otherwise. */
 function logoAddress(raw: string): string | null {
   try {
@@ -187,7 +213,7 @@ export function encodeViewOptions(o: ViewOptions): string {
   // so a tag written before lists existed reads the same way; several are colors=rrggbb,rrggbb.
   const list = colorList(o.colors).map((c) => c.slice(1));
   const accent = list.length === 1 ? `&accent=${list[0]}` : list.length ? `&colors=${list.join(",")}` : "";
-  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.slides ? "&slides=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
+  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.modelColors === false ? "&model=0" : ""}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.slides ? "&slides=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
 }
 
 /** The settings from encodeViewOptions; anything missing or unknown keeps its default. */
@@ -198,6 +224,7 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   if (p.get("picker") === "1") out.themePicker = true;
   if (p.get("save") === "0") out.saveImage = false;
   if (p.get("copy") === "0") out.copyText = false;
+  if (p.get("model") === "0") out.modelColors = false;
   if (p.get("scene") === "1") out.scene = true;
   if (p.get("behavior") === "1") out.behavior = true;
   if (p.get("slides") === "1") out.slides = true;
