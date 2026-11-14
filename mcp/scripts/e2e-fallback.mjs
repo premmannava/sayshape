@@ -70,6 +70,22 @@ async function pageFor(spec, title) {
 
 const pages = { chart: await pageFor(CHART, "Sales"), map: await pageFor(MAP, "Offices") };
 
+// Brand colors from the conversation: the page carries the light and dark values the server worked out.
+const TWO_SERIES = `state sales=[{m: "Jan", a: 120, b: 80}, {m: "Feb", a: 180, b: 120}, {m: "Mar", a: 150, b: 100}]
+card
+  chart "Revenue and costs" kind=bar items=sales x=m y=a,b
+  button "Add" on=inc:n
+`;
+{
+  const r = await client.callTool({ name: "show_interface", arguments: { colors: ["#1f3a93", "#f28c28"], spec: TWO_SERIES, title: "Colors" } });
+  const text = r.content?.[0]?.text ?? "";
+  pages.colors = /(`{3,})html\n([\s\S]*?)\1/.exec(text)?.[2] ?? "";
+  check(!!pages.colors && /\nColors: #1f3a93, #f28c28\. Pass the same colors/.test(text), "colors: the result carries the page and ends with the note about keeping the colors");
+  const plain = await client.callTool({ name: "show_interface", arguments: { spec: TWO_SERIES.replace("costs", "spend"), title: "No colors" } });
+  const plainText = plain.content?.[0]?.text ?? "";
+  check(!/Colors:/.test(plainText) && !/extendTheme/.test(plainText), "no colors: no note, and the page doesn't mention brand colors");
+}
+
 // emit: has no chat to reach from a page: the model is asked to remove it first.
 {
   const tools = (await client.listTools()).tools;
@@ -183,6 +199,27 @@ try {
     check(url === "https://example.com/notes", `a pressed link opens in a new tab (${url})`);
     check(problems.length === 0, `link: no errors${problems.length ? `: ${problems.join("; ")}` : ""}`);
     await page.close();
+  }
+  // Brand colors: the chart's first two series are drawn in the values the page carries, in light and dark.
+  {
+    const brand = JSON.parse(/var brand = (\{.*?\});\n/.exec(pages.colors)?.[1] ?? "null");
+    check(!!brand && brand.light.series1 !== brand.dark.series1, "colors: the page carries values for light and dark, which differ");
+    for (const scheme of ["light", "dark"]) {
+      const { page, problems } = await open(files.colors, { scheme, width: 640 });
+      await painted(page, rgb((scheme === "light" ? LIGHT : DARK).surface));
+      const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+      const counts = await page.evaluate((colors) => {
+        const c = document.querySelector("canvas");
+        const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+        const n = colors.map(() => 0);
+        for (let i = 0; i < d.length; i += 4) colors.forEach((rgb, k) => { if (Math.abs(d[i] - rgb[0]) + Math.abs(d[i + 1] - rgb[1]) + Math.abs(d[i + 2] - rgb[2]) <= 6) n[k]++; });
+        return n;
+      }, [hexRgb(brand[scheme].series1), hexRgb(brand[scheme].series2)]);
+      check(counts[0] > 500 && counts[1] > 500, `colors, ${scheme}: the bars are drawn in the first two colors (${brand[scheme].series1}: ${counts[0]} pixels, ${brand[scheme].series2}: ${counts[1]} pixels)`);
+      check(problems.length === 0, `colors, ${scheme}: no errors or dialogs${problems.length ? `: ${problems.join("; ")}` : ""}`);
+      await page.screenshot({ path: join(out, `fallback-colors-${scheme}.png`), fullPage: true });
+      await page.close();
+    }
   }
   // The map's own script.
   {

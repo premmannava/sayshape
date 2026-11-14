@@ -114,14 +114,14 @@ describe("the colors argument", () => {
     expect(interfaceKey("a\n", {}, ["#e4572e", "#2e86ab"])).not.toBe(interfaceKey("a\n", {}, ["#2e86ab", "#e4572e"]));
   });
 
-  it("is offered to text-only clients, which get no note: their page doesn't draw in it yet", async () => {
+  it("is offered to text-only clients, whose page draws in it, and whose result ends with the same note (test/fallback.test.ts)", async () => {
     const client = await connect(undefined, false);
     const tool = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
     expect(Object.keys(tool.inputSchema.properties ?? {})).toEqual(["colors", "spec", "title"]);
     const r = await show(client, { colors: ["#e4572e"], spec: GOOD });
     expect(r.isError).toBeFalsy();
     expect(text(r)).toMatch(/```html/);
-    expect(text(r)).not.toMatch(/Colors:|e4572e/);
+    expect(text(r).endsWith(`\n${colorsNote(["#e4572e"])}`)).toBe(true);
   });
 });
 
