@@ -104,5 +104,7 @@ export async function startStub(behavior: StubBehavior): Promise<{ url: string; 
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
-  return { url: `http://127.0.0.1:${port}/v1`, close: () => new Promise<void>((resolve) => server.close(() => resolve())) };
+  // Node 18's server.close waits for idle keep-alive connections (fetch leaves one open); later Nodes close them.
+  const close = () => new Promise<void>((resolve) => { server.close(() => resolve()); server.closeAllConnections?.(); });
+  return { url: `http://127.0.0.1:${port}/v1`, close };
 }
