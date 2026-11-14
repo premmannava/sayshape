@@ -277,6 +277,13 @@ export interface ElementPick {
   write: string;
 }
 
+/** How a ComponentDef.childTransform maps its children's layout to the screen: screen = point * scale + (dx, dy). */
+export interface ChildTransform {
+  scale: number;
+  dx: number;
+  dy: number;
+}
+
 export interface ComponentDef {
   type: string;
   category: Category;
@@ -342,6 +349,22 @@ export interface ComponentDef {
    * their drawing to it, and the pointer reaches only what's inside it.
    */
   clipChildren?(box: Box): Rect | null;
+  /**
+   * Experimental (slides): for an element that lays its children out at a size
+   * of its own and draws them scaled to fit its box. Maps a point where the
+   * children were laid out to the screen: screen = point * scale + (dx, dy).
+   * The engine paints the children through it, maps their hit regions, focus
+   * ring, screen reader rects and the inspector's boxes to the screen, and
+   * hands press, drag, wheel and hitTest handlers their own laid-out box and
+   * the pointer in the same space. Null or missing: drawn as laid out.
+   */
+  childTransform?(box: Box): ChildTransform | null;
+  /**
+   * Experimental (slides): the theme this element and everything inside it
+   * is laid out and painted with, made from the screen's theme (a slide's
+   * larger type and spacing). Return the same theme to change nothing.
+   */
+  theme?(theme: Theme): Theme;
   /**
    * Drawn by its parent, with no box of its own (a table-column, a detail row, a menu-item): the
    * parser warns that tip= on it isn't shown.

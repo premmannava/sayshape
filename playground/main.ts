@@ -1,10 +1,12 @@
 import { SayShape, coreComponents, languageGuide, type Diagnostic, type SayShapeNode } from "../src";
 import { mapComponents } from "../src/components/map";
 import { sceneComponents } from "../src/components/scene";
+import { slideComponents } from "../src/components/slides";
 import { setupAppearance } from "./appearance/panel";
 import { setupAsk } from "./ask";
 import { samples as coreSamples } from "./samples";
 import { sceneSamples } from "./scene-samples";
+import { slideSamples } from "./slides-samples";
 import { behaviorSamples, behaviorSceneSamples } from "./behavior-samples";
 import { playgroundGuide } from "./model-guide";
 
@@ -19,11 +21,14 @@ const imageHosts = ["images.unsplash.com"];
 const scenes = new URLSearchParams(location.search).get("scene") === "1";
 // Experimental behavior (rules that tick, dragging in scenes) is off unless asked for too: ?behavior=1
 const behavior = new URLSearchParams(location.search).get("behavior") === "1";
-const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : [])], imageHosts, behavior }).expose("sayshape");
+// Experimental slide decks (deck, slide) are off unless asked for too: ?slides=1
+const slides = new URLSearchParams(location.search).get("slides") === "1";
+const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : []), ...(slides ? slideComponents : [])], imageHosts, behavior }).expose("sayshape");
 // Scene and behavior samples only work with those on.
 const samples = {
   ...coreSamples,
   ...(scenes ? sceneSamples : {}),
+  ...(slides ? slideSamples : {}),
   ...(behavior ? behaviorSamples : {}),
   ...(behavior && scenes ? behaviorSceneSamples : {}),
 };
