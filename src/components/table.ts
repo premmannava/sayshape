@@ -27,7 +27,8 @@
  *   be selected. A selected key no row has selects nothing; state is left as
  *   it is.
  * - Width: columns get their natural widths, and text columns narrow (never
- *   below MIN_TEXT_COLUMN) to fit. Text cells that no longer fit on one line
+ *   below MIN_TEXT_COLUMN, nor below their longest word up to
+ *   MAX_SCROLL_TEXT_COLUMN, so words aren't split) to fit. Text cells that no longer fit on one line
  *   wrap to at most MAX_CELL_LINES lines, ending with "…" past that; a row is
  *   as tall as its tallest cell (never shorter than one line), and numbers
  *   stay on one line. When even the narrowest columns don't fit, the table
@@ -288,6 +289,21 @@ export function fitColumns(natural: readonly number[], minimum: readonly number[
   return n && left > 0 ? w.map((x, i) => x + (cut[i] ? left / n : 0)) : w;
 }
 
+/**
+ * The width of the longest word in column ci. A cell with no space is one word, already
+ * measured; a cell no wider than the longest so far can't hold a longer word, so it's skipped.
+ */
+function longestWord(texts: readonly string[][], textW: readonly number[][], ci: number, font: string, m: TextMeasurer): number {
+  let best = 0;
+  texts.forEach((row, r) => {
+    const s = row[ci]!, w = textW[r]![ci]!;
+    if (w <= best) return;
+    if (!/\s/.test(s)) { best = w; return; }
+    for (const word of s.split(/\s+/)) if (word) best = Math.max(best, m.width(word, font));
+  });
+  return best;
+}
+
 interface ColumnSpec { field: string; label: string; format: Format; align: Align; node: SayShapeNode; tip?: string }
 
 function readColumns(node: SayShapeNode, ctx: Pick<LayoutContext, "visibleChildren" | "props">): ColumnSpec[] {
@@ -372,10 +388,14 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
 
   // Column widths from what they hold.
   const headerW = specs.map((c) => m.width(c.label, headerFont) + (sortable ? ARROW : 0) + 2 * pad);
-  const cellW = specs.map((_, ci) => Math.max(0, ...texts.map((row) => m.width(row[ci]!, cellFont))) + 2 * pad);
+  const textW = texts.map((row) => row.map((s) => m.width(s, cellFont)));
+  const cellW = specs.map((_, ci) => Math.max(0, ...textW.map((row) => row[ci]!)) + 2 * pad);
   const natural = specs.map((_, ci) => Math.max(headerW[ci]!, cellW[ci]!));
-  // Numbers are never cut short; text and headers can be.
-  const minimum = specs.map((c, ci) => (c.format === "text" ? Math.min(natural[ci]!, MIN_TEXT_COLUMN) : Math.max(cellW[ci]!, Math.min(headerW[ci]!, MIN_TEXT_COLUMN))));
+  // A text column is never narrower than its longest word (up to MAX_SCROLL_TEXT_COLUMN), so
+  // wrapping happens between words; when that can't fit, the table scrolls instead of splitting
+  // "Healthy" into "Healt / hy". Numbers are never cut short; headers can be.
+  const wordW = specs.map((c, ci) => (c.format === "text" ? Math.min(MAX_SCROLL_TEXT_COLUMN, longestWord(texts, textW, ci, cellFont, m) + 2 * pad) : 0));
+  const minimum = specs.map((c, ci) => (c.format === "text" ? Math.max(Math.min(natural[ci]!, MIN_TEXT_COLUMN), wordW[ci]!) : Math.max(cellW[ci]!, Math.min(headerW[ci]!, MIN_TEXT_COLUMN))));
   let widths = fitColumns(natural, minimum, box.w, specs.map((c) => c.format === "text"));
   let scrollParts: Omit<TableScroll, "bar"> | undefined;
   if (!widths) {
