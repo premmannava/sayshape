@@ -741,6 +741,59 @@ describe("table cells that wrap", () => {
   });
 });
 
+describe("table words kept whole", () => {
+  // Four columns on a phone: one-word names and statuses used to be split mid-word ("Healt / hy").
+  const services = `state services=[{name: "events-api", status: "Healthy", note: "Up since the last deploy", storage: 120, cost: 96}, {name: "raw-archive", status: "Healthy", note: "Cold storage", storage: 1640, cost: 488}, {name: "ingest-worker", status: "Degraded", note: "Retrying", storage: 210, cost: 132}]
+table items=services
+  table-column "Service" field=name
+  table-column "Status" field=status
+  table-column "Note" field=note
+  table-column "Storage (GB)" field=storage format=number
+  table-column "Cost" field=cost format=money
+`;
+  const words = (s: string) => s.split(/\s+/).filter(Boolean);
+
+  it.each([300, 340, 400, 600, 1000])("wraps text only between words at %i px, scrolling when the words can't fit", (width) => {
+    const ui = render(services, { width });
+    const g = geo(ui);
+    expect(ui.warnings).toEqual([]);
+    for (const row of g.rows) {
+      row.cells.forEach((cell, ci) => {
+        if (g.columns[ci]!.format !== "text") return;
+        // Every line is made of whole words, and together they are the cell's words in order.
+        expect(cell.lines.flatMap(words), `${cell.full} at ${width}`).toEqual(words(cell.full));
+        for (const l of cell.lines) expect(monoWidth(l, g.cellFont)).toBeLessThanOrEqual(g.columns[ci]!.w);
+      });
+    }
+    const total = g.columns.reduce((a, c) => a + c.w, 0);
+    if (g.scroll) expect(total).toBeGreaterThan(ui.find("table").box!.w);
+    else expect(total).toBeCloseTo(ui.find("table").box!.w, 6);
+  });
+
+  it("scrolls on a phone rather than squeezing words, and fits side by side when there's room", () => {
+    expect(geo(render(services, { width: 340 })).scroll).toBeDefined();
+    expect(geo(render(services, { width: 1000 })).scroll).toBeUndefined();
+  });
+
+  it("keeps the pinned first column at least as wide as its longest word", () => {
+    const g = geo(render(services, { width: 300 }));
+    const s = g.scroll!;
+    expect(s.pinned).toBeGreaterThan(0);
+    expect(s.pinned).toBeGreaterThanOrEqual(monoWidth("ingest-worker", g.cellFont));
+    expect(g.rows[2]!.cells[0]!.lines).toEqual(["ingest-worker"]);
+  });
+
+  it("still breaks a single word too long for any column, so one long value can't make the table huge", () => {
+    const url = "https://example.com/" + "a".repeat(120);
+    const ui = render(`state rows=[{u: ${JSON.stringify(url)}, n: 1}]\ntable items=rows\n  table-column "Link" field=u\n  table-column "N" field=n format=number\n`, { width: 360 });
+    const g = geo(ui);
+    expect(g.scroll).toBeUndefined();
+    expect(g.columns[0]!.w + g.columns[1]!.w).toBeCloseTo(ui.find("table").box!.w, 6);
+    expect(g.rows[0]!.cells[0]!.lines.length).toBeGreaterThan(1);
+    for (const l of g.rows[0]!.cells[0]!.lines) expect(monoWidth(l, g.cellFont)).toBeLessThanOrEqual(g.columns[0]!.w);
+  });
+});
+
 describe("table sort arrows", () => {
   const arrows = (ui: Rendered, color: string) => ui.drawOps.filter((o) => o.op === "stroke" && o.strokeStyle === color);
   const spec = (props: string) => `${equipment}\ntable items=equipment key=id ${props}\n${columns}\n`;
