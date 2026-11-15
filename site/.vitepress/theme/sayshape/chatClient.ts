@@ -8,7 +8,7 @@
  * start when someone begins to ask, so a visit that only reads makes no
  * request outside the site.
  */
-import { readEvents, refusal, type ChatBody, type ChatEvent, type Failure } from "./chat";
+import { readEvents, refusal, type ChatBody, type ChatEvent, type Failure, type Usage } from "./chat";
 
 const BASE = ((import.meta.env.VITE_SAYSHAPE_MODEL_ENDPOINT as string | undefined)?.trim() || "").replace(/\/(answer|status)\/?$/, "").replace(/\/+$/, "");
 const TURNSTILE_SITE_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim() || "";
@@ -19,15 +19,16 @@ export const MODEL_LABEL = (import.meta.env.VITE_SAYSHAPE_MODEL_LABEL as string 
 export const configured = /^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?($|\/)/.test(BASE);
 export const needsHumanCheck = configured && !!TURNSTILE_SITE_KEY;
 
-export type Status = { enabled: true; model?: string } | { enabled: false; failure: Failure };
+/** recording: the proxy can save answers for visitors who choose to (so the page offers the switch). */
+export type Status = { enabled: true; model?: string; recording: boolean } | { enabled: false; failure: Failure };
 
 /** Whether answers are on, asked without calling the model. Null when the proxy can't be reached (sending will say so). */
 export async function fetchStatus(signal?: AbortSignal): Promise<Status | null> {
   try {
     const res = await fetch(`${BASE}/status`, { signal });
     if (!res.ok) return { enabled: false, failure: refusal(res.status, undefined) };
-    const s = (await res.json()) as { enabled?: boolean; model?: string; reason?: string };
-    if (s.enabled) return { enabled: true, model: typeof s.model === "string" ? s.model : undefined };
+    const s = (await res.json()) as { enabled?: boolean; model?: string; reason?: string; recording?: boolean };
+    if (s.enabled) return { enabled: true, model: typeof s.model === "string" ? s.model : undefined, recording: s.recording === true };
     return { enabled: false, failure: refusal(503, s.reason) };
   } catch {
     return null;
@@ -52,6 +53,16 @@ export async function send(body: ChatBody, opts: { token?: string; signal: Abort
   }
   await readEvents(res.body, opts.onEvent);
   return null;
+}
+
+/**
+ * Feedback on a saved answer. Best effort: it never interrupts the chat. Sent as plain text (the
+ * worker reads it as JSON either way), so it's a simple request with no preflight, and keepalive
+ * lets it go as the page closes.
+ */
+export function sendFeedback(body: { id: string; vote?: "up" | "down"; note?: string; used?: Usage }): Promise<boolean> {
+  return fetch(`${BASE}/feedback`, { method: "POST", body: JSON.stringify(body), keepalive: true })
+    .then((res) => res.ok, () => false);
 }
 
 // ---------------------------------------------------------------- Turnstile

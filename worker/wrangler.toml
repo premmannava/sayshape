@@ -43,3 +43,20 @@ id = "89cc3751902a421e8ecacfb9cc3f400a"
 # Secrets, set with wrangler and never written here:
 #   npx wrangler secret put MODEL_API_KEY        the provider's API key
 #   npx wrangler secret put TURNSTILE_SECRET     (recommended)
+
+# Saved answers, for visitors who turn on "Help improve SayShape" on the chat page
+# (src/records.ts). Off until this block is filled in: without it nothing is saved and the
+# page offers no switch. Set it up once with
+#   npx wrangler d1 create sayshape-records
+#   (put the database_id it prints below; the binding must stay RECORDS, which the code reads)
+#   npx wrangler d1 migrations apply sayshape-records --remote
+# Comment the block out and deploy to stop saving.
+[[d1_databases]]
+binding = "RECORDS"
+database_name = "sayshape-records"
+database_id = "6b460ab1-2a11-4e51-b008-84d2a4d3607c"
+
+# Daily at 03:17 UTC: delete saved answers older than 30 days (RETENTION_DAYS).
+# Does nothing while RECORDS isn't set up.
+[triggers]
+crons = ["17 3 * * *"]
