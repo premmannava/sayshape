@@ -23,7 +23,14 @@
  *       {"t":"error","message":"…"}   a message to show; the stream ends
  *   → or before streaming, a JSON error: {"error": "…", "reason": "off" | "unconfigured" | "rate" | "daily" | "check" | "too-big" | "bad-request"}
  *
- *   GET /status    → {"enabled": true, "model": "…"}: whether answers are on, without calling the model
+ *   A chat question may add "record": {"chat": "…", "turn": 1, "width": 720} when the visitor chose to
+ *   save it (records.ts); its done event then carries "record": "<id>", and the answer is saved.
+ *
+ *   POST /feedback {"id": "<record id>", "vote": "up" | "down", "note": "…", "used": {"changes": 2, "actions": 0, "screens": 0}}
+ *   → 204 when saved, 404 when there's no such answer (or answers aren't saved here)
+ *
+ *   GET /status    → {"enabled": true, "model": "…", "recording": true}: whether answers are on, and can be
+ *                  saved, without calling the model
  *
  * Plain functions with no Cloudflare types, so test/worker.test.ts can run
  * it in Node with a fake model.
@@ -36,6 +43,7 @@ import { Registry } from "../../src/registry";
 import { languageGuide } from "../../src/prompt";
 import { answerGuide, answerRequest, checkAnswer, DATA, readQuestion } from "./answer";
 import { chatGuide, chatRequest, checkDrawing, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
+import { applyFeedback, MAX_FEEDBACK_BYTES, readFeedback, readRecordRequest, saveAnswer, type AnswerRow, type RecordStore } from "./records";
 
 /** The part of a Workers KV namespace the daily count uses. */
 export interface Counter {
@@ -78,6 +86,11 @@ export interface Env {
   DAILY_ANSWERS?: string;
   /** A KV namespace for the daily count. Without it there's no daily cap. */
   ANSWER_COUNT?: Counter;
+  /**
+   * A D1 database for answers visitors chose to save (records.ts). Without it nothing is saved,
+   * /status says so, and the page offers no switch.
+   */
+  RECORDS?: RecordStore;
 }
 
 export interface Deps {
@@ -86,6 +99,10 @@ export interface Deps {
   waitUntil?: (p: Promise<unknown>) => void;
   /** Today's date, for the daily count. */
   today?: () => string;
+  /** The time now, for saved answers. */
+  now?: () => Date;
+  /** A new saved answer's id. Default: crypto.randomUUID(). */
+  newId?: () => string;
 }
 
 /** A spreadsheet question's limit: big enough for 40 columns and 3 rows of 100-character cells; far too small for a spreadsheet. */
@@ -186,6 +203,8 @@ interface Job {
   registry: Registry;
   /** What the person sees when the model gives no usable answer. */
   unanswered: string;
+  /** For a chat question: what's saved if the visitor chose to save it. */
+  saved?: { question: string; followup: boolean };
 }
 
 function chatJob(body: Record<string, unknown>): Job | { error: string } {
@@ -197,6 +216,7 @@ function chatJob(body: Record<string, unknown>): Job | { error: string } {
     // A follow-up's request is the visitor's words; refineMessages frames them as a change to the latest answer.
     options: c.refine ? { request: c.message, refine: c.refine, guide: chatGuideOnce(), check } : { request: chatRequest(c.message), guide: chatGuideOnce(), check },
     unanswered: "The model didn't draw anything for that. Try asking it another way.",
+    saved: { question: c.message, followup: !!c.refine },
   };
 }
 
@@ -216,7 +236,7 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   const origin = req.headers.get("Origin") ?? "";
   const allowed = allowedOrigins(env);
 
-  if (url.pathname !== "/answer" && url.pathname !== "/status") return json(404, { error: "Not found" });
+  if (url.pathname !== "/answer" && url.pathname !== "/status" && url.pathname !== "/feedback") return json(404, { error: "Not found" });
   // Only the site may call. (Origin can be forged outside a browser; Turnstile and rate limits cover that.)
   if (!allowed.includes(origin)) return json(403, { error: "This origin isn't allowed" });
   const cors = corsHeaders(origin);
@@ -228,9 +248,10 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
     if (req.method !== "GET") return json(405, { error: "Use GET" }, cors);
     // No model call and nothing counted: a page asks this before showing its question box.
     const enabled = !off && configured;
-    return json(200, { enabled, ...(enabled ? { model: env.MODEL_LABEL?.trim() || env.MODEL } : { reason: off ? "off" : "unconfigured" }) }, { ...cors, "Cache-Control": "no-store" });
+    return json(200, { enabled, ...(enabled ? { model: env.MODEL_LABEL?.trim() || env.MODEL, ...(env.RECORDS ? { recording: true } : {}) } : { reason: off ? "off" : "unconfigured" }) }, { ...cors, "Cache-Control": "no-store" });
   }
   if (req.method !== "POST") return json(405, { error: "Use POST" }, cors);
+  if (url.pathname === "/feedback") return feedback(req, env, cors, deps);
 
   if (off) return refuse(503, OFF_MESSAGE, "off", cors);
   if (!configured) return refuse(503, UNCONFIGURED_MESSAGE, "unconfigured", cors);
@@ -255,6 +276,8 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   }
   const job = kind === "chat" ? chatJob(body) : dataJob(body);
   if ("error" in job) return refuse(400, job.error, "bad-request", cors);
+  // Saved only when the visitor asked, and only chat questions: a spreadsheet's sample rows are never kept.
+  const rec = env.RECORDS && job.saved ? readRecordRequest(body.record) : null;
 
   const ip = req.headers.get("CF-Connecting-IP") ?? "";
   if (env.TURNSTILE_SECRET) {
@@ -281,6 +304,14 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
     // Only chat answers show thinking: the spreadsheet page never did.
     const showThinking = kind === "chat" && env.SHOW_THINKING !== "false";
     let thought = 0;
+    const label = env.MODEL_LABEL?.trim() || env.MODEL!;
+    const recordId = rec ? (deps.newId ?? (() => crypto.randomUUID()))() : undefined;
+    // Set by saveAs inside callbacks, so typed with `as` to keep TypeScript from narrowing it to null.
+    let row = null as AnswerRow | null;
+    const saveAs = (r: Pick<AnswerRow, "outcome" | "spec" | "problems" | "repaired" | "ms" | "tokensIn" | "tokensOut" | "error">) => {
+      if (!rec || !recordId || !job.saved) return;
+      row = { id: recordId, chat: rec.chat, turn: rec.turn, width: rec.width, at: (deps.now?.() ?? new Date()).toISOString(), followup: job.saved.followup, question: job.saved.question, model: label, ...r };
+    };
     try {
       const result = await generateSpec({
         config: {
@@ -309,25 +340,36 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
         } : undefined,
       });
       const errors = result.diagnostics.filter((d) => d.severity === "error");
+      const { promptTokens, completionTokens } = result.usage;
+      const ms = Math.round(result.timings.totalMs);
+      const how = { spec: result.spec, problems: result.diagnostics.length, repaired: !!result.repair, ms, tokensIn: promptTokens ?? null, tokensOut: completionTokens ?? null };
       if (!result.spec.trim() || errors.some((d) => /never reads data|Don't declare data/.test(d.message))) {
+        saveAs({ ...how, outcome: "empty", error: job.unanswered });
         await send({ t: "error", message: job.unanswered });
         return;
       }
-      const { promptTokens, completionTokens } = result.usage;
+      saveAs({ ...how, outcome: "done", error: null });
       await send({
         t: "done",
         spec: result.spec,
         problems: result.diagnostics.length,
         repaired: !!result.repair,
-        ms: Math.round(result.timings.totalMs),
-        model: env.MODEL_LABEL?.trim() || env.MODEL,
+        ms,
+        model: label,
         ...(promptTokens !== undefined && completionTokens !== undefined ? { tokens: { in: promptTokens, out: completionTokens } } : {}),
+        ...(row ? { record: recordId } : {}),
       });
     } catch (e) {
-      if (!req.signal?.aborted) await send({ t: "error", message: friendlyError(e) });
+      if (!req.signal?.aborted) {
+        const message = friendlyError(e);
+        saveAs({ outcome: "failed", spec: "", problems: 0, repaired: false, ms: null, tokensIn: null, tokensOut: null, error: message });
+        await send({ t: "error", message });
+      }
     } finally {
       flush();
       await writer.close().catch(() => {});
+      // After the answer has ended, so saving never holds it up; a failed save loses only the row.
+      if (row && env.RECORDS) await saveAnswer(env.RECORDS, row).catch(() => {});
     }
   };
 
@@ -335,4 +377,26 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   const done = run();
   deps.waitUntil?.(done);
   return new Response(readable, { status: 200, headers: { ...cors, "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+/**
+ * Feedback on a saved answer: a thumb, a note, how much it was used. No human check or daily
+ * count, since it never calls the model; it can only change a row whose random id the page was
+ * given, while that row is kept.
+ */
+async function feedback(req: Request, env: Env, cors: Record<string, string>, deps: Deps): Promise<Response> {
+  if (!env.RECORDS) return json(404, { error: "Answers aren't saved here." }, cors);
+  const raw = await req.text();
+  if (new TextEncoder().encode(raw).length > MAX_FEEDBACK_BYTES) return json(413, { error: "That's more than feedback." }, cors);
+  let body: unknown;
+  try { body = JSON.parse(raw); } catch { return json(400, { error: "Send JSON" }, cors); }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return json(400, { error: "Send JSON" }, cors);
+  const f = readFeedback(body as Record<string, unknown>);
+  if ("error" in f) return json(400, { error: f.error }, cors);
+  try {
+    const found = await applyFeedback(env.RECORDS, f, deps.now?.() ?? new Date());
+    return found ? new Response(null, { status: 204, headers: cors }) : json(404, { error: "There's no saved answer with that id." }, cors);
+  } catch {
+    return json(503, { error: "Feedback couldn't be saved right now." }, cors);
+  }
 }

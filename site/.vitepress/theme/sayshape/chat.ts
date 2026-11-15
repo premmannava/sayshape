@@ -27,13 +27,28 @@ export interface ChatBody {
   kind: "chat";
   message: string;
   refine?: { task: string; changes: string[]; spec: string };
+  /** Only when the visitor chose to save their answers: which chat and turn this is, and how wide the answer is. */
+  record?: Recording;
 }
 
-export function requestBody(context: RefineContext | null, message: string): ChatBody {
-  const m = message.trim();
-  if (!context) return { kind: "chat", message: m };
-  return { kind: "chat", message: m, refine: { task: context.task, changes: [...(context.changes ?? [])], spec: context.spec } };
+/** What a saved question is filed under (worker/src/records.ts). */
+export interface Recording {
+  /** Random, made for each chat (newChatId); nothing ties it to the visitor. */
+  chat: string;
+  /** Which answer in the chat, from 1. */
+  turn: number;
+  width?: number;
 }
+
+export function requestBody(context: RefineContext | null, message: string, record?: Recording): ChatBody {
+  const m = message.trim();
+  const saved = record ? { record } : {};
+  if (!context) return { kind: "chat", message: m, ...saved };
+  return { kind: "chat", message: m, refine: { task: context.task, changes: [...(context.changes ?? [])], spec: context.spec }, ...saved };
+}
+
+/** A new chat's id, for saved answers. */
+export const newChatId = (): string => crypto.randomUUID();
 
 /**
  * The context after an answer: the first answer starts it, a later one
@@ -74,6 +89,46 @@ export interface Turn {
   ms?: number;
   tokens?: { in: number; out: number };
   failure?: Failure;
+  /** The saved answer's id, when the visitor chose to save it and the worker did. */
+  record?: string;
+  /** The thumb given, once given. */
+  vote?: "up" | "down";
+  /** How much the finished answer was used, counted by the page. */
+  used: Usage;
+  /** The usage last sent to the worker, so it's only sent when it grew. */
+  usedSent: number;
+}
+
+/** What using an answer did: state changes (a slider, a tick, typing), emit: actions, screens moved to. */
+export interface Usage {
+  changes: number;
+  actions: number;
+  screens: number;
+}
+
+const usageTotal = (u: Usage) => u.changes + u.actions + u.screens;
+
+/** Count one use of a finished, saved answer. Uses while it's still arriving aren't the visitor's. */
+export function countUse(t: Turn, kind: keyof Usage): void {
+  if (t.status !== "done" || !t.record) return;
+  t.used[kind]++;
+}
+
+/** Feedback to send for a turn's usage, or null when there's nothing new; marks it sent. */
+export function takeUsage(t: Turn): { id: string; used: Usage } | null {
+  const total = usageTotal(t.used);
+  if (!t.record || total <= t.usedSent) return null;
+  t.usedSent = total;
+  return { id: t.record, used: { ...t.used } };
+}
+
+/** The visitor's choice to save their answers, remembered in this browser only. Off unless they turn it on. */
+const RECORD_KEY = "sayshape-chat-save";
+export function loadSaveChoice(): boolean {
+  try { return localStorage.getItem(RECORD_KEY) === "1"; } catch { return false; }
+}
+export function storeSaveChoice(on: boolean): void {
+  try { if (on) localStorage.setItem(RECORD_KEY, "1"); else localStorage.removeItem(RECORD_KEY); } catch { /* not remembered: still applies to this visit */ }
 }
 
 let nextId = 0;
@@ -91,12 +146,12 @@ export interface Marks {
 const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 export function newTurn(question: string, now = clock()): Turn {
-  return { id: ++nextId, question: question.trim(), status: "waiting", phase: "waiting", text: "", resets: 0, thought: "", marks: { sent: now }, drawMs: 0, spec: "", problems: 0 };
+  return { id: ++nextId, question: question.trim(), status: "waiting", phase: "waiting", text: "", resets: 0, thought: "", marks: { sent: now }, drawMs: 0, spec: "", problems: 0, used: { changes: 0, actions: 0, screens: 0 }, usedSent: 0 };
 }
 
 /** Start a turn over for Try again: same question, a fresh attempt. */
 export function restart(t: Turn, now = clock()): void {
-  Object.assign(t, { status: "waiting", phase: "waiting", text: "", resets: t.resets + 1, thought: "", marks: { sent: now }, drawMs: 0, spec: "", problems: 0, failure: undefined, model: undefined, ms: undefined, tokens: undefined });
+  Object.assign(t, { status: "waiting", phase: "waiting", text: "", resets: t.resets + 1, thought: "", marks: { sent: now }, drawMs: 0, spec: "", problems: 0, failure: undefined, model: undefined, ms: undefined, tokens: undefined, record: undefined, vote: undefined, used: { changes: 0, actions: 0, screens: 0 }, usedSent: 0 });
 }
 
 /** Whether another question fits in this chat. */
@@ -211,7 +266,7 @@ export type ChatEvent =
   | { t: "text"; v: string }
   | { t: "reset" }
   | { t: "thought"; v: string }
-  | { t: "done"; spec: string; problems: number; repaired: boolean; ms: number; model?: string; tokens?: { in: number; out: number } }
+  | { t: "done"; spec: string; problems: number; repaired: boolean; ms: number; model?: string; tokens?: { in: number; out: number }; record?: string }
   | { t: "error"; message: string };
 
 /** Read the worker's newline-delimited JSON, calling onEvent for each object. A broken line is skipped. */
@@ -273,6 +328,7 @@ export function applyEvent(turn: Turn, e: ChatEvent, now = clock()): string | nu
       turn.model = e.model;
       turn.ms = e.ms;
       turn.tokens = e.tokens;
+      turn.record = typeof e.record === "string" ? e.record : undefined;
       if (!e.spec.trim()) {
         turn.status = "failed";
         turn.failure = failure("empty");
