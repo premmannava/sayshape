@@ -7,7 +7,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "check": "wrangler deploy --dry-run --outdir dist",
-    "report": "wrangler d1 execute sayshape-records --remote --file reports.sql"
+    "report": "node scripts/report.mjs"
   },
   "devDependencies": {
     "wrangler": "4.151.3"

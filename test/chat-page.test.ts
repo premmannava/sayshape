@@ -11,6 +11,10 @@ import {
 } from "../site/.vitepress/theme/sayshape/chat";
 import { readChat } from "../worker/src/chat";
 import { readFeedback, readRecordRequest } from "../worker/src/records";
+import { webcrypto } from "node:crypto";
+
+// Node 18 has no global crypto; browsers (where newChatId runs) and Node 19+ do.
+if (!(globalThis as { crypto?: unknown }).crypto) Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
 import { contrast } from "../playground/appearance/color";
 import { coreComponents } from "../src/components";
 import { Registry } from "../src/registry";

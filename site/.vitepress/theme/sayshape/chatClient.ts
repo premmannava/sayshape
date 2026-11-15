@@ -55,9 +55,13 @@ export async function send(body: ChatBody, opts: { token?: string; signal: Abort
   return null;
 }
 
-/** Feedback on a saved answer. Best effort: it never interrupts the chat. keepalive lets it go as the page closes. */
+/**
+ * Feedback on a saved answer. Best effort: it never interrupts the chat. Sent as plain text (the
+ * worker reads it as JSON either way), so it's a simple request with no preflight, and keepalive
+ * lets it go as the page closes.
+ */
 export function sendFeedback(body: { id: string; vote?: "up" | "down"; note?: string; used?: Usage }): Promise<boolean> {
-  return fetch(`${BASE}/feedback`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), keepalive: true })
+  return fetch(`${BASE}/feedback`, { method: "POST", body: JSON.stringify(body), keepalive: true })
     .then((res) => res.ok, () => false);
 }
 

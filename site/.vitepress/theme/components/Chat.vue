@@ -51,6 +51,9 @@ let context: RefineContext | null = null;
 const following = ref(false);
 let controller: AbortController | null = null;
 let statusAsked = false;
+/** The status request, once made: a question waits for it (briefly), so a remembered choice to save applies from the first one. */
+let statusReady: Promise<void> | null = null;
+const STATUS_WAIT_MS = 3_000;
 let check: ReturnType<typeof humanCheck> | null = null;
 
 const last = computed(() => turns.value[turns.value.length - 1]);
@@ -163,7 +166,7 @@ onBeforeUnmount(() => {
 function getReady() {
   if (!configured || statusAsked) return;
   statusAsked = true;
-  void fetchStatus().then((s) => {
+  statusReady = fetchStatus().then((s) => {
     if (!s) return;
     if (s.enabled) { if (s.model) model.value = s.model; recording.value = s.recording; }
     else blocked.value = s.failure;
@@ -193,6 +196,9 @@ async function ask(question: string, existing?: Turn) {
   controller?.abort();
   controller = new AbortController();
   const signal = controller.signal;
+  // The question is already in the thread (and the chat busy); wait for the status so a remembered choice to save applies.
+  if (statusReady) await Promise.race([statusReady, new Promise((r) => setTimeout(r, STATUS_WAIT_MS))]);
+  if (signal.aborted) { if (isBusy(turn)) turn.status = "stopped"; return; }
   const saving = recording.value && save.value;
   const width = threadEl.value?.clientWidth;
   const body = requestBody(context, message, saving ? { chat: (chatId ||= newChatId()), turn: turns.value.indexOf(turn) + 1, ...(width ? { width } : {}) } : undefined);

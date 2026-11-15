@@ -66,7 +66,7 @@ npx wrangler d1 migrations apply sayshape-records --remote
 npx wrangler deploy
 ```
 
-Read the last 7 days (answers, how many drew, were used and got a thumb up; follow-ups; thumbs down with notes; failures) with `npm run report`, or ask your own questions with `npx wrangler d1 execute sayshape-records --remote --command "SELECT …"`. To stop saving, comment the block out again and deploy: `/status` stops offering the switch. To delete a row someone asks about, `DELETE FROM answers WHERE …`.
+Read the last 7 days (answers, how many drew, were used and got a thumb up; follow-ups; thumbs down with notes; failures) with `npm run report`, which runs each query in `reports.sql` on its own (`scripts/report.mjs`; extra arguments go to wrangler), or ask your own questions with `npx wrangler d1 execute sayshape-records --remote --command "SELECT …"`. To stop saving, comment the block out again and deploy: `/status` stops offering the switch. To delete a row someone asks about, `DELETE FROM answers WHERE …`.
 
 ## Deploy (one time)
 

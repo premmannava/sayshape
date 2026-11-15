@@ -222,8 +222,8 @@ async function copy(what: "text" | "spec") {
       <div v-if="showThought && turn.thought" :id="thoughtId" class="ca-think-text full" tabindex="0" aria-label="The model's thinking">{{ turn.thought }}</div>
     </div>
 
-    <!-- Input on the canvas, its text editor and its screen reader mirror all reach this wrapper. -->
-    <div v-show="drawn" class="sayshape-canvas-wrap ca-canvas" @pointerdown.capture="touched" @keydown.capture="touched">
+    <!-- Input on the canvas, its text editor and its screen reader mirror (whose activations arrive as click and input) all reach this wrapper. -->
+    <div v-show="drawn" class="sayshape-canvas-wrap ca-canvas" @pointerdown.capture="touched" @keydown.capture="touched" @click.capture="touched" @input.capture="touched">
       <canvas ref="canvas" :aria-label="`Answer to “${turn.question}”, drawn by SayShape`"></canvas>
     </div>
 
