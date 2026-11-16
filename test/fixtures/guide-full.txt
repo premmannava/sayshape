@@ -412,6 +412,7 @@ ELEMENTS
     sort=<state>  State that holds the field to sort by. Pressing a header sets it; missing values sort last.
     direction=<state>  State that holds asc or desc. Pressing the sorted header again flips it.
     on=<action>  Actions to run after a row is selected, with bind= already set, e.g. emit:changed. Separate several with ;
+    total=<string>  Add a totals row summing number, money and compact columns: true, or text for its first cell.
     children: table-column
     example:
       state gear=[{id: "tent", name: "Tent", price: 180}, {id: "stove", name: "Stove", price: 45}] picked="" by="name" dir="asc"
@@ -422,8 +423,10 @@ ELEMENTS
   table-column "<text>"  — One column of a table: its header and the field it shows.
     "<text>"  The header. Defaults to the field name.
     field=<name, required>  The field of each record to show, e.g. field=price.
-    format=<text|number|money>  text, number (1,200.5) or money ($1,200.00, US dollars). number and money show only numbers; other values show —.
-    align=<left|right>  left or right. Default: right for number and money, left for text.
+    format=<text|number|money|percent|date|compact>  text, number (1,200.5), money ($1,200.00), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —.
+    align=<left|right>  left or right. Default: right for numbers, left for text and date.
+    tone=<name>  sign (negative bad, positive good) or a row field holding good, warn, bad, accent or muted to draw a badge.
+    bar=<boolean>  A bar behind each number, sized to the column's largest.
     only inside: table
     example:
       table-column "Price" field=price format=money
