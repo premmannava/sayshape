@@ -1,6 +1,6 @@
 # Prompt caching
 
-The guide is about the same size on every request (the compact guide is roughly 5,500 tokens, the full one about 10,500) and comes first, so a provider's prompt cache can serve it: after the first request those tokens cost a fraction of the input price. SayShape never caches anything itself. It builds the prompt in a cache-friendly order and in each provider's shape; the provider does the caching. The background is in [Model](model.md#prompt-caching).
+The guide is about the same size on every request (with every element, the compact guide is roughly 5,500 tokens and the full one about 18,000; `npm run guide:size` measures yours) and comes first, so a provider's prompt cache can serve it: after the first request those tokens cost a fraction of the input price. SayShape never caches anything itself. It builds the prompt in a cache-friendly order and in each provider's shape; the provider does the caching. The background is in [Model](model.md#prompt-caching).
 
 ## What to send first
 
