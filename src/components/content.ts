@@ -768,7 +768,7 @@ progress value={done} max=5 label="{done} of 5 steps"`,
         fill.addColorStop(0, c.accent);
         fill.addColorStop(1, c.accent2);
         g.fillStyle = fill;
-      } else g.fillStyle = tone === "default" ? c.accent : toneColor(ctx.theme, tone);
+      } else g.fillStyle = tone === "default" ? c.accent : tone === "warn" ? c.warnFill : toneColor(ctx.theme, tone);
       g.fill();
     }
   },

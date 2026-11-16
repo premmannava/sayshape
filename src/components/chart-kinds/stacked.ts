@@ -16,7 +16,7 @@
 import { easeOut, staggered } from "../../ghost";
 import {
   barPath, barText, chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels,
-  plotHeight, preciseText, slotLabels, tickLabels, type ChartGeometry, type ChartSlot, type Rect,
+  plotHeight, preciseText, slotLabels, labelRows, fieldTitle, tickLabels, type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import { fillTint } from "../util";
 import { seriesColors } from "../../theme";
@@ -65,7 +65,7 @@ export const stacked: ChartKindDef = {
       if (gaps) ctx.warn?.(`${where}: ${gaps} of ${d.slots.length} items have no number in their ${f} field, so that part is left out of their bars`);
     });
 
-    const series = fields.map((field, k) => ({ field, label: input.labels[k] || field, color: k }));
+    const series = fields.map((field, k) => ({ field, label: input.labels[k] || fieldTitle(field), color: k }));
     // How far each bar reaches above and below 0.
     const ends = d.slots.map((s) => {
       let pos = 0, neg = 0;
@@ -94,7 +94,7 @@ export const stacked: ChartKindDef = {
     const bars: StackSegment[][] = [];
     const totals: Array<string | null> = [];
     const slots: ChartSlot[] = d.slots.map((s, i) => {
-      const { cx, shownLabel, labelX } = placed[i]!;
+      const { cx, shownLabel, shownLabel2, labelX } = placed[i]!;
       const segs: StackSegment[] = [];
       let up = 0, down = 0;
       s.values.forEach((v, k) => {
@@ -123,11 +123,11 @@ export const stacked: ChartKindDef = {
       const hit: Rect | null = segs.length
         ? { x: cx - barW / 2, y: Math.min(...segs.map((g) => g.rect.y)), w: barW, h: Math.max(...segs.map((g) => g.rect.y + g.rect.h)) - Math.min(...segs.map((g) => g.rect.y)) }
         : null;
-      return { label: s.label, shownLabel, labelX, cx, value: known ? total : null, values: s.values, bars: [hit], ...(hit ? { bar: hit } : {}), notes, noteSeries };
+      return { label: s.label, shownLabel, ...(shownLabel2 ? { shownLabel2 } : {}), labelX, cx, value: known ? total : null, values: s.values, bars: [hit], ...(hit ? { bar: hit } : {}), notes, noteSeries };
     });
 
     const labelY = plot.y + plot.h + t.space.xs;
-    let h = labelY + labelLH;
+    let h = labelY + labelLH * labelRows(placed);
     const legend = flowLegend(series, box.w, h + t.space.sm, ctx);
     h = legend.bottom;
     const geometry: StackedGeometry = { bars, totals };

@@ -186,7 +186,7 @@ describe("stacked", () => {
     expect(jan[1]!.rect.h / jan[0]!.rect.h).toBeCloseTo(8 / 12, 5);
     expect(jan.map((g) => g.end)).toEqual([false, false, true]);
     expect(d.slots[0]!.value).toBe(24000);
-    expect(d.legend.map((l) => l.label)).toEqual(["hw", "sw", "sv"]);
+    expect(d.legend.map((l) => l.label)).toEqual(["Hw", "Sw", "Sv"]);
   });
 
   it("shows each total above its bar, and every part in the tooltip", () => {

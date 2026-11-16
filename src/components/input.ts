@@ -524,7 +524,7 @@ rating bind=stars`,
         g.rect(x, box.y, STAR * fill, box.h);
         g.clip();
         starPath(g, x + STAR / 2, cy, STAR / 2);
-        g.fillStyle = c.warn;
+        g.fillStyle = c.warnFill;
         g.fill();
         g.restore();
       }

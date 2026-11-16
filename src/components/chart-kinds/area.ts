@@ -18,7 +18,7 @@ import { easeOut } from "../../ghost";
 import { mixColors, seriesColors } from "../../theme";
 import {
   chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels, plotHeight,
-  preciseText, slotLabels, tickLabels, traceSmoothLine, type ChartGeometry, type ChartSlot, type Rect,
+  preciseText, slotLabels, labelRows, fieldTitle, tickLabels, traceSmoothLine, type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
@@ -52,7 +52,7 @@ export const area: ChartKindDef = {
       const gaps = d.gaps[k] ?? 0;
       if (gaps) ctx.warn?.(`${where}: ${gaps} of ${d.slots.length} items have no number in their ${fields.length > 1 ? `${f} field` : "y field"}, so the area breaks there`);
     });
-    const series = fields.map((field, k) => ({ field, label: input.labels[k] || field, color: k }));
+    const series = fields.map((field, k) => ({ field, label: input.labels[k] || fieldTitle(field), color: k }));
 
     const n = d.slots.length;
     const plotH = plotHeight(box.w);
@@ -71,7 +71,7 @@ export const area: ChartKindDef = {
     const placed = slotLabels(d.slots.map((s) => s.label), plot, box.w, labelFont, ctx);
 
     const slots: ChartSlot[] = d.slots.map((s, i) => {
-      const { cx, shownLabel, labelX } = placed[i]!;
+      const { cx, shownLabel, shownLabel2, labelX } = placed[i]!;
       const notes: string[] = [], noteSeries: number[] = [];
       s.values.forEach((v, k) => {
         if (v === null) return;
@@ -82,7 +82,7 @@ export const area: ChartKindDef = {
       // The whole column of the slot is its hover target, as on a line chart.
       const column: Rect = { x: plot.x + slotW * i, y: plot.y, w: slotW, h: plot.h };
       return {
-        label: s.label, shownLabel, labelX, cx, value: s.values[0] ?? null, values: s.values, points,
+        label: s.label, shownLabel, ...(shownLabel2 ? { shownLabel2 } : {}), labelX, cx, value: s.values[0] ?? null, values: s.values, points,
         bars: [s.values.some((v) => v !== null) ? column : null], notes, noteSeries,
       };
     });
@@ -99,7 +99,7 @@ export const area: ChartKindDef = {
     });
 
     const labelY = plot.y + plot.h + t.space.xs;
-    let h = labelY + labelLH;
+    let h = labelY + labelLH * labelRows(placed);
     let legend: ChartGeometry["legend"] = [];
     if (fields.length > 1) {
       const l = flowLegend(series, box.w, h + t.space.sm, ctx);
