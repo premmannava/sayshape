@@ -15,6 +15,9 @@ GENERATION_ENABLED = "true"
 # "false" stops showing the model's thinking on the chat page. Thinking is free text, so while
 # it's shown the key can be used to get prose back (up to 12,000 characters an answer).
 SHOW_THINKING = "true"
+# "true": a new chat question is first asked with the small report guide (the report preset), and with the chat guide only when
+# a report can't show it. The chat page draws with presets on. Set to "false" to go back to the chat guide alone.
+REPORT_FIRST = "true"
 # How hard the model thinks before it writes: DeepSeek takes "none", "low", "high" or "max" and
 # uses "high" when this is empty, which is most of the wait for an answer. "none" is fastest and
 # shows no thinking.

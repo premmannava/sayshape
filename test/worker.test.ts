@@ -457,3 +457,96 @@ describe("chat messages", () => {
     for (const kept of ["chart", "table", "tabs", "stat", "callout", "slider"]) expect(text).toMatch(new RegExp(`^- ${kept} `, "m"));
   });
 });
+
+const REPORT = `report "Sales review" subtitle="Example figures" data=sales
+  sum amount
+  bar month amount
+state sales=[{month: "Jan", amount: 1200}, {month: "Feb", amount: 800}]
+`;
+
+describe("chat answers with the report preset first (REPORT_FIRST)", () => {
+  const on: Env = { ...env, REPORT_FIRST: "true" };
+  const ask = { kind: "chat", message: "How did sales go this year?" };
+
+  it("asks a new question with the small report guide, and sends a report on as the answer", async () => {
+    const model = fakeModel([{ content: [REPORT], usage: { prompt_tokens: 600, completion_tokens: 60 } }]);
+    const ev = await events(await handle(post(ask), on, { fetch: model.fetch }));
+    expect(model.requests).toHaveLength(1);
+    const guide = model.requests[0]!.body.messages[0]!.content as string;
+    expect(guide).toContain("You show data in SayShape with one report");
+    expect(guide).toContain('subtitle="Example figures"');
+    expect(guide.length).toBeLessThan(languageGuide(chatRegistry, chatGuide(chatRegistry)).length / 4);
+    expect(ev.filter((e) => e.t === "text").map((e) => e.v).join("")).toBe(REPORT);
+    expect(ev.at(-1)).toMatchObject({ t: "done", spec: REPORT, problems: 0, tokens: { in: 600, out: 60 } });
+    // The answer's end is said once.
+    expect(ev.filter((e) => e.t === "phase" && e.v === "done")).toHaveLength(1);
+    // What the page draws from it: the report's parts, as ordinary elements.
+    const drawn = parse(REPORT, chatRegistry, { presets: true });
+    expect(drawn.diagnostics).toEqual([]);
+    expect(drawn.presets?.expanded).toMatch(/^\s*chart /m);
+  });
+
+  it("answers with the chat guide when the model says a report can't show it, without the word reaching the page", async () => {
+    const model = fakeModel([
+      { content: ["FULL"], usage: { prompt_tokens: 600, completion_tokens: 1 } },
+      { content: [LATEST], usage: { prompt_tokens: 4_000, completion_tokens: 90 } },
+    ]);
+    const ev = await events(await handle(post({ kind: "chat", message: "Compare phone plans for a family" }), on, { fetch: model.fetch }));
+    expect(model.requests).toHaveLength(2);
+    expect(model.requests[1]!.body.messages[0]!.content).toContain("demo chat on SayShape's website");
+    expect(model.requests[1]!.body.messages[0]!.content).not.toContain("with one report");
+    expect(model.requests[1]!.body.messages[1]!.content).toBe(model.requests[0]!.body.messages[1]!.content);
+    expect(ev.filter((e) => e.t === "text").map((e) => e.v).join("")).toBe(LATEST);
+    expect(ev.some((e) => e.t === "reset")).toBe(false);
+    expect(ev.filter((e) => e.t === "phase" && e.v === "done")).toHaveLength(1);
+    // Both calls are counted.
+    expect(ev.at(-1)).toMatchObject({ t: "done", spec: LATEST, tokens: { in: 4_600, out: 91 } });
+  });
+
+  it("also falls back when the report guide's answer draws nothing", async () => {
+    const model = fakeModel([{ content: ["I can't show that as a report."] }, { content: [LATEST] }]);
+    const ev = await events(await handle(post(ask), on, { fetch: model.fetch }));
+    expect(model.requests).toHaveLength(2);
+    expect(ev.at(-1)).toMatchObject({ t: "done", spec: LATEST });
+  });
+
+  it("stays off unless REPORT_FIRST is \"true\", and never applies to a follow-up or a spreadsheet question", async () => {
+    for (const e of [env, { ...env, REPORT_FIRST: "false" }]) {
+      const model = fakeModel([{ content: [LATEST] }]);
+      await events(await handle(post(ask), e, { fetch: model.fetch }));
+      expect(model.requests).toHaveLength(1);
+      expect(model.requests[0]!.body.messages[0]!.content).toContain("demo chat on SayShape's website");
+    }
+    const follow = fakeModel([{ content: [DONUT] }]);
+    await events(await handle(post({ ...ask, message: "Make it a donut", refine: { task: ask.message, spec: LATEST } }), on, { fetch: follow.fetch }));
+    expect(follow.requests).toHaveLength(1);
+    expect(follow.requests[0]!.body.messages[0]!.content).toContain("demo chat on SayShape's website");
+    const data = fakeModel([{ content: [GOOD] }]);
+    await events(await handle(post(question), on, { fetch: data.fetch }));
+    expect(data.requests).toHaveLength(1);
+    expect(data.requests[0]!.body.messages[0]!.content).not.toContain("with one report");
+  });
+
+  it("sends a follow-up to a report as the ordinary elements it became, which the chat guide teaches", async () => {
+    expect(readSpec(REPORT, chatRegistry)).toBe(REPORT);
+    const c = readChat({ message: "Make it a line chart", refine: { task: ask.message, spec: REPORT } }, chatRegistry);
+    if ("error" in c) throw new Error(c.error);
+    const sent = c.refine!.spec;
+    expect(sent).not.toMatch(/^report\b/m);
+    expect(sent).toMatch(/^\s*chart /m);
+    expect(sent).toContain("state sales=");
+    expect(parse(sent, chatRegistry).diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // An ordinary answer goes back exactly as it was.
+    const plain = readChat({ message: "Make it a donut", refine: { task: ask.message, spec: LATEST } }, chatRegistry);
+    expect("error" in plain ? null : plain.refine!.spec).toBe(LATEST);
+  });
+});
+
+describe("the chat guide's order", () => {
+  it("asks for the layout first and long lists last, so an answer starts drawing at once", () => {
+    const text = languageGuide(chatRegistry, chatGuide(chatRegistry));
+    expect(text).toContain("Elements first (they draw as you write)");
+    expect(text).not.toContain("- State first, unindented");
+  });
+});
+

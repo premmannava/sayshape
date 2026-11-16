@@ -357,7 +357,7 @@ ${REPORT_EXAMPLE}
 REPORT
 - First line: report "Title" subtitle="One line" data=<list> filter=<field>[,<field>]. The screen is built from it.
 - Then one indented line (2 spaces) per part, in screen order:
-  - figures: ${FIGURE_OPS.join(", ")}, then a field (count needs none). Add field=value to count or add up only matching rows: count status=Late, sum amount region=West.
+  - figures: ${FIGURE_OPS.join(", ")}, then a field (count needs none). Add field=value to any figure to use only matching rows: count status=Late, avg days status=Closed.
   - charts: ${CHART_KINDS.join(", ")}, then x, then y fields. With no y it counts rows per x (donut region). Name another list first to draw it as it is: line targets month goal actual.
   - table: every field of data=, or the fields you list: table id region amount.
 - Labels, titles, column headers and money or number formats come from field names. To name a part yourself, end its line with "Text".

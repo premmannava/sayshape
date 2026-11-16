@@ -35,13 +35,13 @@
  * Plain functions with no Cloudflare types, so test/worker.test.ts can run
  * it in Node with a fake model.
  */
-import { cachedPrompt, generateSpec, ModelError, type GenerateOptions, type Phase } from "../../src/model";
+import { asksForFullGuide, cachedPrompt, generateSpec, ModelError, sumUsage, type GenerateOptions, type GenerateResult, type Phase } from "../../src/model";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { sceneComponents } from "../../src/components/scene";
 import { Registry } from "../../src/registry";
 import { answerGuide, answerRequest, checkAnswer, DATA, readQuestion } from "./answer";
-import { chatGuide, chatRequest, checkDrawing, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
+import { chatGuide, chatReportGuide, chatRequest, checkDrawing, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
 import { applyFeedback, MAX_FEEDBACK_BYTES, readFeedback, readRecordRequest, saveAnswer, type AnswerRow, type RecordStore } from "./records";
 
 /** The part of a Workers KV namespace the daily count uses. */
@@ -88,6 +88,13 @@ export interface Env {
    * back (up to MAX_THOUGHT_CHARS an answer).
    */
   SHOW_THINKING?: string;
+  /**
+   * "true": a new chat question is first asked with the small report guide (the
+   * report preset: figures, charts, a table and filters from a few lines), and
+   * only with the chat guide when the model says a report can't show it. The
+   * page must draw with the engine's presets on. Default: off.
+   */
+  REPORT_FIRST?: string;
   /** Workers rate limiting binding, keyed by IP. Optional. */
   RATE_LIMITER?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
   /** Questions answered per day (UTC) for the whole site, counted in ANSWER_COUNT. Default 500. */
@@ -146,6 +153,9 @@ let chatPrompt: string | undefined;
 let dataPrompt: string | undefined;
 export const chatStable = () => (chatPrompt ??= cachedPrompt(chatRegistry, { guide: chatGuide(chatRegistry) }).stable);
 export const dataStable = () => (dataPrompt ??= cachedPrompt(registry, { guide: answerGuide() }).stable);
+let reportPrompt: string | undefined;
+/** The report guide for chat answers (REPORT_FIRST), stable in the same way. */
+export const chatReportStable = () => (reportPrompt ??= cachedPrompt(chatRegistry, { guide: chatReportGuide() }).stable);
 
 /** PROMPT_CACHE as the model client's `cache` setting: undefined (off), true (5 minutes) or "1h". */
 export function cacheSetting(env: Env): true | "1h" | undefined {
@@ -230,6 +240,8 @@ interface Job {
   unanswered: string;
   /** For a chat question: what's saved if the visitor chose to save it. */
   saved?: { question: string; followup: boolean };
+  /** A new chat question, which REPORT_FIRST asks with the report guide first. Never a follow-up or a spreadsheet question. */
+  reportFirst?: boolean;
 }
 
 function chatJob(body: Record<string, unknown>): Job | { error: string } {
@@ -242,6 +254,7 @@ function chatJob(body: Record<string, unknown>): Job | { error: string } {
     options: c.refine ? { request: c.message, refine: c.refine, guide: chatStable(), check } : { request: chatRequest(c.message), guide: chatStable(), check },
     unanswered: "The model didn't draw anything for that. Try asking it another way.",
     saved: { question: c.message, followup: !!c.refine },
+    reportFirst: !c.refine,
   };
 }
 
@@ -342,7 +355,9 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
       const refusedKey = `${url}|${env.MODEL}`;
       // Nothing has reached the page yet: set once the model has said anything, after which a failed call can't be retried quietly.
       let started = false;
-      const call = (cache: true | "1h" | undefined) => generateSpec({
+      // Whether any of the answer's lines have reached the page, so a second try can tell it to start again.
+      let drawn = false;
+      const call = (cache: true | "1h" | undefined, over: Partial<GenerateOptions> = {}, more = false) => generateSpec({
         config: {
           url,
           model: env.MODEL!,
@@ -355,13 +370,15 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
         },
         registry: job.registry,
         ...job.options,
+        ...over,
         // One repair, only for errors: lines the parser had to skip, or (for data) an answer that doesn't read the data.
         repairOn: "errors",
         signal: req.signal,
         fetch: doFetch,
-        onText: (v) => { started = true; void send({ t: "text", v }); },
+        onText: (v) => { started = true; drawn = true; void send({ t: "text", v }); },
         onReset: () => void send({ t: "reset" }),
-        onPhase: (v: Phase) => void send({ t: "phase", v }),
+        // With another try to come, this one's end isn't the answer's.
+        onPhase: (v: Phase) => { if (!(more && v === "done")) void send({ t: "phase", v }); },
         onThinking: (v) => {
           started = true;
           if (!showThinking || thought >= MAX_THOUGHT_CHARS) return;
@@ -372,16 +389,31 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
         },
       });
       const wanted = cacheSetting(env);
-      const marked = wanted && !cacheRefused.has(refusedKey) ? wanted : undefined;
-      let result;
-      try {
-        result = await call(marked);
-      } catch (e) {
-        // A provider that doesn't take cache markers must not break the page: say it once, send the request plain.
-        if (!marked || started || !(e instanceof ModelError) || (e.status !== 400 && e.status !== 422)) throw e;
-        cacheRefused.add(refusedKey);
-        result = await call(undefined);
-      }
+      const ask = async (over: Partial<GenerateOptions> = {}, more = false): Promise<GenerateResult> => {
+        const marked = wanted && !cacheRefused.has(refusedKey) ? wanted : undefined;
+        try {
+          return await call(marked, over, more);
+        } catch (e) {
+          // A provider that doesn't take cache markers must not break the page: say it once, send the request plain.
+          if (!marked || started || !(e instanceof ModelError) || (e.status !== 400 && e.status !== 422)) throw e;
+          cacheRefused.add(refusedKey);
+          return await call(undefined, over, more);
+        }
+      };
+      let result: GenerateResult;
+      if (job.reportFirst && env.REPORT_FIRST === "true") {
+        // The small report guide first. When the model says a report can't show it (or draws nothing), the chat guide answers.
+        const first = await ask({ guide: chatReportStable(), presets: true }, true);
+        if (first.spec.trim() && !asksForFullGuide(first.first.raw)) {
+          result = first;
+          await send({ t: "phase", v: "done" });
+        } else {
+          if (drawn) await send({ t: "reset" });
+          const second = await ask();
+          const attempts = [first.first, ...(first.repair ? [first.repair] : []), second.first, ...(second.repair ? [second.repair] : [])];
+          result = { ...second, usage: sumUsage(attempts.map((a) => a.usage)), timings: { ...second.timings, totalMs: first.timings.totalMs + second.timings.totalMs } };
+        }
+      } else result = await ask();
       const errors = result.diagnostics.filter((d) => d.severity === "error");
       const { promptTokens, completionTokens, cachedTokens, cacheWriteTokens } = result.usage;
       const ms = Math.round(result.timings.totalMs);

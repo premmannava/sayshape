@@ -209,3 +209,19 @@ describe("report in sayshape/model", () => {
     expect(model.requests).toHaveLength(1);
   });
 });
+
+describe("a figure over only some rows", () => {
+  it("filters any figure, an average included, and the guide says so", () => {
+    const spec = `report "Claims" data=claims
+  avg days status=Closed "Average days to close"
+  avg days
+state claims=[{status: "Closed", days: 10}, {status: "Closed", days: 20}, {status: "Open", days: 90}]`;
+    const ui = render(spec, { presets: true });
+    expect(ui.diagnostics).toEqual([]);
+    const shown = ui.copyText();
+    expect(shown).toContain("Average days to close: 15");
+    expect(shown).toContain("40");
+    expect(languageGuide(new Registry(coreComponents), { mode: "report" })).toContain("avg days status=Closed");
+  });
+});
+
