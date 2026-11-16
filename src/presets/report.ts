@@ -233,7 +233,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
     const where = parts.filter((t) => t.kind === "pair");
 
     if ((FIGURE_OPS as readonly string[]).includes(op)) {
-      if (group !== "figures") { at(c.line, 1, "grid min=140 gap=12"); group = "figures"; }
+      if (group !== "figures") { at(c.line, 1, "grid min=170 gap=12"); group = "figures"; }
       const field = words[0];
       if (op !== "count" && !field) { warn(c.line, `${op} needs a field: ${op} amount`); continue; }
       if (field && !checkField(c.line, main, mainRows, field)) continue;
@@ -251,7 +251,8 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
         const word = { sum: "Total", avg: "Average", min: "Lowest", max: "Highest" }[op as Exclude<FigureOp, "count">];
         name = label ?? `${word} ${humanize(field!).toLowerCase()}${cond ? `, ${cond}` : ""}`;
       }
-      at(c.line, 2, `stat label=${quote(name)} value=${value}`);
+      at(c.line, 2, "card pad=18 gap=10");
+      at(c.line, 3, `stat label=${quote(name)} value=${value}`);
       continue;
     }
 
