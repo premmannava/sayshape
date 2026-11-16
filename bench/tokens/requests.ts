@@ -152,13 +152,16 @@ Show a title, four headline figures, a bar chart by month, a line chart of opene
   },
 ];
 
-/** Follow-up changes for item 3, each made to the claims review (by reference). */
+/**
+ * Follow-up changes for item 3, each made to the claims review (by reference),
+ * starting from runs/compact/r7-claims-ref__1.ss. None of them is already true of it.
+ */
 export const FOLLOW_UPS: string[] = [
   "Make the bar chart a line chart.",
-  "Add a column for the site to the table.",
+  "Remove the Opened column from the table.",
   "Remove the donut.",
   "Rename the title to \"Claims review, 2025\".",
-  "Show incurred as money in the table.",
+  "Make the status filter a dropdown.",
   "Add a fifth headline figure: the longest days open.",
   "Sort the table by incurred, highest first.",
   "Move the table above the charts.",
