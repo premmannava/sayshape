@@ -114,7 +114,10 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
       };
     },
     set(_t, prop, value) {
-      if (prop === "fillStyle" && value && typeof value === "object" && "addColorStop" in value) {
+      if (typeof prop === "string" && typeof value === "function") {
+        // A method put in place of the stand-in's own (the engine's text layer wraps fillText).
+        methods[prop] = value as (...args: unknown[]) => unknown;
+      } else if (prop === "fillStyle" && value && typeof value === "object" && "addColorStop" in value) {
         style.fillStyle = value as FakeGradient;
       } else if (typeof prop === "string") {
         style[prop] = typeof value === "number" || typeof value === "string" ? value : String(value);

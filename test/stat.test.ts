@@ -88,7 +88,7 @@ describe("stat layout", () => {
   });
 
   it("wraps a change below the value when there isn't room, and cuts it to fit", () => {
-    const spec = `stat label="Revenue" value="$1,234,567.89" change="+12% on last quarter, the best since records began"\n`;
+    const spec = `stat label="Revenue" value="$1,234,567.89" short=false change="+12% on last quarter, the best since records began"\n`;
     for (const width of [240, 360]) {
       const ui = render(spec, { width });
       const box = ui.find("stat").box!;

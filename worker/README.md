@@ -21,6 +21,10 @@ While the model thinks, chat answers stream its thinking as `{"t":"thought"}` ev
 
 A refusal before any answer is JSON with a `reason` the page words itself: `off`, `unconfigured`, `rate`, `daily`, `check`, `too-big` or `bad-request`.
 
+### Prompt caching
+
+The guide is about 5,500 tokens and the same on every request, so it is built once (`chatStable`, `dataStable` in `src/handler.ts`, with SayShape's `cachedPrompt`) and sent as the first, only system message; the visitor's words, a follow-up's earlier answer and a spreadsheet's columns all come after it. `test/worker-cache.test.ts` checks that it is identical for every visitor and question. The variable `PROMPT_CACHE` (`true` or `5m`, or `1h`) sends it as a text block marked with `cache_control`, as Anthropic models need (directly or through OpenRouter); empty (the default) sends plain text, which is right for providers that cache on their own, as the current one does. If a provider answers 400 or 422 to the marked form before anything streams, the request is sent again plain and the worker stops marking for that model until it restarts. The `done` event's `tokens` adds `cached` and `cacheWrite` when the provider reports them: that is how to see it working. See [docs/prompt-caching.md](../docs/prompt-caching.md).
+
 ### Spreadsheet questions
 
 The browser sends the question (at most 400 characters), the column names with a type and how many different values each has, three sample rows (cells cut to 100 characters) and a Turnstile token. The worker builds every message itself with SayShape's model client (`src/model`): a guide for data answers, the request with the sample rows fenced as data, and one repair if the parser had to skip lines or the answer doesn't read the data. It always calls the one model set in `wrangler.toml`, so the key can't be borrowed for anything else. An answer must read the spreadsheet by name (`data`) and may not declare it, so the model can't make up or copy rows.

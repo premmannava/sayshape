@@ -121,7 +121,7 @@ row
 
 describe("stat", () => {
   const stat = (value: string, width: number) => {
-    const ui = render(`stat label="Total" value="${value}"`, { components: coreComponents, width });
+    const ui = render(`stat label="Total" value="${value}" short=false`, { components: coreComponents, width });
     const box = boxes(ui.sayshape.boxes!, "stat")[0]!;
     const sizes = ui.drawOps.filter((o) => o.op === "fillText" && o.args[0] !== "Total").map((o) => Number(/(\d+)px/.exec(o.font)![1]));
     ui.destroy();

@@ -14,6 +14,8 @@
  *                                the colors (the operator's --colors, the theme or the chat app's stay)
  *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --no-copy-text  hide the Copy text button
+ *   sayshape-mcp --no-select-text  no invisible text layer: words can't be selected or found with Ctrl+F
+ *   sayshape-mcp --select-touch    let a long press on a touch screen select a word (off by default for now)
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
  *   sayshape-mcp --logo https://cdn.example.com/logo.png   a logo in the corner of every slide of a deck
  *                                (slide decks need no flag; --slides is accepted and does nothing)
@@ -23,6 +25,9 @@
  *   sayshape-mcp --widget-dir <folder>  for chat apps that can't draw MCP Apps views but can show a widget
  *                                made from a file: write each interface there as one self-contained file
  *                                (stdio only; not with --http)
+ *   sayshape-mcp --widget-dir <folder> --widget-inline
+ *                                with --widget-dir: write the engine into each file as plain script text, for
+ *                                chat apps that run a file's own scripts but no blob: script (Antigravity)
  *   sayshape-mcp --widget-dir <folder> --widget-host muse
  *                                with --widget-dir: hook that chat app's adapter into each file, so
  *                                emit: presses and the interface's state are saved for the model's next turn
@@ -50,7 +55,7 @@ import { fileURLToPath } from "node:url";
 import { basename, resolve } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { cannotDrawViews, createServer, setBehavior, setImageHosts, setScenes } from "./server";
+import { cannotDrawViews, createServer, setBehavior, setImageHosts, setLayoutFirst, setScenes } from "./server";
 import { accentNotes, parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
@@ -84,12 +89,14 @@ async function main(): Promise<void> {
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color | --colors list]",
-      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--logo <https url>]",
-      "                    [--image-hosts host1,host2,...] [--widget-dir folder [--widget-host name]]",
+      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--no-select-text] [--select-touch] [--scene] [--behavior] [--layout-first] [--logo <https url>]",
+      "                    [--image-hosts host1,host2,...] [--widget-dir folder [--widget-inline] [--widget-host name]]",
       "",
       "  --widget-dir <folder>  for chat apps that can't draw interfaces but can show a widget made from a file:",
       "                      write each interface there as one self-contained file, named by a hash of the",
       "                      spec and settings (the newest 50 are kept); stdio only, refused with --http",
+      "  --widget-inline     with --widget-dir: put the engine in each file as plain script text (about twice the",
+      "                      size), for chat apps that show the file but say the engine didn't start",
       `  --widget-host <name>  with --widget-dir: hook a chat app's adapter into each file so emit: presses and the`,
       "                      interface's state are saved for the model's next turn; hosts: " + WIDGET_HOST_NAMES.join(", "),
       "  --http [port]       Streamable HTTP on /mcp instead of stdio; port from the flag, else PORT, else 3001",
@@ -114,10 +121,13 @@ async function main(): Promise<void> {
       "                   the theme and the chat app's own color apply",
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
       "  --no-copy-text   hide the Copy text button",
+      "  --no-select-text  turn off the invisible text layer that lets people select, copy and find (Ctrl+F) the words",
+      "  --select-touch    let a long press on a touch screen select a word, with the phone's own handles (off by default until checked on real phones)",
       "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",
       "  --logo <url>     an https image drawn small in the corner of every slide of a deck (its host is allowed like --image-hosts)",
       "  --slides         does nothing: slide decks (deck, slide) are always on; kept so existing setups still start",
       "  --behavior       experimental: rules that tick (timers, simulations) and, with --scene, dragging (off by default)",
+      "  --layout-first   tell models to write the layout first and the data last, so an interface draws while it is written (off by default)",
       "  --image-hosts    hosts images may load from, comma-separated; *.example.com allows its subdomains",
       "                   (none by default; https only, and the host must send CORS headers)",
     ].join("\n"));
@@ -128,6 +138,8 @@ async function main(): Promise<void> {
   // Experimental scenes: the server's parser and docs and the view must agree.
   setScenes(view.scene === true);
   setBehavior(view.behavior === true);
+  // Layout first: only the model's guide changes; the view already draws placeholders while a spec streams in.
+  setLayoutFirst(args.includes("--layout-first"));
   // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.
   setImageHosts(view.imageHosts ?? []);
   const httpAt = args.indexOf("--http");
@@ -142,6 +154,8 @@ async function main(): Promise<void> {
     if (name === undefined || !isWidgetHost(name)) throw new Error("unreachable: widgetHostRefusal checked the name");
     widgetHost = name;
   }
+  const widgetInline = args.includes("--widget-inline");
+  if (widgetInline && widgetAt < 0) throw new Error("--widget-inline only applies with --widget-dir: it changes how the widget files are written. Add --widget-dir <folder>, or leave --widget-inline out.");
   if (widgetAt >= 0) {
     if (httpAt >= 0) throw new Error("--widget-dir can't be used with --http: it writes files on this computer for a chat app on this computer to read, and an HTTP server's callers can't read them.");
     const raw = args[widgetAt + 1];
@@ -155,7 +169,7 @@ async function main(): Promise<void> {
       throw new Error(`--widget-dir ${widgetDir} can't be written to: ${e instanceof Error ? e.message : String(e)}`);
     }
     await loadPackedEngine();
-    console.error(`SayShape: chat apps that can't draw interfaces get a widget file in ${widgetDir}${widgetHost ? `, hooked to ${widgetHost}` : ""}`);
+    console.error(`SayShape: chat apps that can't draw interfaces get a widget file in ${widgetDir}${widgetInline ? ", with the engine as plain script text" : ""}${widgetHost ? `, hooked to ${widgetHost}` : ""}`);
   }
   if (httpAt < 0) {
     for (const flag of ["--host", "--rate-limit", "--trust-proxy", "--allow-public-data"]) {
@@ -206,7 +220,7 @@ async function main(): Promise<void> {
     return;
   }
   // stdout carries the protocol, so anything for people goes to stderr.
-  await logClient(createServer({ uiHtml, data, mcpResults, view, ...(widgetDir ? { widgetDir } : {}), ...(widgetHost ? { widgetHost: { name: widgetHost, ignoreAppColors: args.includes("--theme") || args.includes("--accent") || args.includes("--colors") } } : {}) })).connect(new StdioServerTransport());
+  await logClient(createServer({ uiHtml, data, mcpResults, view, ...(widgetDir ? { widgetDir, widgetInline } : {}), ...(widgetHost ? { widgetHost: { name: widgetHost, ignoreAppColors: args.includes("--theme") || args.includes("--accent") || args.includes("--colors") } } : {}) })).connect(new StdioServerTransport());
 }
 
 main().catch((e) => {

@@ -40,6 +40,8 @@ The canvas fills its parent's width and grows to fit its content.
 | `today` | the device's local day | Today's date as `() => "YYYY-MM-DD"`, for date pickers; fix it in tests and screenshots |
 | `viewport` | from the window | The part of the canvas people can see, `() => ({ top, bottom })` in canvas pixels, for placing a select's list ([Popups](#popups)) |
 | `pixelRatio` | the window's `devicePixelRatio` | Device pixels per CSS pixel in the canvas bitmap |
+| `streamPlaceholders` | `false` | For specs written layout first, data last: while a spec streams in, names an element reads before their `state` line arrives draw as placeholders and aren't reported until `endStream()` ([Layout first while streaming](model.md#layout-first-while-streaming)) |
+| `presets` | `false` | Expand `report` blocks into ordinary elements when the spec is read; `expandedSpec` shows the result ([the report preset](model.md#data-answers-with-the-report-preset-opt-in)) |
 | `behavior` | `false` | Experimental: `every` rules and dragging in scenes ([Behavior](#behavior-experimental-off-by-default)) |
 | `clock` | the real clock | Where time comes from (`now`, `setTimeout`, `clearTimeout`): scene motion, fade-ins and rules. `sayshape/testing` passes one a test advances |
 | `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it, rules wait for a first press or key |
@@ -294,3 +296,21 @@ const sayshape = new SayShape(canvas, { components: coreComponents });   // the 
 ```
 
 In tests, `render(spec).accessibility()` shows the screen as a screen reader gets it, `ui.announcements` what it was told, and `ui.mirror` sends a screen reader's actions; the visual suite runs [axe](https://github.com/dequelabs/axe-core) on every sample. Automated checks can't prove WCAG conformance on their own: [`docs/accessibility-testing.md`](accessibility-testing.md) is a short manual pass with VoiceOver and NVDA to run before claiming it. Still to do: reaching the map by keyboard.
+
+## Selectable text
+
+A canvas has no text to select, so the engine keeps a second invisible layer beside the accessibility mirror: one transparent real text node per drawn line of `text`, `stat` and `table`, at the same position, font and size. Dragging with a mouse or pen selects those words, Ctrl/Cmd+C copies them (a table selection copies one row per line, cells separated by tabs), and the browser's find (Ctrl/Cmd+F) reaches them. With nothing selected, Ctrl/Cmd+C still copies the whole screen through `copyText()`. The layer is marked `aria-hidden` (screen readers use the mirror), is rebuilt only once drawing has been still for a moment and only when the lines changed, holds only what is in view (a long table creates nodes for visible rows), and leaves out hidden, inactive and covered text. A plain click on selectable text still presses the card, row or link under it; only a drag selects. Double-click selects the word under the pointer, triple-click the whole drawn block (a paragraph's wrapped lines, or one table cell), and Shift+click moves the end of the current selection to the click. On text inside something pressable (a card with `on=`, a table that selects rows, a link) the click stays a click: it runs its action each time and never selects a word; dragging still selects there. The canvas stays the only thing that draws.
+
+```js
+const sayshape = new SayShape(canvas, { components: coreComponents });   // the layer is on by default
+// new SayShape(canvas, { components: coreComponents, selectText: false }) leaves it out: no extra DOM
+// new SayShape(canvas, { components: coreComponents, selectTouch: true }) lets a long press select on touch screens
+```
+
+`sayshape-mcp --no-select-text` does the same for the MCP view. In tests, `render(spec).textLayer` lists the lines (`lines`, `builds`, `selection`), `settle()` builds it now and `dragText(from, to)` selects. ### Touch
+
+Touch selection is **off by default for now** (`TOUCH_SELECT_DEFAULT` in `src/text-layer/host.ts`, one line to change) because the browser's own long-press selection can't be reproduced by emulation and has not yet been checked on real phones (the checklist is `docs/plans/selectable-text/touch-checklist.md`). Turn it on with `selectTouch: true` (`sayshape-mcp --select-touch`; `--no-select-touch` says off explicitly). Mouse and pen selection are not affected either way.
+
+On, and only where touch is the main pointer (`(pointer: coarse)`), the words of the layer take touches, so the platform's own long press works on them: it selects the word, shows its handles and Copy menu, and the person drags the handles. The layer replays what the canvas would have got: a tap becomes one press and release on the canvas (so a pressable card, row or link runs once; a tap on plain text clears a selection and does nothing else); a long press (500 ms) is the platform's and presses nothing; a swipe that starts on words is replayed from where the finger went down, so the page and scrolling elements scroll and table drags work as before; a second finger (pinch) presses nothing. The layer's words use the canvas's `touch-action`, and the engine's own touch handling is attached to the layer too. Copying a table selection gives tab-separated cells on touch, as with the mouse.
+
+Not covered: chart labels, scenes and slides.

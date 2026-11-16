@@ -33,6 +33,8 @@ export interface Theme {
     onAccent: string;
     good: string;
     warn: string;
+    /** A brighter warn for fills only (rating stars, meter and progress bars); warn stays the color for text. */
+    warnFill: string;
     bad: string;
     focus: string;
     land: string;
@@ -44,10 +46,12 @@ export interface Theme {
     /** The dimming over the screen behind an open dialog: dark in every theme, so the dialog stands out. */
     scrim: string;
     /**
-     * Harmonized, low-saturation series for lines and bars. The first uses
-     * the accent; steel, sage, stone, blue and moss follow. Keep strokes
-     * visible against the chart surface, not pastel or rainbow-colored.
-     * Pie and donut charts soften these same families for broader segments.
+     * Series for lines and bars. The first uses the accent; then blue, ochre,
+     * violet, rose and olive in the default themes: calm, but clearly different
+     * hues, each at least 3:1 against surface and raised, away from the good and
+     * bad hues, and apart from one another for color-blind viewers too
+     * (test/theme.test.ts checks all of it). Pie and donut charts soften
+     * these same colors for broader segments.
      */
     series1: string;
     series2: string;
@@ -123,6 +127,7 @@ export const lightTheme: Theme = {
     onAccent: "#FFFFFF",
     good: "#277253",
     warn: "#9A641D",
+    warnFill: "#C77D0A",
     bad: "#B14E50",
     focus: "#277E79",
     land: "#DEE5E3",
@@ -132,11 +137,11 @@ export const lightTheme: Theme = {
     shadow: "rgba(25, 43, 45, 0.065)",
     scrim: "rgba(16, 26, 29, 0.45)",
     series1: "#176F69",
-    series2: "#557887",
-    series3: "#638777",
-    series4: "#967D61",
-    series5: "#5E798C",
-    series6: "#767F71",
+    series2: "#6991DC",
+    series3: "#865812",
+    series4: "#5F3389",
+    series5: "#B7739B",
+    series6: "#798A00",
   },
 };
 
@@ -155,6 +160,7 @@ export const darkTheme: Theme = {
     onAccent: "#112825",
     good: "#88CEAA",
     warn: "#E5B77A",
+    warnFill: "#F5B83D",
     bad: "#EB9393",
     focus: "#82C9C0",
     land: "#29373B",
@@ -164,11 +170,11 @@ export const darkTheme: Theme = {
     shadow: "rgba(0, 0, 0, 0.38)",
     scrim: "rgba(0, 0, 0, 0.62)",
     series1: "#72C6BB",
-    series2: "#9DB8C4",
-    series3: "#A6C4B1",
-    series4: "#CDBC9F",
-    series5: "#91B1C2",
-    series6: "#ADB8A0",
+    series2: "#6D8DE8",
+    series3: "#F5AE4B",
+    series4: "#D0AEF8",
+    series5: "#CC6CA7",
+    series6: "#85971C",
   },
 };
 
@@ -212,6 +218,7 @@ export const studioLightTheme: Theme = {
     onAccent: "#FFFFFF",
     good: "#15803D",
     warn: "#B45309",
+    warnFill: "#D27406",
     bad: "#D42020",
     focus: "#5B54E8",
     land: "#E4E7F0",
@@ -244,6 +251,7 @@ export const studioDarkTheme: Theme = {
     onAccent: "#0B0D14",
     good: "#5ED394",
     warn: "#F5BE4F",
+    warnFill: "#FBBF24",
     bad: "#FB8282",
     focus: "#A5A3FF",
     land: "#1D2131",
@@ -271,31 +279,20 @@ export function seriesColors(theme: Theme): string[] {
 export const SERIES_COUNT = 6;
 
 /**
- * A little color, not a rainbow: one deep teal and supporting steel, sage,
- * warm stone, dusty blue and moss. The same six configurable series tokens
- * feed every chart; broad pie slices are softer than thin line-chart strokes.
- * Hover still uses the unmuted accent, and custom host series colors follow.
+ * The six series tokens feed every chart. Pie slices are a little different
+ * from line strokes so the accent stays reserved for hover: the first slice
+ * is the accent nudged toward the ink; in light themes the rest are softened
+ * a touch toward the surface (dark themes and vivid ones, Studio, use their
+ * series colors as they are). Custom host series colors follow.
  */
 export function sliceColors(theme: Theme): string[] {
-  const [accent, steel, sage, stone, blue, moss] = seriesColors(theme);
+  const [accent, ...rest] = seriesColors(theme) as [string, ...string[]];
   const { raised, ink } = theme.colors;
+  const dark = isDarkTheme(theme);
+  const first = mixColors(accent, ink, dark ? 0.12 : 0.15) ?? accent;
   // A theme with an accent gradient (Studio) is a vivid one: its slices are its series colors.
   if (theme.colors.accent2 !== theme.colors.accent) return seriesColors(theme);
-  if (isDarkTheme(theme)) {
-    return [
-      mixColors(raised, accent!, 0.77) ?? accent!,
-      steel!, sage!, stone!, blue!, moss!,
-    ];
-  }
-  const deep = mixColors(accent!, steel!, 0.6) ?? accent!;
-  return [
-    mixColors(deep, ink, 0.25) ?? deep,
-    mixColors(steel!, raised, 0.18) ?? steel!,
-    mixColors(sage!, raised, 0.32) ?? sage!,
-    mixColors(stone!, raised, 0.40) ?? stone!,
-    mixColors(blue!, raised, 0.25) ?? blue!,
-    mixColors(moss!, raised, 0.24) ?? moss!,
-  ];
+  return [first, ...rest.map((c) => (dark ? c : mixColors(c, raised, 0.12) ?? c))];
 }
 
 /**
@@ -413,7 +410,7 @@ export function forcedColorsTheme(base: Theme, resolve: (systemColor: string) =>
       surface: canvas, raised: canvas,
       ink: text, muted: text, line: text, control: text,
       accent: highlight, accent2: highlight, onAccent: resolve("HighlightText"), focus: highlight,
-      good: text, warn: text, bad: text,
+      good: text, warn: text, warnFill: text, bad: text,
       land: canvas, landHighlight: highlight, landHover: resolve("GrayText"),
       debug: text, shadow: "transparent",
       // Series are told apart by their legend and labels here, not by color.

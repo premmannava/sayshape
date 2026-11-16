@@ -6,7 +6,8 @@ export { Registry } from "./registry";
 export { Store } from "./state";
 export { layoutTree, boxAt, walkBoxes, isVisible } from "./layout";
 export { Inspector, type DrawCall } from "./inspector";
-export { languageGuide, guideSections, describeGuide, componentExampleSpec, pickList, PICKS_HEADING, WORKED_EXAMPLES, COMPACT_EXAMPLE_ORDER, type GuideOptions, type GuideMode, type GuideSection, type GuideInfo, type WorkedExampleName, type AppAction } from "./prompt";
+export { expandPresets, humanize, REPORT_EXAMPLE, FIGURE_OPS, CHART_KINDS, type Expansion, type PresetData } from "./presets/report";
+export { languageGuide, guideSections, describeGuide, REPORT_FALLBACK, componentExampleSpec, pickList, PICKS_HEADING, WORKED_EXAMPLES, COMPACT_EXAMPLE_ORDER, type GuideOptions, type GuideMode, type GuideSection, type GuideInfo, type WorkedExampleName, type AppAction } from "./prompt";
 export { resolveProfile, PROFILES, ALWAYS_EXPOSED, type ComponentProfile, type ResolvedProfile } from "./profiles";
 export { lightTheme, darkTheme, studioLightTheme, studioDarkTheme, extendTheme, themeFromCSS, forcedColorsTheme, type Theme } from "./theme";
 export { CanvasMeasurer, MonoMeasurer, wrapText, type TextMeasurer } from "./text";
@@ -17,3 +18,4 @@ export type { SayShapeNode, Box, Diagnostic, Value, HitTarget, Rect } from "./ty
 export { ROLES, accessibleKey, type Role, type Semantics, type ElementSemantics, type PartSemantics, type SemanticsResult, type SemanticsContext, type AccessibleNode, type RangeValue } from "./a11y/semantics";
 export { noAccessibility, type AccessibilityHost, type Politeness } from "./a11y/host";
 export { plainText } from "./a11y/text";
+export { noTextLayer, type TextLayerHost, type TextLayerInfo, type TextLine } from "./text-layer/host";

@@ -24,6 +24,7 @@ import { loopNames } from "./each";
 import { PATH } from "./paths";
 import { literal } from "./actions";
 import type { Registry } from "./registry";
+import { expandPresets } from "./presets/report";
 import type { Diagnostic, SayShapeNode, Value } from "./types";
 
 /**
@@ -72,6 +73,12 @@ function defOf(type: string, registry: Registry): ComponentDef | undefined {
 export interface ParseOptions {
   /** Ignore the last line if it has no trailing newline (it may still be streaming). */
   partial?: boolean;
+  /**
+   * Used with partial: a name read before its state line (layout first, data
+   * last) isn't reported as unknown yet, since the line may still be on its
+   * way. Without partial, or off (default), nothing changes.
+   */
+  deferUnknownNames?: boolean;
   /** Props given to the invisible root column. */
   rootProps?: Record<string, string>;
   /**
@@ -85,6 +92,17 @@ export interface ParseOptions {
    * language and the result are exactly what they were.
    */
   behavior?: boolean;
+  /**
+   * Opt-in presets (src/presets/): `report` blocks are expanded into ordinary
+   * elements before the spec is read, and the result says what they became.
+   * Off (default), `report` is an unknown element, as it always was.
+   */
+  presets?: boolean;
+  /**
+   * With presets: the values of data the host supplies (sayshape.state.set),
+   * so a report can name a table's columns and choose number formats from them.
+   */
+  presetValue?: (name: string) => unknown;
 }
 
 /** A derive line's value: a name, its expression, and the names that expression reads. */
@@ -110,6 +128,12 @@ export interface ParseResult {
   lines: number;
   /** Rules (`every 1s … do=…`) that can run. Present only when parsed with behavior on. */
   rules?: RuleDef[];
+  /**
+   * With presets on and a report in the spec: the spec as ordinary SayShape
+   * (what the reports became), and the data names reports read. Line numbers
+   * everywhere else in the result are the original spec's.
+   */
+  presets?: { expanded: string; reads: string[] };
 }
 
 interface LineTokens {
@@ -572,6 +596,41 @@ function providedTo(stack: readonly SayShapeNode[], registry: Registry): { names
 }
 
 export function parse(src: string, registry: Registry, opts: ParseOptions = {}): ParseResult {
+  if (!opts.presets || !HAS_PRESET.test(src)) return parseSpec(src, registry, opts);
+  if (opts.partial) {
+    const cut = src.lastIndexOf("\n");
+    src = cut < 0 ? "" : src.slice(0, cut + 1);
+  }
+  // What the spec itself declares, to name a report's columns from its data: read once without presets.
+  const plain = parseSpec(src, registry, { ...opts, presets: false, partial: false });
+  const values = new Map<string, unknown>(plain.state.map((s) => [s.key, s.value]));
+  const names = new Set<string>([...values.keys(), ...plain.derived.map((d) => d.name), ...(opts.knownNames ?? [])]);
+  const x = expandPresets(src, {
+    value: (n) => (values.has(n) ? values.get(n) : opts.presetValue?.(n)),
+    known: (n) => names.has(n) || opts.presetValue?.(n) !== undefined,
+  });
+  const result = parseSpec(x.text, registry, { ...opts, partial: false });
+  // Back to the original spec's lines; elements a report made get ids of their own from the report line.
+  const orig = (line: number) => x.lines[line - 1] ?? line;
+  const walk = (n: SayShapeNode) => {
+    if (n.id !== "root") {
+      const part = x.part[n.line - 1] ?? 0;
+      n.line = orig(n.line);
+      n.id = part ? `${n.line}.${part}:${n.type}` : `${n.line}:${n.type}`;
+    }
+    n.children.forEach(walk);
+  };
+  walk(result.root);
+  for (const st of result.state) st.line = orig(st.line);
+  for (const d of result.derived) d.line = orig(d.line);
+  for (const r of result.rules ?? []) r.line = orig(r.line);
+  const diagnostics = [...result.diagnostics.map((d) => ({ ...d, line: orig(d.line) })), ...x.diagnostics].sort((a, b) => a.line - b.line);
+  return { ...result, diagnostics, lines: (src.match(/\n/g) ?? []).length, presets: { expanded: x.text, reads: x.reads } };
+}
+
+const HAS_PRESET = /^\s*report(\s|$)/m;
+
+function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): ParseResult {
   if (opts.partial) {
     const cut = src.lastIndexOf("\n");
     src = cut < 0 ? "" : src.slice(0, cut + 1);
@@ -901,7 +960,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   for (const d of derivedLines) if (d.reads.length) outsideUses.push({ line: d.line, names: d.reads });
   const defined = new Set([...state.map((s) => s.key), ...derivedLines.map((d) => d.name)]);
   // A state value that couldn't be read is reported on its own line; saying again on every line that uses it hides that.
-  checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics);
+  checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics, !!(opts.partial && opts.deferUnknownNames));
   // Stable sort keeps each line's diagnostics in the order they were found.
   const kept = opts.behavior ? checkRules(rules, controls, dialogs, diagnostics) : undefined;
   diagnostics.sort((a, b) => a.line - b.line);
@@ -953,7 +1012,7 @@ const ENGINE_STATE = ["screen"];
  * otherwise just show a dash: a loop variable outside its each, or a word
  * meant as text but left unquoted ({done ? Yes : No}).
  */
-function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayShapeNode[], stateKeys: Set<string>, written: Set<string>, diags: Diagnostic[]): void {
+function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayShapeNode[], stateKeys: Set<string>, written: Set<string>, diags: Diagnostic[], deferUnknown = false): void {
   const defined = new Map<string, { each: SayShapeNode; prop: string }>();
   for (const e of eaches) {
     const as = e.props.as ?? "item";
@@ -966,6 +1025,8 @@ function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayS
       const d = defined.get(name);
       // Writing t.done outside its each doesn't make t exist there, so loop variables are checked first.
       if (!d && written.has(name)) continue;
+      // Layout first: the state line may still be streaming in; the last parse reports it.
+      if (!d && deferUnknown) continue;
       diags.push(d
         ? { line, severity: "warning", message: `"${name}" only exists inside the each on line ${d.each.line} (${d.prop}). Indent this line under it, or use a state name` }
         : { line, severity: "warning", message: `"${name}" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: '${name}'. To use state, declare it: state ${name}=…` });

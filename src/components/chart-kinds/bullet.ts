@@ -176,7 +176,7 @@ export const bullet: ChartKindDef = {
     const hot = ctx.pointer && ctx.isHovered(box.node) ? ctx.pointer : null;
     const n = b.rows.length;
     b.rows.forEach((r, i) => {
-      const color = r.tone === "accent" ? c.accent : c[r.tone];
+      const color = r.tone === "accent" ? c.accent : r.tone === "warn" ? c.warnFill : c[r.tone];
       const tr = r.track;
       const row = d.slots[i]?.bars?.[0];
       const over = !!row && !!hot && hot.y - oy >= row.y && hot.y - oy < row.y + row.h;

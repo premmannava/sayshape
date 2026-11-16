@@ -121,6 +121,16 @@ describe("generateSpec with edits", () => {
     expect(r.usage).toMatchObject({ promptTokens: 180, completionTokens: 35 });
   });
 
+  it("checks edited specs with presets on, so a report isn't an unknown element", async () => {
+    const report = `state claims=[{id: "A", amount: 1}]\nreport "Claims" data=claims\n  count\n`;
+    const m = fakeModel([{ content: ['@replace 2\nreport "Claims review" data=claims\n'] }]);
+    const r = await generateSpec({ ...base, refine: { task: "A claims report", spec: report }, presets: true, edits: true, fetch: m.fetch });
+    expect(r.edit).toMatchObject({ mode: "edits", applied: 1 });
+    expect(r.spec).toContain('report "Claims review" data=claims');
+    expect(r.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(m.requests).toHaveLength(1); // no repair call
+  });
+
   it("falls back when the edits leave an error the current spec didn't have", async () => {
     const m = fakeModel([{ content: ['@replace 4\n  nonsense "Book"\n'] }, { content: [spec] }]);
     const r = await generateSpec({ ...base, edits: true, fetch: m.fetch });

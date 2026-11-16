@@ -509,6 +509,12 @@ async function copyText(): Promise<void> {
   sayshape.notify(ok ? "Text copied" : "This chat app doesn't allow copying from here");
 }
 
+/** Put a code block's text on the clipboard, with a short notice either way. Nothing goes to the model. */
+async function copyCode(text: string): Promise<void> {
+  const ok = await writeClipboard(text, browserClipboard(document));
+  sayshape?.notify(ok ? "Code copied" : "This chat app doesn't allow copying from here");
+}
+
 /**
  * Ctrl+C (Cmd+C on a Mac) copies the interface's text, as the Copy text
  * button does, unless the person is typing in a field or has selected text
@@ -610,6 +616,9 @@ async function start(): Promise<void> {
   sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
     ...(viewOptions.behavior ? { behavior: true } : {}),
+    // The invisible text layer (selecting, copying by drag, Ctrl/Cmd+F) unless --no-select-text.
+    ...(viewOptions.selectText === false ? { selectText: false } : {}),
+    ...(viewOptions.selectTouch !== undefined ? { selectTouch: viewOptions.selectTouch } : {}),
     theme: faceTheme(theme),
     // The chat app already boxes the view: a card that is the whole interface draws no frame of its own.
     bareRootCard: true,
@@ -626,6 +635,8 @@ async function start(): Promise<void> {
   sayshape.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
     if (!sayshape) return;
     if (name === SHOW_ANYWAY) { unfold(); return; }
+    // A code block's copy button (emit:copy:<code>) is the person's own: it goes to the clipboard, not the model.
+    if (name === "copy" && typeof value === "string") { void copyCode(value); return; }
     void deliver(name, value, sayshape.state.snapshot());
   });
   document.addEventListener("keydown", onCopyKey);

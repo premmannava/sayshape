@@ -1,8 +1,8 @@
-import { ICON_NAMES, isIconName, nearestIcon } from "../icons";
-import type { LayoutContext, PressContext, PropDef } from "../component";
+import { drawIcon, ICON_NAMES, isIconName, nearestIcon, type IconName } from "../icons";
+import type { LayoutContext, PaintContext, PressContext, PropDef } from "../component";
 import type { Theme } from "../theme";
 import type { Box, SayShapeNode } from "../types";
-import { fitLines } from "../text";
+import { ellipsize, fitLines } from "../text";
 
 export const TONES = ["default", "muted", "accent", "good", "warn", "bad"] as const;
 export type Tone = (typeof TONES)[number];
@@ -69,7 +69,8 @@ export function shareWidths(space: number, mins: readonly number[]): number[] {
  * more lines, so a row of controls becomes a column on a narrow screen. At
  * widths where everything fits, every child gets an equal share, as before.
  */
-export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (typeof ROW_ALIGN)[number], wrap = false): void {
+export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (typeof ROW_ALIGN)[number], wrap = false, fit?: RowFit): void {
+  if (fit && (fit.fit || fit.justify)) return fitRow(box, ctx, pad, gap, align, wrap, fit);
   const kids = ctx.visibleChildren(box.node);
   const innerW = Math.max(0, box.w - pad * 2);
   const mins = kids.map((k) => Math.min(innerW, ctx.minWidth(k)));
@@ -100,6 +101,72 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
     packButtons(placed, widths, box.x + pad, innerW, gap, ctx);
     // Cards form visual panels: match their bottom edges instead of centering
     // a shorter card. Explicit top/bottom alignment still takes precedence.
+    if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
+      for (const kb of placed) kb.h = tallest;
+    } else if (align !== "top") {
+      for (const kb of placed) {
+        const d = tallest - kb.h;
+        if (d > 0) ctx.shift(kb, 0, align === "center" ? d / 2 : d);
+      }
+    }
+    y += tallest;
+  });
+  box.h = y - box.y + pad;
+}
+
+export const ROW_JUSTIFY = ["start", "end", "between"] as const;
+export interface RowFit { fit: boolean; justify?: (typeof ROW_JUSTIFY)[number] }
+
+/**
+ * A row whose children keep their natural width (fit=true, or any justify).
+ * Each child is first laid out with the whole row to itself: one that hugs its
+ * content (a button, a badge) comes back narrower and keeps that width; the
+ * rest (text, cards) share what is left. Lines wrap on those widths, then each
+ * line is placed by justify (start, end, or between: spare room between children).
+ */
+function fitRow(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (typeof ROW_ALIGN)[number], wrap: boolean, fit: RowFit): void {
+  const kids = ctx.visibleChildren(box.node);
+  const innerW = Math.max(0, box.w - pad * 2);
+  const left = box.x + pad;
+  const mins = kids.map((k) => Math.min(innerW, ctx.minWidth(k)));
+  const trial = kids.map((k) => ctx.layout(k, left, box.y + pad, innerW));
+  const hugs = trial.map((kb) => kb.w < innerW - 1);
+  const need = kids.map((_k, i) => (hugs[i] ? Math.max(trial[i]!.w, mins[i]!) : mins[i]!));
+  const lines: number[][] = [];
+  let line: number[] = [], used = 0;
+  kids.forEach((_k, i) => {
+    const w = (line.length ? used + gap : 0) + need[i]!;
+    if (wrap && line.length && w > innerW + 0.01) { lines.push(line); line = []; used = 0; }
+    used = (line.length ? used + gap : 0) + need[i]!;
+    line.push(i);
+  });
+  if (line.length || !lines.length) lines.push(line);
+
+  let y = box.y + pad;
+  lines.forEach((idx, li) => {
+    if (li) y += gap;
+    const space = innerW - gap * Math.max(0, idx.length - 1);
+    const fill = idx.filter((i) => !hugs[i]);
+    const hugW = idx.reduce((t, i) => t + (hugs[i] ? need[i]! : 0), 0);
+    const shares = shareWidths(Math.max(0, space - hugW), fill.map((i) => mins[i]!));
+    const width = (i: number) => (hugs[i] ? trial[i]!.w : shares[fill.indexOf(i)]!);
+    const total = idx.reduce((t, i) => t + width(i), 0) + gap * Math.max(0, idx.length - 1);
+    const spare = Math.max(0, innerW - total);
+    const between = fit.justify === "between" && idx.length > 1 ? spare / (idx.length - 1) : 0;
+    let x = left + (fit.justify === "end" ? spare : 0);
+    if (!fit.justify && !fill.length && idx.every((i) => kids[i]!.type === "tile")) x = left + spare / 2;
+    let tallest = 0;
+    const placed: Box[] = [];
+    idx.forEach((i) => {
+      const w = width(i);
+      const kb = hugs[i] ? trial[i]! : ctx.layout(kids[i]!, x, y, w);
+      if (hugs[i]) ctx.shift(kb, x - kb.x, y - kb.y);
+      else if (Math.abs(kb.x - x) > 0.01) ctx.shift(kb, x - kb.x, 0);
+      placed.push(kb);
+      box.children.push(kb);
+      tallest = Math.max(tallest, kb.h);
+      x += w + gap + between;
+    });
     if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
       for (const kb of placed) kb.h = tallest;
     } else if (align !== "top") {
@@ -231,9 +298,63 @@ export function labelLines(ctx: LayoutContext, text: string, width: number, maxL
 /** icon= on text and list-item: a symbol before the words, from the icon element's list. */
 export const iconProp: PropDef = { type: "string", description: "An icon before the text, by name from icon's list, e.g. icon=check-circle." };
 
+/** icon= on controls and labels: the same name list as iconProp, in fewer words for the guide. */
+export const iconBefore = (what: string): PropDef => ({ type: "string", description: `Icon name before the ${what}.` });
+
+/** detail= on controls: a quiet second line. */
+export const detailProp = (under: string): PropDef => ({ type: "string", description: `A muted line under the ${under}.` });
+
 /** A warning for an icon name that doesn't exist, with the nearest one and the full list. */
 export function iconProblems(raw: string | undefined, prop: string): string[] {
   if (raw === undefined || raw.includes("{") || isIconName(raw)) return [];
   const near = nearestIcon(raw);
   return [`${prop}="${raw}" isn't an icon.${near ? ` Did you mean ${prop}=${near}?` : ""} Icons: ${ICON_NAMES.join(", ")}`];
+}
+
+/** A small label pill (badge, a list row's tagged value, a tab's count): soft tint, solid fill or outline. */
+export const PILL_VARIANTS = ["soft", "solid", "outline"] as const;
+/** The tone roles a pill or an edge stripe takes (no plain ink). */
+export const PILL_TONES = ["accent", "good", "warn", "bad", "muted"] as const;
+export type PillVariant = (typeof PILL_VARIANTS)[number];
+const PILL_PAD = 8, PILL_DOT = 12, PILL_ICON = 18;
+
+/** What starts a pill: a status dot, an icon, or nothing. */
+export type PillLead = "dot" | IconName | null;
+
+/** A pill's width: its label with padding, and room for what leads it. */
+export function pillWidth(ctx: LayoutContext, label: string, lead: PillLead): number {
+  return Math.ceil(textWidth(ctx, label, 600, 12) + PILL_PAD * 2 + (lead === "dot" ? PILL_DOT : lead ? PILL_ICON : 0));
+}
+
+/** Draw a pill (w from pillWidth) in a tone color: the label in that color, or the theme's on-accent color on a solid fill. */
+export function paintPill(ctx: PaintContext, at: { x: number; y: number; w: number; h: number }, label: string, color: string, variant: PillVariant, lead: PillLead): void {
+  const { g, theme } = ctx;
+  const ink = variant === "solid" ? theme.colors.onAccent : color;
+  g.font = ctx.font(600, 12);
+  if (variant === "outline") {
+    ctx.roundRect(at.x + 0.5, at.y + 0.5, at.w - 1, at.h - 1, theme.radius.sm);
+    g.strokeStyle = color;
+    g.lineWidth = 1;
+    g.stroke();
+  } else {
+    ctx.roundRect(at.x, at.y, at.w, at.h, theme.radius.sm);
+    if (variant === "solid") { g.fillStyle = color; g.fill(); }
+    else fillTint(g, color, color === theme.colors.muted ? 0.1 : 0.12);
+  }
+  g.fillStyle = ink;
+  let room = PILL_PAD;
+  if (lead === "dot") {
+    // A status dot leads the label, so the color reads at a glance even where tints are faint.
+    g.beginPath();
+    g.arc(at.x + PILL_PAD + 3, at.y + at.h / 2, 3, 0, Math.PI * 2);
+    g.fill();
+    room += PILL_DOT;
+  } else if (lead) {
+    drawIcon(g, lead, at.x + PILL_PAD, at.y + (at.h - 14) / 2, 14, ink);
+    room += PILL_ICON;
+  }
+  g.textAlign = "left";
+  g.textBaseline = "middle";
+  g.fillStyle = ink;
+  g.fillText(ellipsize(label, at.w - PILL_PAD - room, g.font, { width: (t) => g.measureText(t).width }), at.x + room, at.y + at.h / 2 + 1);
 }
