@@ -177,6 +177,7 @@ export function chartSemantics(box: Box, ctx: SemanticsContext): ElementSemantic
   // Layers: levels and notes in the summary, line layers as more columns of the data.
   const L = geo?.layers;
   if (L) summary += layersSummary(L, v);
+  if (geo?.highlight?.length) summary += ` Highlighted: ${geo.highlight.map((i) => geo.slots[i]?.label).filter(Boolean).join(", ")}.`;
   const extra = L?.lines ?? [];
   return figure(summary, tableParts(name, [x, ...seriesNames, ...extra.map((ln) => ln.label)], d.slots.map((s, i) => [s.label, ...s.values.map(v), ...extra.map((ln) => v(ln.values[i] ?? null))])));
 }
