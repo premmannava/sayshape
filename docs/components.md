@@ -41,6 +41,8 @@ Places children side by side, splitting the width equally. On narrow screens the
 | `pad` | number | Inner padding in pixels (default 0). |
 | `align` | `top` / `center` / `bottom` | Vertical alignment of children: top, center or bottom. |
 | `wrap` | boolean | Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line. |
+| `fit` | boolean | Keep children at their natural width. |
+| `justify` | `start` / `end` / `between` | Where children sit: start, end, or between (spread). Implies fit. |
 
 Children: any elements.
 
@@ -76,6 +78,7 @@ Places children in responsive equal columns. Cards in the same grid row automati
 | Prop | Type | Description |
 |---|---|---|
 | `min` | number | Narrowest a column may be, in pixels (default 200). |
+| `cols` | number | Most columns; fewer when min doesn't fit. |
 | `gap` | number | Space between children in pixels (default 14). |
 
 Children: any elements.
