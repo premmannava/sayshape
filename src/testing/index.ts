@@ -46,6 +46,8 @@ export interface RenderOptions {
   today?: string;
   /** Experimental behavior: `every` rules and dragging in scenes. Turns on the manual clock too. */
   behavior?: boolean;
+  /** The engine's streamPlaceholders option: names declared later in a streamed spec draw as placeholders. Default false. */
+  streamPlaceholders?: boolean;
   /** The engine's presets option: `report` blocks expand into ordinary elements. Default false. */
   presets?: boolean;
   /**
@@ -216,6 +218,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     animate: opts.animate ?? false,
     imageHosts: opts.imageHosts,
     ...(opts.behavior ? { behavior: true } : {}),
+    ...(opts.streamPlaceholders ? { streamPlaceholders: true } : {}),
     ...(opts.presets ? { presets: true } : {}),
     ...(manual ? { clock: manual } : {}),
     reducedMotion: !!opts.reducedMotion,

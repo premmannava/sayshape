@@ -136,6 +136,14 @@ export interface SayShapeOptions {
    */
   behavior?: boolean;
   /**
+   * For specs written layout first, data last. While a spec streams in
+   * (beginStream to endStream), a name an element reads that isn't declared
+   * yet draws as a loading placeholder (the same as setAwaiting(true)), and
+   * the "isn't state" warning for it waits until the stream ends. Default
+   * off: a streamed spec then behaves exactly as before.
+   */
+  streamPlaceholders?: boolean;
+  /**
    * Opt-in presets: `report` blocks (src/presets/report.ts) are expanded into
    * ordinary elements when the spec is read. `expandedSpec` shows what they
    * became. Off (default), `report` is an unknown element, as before.
@@ -331,6 +339,8 @@ export class SayShape {
     this.tipPinned = null;
     this.tipHidden = null;
     this.source = src;
+    // A stream cut short by a whole new spec stops waiting for names too.
+    if (this.streaming && this.opts.streamPlaceholders) this.setAwaiting(false);
     this.streaming = false;
     this.invalidate("parse");
   }
@@ -350,6 +360,7 @@ export class SayShape {
     this.closePopup(false);
     this.source = "";
     this.streaming = true;
+    if (this.opts.streamPlaceholders) this.setAwaiting(true);
     this.invalidate("parse");
   }
 
@@ -360,6 +371,7 @@ export class SayShape {
   }
 
   endStream(): void {
+    if (this.opts.streamPlaceholders) this.setAwaiting(false);
     this.streaming = false;
     this.invalidate("parse");
   }
@@ -505,6 +517,7 @@ export class SayShape {
     const s = this.theme.space;
     this.parsed = parse(this.source, this.registry, {
       partial: this.streaming,
+      ...(this.opts.streamPlaceholders ? { deferUnknownNames: true } : {}),
       rootProps: { pad: String(this.opts.padding ?? 20), gap: String(s.md) },
       // State the app set itself counts as known, so reading it isn't flagged.
       knownNames: Object.keys(this.state.snapshot()),
@@ -530,7 +543,7 @@ export class SayShape {
     this.width = width;
     const lv = this.loadingView();
     const scope = this.state.scope;
-    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.warnOnce(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
+    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.layoutWarning(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
     if (this.opts.bareRootCard) {
       const root = this.parsed.root;
       const top = ctx.visibleChildren(root).filter((n) => !this.registry.get(n.type)?.overlay);
@@ -621,6 +634,17 @@ export class SayShape {
       }
     }
     return false;
+  }
+
+  /**
+   * A problem layout ran into. With streamPlaceholders, while the spec is still
+   * streaming it may be a list or field that's on its way (a select's items, a
+   * chart's data), so it waits: layout runs again when the stream ends, and
+   * reports whatever is still wrong then.
+   */
+  private layoutWarning(m: string): void {
+    if (this.streaming && this.opts.streamPlaceholders) return;
+    this.warnOnce(m);
   }
 
   /** Report a problem once per spec, however often layout runs into it. */

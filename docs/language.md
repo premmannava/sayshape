@@ -190,6 +190,8 @@ ui.setLoading([]);                      // whatever is still loading; [] when al
 
 `setAwaiting(true)` treats every name an element reads that has no value yet as loading. Use it while a spec streams in and you don't yet know which names you'll fill; turn it off when you do.
 
+With the engine option `streamPlaceholders: true`, the engine does this itself from `beginStream()` to `endStream()`, which suits a spec written layout first, data last ([Layout first while streaming](model.md#layout-first-while-streaming)): until the line that declares a name arrives, elements that read it draw placeholders, and the "isn't state" warning for it waits until the stream ends. Off by default.
+
 ### Charts
 
 `chart` draws a list of records as bars, lines, a pie or a donut, and redraws whenever the list changes, from state, the screen's own controls or the host:

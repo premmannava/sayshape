@@ -1,0 +1,871 @@
+{
+  "tokenizer": "o200k_base (gpt-tokenizer)",
+  "variant": "layout-first",
+  "guideTokens": 5563,
+  "results": [
+    {
+      "request": "r1-table",
+      "run": "1",
+      "outputTokens": 213,
+      "firstPaintTokens": 2,
+      "composition": {
+        "data": 137,
+        "structure": 52,
+        "words": 21,
+        "formulas": 3
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r1-table",
+      "run": "2",
+      "outputTokens": 229,
+      "firstPaintTokens": 2,
+      "composition": {
+        "data": 137,
+        "structure": 58,
+        "words": 33,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r1-table",
+      "run": "3",
+      "outputTokens": 207,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 138,
+        "structure": 48,
+        "words": 21,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "1",
+      "outputTokens": 184,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 75,
+        "structure": 70,
+        "words": 18,
+        "formulas": 22
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "2",
+      "outputTokens": 284,
+      "firstPaintTokens": 9,
+      "composition": {
+        "data": 101,
+        "structure": 101,
+        "words": 40,
+        "formulas": 46
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "3",
+      "outputTokens": 252,
+      "firstPaintTokens": 9,
+      "composition": {
+        "data": 75,
+        "structure": 95,
+        "words": 30,
+        "formulas": 56
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r3-contact",
+      "run": "1",
+      "outputTokens": 256,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 19,
+        "structure": 98,
+        "words": 112,
+        "formulas": 45
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Name, Email and Phone fields",
+          "passed": true
+        },
+        {
+          "label": "a Subject dropdown",
+          "passed": true
+        },
+        {
+          "label": "a Message text area",
+          "passed": true
+        },
+        {
+          "label": "Submit and Cancel buttons",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r3-contact",
+      "run": "2",
+      "outputTokens": 247,
+      "firstPaintTokens": 22,
+      "composition": {
+        "data": 14,
+        "structure": 100,
+        "words": 105,
+        "formulas": 36
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Name, Email and Phone fields",
+          "passed": true
+        },
+        {
+          "label": "a Subject dropdown",
+          "passed": true
+        },
+        {
+          "label": "a Message text area",
+          "passed": true
+        },
+        {
+          "label": "Submit and Cancel buttons",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r3-contact",
+      "run": "3",
+      "outputTokens": 287,
+      "firstPaintTokens": 57,
+      "composition": {
+        "data": 60,
+        "structure": 109,
+        "words": 108,
+        "formulas": 19
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Name, Email and Phone fields",
+          "passed": true
+        },
+        {
+          "label": "a Subject dropdown",
+          "passed": true
+        },
+        {
+          "label": "a Message text area",
+          "passed": true
+        },
+        {
+          "label": "Submit and Cancel buttons",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r4-analytics",
+      "run": "1",
+      "outputTokens": 1026,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 578,
+        "structure": 274,
+        "words": 101,
+        "formulas": 77
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r4-analytics",
+      "run": "2",
+      "outputTokens": 1063,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 571,
+        "structure": 292,
+        "words": 116,
+        "formulas": 83
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r4-analytics",
+      "run": "3",
+      "outputTokens": 1039,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 610,
+        "structure": 264,
+        "words": 107,
+        "formulas": 63
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r5-pricing",
+      "run": "1",
+      "outputTokens": 564,
+      "firstPaintTokens": 158,
+      "composition": {
+        "data": 150,
+        "structure": 217,
+        "words": 160,
+        "formulas": 41
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "three tiers",
+          "passed": true
+        },
+        {
+          "label": "a feature comparison table",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r5-pricing",
+      "run": "2",
+      "outputTokens": 722,
+      "firstPaintTokens": 184,
+      "composition": {
+        "data": 176,
+        "structure": 342,
+        "words": 199,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "three tiers",
+          "passed": true
+        },
+        {
+          "label": "a feature comparison table",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r5-pricing",
+      "run": "3",
+      "outputTokens": 755,
+      "firstPaintTokens": 13,
+      "composition": {
+        "data": 193,
+        "structure": 318,
+        "words": 239,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "three tiers",
+          "passed": true
+        },
+        {
+          "label": "a feature comparison table",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r6-settings",
+      "run": "1",
+      "outputTokens": 423,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 33,
+        "structure": 190,
+        "words": 197,
+        "formulas": 23
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Profile, Security and Notifications tabs",
+          "passed": true
+        },
+        {
+          "label": "a name field and an avatar on Profile",
+          "passed": true
+        },
+        {
+          "label": "a 2FA toggle on Security",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r6-settings",
+      "run": "2",
+      "outputTokens": 429,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 47,
+        "structure": 202,
+        "words": 176,
+        "formulas": 19
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Profile, Security and Notifications tabs",
+          "passed": true
+        },
+        {
+          "label": "a name field and an avatar on Profile",
+          "passed": true
+        },
+        {
+          "label": "a 2FA toggle on Security",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r6-settings",
+      "run": "3",
+      "outputTokens": 362,
+      "firstPaintTokens": 26,
+      "composition": {
+        "data": 29,
+        "structure": 184,
+        "words": 144,
+        "formulas": 16
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Profile, Security and Notifications tabs",
+          "passed": true
+        },
+        {
+          "label": "a name field and an avatar on Profile",
+          "passed": true
+        },
+        {
+          "label": "a 2FA toggle on Security",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "1",
+      "outputTokens": 2728,
+      "firstPaintTokens": 13,
+      "composition": {
+        "data": 2211,
+        "structure": 281,
+        "words": 125,
+        "formulas": 104
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "2",
+      "outputTokens": 2714,
+      "firstPaintTokens": 13,
+      "composition": {
+        "data": 2211,
+        "structure": 253,
+        "words": 150,
+        "formulas": 106
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "3",
+      "outputTokens": 2633,
+      "firstPaintTokens": 12,
+      "composition": {
+        "data": 2211,
+        "structure": 222,
+        "words": 180,
+        "formulas": 21
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "1",
+      "outputTokens": 521,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 5,
+        "structure": 300,
+        "words": 128,
+        "formulas": 86
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "2",
+      "outputTokens": 459,
+      "firstPaintTokens": 13,
+      "composition": {
+        "data": 5,
+        "structure": 265,
+        "words": 165,
+        "formulas": 21
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "3",
+      "outputTokens": 436,
+      "firstPaintTokens": 8,
+      "composition": {
+        "data": 5,
+        "structure": 260,
+        "words": 101,
+        "formulas": 66
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    }
+  ]
+}
