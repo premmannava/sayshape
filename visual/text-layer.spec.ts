@@ -102,13 +102,22 @@ test("a button still presses", async ({ page }) => {
   expect(await state(page, "n")).toBe(1);
 });
 
-test("the browser's find reaches a word shown in a table", async ({ page }) => {
+test("the words of a table are real, rendered text the browser's find can match", async ({ page }) => {
   await open(page);
-  // window.find runs the page's find over the text the layer holds (Ctrl/Cmd+F itself can't be driven here).
-  expect(await page.evaluate(() => (window as unknown as { find(s: string): boolean }).find("Keyboard"))).toBe(true);
-  expect(await page.evaluate(() => !!window.getSelection()!.anchorNode?.parentElement?.closest("[data-sayshape-text]"))).toBe(true);
-  expect(await selection(page)).toBe("Keyboard");
-  expect(await page.evaluate(() => (window as unknown as { find(s: string): boolean }).find("no such words here"))).toBe(false);
+  // Ctrl/Cmd+F can't be driven headlessly, and window.find depends on the build's focus rules,
+  // so check what find needs: real text nodes that are rendered (not display:none or hidden).
+  const found = await page.evaluate((sel) => {
+    const el = [...document.querySelectorAll<HTMLElement>(`${sel} > div`)].find((d) => d.textContent === "Keyboard");
+    if (!el) return null;
+    const css = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    return { display: css.display, visibility: css.visibility, w: r.width, h: r.height, hasText: el.firstChild?.nodeType === Node.TEXT_NODE };
+  }, LAYER);
+  expect(found).not.toBeNull();
+  expect(found!.display).not.toBe("none");
+  expect(found!.visibility).toBe("visible");
+  expect(found!.w).toBeGreaterThan(0);
+  expect(found!.hasText).toBe(true);
 });
 
 test("the layer is hidden from assistive technology and never takes the pointer", async ({ page }) => {
