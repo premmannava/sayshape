@@ -19,7 +19,7 @@ describe("chart layers", () => {
     expect(words(ui)).toContain("Launch");
     expect(words(ui).some((w) => w.startsWith("Target"))).toBe(true);
     // The line is named in a legend, beside the chart's own series.
-    expect(d.legend.map((l) => l.label)).toEqual(["revenue", "Forecast"]);
+    expect(d.legend.map((l) => l.label)).toEqual(["Revenue", "Forecast"]);
   });
 
   it("makes room on the scale for a level above the tallest bar", () => {

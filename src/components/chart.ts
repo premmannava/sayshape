@@ -46,8 +46,8 @@ import { themeFont } from "./util";
 import { statSizes } from "./content";
 import { CHART_KINDS, paintSankeyHover, sankeyLinkAt, type SankeyGeometry } from "./chart-kinds";
 import {
-  barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
-  plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
+  barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, labelRows, fieldTitle, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
+  legendValueTexts, plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
   formatter, type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
 } from "./chart-kit";
 
@@ -303,8 +303,8 @@ function axisGeometry(
   const each = grouped ? (group - (ns - 1) * BAR_GAP) / ns : barW;
 
   const slots: ChartSlot[] = d.slots.map((s, i) => {
-    const { cx, shownLabel, labelX } = placed[i]!;
-    const slot: ChartSlot = { label: s.label, shownLabel, labelX, cx, value: s.values[0] ?? null, values: s.values };
+    const { cx, shownLabel, shownLabel2, labelX } = placed[i]!;
+    const slot: ChartSlot = { label: s.label, shownLabel, ...(shownLabel2 ? { shownLabel2 } : {}), labelX, cx, value: s.values[0] ?? null, values: s.values };
     if (kind === "bar") {
       const z = zeroY ?? y(scale.min);
       slot.bars = s.values.map((v, k) => {
@@ -341,7 +341,7 @@ function axisGeometry(
   });
 
   const labelY = plot.y + plot.h + t.space.xs;
-  let h = labelY + labelLH;
+  let h = labelY + labelLH * labelRows(placed);
   let legend: LegendItem[] = [];
   const layers = layerInput ? placeLayers(layerInput, d, slots, y, ns, format, line, ctx.warn) : undefined;
   // A line layer needs naming, so the legend shows with one series too.
@@ -553,7 +553,8 @@ function roundGeometry(box: { w: number }, d: PieData, kind: "pie" | "donut", fo
     center = { text: ellipsize(text, width, font, m), font, caption, captionFont, lh: Math.round(fontSize * 1.2) };
   }
 
-  const entries = slices.map((s) => ({ label: s.label, detail: `${valueText(s.value, format)} · ${shareText(s.share)}`, color: s.color }));
+  const valueTexts = legendValueTexts(slices.map((s) => s.value), format);
+  const entries = slices.map((s, i) => ({ label: s.label, detail: `${valueTexts[i]} · ${shareText(s.share)}`, color: s.color }));
   let l: { items: LegendItem[]; bottom: number };
   if (beside) {
     // One column, centred on the ring's height.
@@ -934,7 +935,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     } else {
       const ys = fields.length ? fields : [""];
       const labels = labelsOf(p.str("labels"));
-      const series = ys.map((field, k) => ({ field, label: labels[k] || field, color: k }));
+      const series = ys.map((field, k) => ({ field, label: labels[k] || fieldTitle(field), color: k }));
       const data = chartSeries(items, x, ys);
       // A bar chart on a phone tries its bars across first; its warnings wait until it's kept.
       let across: { g: ChartGeometry; h: number } | null = null;
