@@ -249,6 +249,23 @@ describe("sorting", () => {
     expect(geo(ui).columns.every((c) => c.sorted === null)).toBe(true);
   });
 
+  it("starts sorted by a field written straight into sort= and direction=, and headers still sort", () => {
+    const ui = render(`${equipment}\ntable items=equipment sort=price direction=desc\n${columns}\n`);
+    expect(names(ui)).toEqual(["Laptop", "Monitor", "Keyboard"]);
+    expect(geo(ui).columns.map((c) => c.sorted)).toEqual([null, "desc", null]);
+    // Pressing the sorted header flips it; pressing another sorts by that one.
+    clickDetail(ui, "sort:price");
+    expect(names(ui)).toEqual(["Keyboard", "Monitor", "Laptop"]);
+    clickDetail(ui, "sort:stock");
+    expect(geo(ui).columns.map((c) => c.sorted)).toEqual([null, null, "asc"]);
+    expect(names(ui)).toEqual(["Laptop", "Monitor", "Keyboard"]);
+  });
+
+  it("lets state win over a sort= that is also a field", () => {
+    const ui = render(`${equipment} price="stock"\ntable items=equipment sort=price\n${columns}\n`);
+    expect(geo(ui).columns.map((c) => c.sorted)).toEqual([null, null, "asc"]);
+  });
+
   it("has no header targets without sort=", () => {
     expect(regions(render(`${equipment}\ntable items=equipment key=id bind=selected\n${columns}\n`), "sort:")).toEqual([]);
   });
