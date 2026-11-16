@@ -158,6 +158,19 @@ export function expandPresets(src: string, data: PresetData): Expansion {
   };
 }
 
+/**
+ * Whether a part's first word names a list of its own: a list that's known, or,
+ * when the report's rows are known, a word that isn't one of their fields
+ * (a list whose state line hasn't arrived yet, written after the report).
+ */
+function ownList(words: string[], main: string | undefined, mainRows: unknown, data: PresetData, minWords: number): boolean {
+  const w = words[0];
+  if (w === undefined || w === main || !NAME.test(w)) return false;
+  if (data.known(w)) return true;
+  const row = firstRow(mainRows);
+  return !!row && !(w in row) && words.length >= minWords;
+}
+
 interface ReportSource { line: number; body: string; indent: number; children: Array<{ line: number; text: string }>; no: number }
 
 function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[], diags: Diagnostic[], reads: Set<string>): void {
@@ -259,7 +272,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
     if ((CHART_KINDS as readonly string[]).includes(op)) {
       if (group !== "charts") { at(c.line, 1, "grid min=300 gap=12"); group = "charts"; }
       // A first word that names a list other than the report's data is the chart's own list.
-      const own = words[0] !== undefined && words[0] !== main && data.known(words[0]) ? words.shift() : undefined;
+      const own = ownList(words, main, mainRows, data, 2) ? words.shift() : undefined;
       if (own) reads.add(own);
       const [x, ...ys] = words;
       if (!x) { warn(c.line, `${op} needs the field to go along: ${op} month revenue, or ${op} region for a count per region`); continue; }
@@ -294,7 +307,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
     if (op === "table") {
       group = null;
       tables++;
-      const own = words[0] !== undefined && words[0] !== main && data.known(words[0]) ? words.shift() : undefined;
+      const own = ownList(words, main, mainRows, data, 1) ? words.shift() : undefined;
       if (own) reads.add(own);
       const listRows = own ? data.value(own) : mainRows;
       const row = firstRow(listRows);

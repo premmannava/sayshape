@@ -167,6 +167,29 @@ Three sets of elements are involved, and they're separate:
 
 Examples are chosen explicitly: `examples` turns each element's own short example on or off (default on in full mode, off in compact), and `workedExamples` picks the larger ones by name (`["todo", "cart"]`, `["equipment"]` for a filterable order calculator, or `false` for none). With a profile, an example that uses an element outside it is never shown.
 
+### Data answers with the report preset (opt-in)
+
+Most of what a model writes for a data answer is layout it doesn't need to choose: where the figures go, which cards hold which chart, a table's columns, headers and formats. The `report` preset lets it name the data and what to show, and the engine writes the layout:
+
+```text
+report "Claims review" subtitle="2025" data=claims filter=status
+  count
+  sum incurred
+  count status=Open
+  bar monthly month opened
+  line monthly month opened closed
+  donut line
+  table
+```
+
+- The first line takes a title, `subtitle=`, `data=` (the list the report shows) and `filter=` (one or more fields; each becomes a multiple-choice select, and the figures, grouped charts and table on `data=` show only the rows it leaves).
+- Each line under it is one part, in screen order: a figure (`count`, `sum`, `avg`, `min`, `max`, then a field; `field=value` counts or adds up only matching rows), a chart (`bar`, `hbar`, `line`, `area`, `pie`, `donut`, `stacked`, then x, then y fields; with no y it counts rows per x with `group()`; a list named first is drawn as it is), or `table` (every field, or the ones listed). A quoted text at the end of a line names the part.
+- Labels, chart titles, column headers and money or number formats come from the field names and, when the data is known (in the spec's `state` lines or set by the host), from its values. A table waits as a placeholder until its data is known, and the spec is read again when the host's data arrives.
+
+It is a preset, not a component: the parser expands it into ordinary elements (`text`, `select`, `grid`, `card`, `stat`, `chart`, `table`) before reading the spec, so accessibility, Copy text, the inspector and everything else work as usual. Element ids, state, derived values and diagnostics keep the spec's own line numbers. `ui.expandedSpec` (and `ParseResult.presets.expanded`, or `expandPresets()` on its own) shows what a report became.
+
+Turn it on in the engine with `presets: true` (`render(spec, { presets: true })` in tests), and give the model the report guide, `guide: { mode: "report" }`: about 490 tokens (o200k_base) instead of about 5,500 for the compact guide, teaching only the report, how to write data, and to answer `FULL` alone (`REPORT_FALLBACK`) when the request needs anything else. `generateReport()` does both steps: it asks with the report guide and, if the answer is `FULL`, once more with the compact guide (or `fallbackGuide`), adding up the usage of both. `generateSpec` checks specs with presets on whenever the guide is in report mode (or with `presets: true`). Off, `report` is an unknown element, as it always was, and every other guide is unchanged.
+
 ### Repairs
 
 `generateSpec` asks once for a fix when the parser finds problems (`repairOn: "any" | "errors" | "never"`). With a compact guide, `repairGuide: "full"` sends the full guide for that one repair, still limited to the profile. Each attempt reports the guide it used (`result.first.guide`, `result.repair?.guide`); `npm run eval -- --guide compact --repair-guide same,full` measures whether it helps.

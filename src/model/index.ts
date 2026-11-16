@@ -10,3 +10,4 @@ export { refineMessages, nextRefineContext, sumUsage, DEFAULT_MAX_CHANGES, type 
 export { cachedPrompt, type CachedPrompt, type CachedPromptOptions, type CacheTtl, type TextBlock } from "./cache";
 export { streamChat, ModelError, type ChatMessage, type ModelConfig, type StreamPart, type Usage } from "./stream";
 export { SpecFilter, sayShapeLineTest, tidySpec, type FilterOutput } from "./clean";
+export { generateReport, asksForFullGuide, type ReportOptions, type ReportResult } from "./report";
