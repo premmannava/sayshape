@@ -1,0 +1,2 @@
+@replace 2
+derive shown={sort(status == 'All' ? claims : filter(claims, 'status', status), 'incurred', 'desc')}

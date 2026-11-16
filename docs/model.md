@@ -226,6 +226,24 @@ It sends the original task, the `requirements` that must always hold, the change
 
 `result.messages` is the conversation that produced the accepted spec: the guide, the context, the request and the final spec. A rejected repair isn't in it, and a kept repair replaces the first spec. (Before, it included the repair exchange.) `result.transcript` has everything that was sent and received. Passing `result.messages` as `history` still works for apps that want the whole conversation.
 
+### Follow-ups as edits (opt-in)
+
+A change to a long screen costs as many output tokens as the screen. With `edits: true` (and `refine`), the model answers with line edits to the current spec instead:
+
+```text
+@replace 4-5      the lines under it replace lines 4 to 5 (@replace 4 for one line)
+@insert 7         the lines under it go after line 7 (0 = at the top)
+@delete 9-10
+```
+
+The request shows the current spec as `N|line`, which the model is told are labels and never to copy (if it does copy them on every line of an edit, they are removed). Numbers always mean the spec as sent, not shifted by earlier edits in the same answer. `refineEditMessages(ctx, request, policy)` builds the exact messages, like `refineMessages`, to try the same text on a writer. `parseEdits`, `applyEdits`, `numberSpec` and `wholeSpecFrom` are exported too.
+
+- A whole spec instead of edits (no `@` lines, starts at the left edge with a SayShape line) is accepted as a rewrite: `result.edit.mode` is `"rewrite"`.
+- Edits that don't apply (bad line, out of range, overlapping, an insert inside a replaced range), edits that leave nothing, edits that cause error diagnostics the current spec didn't have (matched by message), or an answer that is neither, fall back to one normal full-rewrite request (`mode: "fallback"`, with `reason`). The repair flow then runs as usual, on whichever spec was accepted.
+- `result.edit = { mode, applied, reason?, attempt, messages }`; `attempt` is the edit request's attempt and `messages` what it sent. `result.usage` adds up every attempt, a fallback included. `result.messages` is the normal refine conversation ending in the final spec, so it can be reused as before.
+- Streaming: nothing is streamed while edit lines arrive. Once they are applied, `onReset("edits")` is called and `onText` gets the whole patched spec in one call; a whole-spec answer arrives the same way (without a reset). A fallback streams as a normal request does.
+- `edits` is ignored without `refine` or with an empty `refine.spec`. With it off, requests are byte-for-byte as before.
+
 ### Parallel sections (experimental)
 
 `generateSections` is an opt-in alternative to `generateSpec` for long screens. It takes the same options plus `maxSections` (default 6, at most 12) and `onSection`. Nothing else changes: `generateSpec` doesn't know about it, and it can be deleted with one file (`src/model/sections.ts`) and one export line.
