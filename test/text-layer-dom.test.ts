@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { domTextLayer, highlightCss, TEXT_LAYER_MARK } from "../src/text-layer/dom";
 import type { TextLayerHost, TextLayerInfo, TextLine } from "../src/text-layer/host";
 
@@ -153,5 +153,110 @@ describe("the selection highlight", () => {
     const css = highlightCss("1", "#0f766e", true);
     expect(css).toContain("background:Highlight");
     expect(css).toContain("color:HighlightText");
+  });
+});
+
+describe("the browser text layer on touch screens", () => {
+  let canvas: HTMLCanvasElement;
+  let host: TextLayerHost;
+  const seen: Array<{ type: string; x: number; y: number }> = [];
+  const nodes = () => [...document.querySelectorAll<HTMLElement>(`[${TEXT_LAYER_MARK}] > div`)];
+
+  /** A pointer event as a touch screen sends it, from a line of the layer. */
+  const fire = (el: Element, type: string, x: number, y: number, pointerType = "touch") => {
+    const e = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+    Object.assign(e, { pointerId: 7, pointerType, isPrimary: true });
+    el.dispatchEvent(e);
+  };
+
+  const make = (touch: boolean | undefined, coarse = true) => {
+    (window as unknown as { matchMedia: unknown }).matchMedia = (q: string) => ({ matches: coarse && q.includes("coarse"), addEventListener() {}, removeEventListener() {} });
+    document.body.innerHTML = "<div id=app></div>";
+    canvas = document.createElement("canvas");
+    document.getElementById("app")!.append(canvas);
+    seen.length = 0;
+    for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel"]) canvas.addEventListener(t, (e) => seen.push({ type: t, x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY }));
+    host = domTextLayer(canvas, touch === undefined ? {} : { touch });
+    host.update([line("a", "Hello there", 10, 20)], info);
+  };
+  afterEach(() => { host.destroy(); vi.useRealTimers(); });
+
+  it("takes touches over words only when asked to and touch is the main pointer", () => {
+    make(undefined);
+    expect(nodes()[0]!.style.pointerEvents).toBe("");
+    host.destroy();
+    make(true, false);
+    expect(nodes()[0]!.style.pointerEvents).toBe("");
+    host.destroy();
+    make(true);
+    expect(nodes()[0]!.style.pointerEvents).toBe("auto");
+    expect(nodes()[0]!.style.touchAction).toBe("pan-y pinch-zoom");
+    expect(host.surface).toBe(document.querySelector(`[${TEXT_LAYER_MARK}]`));
+  });
+
+  it("passes a tap on as one press and release on the canvas", () => {
+    make(true);
+    const el = nodes()[0]!;
+    fire(el, "pointerdown", 30, 30); fire(el, "pointerup", 30, 30);
+    expect(seen).toEqual([{ type: "pointerdown", x: 30, y: 30 }, { type: "pointerup", x: 30, y: 30 }]);
+  });
+
+  it("passes nothing on for a long press, and nothing at its release", () => {
+    vi.useFakeTimers();
+    make(true);
+    const el = nodes()[0]!;
+    fire(el, "pointerdown", 30, 30);
+    vi.advanceTimersByTime(700);
+    fire(el, "pointerup", 30, 30);
+    expect(seen).toEqual([]);
+  });
+
+  it("passes nothing on when the browser takes the gesture before anything moved (its selection, a pinch)", () => {
+    make(true);
+    const el = nodes()[0]!;
+    fire(el, "pointerdown", 30, 30);
+    fire(el, "pointercancel", 30, 30);
+    expect(seen).toEqual([]);
+  });
+
+  it("replays a swipe from where the finger went down, and its end", () => {
+    make(true);
+    const el = nodes()[0]!;
+    fire(el, "pointerdown", 30, 30);
+    fire(el, "pointermove", 31, 33); // within the slop: still waiting
+    expect(seen).toEqual([]);
+    fire(el, "pointermove", 30, 60);
+    fire(el, "pointermove", 30, 90);
+    fire(el, "pointerup", 30, 90);
+    expect(seen.map((s) => s.type)).toEqual(["pointerdown", "pointermove", "pointermove", "pointerup"]);
+    expect(seen[0]).toEqual({ type: "pointerdown", x: 30, y: 30 });
+  });
+
+  it("finishes a swipe the browser takes over (a page scroll) with a cancel", () => {
+    make(true);
+    const el = nodes()[0]!;
+    fire(el, "pointerdown", 30, 30); fire(el, "pointermove", 30, 70); fire(el, "pointercancel", 30, 70);
+    expect(seen.map((s) => s.type)).toEqual(["pointerdown", "pointermove", "pointercancel"]);
+  });
+
+  it("a second finger (a pinch) presses nothing", () => {
+    make(true);
+    const el = nodes()[0]!;
+    fire(el, "pointerdown", 30, 30);
+    fire(el, "pointerdown", 60, 30);
+    fire(el, "pointerup", 60, 30);
+    expect(seen).toEqual([]);
+  });
+
+  it("only a finger's long press may start the browser's own selection", () => {
+    make(true);
+    const mouse = new Event("selectstart", { cancelable: true, bubbles: true });
+    fire(nodes()[0]!, "pointerdown", 30, 30, "mouse");
+    nodes()[0]!.dispatchEvent(mouse);
+    expect(mouse.defaultPrevented).toBe(true);
+    const finger = new Event("selectstart", { cancelable: true, bubbles: true });
+    fire(nodes()[0]!, "pointerdown", 30, 30, "touch");
+    nodes()[0]!.dispatchEvent(finger);
+    expect(finger.defaultPrevented).toBe(false);
   });
 });

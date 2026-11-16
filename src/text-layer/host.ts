@@ -43,6 +43,12 @@ export interface TextLayerInfo {
 export interface PointerInfo {
   pointerType: string;
   button: number;
+  /** Shift was held: with a selection, the press extends it to the point. */
+  shiftKey?: boolean;
+  /** An element that does something when pressed is under the point. Its text keeps the plain click: no word or block selecting on repeated clicks. */
+  pressable?: boolean;
+  /** When the press happened, in milliseconds, to count double and triple clicks. */
+  time?: number;
 }
 
 export interface TextLayerHost {
@@ -60,6 +66,11 @@ export interface TextLayerHost {
   pointerUp?(): boolean;
   /** Whether there's text under this point (to show a text cursor over text nothing else uses). */
   lineAt?(x: number, y: number): boolean;
+  /**
+   * What touches land on, when the host takes them (touch selection): the engine's own touch
+   * handling for scrolling elements is attached to it too, as to the canvas.
+   */
+  readonly surface?: EventTarget;
   /** Remove everything the host added to the page. */
   destroy(): void;
 }
@@ -78,3 +89,10 @@ export const TEXT_MAX_WAIT_MS = 1000;
 
 /** How far past the visible part of the page lines are kept, so a little scrolling needs no rebuild. */
 export const OVERSCAN = 400;
+
+/**
+ * Whether a long press selects text on touch screens when the host doesn't say. Off until the manual check
+ * on real phones (docs/plans/selectable-text/touch-checklist.md) has been done: emulated touch can't
+ * show the browser's own long-press selection. Turning it on is this one line.
+ */
+export const TOUCH_SELECT_DEFAULT = false;

@@ -38,7 +38,7 @@ import { buildAccessibilityTree } from "./a11y/tree";
 import { plainText } from "./a11y/text";
 import { TextCollector } from "./text-layer/collect";
 import { domTextLayer } from "./text-layer/dom";
-import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, TEXT_MAX_WAIT_MS, type TextLayerHost } from "./text-layer/host";
+import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, TEXT_MAX_WAIT_MS, TOUCH_SELECT_DEFAULT, type TextLayerHost } from "./text-layer/host";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
 import type { ExpressionFunctions, Scope } from "./expr";
 
@@ -139,6 +139,11 @@ export interface SayShapeOptions {
    * adds nothing to the page. sayshape/testing passes a recording layer.
    */
   selectText?: boolean | TextLayerHost;
+  /**
+   * With the text layer on: whether a long press on touch screens selects the word under the finger,
+   * with the platform's own handles and Copy menu (default off for now, see TOUCH_SELECT_DEFAULT; false keeps mouse and pen selection only).
+   */
+  selectTouch?: boolean;
   /**
    * Experimental, opt-in behavior (docs/plans/behavior.md): `every` rules that
    * change state on an interval, and dragging in scenes. Default off: the
@@ -715,11 +720,15 @@ export class SayShape {
 
   // ---------------------------------------------------------------- text layer
 
+  /** Attaches the engine's touch handling to another surface (set by bindInput). */
+  private bindTouchSurface: ((el: EventTarget) => void) | null = null;
+
   /** Set up the text layer from the selectText option: a real one in browsers, none when off or with no document. */
   private bindTextLayer(): void {
     const opt = this.opts.selectText;
-    const host = opt === false ? noTextLayer : typeof opt === "object" ? opt : typeof document !== "undefined" ? domTextLayer(this.canvas) : noTextLayer;
+    const host = opt === false ? noTextLayer : typeof opt === "object" ? opt : typeof document !== "undefined" ? domTextLayer(this.canvas, { touch: this.opts.selectTouch ?? TOUCH_SELECT_DEFAULT }) : noTextLayer;
     if (host === noTextLayer) return;
+    if (host.surface) this.bindTouchSurface?.(host.surface);
     const collector = new TextCollector(this.g, (t, f) => this.measurer.width(t, f), () => this.clips[this.clips.length - 1]?.rect ?? null);
     this.text = { host, collector };
   }
@@ -2253,7 +2262,14 @@ export class SayShape {
       this.downAt = p;
       this.pressed = this.targetAt(p.x, p.y);
       // Text under the pointer may become a selection if this turns into a drag; a plain click still presses.
-      this.text?.host.pointerDown?.(p.x, p.y, { pointerType: e.pointerType, button: e.button });
+      this.text?.host.pointerDown?.(p.x, p.y, {
+        pointerType: e.pointerType,
+        button: e.button,
+        shiftKey: e.shiftKey,
+        // Text with an action under it keeps the plain click; a tip alone isn't one.
+        pressable: !!this.pressed && this.pressed.detail !== TIP && !isTipPart(this.pressed.detail),
+        time: typeof performance !== "undefined" ? performance.now() : Date.now(),
+      });
       // Pressing inside a popup leaves keyboard focus on its owner.
       if (this.pressed?.layer === "popup") { this.invalidate("paint"); return; }
       if (this.pressed) { this.focus = this.pressed; this.invalidate("paint"); }
@@ -2370,6 +2386,18 @@ export class SayShape {
       }
     };
     const onTouchEnd = () => { touch = null; };
+    // The text layer takes touches over words (so a long press selects natively): scrolling elements
+    // must still hear them, so the same handlers go on whatever surface the host gives.
+    this.bindTouchSurface = (el) => {
+      el.addEventListener("touchstart", onTouchStart as EventListener, { passive: true });
+      el.addEventListener("touchmove", onTouchMove as EventListener, { passive: false });
+      el.addEventListener("touchend", onTouchEnd as EventListener);
+      this.cleanup.push(() => {
+        el.removeEventListener("touchstart", onTouchStart as EventListener);
+        el.removeEventListener("touchmove", onTouchMove as EventListener);
+        el.removeEventListener("touchend", onTouchEnd as EventListener);
+      });
+    };
     c.addEventListener("touchstart", onTouchStart as EventListener, { passive: true });
     c.addEventListener("touchmove", onTouchMove as EventListener, { passive: false });
     c.addEventListener("touchend", onTouchEnd as EventListener);
@@ -2402,7 +2430,11 @@ export class SayShape {
     if (typeof window === "undefined") return;
     // A message sits at the bottom of the visible area, which moves when the page scrolls.
     // A press anywhere on the page outside the canvas closes an open popup too.
-    const onPagePress = (e: Event) => { if (this.popup && e.target !== this.canvas) this.closePopup(false); };
+    const onPagePress = (e: Event) => {
+      // A press on the text layer is a press on the canvas it covers.
+      const layer = this.text?.host.surface as Node | undefined;
+      if (this.popup && e.target !== this.canvas && !(layer && layer.contains(e.target as Node))) this.closePopup(false);
+    };
     document.addEventListener("pointerdown", onPagePress, true);
     this.cleanup.push(() => document.removeEventListener("pointerdown", onPagePress, true));
     const onScroll = () => {

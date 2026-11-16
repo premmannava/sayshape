@@ -169,6 +169,16 @@ describe("the widget fragment", () => {
     expect(r.g.__opts.selectText).toBe(false);
   });
 
+  it("passes touch selection to the engine only when the operator said so", async () => {
+    const unset = await run(widgetFragment(base({})));
+    expect("selectTouch" in unset.g.__opts).toBe(false);
+    for (const v of [true, false]) {
+      const r = await run(widgetFragment(base({ selectTouch: v })));
+      expect(r.failures).toEqual([]);
+      expect(r.g.__opts.selectTouch).toBe(v);
+    }
+  });
+
   it("carries the server's settings: theme, accent, image hosts, scenes and behavior", async () => {
     const html = widgetFragment(base({ theme: "purple", colors: ["#e4572e"], imageHosts: ["cdn.example.com", "*.img.example.com"], scenes: true, behavior: true, logo: "https://cdn.example.com/logo.png" }));
     const r = await run(html);

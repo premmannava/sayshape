@@ -398,3 +398,95 @@ describe("text layer: details, callout, badge and list items", () => {
     expect(w).toEqual(expect.arrayContaining(["First thing", "Second thing"]));
   });
 });
+
+describe("text layer: double-click, triple-click and shift+click", () => {
+  const SPEC = `state n=0
+text "Weekend plan for the whole family"
+text "A second paragraph that is long enough to wrap onto more than one drawn line at this width, so a block has several lines"
+card on=inc:n
+  text "Pressable heading"
+${TABLE}`;
+  const at = (ui: Rendered, text: string | RegExp, f: number) => {
+    const l = ui.textLayer.lines.find((x) => (typeof text === "string" ? x.text === text : text.test(x.text)))!;
+    expect(l, String(text)).toBeTruthy();
+    return { x: l.x + l.w * f, y: l.y + l.h / 2, line: l };
+  };
+  const open = () => { const ui = shown(SPEC, { width: 300 }); expect(ui.diagnostics).toEqual([]); return ui; };
+
+  it("double-click selects the word under the pointer", () => {
+    const ui = open();
+    const p = at(ui, "Weekend plan for the whole family", 0.1);
+    ui.click(p.x, p.y); ui.click(p.x, p.y);
+    expect(ui.textLayer.selection).toBe("Weekend");
+    const q = at(ui, "Weekend plan for the whole family", 0.72);
+    ui.click(q.x, q.y); ui.click(q.x, q.y);
+    expect(ui.textLayer.selection).toBe("whole");
+  });
+
+  const PLAIN = `${equipment}
+table "Available equipment" items=equipment key=id
+  table-column "Equipment" field=name
+  table-column "Price" field=price format=money
+`;
+
+  it("double-click on a cell of a table that isn't pressable selects a word of it", () => {
+    const ui = shown(PLAIN, { width: 300 });
+    const p = at(ui, "Keyboard", 0.5);
+    ui.click(p.x, p.y); ui.click(p.x, p.y);
+    expect(ui.textLayer.selection).toBe("Keyboard");
+  });
+
+  it("triple-click selects the whole drawn block: a paragraph's wrapped lines, or one table cell", () => {
+    const ui = open();
+    const lines = ui.textLayer.lines.filter((l) => l.block === at(ui, /^A second paragraph/, 0).line.block);
+    expect(lines.length).toBeGreaterThan(1);
+    const p = at(ui, /^A second paragraph/, 0.3);
+    ui.click(p.x, p.y); ui.click(p.x, p.y); ui.click(p.x, p.y);
+    expect(ui.textLayer.selection).toBe(lines.map((l) => l.text).join(" "));
+    const t = shown(PLAIN, { width: 300 });
+    const c = at(t, "Monitor", 0.5);
+    t.click(c.x, c.y); t.click(c.x, c.y); t.click(c.x, c.y);
+    expect(t.textLayer.selection).toBe("Monitor");
+  });
+
+  it("a fourth click starts over, and a click elsewhere is a new first click", () => {
+    const ui = open();
+    const p = at(ui, "Weekend plan for the whole family", 0.1);
+    for (let i = 0; i < 3; i++) ui.click(p.x, p.y);
+    expect(ui.textLayer.selection).toBe("Weekend plan for the whole family");
+    ui.click(p.x, p.y);
+    expect(ui.textLayer.selection).toBeNull();
+  });
+
+  it("shift+click extends the selection from where it started to the click", () => {
+    const ui = open();
+    ui.dragText("Weekend plan for the whole family");
+    expect(ui.textLayer.selection).toBe("Weekend plan for the whole family");
+    const to = at(ui, /^A second paragraph/, 0.5);
+    ui.click(to.x, to.y, { shift: true });
+    const sel = ui.textLayer.selection!;
+    expect(sel.startsWith("Weekend plan for the whole family\nA second")).toBe(true);
+    expect(sel.length).toBeLessThan(ui.textLayer.lines.map((l) => l.text).join("\n").length);
+    // With no selection, shift+click is just a click.
+    ui.textLayer.clear();
+    const away = at(ui, "Weekend plan for the whole family", 0.9);
+    ui.click(away.x, away.y, { shift: true });
+    expect(ui.textLayer.selection).toBeNull();
+  });
+
+  it("text inside something pressable keeps the plain click: no word selecting, the action runs each time", () => {
+    const ui = open();
+    const p = at(ui, "Pressable heading", 0.2);
+    ui.click(p.x, p.y); ui.click(p.x, p.y);
+    expect(ui.textLayer.selection).toBeNull();
+    expect(ui.state.n).toBe(2);
+  });
+
+  it("a table row that's pressable keeps its click, too", () => {
+    const ui = open();
+    const p = at(ui, "Keyboard", 0.5);
+    ui.click(p.x, p.y); ui.click(p.x, p.y);
+    expect(ui.textLayer.selection).toBeNull();
+    expect(ui.state.selected).toBe("keyboard");
+  });
+});

@@ -615,6 +615,7 @@ export function createServer(opts: ServerOptions): McpServer {
             scenes: scenesOn,
             behavior: behaviorOn,
             ...(opts.view?.selectText === false ? { selectText: false } : {}),
+            ...(opts.view?.selectTouch !== undefined ? { selectTouch: opts.view.selectTouch } : {}),
             imageHosts,
             ...(hostSource !== undefined ? { host: hostSource } : {}),
             ...(opts.view?.theme ? { theme: opts.view.theme } : {}),

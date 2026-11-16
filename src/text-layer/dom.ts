@@ -15,6 +15,7 @@
  * tab-separated (selection.ts) instead of on lines of their own.
  */
 import type { PointerInfo, TextLayerHost, TextLayerInfo, TextLine } from "./host";
+import { blockBounds, ClickCounter, wordBounds } from "./gesture";
 import { lineAtPoint, nearestLine, pieceOf, selectionText, type Piece } from "./selection";
 
 export const TEXT_LAYER_MARK = "data-sayshape-text";
@@ -35,7 +36,17 @@ interface CaretDocument {
   caretRangeFromPoint?(x: number, y: number): Range | null;
 }
 
-export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
+/** How long a finger must stay down, in milliseconds, before it counts as a long press and not a tap. Native selection starts at about the same time. */
+const LONG_PRESS_MS = 500;
+/** How far a finger may move, in CSS pixels, and still be a tap or a long press, not a swipe. */
+const TOUCH_SLOP = 10;
+
+export interface DomTextLayerOptions {
+  /** Let a long press on a touch screen select a word natively (only where touch is the main pointer). */
+  touch?: boolean;
+}
+
+export function domTextLayer(canvas: HTMLCanvasElement, options: DomTextLayerOptions = {}): TextLayerHost {
   const id = String(++layers);
   const container = document.createElement("div");
   container.setAttribute(TEXT_LAYER_MARK, id);
@@ -72,6 +83,17 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
     }
   };
 
+  // Touch selection needs the words themselves to receive touches, so the browser's own long press
+  // (its handles and Copy menu) works on them. That only makes sense where touch is the main pointer;
+  // elsewhere the layer never takes a pointer event.
+  const coarse = typeof matchMedia === "function" && options.touch === true ? matchMedia("(pointer: coarse)") : null;
+  let touchLines = !!coarse?.matches;
+  const onCoarseChange = (): void => {
+    touchLines = !!coarse?.matches;
+    for (const entry of entries.values()) entry.el.style.pointerEvents = touchLines ? "auto" : "";
+  };
+  coarse?.addEventListener?.("change", onCoarseChange);
+
   const entries = new Map<string, Entry>();
   let shown: readonly TextLine[] = [];
   let order: HTMLElement[] = [];
@@ -96,6 +118,9 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
     s.lineHeight = `${l.h}px`;
     s.whiteSpace = "pre";
     s.overflow = "visible";
+    s.pointerEvents = touchLines ? "auto" : "";
+    // Same as the canvas, so a swipe over words scrolls the page as it does anywhere else.
+    s.touchAction = touchLines ? "pan-y pinch-zoom" : "";
     const c = l.clip;
     if (c) {
       const t = Math.max(0, c.y - l.y), r = Math.max(0, l.x + l.w - (c.x + c.w)), b = Math.max(0, l.y + l.h - (c.y + c.h)), lf = Math.max(0, c.x - l.x);
@@ -108,6 +133,8 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
   let start: { x: number; y: number } | null = null;
   let anchor: { node: Node; offset: number } | null = null;
   let selecting = false;
+  let gesture = false;
+  const clicks = new ClickCounter();
 
   const inLayer = (n: Node | null): boolean => !!n && container.contains(n);
   const layerSelection = (): Selection | null => {
@@ -155,6 +182,28 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
     sel.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
   };
 
+  /** Double-click: the word under the point. False when it isn't on a word. */
+  const selectWordAt = (x: number, y: number): boolean => {
+    if (lineAtPoint(shown, x, y) < 0) return false;
+    const at = caretAt(x, y);
+    const sel = document.getSelection();
+    if (!at || !sel || at.node.nodeType !== Node.TEXT_NODE) return false;
+    const w = wordBounds((at.node as Text).data, at.offset);
+    if (!w) return false;
+    sel.setBaseAndExtent(at.node, w[0], at.node, w[1]);
+    return true;
+  };
+
+  /** Triple-click: everything drawn as the same block (a paragraph's lines, one table cell). */
+  const selectBlockAt = (i: number): boolean => {
+    const [s, e] = blockBounds(shown, i);
+    const first = entries.get(shown[s]!.key), last = entries.get(shown[e]!.key);
+    const sel = document.getSelection();
+    if (!first || !last || !sel) return false;
+    sel.setBaseAndExtent(first.text, 0, last.text, last.text.length);
+    return true;
+  };
+
   /** The selection's words, with a table's cells tab-separated. */
   const selectedText = (sel: Selection): string => {
     const range = sel.getRangeAt(0);
@@ -186,8 +235,85 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
   // A drag that starts on the canvas must not start the browser's own selection of the page around it.
   const onSelectStart = (e: Event): void => e.preventDefault();
   canvas.addEventListener("selectstart", onSelectStart);
+  // On the layer itself, only a finger's long press may start the browser's own selection;
+  // a mouse selects through the host's drag, as everywhere.
+  let lastType = "";
+  const onLayerSelectStart = (e: Event): void => { if (lastType !== "touch") e.preventDefault(); };
+  container.addEventListener("selectstart", onLayerSelectStart);
+
+  // ---- touch: a long press selects natively; a tap, a swipe and a drag go on to the canvas
+
+  type Phase = "wait" | "long" | "swipe" | "none";
+  let touch: { id: number; phase: Phase; x0: number; y0: number; x: number; y: number; timer: number } | null = null;
+
+  /** Replay a pointer event onto the canvas, where the engine listens, as if it had landed there. */
+  const send = (type: string, e: { clientX: number; clientY: number; pointerId: number; pointerType: string }, at?: { x: number; y: number }): void => {
+    const init: PointerEventInit = {
+      bubbles: true, cancelable: true, composed: true,
+      clientX: at?.x ?? e.clientX, clientY: at?.y ?? e.clientY,
+      pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: true,
+      button: type === "pointermove" ? -1 : 0, buttons: type === "pointerup" || type === "pointercancel" ? 0 : 1,
+    };
+    canvas.dispatchEvent(typeof PointerEvent === "function" ? new PointerEvent(type, init) : (Object.assign(new MouseEvent(type, init), { pointerId: e.pointerId, pointerType: e.pointerType }) as unknown as Event));
+  };
+  const endTouch = (): void => {
+    if (touch) clearTimeout(touch.timer);
+    touch = null;
+  };
+  const onLayerDown = (e: PointerEvent): void => {
+    lastType = e.pointerType;
+    if (!touchLines) return;
+    if (e.pointerType !== "touch") { send("pointerdown", e); canvas.focus({ preventScroll: true }); return; }
+    // A second finger is a pinch: nothing is pressed or selected.
+    if (touch) { endTouch(); touch = { id: e.pointerId, phase: "none", x0: 0, y0: 0, x: 0, y: 0, timer: 0 }; return; }
+    const t = { id: e.pointerId, phase: "wait" as Phase, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, timer: 0 };
+    t.timer = window.setTimeout(() => { if (touch === t && t.phase === "wait") t.phase = "long"; }, LONG_PRESS_MS);
+    touch = t;
+  };
+  const onLayerMove = (e: PointerEvent): void => {
+    if (!touchLines) return;
+    if (e.pointerType !== "touch") { send("pointermove", e); return; }
+    const t = touch;
+    if (!t || t.id !== e.pointerId) return;
+    t.x = e.clientX; t.y = e.clientY;
+    if (t.phase === "wait" && Math.hypot(t.x - t.x0, t.y - t.y0) > TOUCH_SLOP) {
+      // A swipe, or a drag of something under the words: it reaches the canvas from where the finger went down.
+      clearTimeout(t.timer);
+      t.phase = "swipe";
+      send("pointerdown", e, { x: t.x0, y: t.y0 });
+    }
+    if (t.phase === "swipe") send("pointermove", e);
+  };
+  const onLayerUp = (e: PointerEvent): void => {
+    if (!touchLines) return;
+    if (e.pointerType !== "touch") { send("pointerup", e); return; }
+    const t = touch;
+    endTouch();
+    if (!t || t.id !== e.pointerId) return;
+    if (t.phase === "wait") {
+      // A tap: pressed and released, exactly once, on whatever is drawn there.
+      send("pointerdown", e);
+      send("pointerup", e);
+      canvas.focus({ preventScroll: true });
+    } else if (t.phase === "swipe") send("pointerup", e);
+    // "long": the browser's selection took over; letting go presses nothing.
+  };
+  const onLayerCancel = (e: PointerEvent): void => {
+    if (!touchLines) return;
+    if (e.pointerType !== "touch") { send("pointercancel", e); return; }
+    const t = touch;
+    endTouch();
+    // The browser took the gesture (a scroll, a pinch, its own selection): a swipe already begun is finished.
+    if (t && t.id === e.pointerId && t.phase === "swipe") send("pointercancel", e);
+  };
+  container.addEventListener("pointerdown", onLayerDown);
+  container.addEventListener("pointermove", onLayerMove);
+  container.addEventListener("pointerup", onLayerUp);
+  container.addEventListener("pointercancel", onLayerCancel);
+  container.addEventListener("pointerleave", (e) => { if (touchLines && e.pointerType !== "touch") send("pointerleave", e); });
 
   return {
+    surface: container,
     update(lines, info) {
       positionContainer(info);
       setHighlight(info.accent, info.forcedColors);
@@ -228,10 +354,27 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
       start = null;
       selecting = false;
       anchor = null;
-      if (info.pointerType === "touch" || info.button !== 0) return;
-      // A new press ends the old selection, as a click on a page does.
-      if (layerSelection()) document.getSelection()?.removeAllRanges();
-      if (lineAtPoint(shown, x, y) < 0) return;
+      gesture = false;
+      if (info.button !== 0) return;
+      const had = layerSelection();
+      const count = info.pointerType === "touch" ? 1 : clicks.press(x, y, info.time ?? performance.now(), info.button);
+      const i = lineAtPoint(shown, x, y);
+      if (info.pointerType !== "touch" && i >= 0 && !info.pressable) {
+        // Shift+click: the selection's anchor stays, its other end moves to the click.
+        if (info.shiftKey && had && had.anchorNode) {
+          anchor = { node: had.anchorNode, offset: had.anchorOffset };
+          extendTo(x, y);
+          anchor = null;
+          gesture = true;
+          return;
+        }
+        if (count === 2 && selectWordAt(x, y)) { gesture = true; return; }
+        if (count === 3 && selectBlockAt(i)) { gesture = true; return; }
+      }
+      // A new press (a tap too) ends the old selection, as a click on a page does.
+      if (had || (!document.getSelection()?.isCollapsed && inLayer(document.getSelection()?.anchorNode ?? null))) document.getSelection()?.removeAllRanges();
+      if (info.pointerType === "touch") return;
+      if (i < 0) return;
       start = { x, y };
     },
     pointerMove(x, y) {
@@ -244,7 +387,8 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
       return true;
     },
     pointerUp() {
-      const was = selecting;
+      const was = selecting || gesture;
+      gesture = false;
       start = null;
       selecting = false;
       anchor = null;
@@ -255,6 +399,8 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
     },
     destroy() {
       document.removeEventListener("copy", onCopy);
+      endTouch();
+      coarse?.removeEventListener?.("change", onCoarseChange);
       canvas.removeEventListener("selectstart", onSelectStart);
       if (sheet) document.adoptedStyleSheets = document.adoptedStyleSheets.filter((s) => s !== sheet);
       sheet = null;

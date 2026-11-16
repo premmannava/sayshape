@@ -43,35 +43,74 @@ export function selectionText(pieces: readonly Piece[]): string {
   return out;
 }
 
+/** A place in the lines shown: a line and a character offset in its text. */
+export interface TextPosition {
+  line: number;
+  offset: number;
+}
+
+const before = (a: TextPosition, b: TextPosition): boolean => a.line < b.line || (a.line === b.line && a.offset <= b.offset);
+
 /**
- * A selection over whole lines, for hosts with no real text to select
- * (sayshape/testing): from the line under one point to the line under
- * another, in reading order.
+ * A selection over the lines, for hosts with no real text to select
+ * (sayshape/testing): from one place in the lines to another, in either
+ * direction, like a browser's anchor and focus.
  */
 export class LineSelection {
-  private from = -1;
-  private to = -1;
+  private anchor: TextPosition | null = null;
+  private focus: TextPosition | null = null;
 
   get active(): boolean {
-    return this.from >= 0;
+    return !!this.anchor && !!this.focus;
   }
 
+  /** Whole lines, from the first to the last. */
   select(from: number, to: number): void {
-    this.from = Math.min(from, to);
-    this.to = Math.max(from, to);
+    const a = Math.min(from, to), b = Math.max(from, to);
+    this.anchor = { line: a, offset: 0 };
+    this.focus = { line: b, offset: Number.POSITIVE_INFINITY };
+  }
+
+  selectRange(anchor: TextPosition, focus: TextPosition): void {
+    this.anchor = anchor;
+    this.focus = focus;
+  }
+
+  /** Keep the anchor and move the other end. */
+  extendTo(focus: TextPosition): boolean {
+    if (!this.anchor) return false;
+    this.focus = focus;
+    return true;
   }
 
   clear(): void {
-    this.from = this.to = -1;
+    this.anchor = this.focus = null;
   }
 
-  /** The lines selected, out of the lines shown. */
+  private ends(): [TextPosition, TextPosition] | null {
+    const { anchor: a, focus: f } = this;
+    if (!a || !f) return null;
+    return before(a, f) ? [a, f] : [f, a];
+  }
+
+  /** The lines the selection touches, out of the lines shown. */
   of(lines: readonly TextLine[]): TextLine[] {
-    return this.active ? lines.slice(this.from, this.to + 1) : [];
+    const e = this.ends();
+    return e ? lines.slice(e[0].line, e[1].line + 1) : [];
   }
 
   text(lines: readonly TextLine[]): string {
-    return selectionText(this.of(lines).map((l) => pieceOf(l)));
+    const e = this.ends();
+    if (!e) return "";
+    const pieces: Piece[] = [];
+    for (let i = e[0].line; i <= e[1].line; i++) {
+      const l = lines[i];
+      if (!l) continue;
+      const s = i === e[0].line ? e[0].offset : 0;
+      const t = i === e[1].line ? e[1].offset : Number.POSITIVE_INFINITY;
+      pieces.push(pieceOf(l, l.text.slice(s, t)));
+    }
+    return selectionText(pieces);
   }
 }
 

@@ -20,7 +20,8 @@ import type { EditorEvents, EditorHost, EditorSpec } from "../editor";
 import type { AccessibilityHost, MirrorEvents, Politeness } from "../a11y/host";
 import type { AccessibleNode } from "../a11y/semantics";
 import { type PointerInfo, type TextLayerHost, type TextLine } from "../text-layer/host";
-import { LineSelection, lineAtPoint, nearestLine, selectionText, pieceOf } from "../text-layer/selection";
+import { LineSelection, lineAtPoint, nearestLine } from "../text-layer/selection";
+import { blockBounds, ClickCounter, wordBounds } from "../text-layer/gesture";
 import { isVisible, walkBoxes } from "../layout";
 import { lightTheme, type Theme } from "../theme";
 import type { Box, Diagnostic, HitRegion, SayShapeNode, Value } from "../types";
@@ -157,7 +158,7 @@ export interface Rendered {
   /** Click the centre of an element through the real pointer path. Throws if it can't be pressed. */
   press(query: Query): void;
   /** Click at a point, in CSS pixels from the canvas's top-left corner. */
-  click(x: number, y: number): void;
+  click(x: number, y: number, o?: { shift?: boolean }): void;
   /**
    * Drag across drawn text through the real pointer path, as a mouse would: from the start of the
    * first line whose text matches `from` to the end of the first line matching `to` (`from` again when
@@ -290,7 +291,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     throw new Error(`${all.length} elements match ${describeQuery(query)} (${where}). Add text, line or id to the query`);
   };
 
-  const pointer = (type: string, x: number, y: number) => canvas.dispatch(type, { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button: 0 });
+  const pointer = (type: string, x: number, y: number, extra: Record<string, unknown> = {}) => canvas.dispatch(type, { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button: 0, ...extra });
 
   /** A point inside the element's first pressable region that the element itself receives. */
   const pressPoint = (query: Query): readonly [number, number] => {
@@ -407,9 +408,9 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
       flush();
     },
 
-    click(x, y) {
+    click(x, y, o = {}) {
       pointer("pointermove", x, y);
-      pointer("pointerdown", x, y);
+      pointer("pointerdown", x, y, o.shift ? { shiftKey: true } : {});
       pointer("pointerup", x, y);
       flush();
     },
@@ -620,13 +621,42 @@ class RecordingTextLayer implements TextLayerHost {
     this.selection.clear();
   }
 
+  private readonly clicks = new ClickCounter();
+  private extended = false;
+
+  /** The character offset nearest a point on a line, from where it falls across the line's width. */
+  private offsetAt(i: number, x: number): number {
+    const l = this.lines[i]!;
+    return Math.max(0, Math.min(l.text.length, Math.round(((x - l.x) / Math.max(1, l.w)) * l.text.length)));
+  }
+
   pointerDown(x: number, y: number, info: PointerInfo): void {
     this.start = null;
     this.selecting = false;
+    this.extended = false;
     if (info.pointerType === "touch" || info.button !== 0) return;
+    const had = this.selection.active;
+    const i = lineAtPoint(this.lines, x, y);
+    const count = this.clicks.press(x, y, info.time ?? performance.now(), info.button);
+    if (i >= 0 && !info.pressable) {
+      if (info.shiftKey && had) {
+        this.selection.extendTo({ line: i, offset: this.offsetAt(i, x) });
+        this.extended = true;
+        return;
+      }
+      if (count === 2) {
+        const w = wordBounds(this.lines[i]!.text, this.offsetAt(i, x));
+        if (w) { this.selection.selectRange({ line: i, offset: w[0] }, { line: i, offset: w[1] }); this.extended = true; return; }
+      } else if (count === 3) {
+        const [s, e] = blockBounds(this.lines, i);
+        this.selection.selectRange({ line: s, offset: 0 }, { line: e, offset: this.lines[e]!.text.length });
+        this.extended = true;
+        return;
+      }
+    }
     this.selection.clear();
-    this.anchor = lineAtPoint(this.lines, x, y);
-    if (this.anchor >= 0) this.start = { x, y };
+    this.anchor = i;
+    if (i >= 0) this.start = { x, y };
   }
 
   pointerMove(x: number, y: number): boolean {
@@ -638,9 +668,10 @@ class RecordingTextLayer implements TextLayerHost {
   }
 
   pointerUp(): boolean {
-    const was = this.selecting;
+    const was = this.selecting || this.extended;
     this.start = null;
     this.selecting = false;
+    this.extended = false;
     return was;
   }
 
@@ -649,7 +680,7 @@ class RecordingTextLayer implements TextLayerHost {
   }
 
   selectedText(): string | null {
-    return this.selection.active ? selectionText(this.selection.of(this.lines).map((l) => pieceOf(l))) : null;
+    return this.selection.active ? this.selection.text(this.lines) : null;
   }
 
   destroy(): void {}

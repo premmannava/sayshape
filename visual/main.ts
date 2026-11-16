@@ -48,6 +48,8 @@ async function main(): Promise<void> {
     // The samples' real photo host, so their images are drawn by the fixture
     // instead of downloaded; other hosts stay blocked, as in the playground.
     imageHosts: ["images.unsplash.com"],
+    // Touch selection tests (text-layer.spec.ts): ?touch=1 turns it on, as a host would.
+    ...(params.get("touch") === "1" ? { selectTouch: true } : {}),
     loadImage: fixtureImageLoader,
     // A fixed today, so calendars look the same whenever the screenshots are taken.
     today: () => "2026-10-21",
