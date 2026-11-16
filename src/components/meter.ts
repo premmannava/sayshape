@@ -221,7 +221,7 @@ meter "Health score" kind=gauge value=score max=100 bands="60,85"`,
     if (!d) return;
     const ox = box.x, oy = box.y;
     const cx = ox + d.cx, cy = oy + d.cy;
-    const colorOf = (z: Zone) => (z === "accent" ? c.accent : c[z]);
+    const colorOf = (z: Zone) => (z === "accent" ? c.accent : z === "warn" ? c.warnFill : c[z]);
     // Draws in once its data arrives, then follows the value as it changes.
     const reveal = easeOut(ctx.reveal(box.node));
     const frac = d.frac === null ? 0 : ctx.tween(box.node, "meter", d.frac, 600) * reveal;

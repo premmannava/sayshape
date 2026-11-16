@@ -178,6 +178,29 @@ const ui = new SayShape(canvas, { streamPlaceholders: true });
 
 `streamPlaceholders` is the engine's half. While a spec streams in (`beginStream` to `endStream`), a name an element reads before its `state` or `derive` line has arrived draws as a loading placeholder (the same as [`setAwaiting`](language.md#lists)), and no warning is shown for it: not the "isn't state" diagnostic, and not a layout warning like a select's items not being a list yet. When the stream ends the screen is checked as usual, so a name that is still undeclared is reported then. With it off, a streamed spec behaves exactly as before. The MCP server's `--layout-first` changes its guide text the same way; its view already draws placeholders while a spec streams in.
 
+### Data answers with the report preset (opt-in)
+
+Most of what a model writes for a data answer is layout it doesn't need to choose: where the figures go, which cards hold which chart, a table's columns, headers and formats. The `report` preset lets it name the data and what to show, and the engine writes the layout:
+
+```text
+report "Claims review" subtitle="2025" data=claims filter=status
+  count
+  sum incurred
+  count status=Open
+  bar monthly month opened
+  line monthly month opened closed
+  donut line
+  table
+```
+
+- The first line takes a title, `subtitle=`, `data=` (the list the report shows) and `filter=` (one or more fields; each becomes a multiple-choice select, and the figures, grouped charts and table on `data=` show only the rows it leaves).
+- Each line under it is one part, in screen order: a figure (`count`, `sum`, `avg`, `min`, `max`, then a field; `field=value` counts or adds up only matching rows), a chart (`bar`, `hbar`, `line`, `area`, `pie`, `donut`, `stacked`, then x, then y fields; with no y it counts rows per x with `group()`; a list named first is drawn as it is), or `table` (every field, or the ones listed). A quoted text at the end of a line names the part.
+- Labels, chart titles, column headers and money or number formats come from the field names and, when the data is known (in the spec's `state` lines or set by the host), from its values. A table waits as a placeholder until its data is known, and the spec is read again when the host's data arrives.
+
+It is a preset, not a component: the parser expands it into ordinary elements (`text`, `select`, `grid`, `card`, `stat`, `chart`, `table`) before reading the spec, so accessibility, Copy text, the inspector and everything else work as usual. Element ids, state, derived values and diagnostics keep the spec's own line numbers. `ui.expandedSpec` (and `ParseResult.presets.expanded`, or `expandPresets()` on its own) shows what a report became.
+
+Turn it on in the engine with `presets: true` (`render(spec, { presets: true })` in tests), and give the model the report guide, `guide: { mode: "report" }`: about 490 tokens (o200k_base) instead of about 5,500 for the compact guide, teaching only the report, how to write data, and to answer `FULL` alone (`REPORT_FALLBACK`) when the request needs anything else. `generateReport()` does both steps: it asks with the report guide and, if the answer is `FULL`, once more with the compact guide (or `fallbackGuide`), adding up the usage of both. `generateSpec` checks specs with presets on whenever the guide is in report mode (or with `presets: true`). Off, `report` is an unknown element, as it always was, and every other guide is unchanged.
+
 ### Repairs
 
 `generateSpec` asks once for a fix when the parser finds problems (`repairOn: "any" | "errors" | "never"`). With a compact guide, `repairGuide: "full"` sends the full guide for that one repair, still limited to the profile. Each attempt reports the guide it used (`result.first.guide`, `result.repair?.guide`); `npm run eval -- --guide compact --repair-guide same,full` measures whether it helps.
@@ -208,6 +231,8 @@ It sends the original task, the `requirements` that must always hold, the change
 `result.usage` adds up the server's token counts over the first try and the repair: `promptTokens`, `completionTokens`, and `reasoningTokens` (part of the completion tokens, not added again). A total is `undefined`, meaning unknown, when any attempt didn't report it; `usage.reported` says how many did. Each attempt also has `inputChars` and `estimatedInputTokens` (characters / 4), `estimatedThinkingTokens`, the guide it used and how long it took. A reasoning model's thinking is often most of the wait: `config.reasoningEffort` sends `reasoning_effort` in the server's own words (DeepSeek: `none`, `low`, `high`, `max`, and `high` when it's left out). Many servers only report usage while streaming when asked; set `config.streamUsage: true` for those that support `stream_options` (OpenAI, vLLM, recent LM Studio and llama.cpp).
 
 ### Prompt caching
+
+For a short guide to what to send first, which provider needs what and the mistakes that break it, see [Prompt caching](prompt-caching.md).
 
 The guide is the same on every request and comes first, so a provider's prompt cache can serve it: after the first request, those tokens cost a fraction of the input price. With the full guide at about 10,500 tokens of input per request, this is most of the cost of a request.
 

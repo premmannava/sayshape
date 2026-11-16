@@ -48,6 +48,8 @@ export interface RenderOptions {
   behavior?: boolean;
   /** The engine's streamPlaceholders option: names declared later in a streamed spec draw as placeholders. Default false. */
   streamPlaceholders?: boolean;
+  /** The engine's presets option: `report` blocks expand into ordinary elements. Default false. */
+  presets?: boolean;
   /**
    * Use a clock the test advances (ui.clock.advance(ms)) instead of real time.
    * Default: on with behavior, off otherwise.
@@ -217,6 +219,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     imageHosts: opts.imageHosts,
     ...(opts.behavior ? { behavior: true } : {}),
     ...(opts.streamPlaceholders ? { streamPlaceholders: true } : {}),
+    ...(opts.presets ? { presets: true } : {}),
     ...(manual ? { clock: manual } : {}),
     reducedMotion: !!opts.reducedMotion,
     ...(opts.bareRootCard ? { bareRootCard: true } : {}),

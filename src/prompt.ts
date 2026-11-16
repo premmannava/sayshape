@@ -24,6 +24,10 @@ import { EXPRESSION_FUNCTIONS } from "./expr";
 import { parse } from "./parser";
 import { resolveProfile, type ComponentProfile } from "./profiles";
 import type { Registry } from "./registry";
+import { reportGuide } from "./presets/report";
+
+/** What a model answers, alone, when the report guide (mode "report") can't show what was asked. */
+export const REPORT_FALLBACK = "FULL";
 
 /** An emit: action the host app listens for. */
 export interface AppAction {
@@ -50,7 +54,12 @@ export interface GuideOptions {
   examples?: boolean;
   /** Extra instructions from the app, such as its domain, audience or tone. */
   notes?: string;
-  /** "full" (default) or "compact". */
+  /**
+   * "full" (default), "compact", or "report": only the report preset (data
+   * answers: figures, charts, a table and filters, see src/presets/report.ts),
+   * with the word to answer when a request needs more (REPORT_FALLBACK). The
+   * engine must have presets on to draw what it writes.
+   */
   mode?: GuideMode;
   /**
    * Which elements the model is told about: a profile name ("forms",
@@ -84,7 +93,7 @@ export interface GuideOptions {
   layoutFirst?: boolean;
 }
 
-export type GuideMode = "full" | "compact";
+export type GuideMode = "full" | "compact" | "report";
 export type WorkedExampleName = "todo" | "form" | "cart" | "orders" | "booking" | "equipment" | "calculator" | "shopping";
 
 function propLine(name: string, d: PropDef): string {
@@ -539,6 +548,7 @@ export interface GuideSection {
 /** The guide in sections, in order. languageGuide() joins them with blank lines. */
 export function guideSections(registry: Registry, opts: GuideOptions = {}): GuideSection[] {
   const ctx = context(registry, opts);
+  if (ctx.mode === "report") return [{ name: "report", text: reportGuide(REPORT_FALLBACK) }, ...(opts.notes?.trim() ? [{ name: "notes", text: `ABOUT THIS APP\n${opts.notes.trim()}` }] : [])];
   return ctx.mode === "compact" ? compactSections(ctx) : fullSections(ctx);
 }
 

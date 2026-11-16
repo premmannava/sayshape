@@ -9,7 +9,8 @@ import { easeOut, paintGhost } from "../ghost";
 import { wrapText } from "../text";
 import type { Theme } from "../theme";
 import type { Box } from "../types";
-import { fillTint, themeFont } from "./util";
+import { fitText } from "./input";
+import { fillTint, onProp, partBox, themeFont } from "./util";
 
 /** info is the accent; accent is accepted as another name for it. */
 const CALLOUT_TONES = ["info", "accent", "good", "warn", "bad"] as const;
@@ -18,6 +19,8 @@ type CalloutTone = (typeof CALLOUT_TONES)[number];
 /** Room before the content where a left bar used to be (none: the border carries the tone), and the icon's diameter. */
 const BAR = 0;
 const ICON = 18;
+/** The action button's height. */
+const ACTION_H = 30;
 
 function calloutColor(theme: Theme, tone: CalloutTone): string {
   const c = theme.colors;
@@ -35,6 +38,9 @@ interface CalloutLayout {
   padY: number;
   textX: number;
   icon: boolean;
+  action: string;
+  /** Where the action button starts under the text, relative to the panel's top. */
+  actionTop: number;
 }
 
 function measure(box: Box, ctx: LayoutContext): CalloutLayout & { height: number } {
@@ -55,7 +61,13 @@ function measure(box: Box, ctx: LayoutContext): CalloutLayout & { height: number
   const detailText = p.str("detail");
   const detail = detailText ? wrapText(detailText, width, detailFont, ctx.measure) : loading && p.has("detail") ? [""] : [];
   const body = lines.length * lh + (detail.length ? t.space.xs + detail.length * detailLH : 0);
-  return { lines, detail, font, detailFont, lh, detailLH, padX, padY, textX, icon, height: padY * 2 + Math.max(body, icon ? ICON : 0) };
+  const action = p.str("action");
+  const above = padY + Math.max(body, icon ? ICON : 0);
+  return {
+    lines, detail, font, detailFont, lh, detailLH, padX, padY, textX, icon, action,
+    actionTop: above + t.space.sm,
+    height: above + (action ? t.space.sm + ACTION_H : 0) + padY,
+  };
 }
 
 /** The panel: a faint tint of the tone, outlined by a hairline of the same tone. */
@@ -110,6 +122,34 @@ function paintIcon(ctx: PaintContext, tone: CalloutTone, cx: number, cy: number,
   g.restore();
 }
 
+/** The button under the text: drawn like a secondary button, so it's clearly pressable without competing with the takeaway. */
+function paintAction(box: Box, ctx: PaintContext, d: CalloutLayout, pressable: boolean): void {
+  const { g, theme } = ctx;
+  const c = theme.colors;
+  g.font = ctx.font(600, theme.text.caption + 1);
+  const room = Math.max(0, box.x + box.w - d.padX - (box.x + d.textX));
+  const w = Math.min(room, g.measureText(d.action).width + theme.space.md * 2);
+  const btn = partBox(box, box.x + d.textX, box.y + d.actionTop, w, ACTION_H);
+  ctx.roundRect(btn.x + 0.5, btn.y + 0.5, btn.w - 1, btn.h - 1, theme.radius.md);
+  g.save();
+  g.shadowColor = c.shadow;
+  g.shadowBlur = 2;
+  g.shadowOffsetY = 1;
+  g.fillStyle = c.raised;
+  g.fill();
+  g.restore();
+  const hot = pressable && ctx.isHovered(box.node, "action");
+  if (hot) fillTint(g, c.ink, 0.04);
+  g.strokeStyle = ctx.isFocused(box.node, "action") ? c.focus : c.line;
+  g.lineWidth = ctx.isFocused(box.node, "action") ? 2 : 1;
+  g.stroke();
+  g.fillStyle = c.ink;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(fitText(g, d.action, w - theme.space.md), btn.x + w / 2, btn.y + ACTION_H / 2 + 1);
+  if (pressable) ctx.addHit(btn, { detail: "action" });
+}
+
 export const callout: ComponentDef = {
   type: "callout",
   category: "content",
@@ -122,14 +162,22 @@ export const callout: ComponentDef = {
       description: "info (default, the accent color) for a finding, good for good news, warn for something to watch, bad for a problem. accent is the same as info.",
     },
     icon: { type: "boolean", default: false, description: "Show a small icon matching the tone: i, a tick, ! or ×." },
+    action: { type: "string", description: "Label of a button inside it." },
+    on: onProp("when the button is pressed"),
   },
   picks: [
     { for: "the one takeaway or warning to notice first", write: "callout tone=warn" },
   ],
-  example: `callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true`,
+  example: `callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true action="See breakdown" on=emit:open_breakdown`,
   semantics(box, ctx) {
     const p = ctx.props(box.node);
-    return { role: "note", name: p.text(), description: p.str("detail") || undefined };
+    const action = p.str("action");
+    return {
+      role: "note",
+      name: p.text(),
+      description: p.str("detail") || undefined,
+      parts: action && p.has("on") ? [{ detail: "action", role: "button", name: action }] : undefined,
+    };
   },
   layout(box, ctx) {
     const d = measure(box, ctx);
@@ -160,6 +208,7 @@ export const callout: ComponentDef = {
       g.fillStyle = theme.colors.muted;
       d.detail.forEach((l, i) => g.fillText(l, x, dy + d.detailLH * i + d.detailLH / 2 + 1));
     }
+    if (d.action) paintAction(box, ctx, d, p.has("on"));
     g.globalAlpha = base;
   },
   paintLoading(box, ctx) {
