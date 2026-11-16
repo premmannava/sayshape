@@ -159,6 +159,24 @@ describe("the widget fragment", () => {
     expect(r.note.hidden).toBe(true);
     expect(r.g.__opts.imageHosts).toEqual([]);
     expect("behavior" in r.g.__opts).toBe(false);
+    // The text layer is the engine's default: the fragment says nothing about it.
+    expect("selectText" in r.g.__opts).toBe(false);
+  });
+
+  it("turns the engine's text layer off with --no-select-text", async () => {
+    const r = await run(widgetFragment(base({ selectText: false })));
+    expect(r.failures).toEqual([]);
+    expect(r.g.__opts.selectText).toBe(false);
+  });
+
+  it("passes touch selection to the engine only when the operator said so", async () => {
+    const unset = await run(widgetFragment(base({})));
+    expect("selectTouch" in unset.g.__opts).toBe(false);
+    for (const v of [true, false]) {
+      const r = await run(widgetFragment(base({ selectTouch: v })));
+      expect(r.failures).toEqual([]);
+      expect(r.g.__opts.selectTouch).toBe(v);
+    }
   });
 
   it("carries the server's settings: theme, accent, image hosts, scenes and behavior", async () => {

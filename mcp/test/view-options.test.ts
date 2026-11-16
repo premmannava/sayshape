@@ -13,6 +13,29 @@ describe("view options", () => {
     expect(parseViewArgs(["--no-copy-text"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, copyText: false });
   });
 
+  it("turns the text layer off with --no-select-text, and leaves it out of the tag when on", () => {
+    expect(parseViewArgs([])).not.toHaveProperty("selectText");
+    expect(parseViewArgs(["--no-select-text"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectText: false });
+    expect(encodeViewOptions(DEFAULT_VIEW_OPTIONS)).toBe("picker=0&theme=teal&save=1&copy=1");
+    const off = { ...DEFAULT_VIEW_OPTIONS, selectText: false };
+    expect(encodeViewOptions(off)).toBe("picker=0&theme=teal&save=1&copy=1&select=0");
+    expect(decodeViewOptions(encodeViewOptions(off))).toEqual(off);
+    // A tag written before the option existed keeps the layer on.
+    expect(decodeViewOptions("picker=0&theme=teal&save=1&copy=1")).not.toHaveProperty("selectText");
+  });
+
+  it("sets touch selection with --select-touch or --no-select-touch, and leaves it out of the tag when unset", () => {
+    expect(parseViewArgs([])).not.toHaveProperty("selectTouch");
+    expect(parseViewArgs(["--select-touch"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectTouch: true });
+    expect(parseViewArgs(["--no-select-touch"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectTouch: false });
+    for (const [v, tag] of [[true, "&touch=1"], [false, "&touch=0"]] as const) {
+      const o = { ...DEFAULT_VIEW_OPTIONS, selectTouch: v };
+      expect(encodeViewOptions(o)).toBe(`picker=0&theme=teal&save=1&copy=1${tag}`);
+      expect(decodeViewOptions(encodeViewOptions(o))).toEqual(o);
+    }
+    expect(decodeViewOptions("picker=0&theme=teal&save=1&copy=1")).not.toHaveProperty("selectTouch");
+  });
+
   it("says which themes exist when --theme names one it doesn't know", () => {
     expect(() => parseViewArgs(["--theme", "red"])).toThrow(/--theme needs one of teal, purple, blue, neutral, studio; got "red"/);
     expect(() => parseViewArgs(["--theme"])).toThrow(/--theme needs one of/);

@@ -629,6 +629,8 @@ export function createServer(opts: ServerOptions): McpServer {
             engine: await widgetEngine(),
             scenes: scenesOn,
             behavior: behaviorOn,
+            ...(opts.view?.selectText === false ? { selectText: false } : {}),
+            ...(opts.view?.selectTouch !== undefined ? { selectTouch: opts.view.selectTouch } : {}),
             imageHosts,
             ...(opts.widgetInline ? { inline: true } : {}),
             ...(hostSource !== undefined ? { host: hostSource } : {}),
