@@ -50,7 +50,7 @@ import { fileURLToPath } from "node:url";
 import { basename, resolve } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { cannotDrawViews, createServer, setBehavior, setImageHosts, setScenes } from "./server";
+import { cannotDrawViews, createServer, setBehavior, setImageHosts, setLayoutFirst, setScenes } from "./server";
 import { accentNotes, parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
@@ -84,7 +84,7 @@ async function main(): Promise<void> {
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color | --colors list]",
-      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--logo <https url>]",
+      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--scene] [--behavior] [--layout-first] [--logo <https url>]",
       "                    [--image-hosts host1,host2,...] [--widget-dir folder [--widget-host name]]",
       "",
       "  --widget-dir <folder>  for chat apps that can't draw interfaces but can show a widget made from a file:",
@@ -118,6 +118,7 @@ async function main(): Promise<void> {
       "  --logo <url>     an https image drawn small in the corner of every slide of a deck (its host is allowed like --image-hosts)",
       "  --slides         does nothing: slide decks (deck, slide) are always on; kept so existing setups still start",
       "  --behavior       experimental: rules that tick (timers, simulations) and, with --scene, dragging (off by default)",
+      "  --layout-first   tell models to write the layout first and the data last, so an interface draws while it is written (off by default)",
       "  --image-hosts    hosts images may load from, comma-separated; *.example.com allows its subdomains",
       "                   (none by default; https only, and the host must send CORS headers)",
     ].join("\n"));
@@ -128,6 +129,8 @@ async function main(): Promise<void> {
   // Experimental scenes: the server's parser and docs and the view must agree.
   setScenes(view.scene === true);
   setBehavior(view.behavior === true);
+  // Layout first: only the model's guide changes; the view already draws placeholders while a spec streams in.
+  setLayoutFirst(args.includes("--layout-first"));
   // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.
   setImageHosts(view.imageHosts ?? []);
   const httpAt = args.indexOf("--http");
