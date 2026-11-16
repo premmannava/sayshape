@@ -4,10 +4,11 @@
  *   npm run token-bench -- kit <dir> [variant...]   write each guide and request as text files, for writers
  *   npm run token-bench -- score <runs-dir>          score every answer under <runs-dir>/<variant>/
  *
- * Answers are files named <request-id>__<run>.ss. Scoring writes
+ * Answers are files named <request-id>__<run>.ss, next to guide.txt, the guide
+ * their writers read (if it's missing, the variant's guide is built). Scoring writes
  * <runs-dir>/<variant>/results.json and prints a Markdown summary.
  */
-import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { GUIDE_VARIANTS, guideText } from "../bench/tokens/guides";
 import { measure, tokens, TOKENIZER, type RunResult } from "../bench/tokens/measure";
@@ -41,7 +42,9 @@ function score(runs: string) {
     const all = comp.data + comp.structure + comp.words + comp.formulas || 1;
     const pct = (n: number) => `${Math.round((n / all) * 100)}%`;
     mix.push(`| ${variant} | ${pct(comp.data)} | ${pct(comp.structure)} | ${pct(comp.words)} | ${pct(comp.formulas)} |`);
-    const guide = GUIDE_VARIANTS[variant] ? tokens(guideText(variant)) : undefined;
+    // The guide the writers read, saved with the answers; else the variant's guide built now.
+    const saved = join(runs, variant, "guide.txt");
+    const guide = existsSync(saved) ? tokens(readFileSync(saved, "utf8")) : GUIDE_VARIANTS[variant] ? tokens(guideText(variant)) : undefined;
     writeFileSync(join(runs, variant, "results.json"), JSON.stringify({ tokenizer: TOKENIZER, variant, guideTokens: guide, results }, null, 2) + "\n");
     for (const id of [...new Set(results.map((r) => r.request))]) {
       const rs = results.filter((r) => r.request === id);

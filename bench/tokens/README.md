@@ -10,7 +10,7 @@ How much a model must read and write to produce a SayShape screen, and how much 
 | `claims.ts` | The fixed claims dataset: 40 claims, 12 monthly rows, 6 by-line rows, from a seed |
 | `guides.ts` | The guides compared, by name. `compact` is the baseline |
 | `measure.ts` | Scoring one answer |
-| `runs/<variant>/` | Answers (`<request>__<run>.ss`) and their scores (`results.json`) |
+| `runs/<variant>/` | The guide the writers read (`guide.txt`), their answers (`<request>__<run>.ss`) and the scores (`results.json`). A variant whose answers use new elements is added by the pull request that adds them, and scores only with that code |
 
 ## What is measured, per answer
 
