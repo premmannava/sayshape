@@ -59,8 +59,8 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - chart-rule ["text"] y=expr! [only in chart] — Under a bar or line chart: a level drawn across the plot, such as a target, a budget or an average.
 - chart-note "text" at=text! [only in chart] — Under a bar or line chart: a marker at one item with a few words, such as a launch or an outage.
 - meter ["text"] value=expr! kind=ring|gauge min=number max=number bands=text good=up|down format=number|money|percent — One number against its range, as a ring or a gauge: progress toward a goal, a score, utilization or a budget used.
-- table ["text"] items=expr! key=name bind=path sort=path direction=path on=action [holds table-column] — Rows of a list of records, one table-column per field, for things like inventory, orders or expenses.
-- table-column ["text"] field=name! format=text|number|money align=left|right [only in table] — One column of a table: its header and the field it shows.
+- table ["text"] items=expr! key=name bind=path sort=path direction=path on=action total=text [holds table-column] — Rows of a list of records, one table-column per field, for things like inventory, orders or expenses.
+- table-column ["text"] field=name! format=text|number|money|percent|date|compact align=left|right tone=name bar=true|false [only in table] — One column of a table: its header and the field it shows.
 - compare ["text"] items=expr! name=name pick=text [holds compare-row] — Two to four options side by side with one row per attribute, marking the best value in each row: plans, products or choices to weigh up.
 - compare-row ["text"] field=name! format=text|number|money best=low|high [only in compare] — One row of a comparison: an attribute and the field each option's value comes from.
 - details ["text"] subtitle=text [holds detail] — One record as label and value rows, for a single customer, order, policy or ticket: its fields one per line, with an optional status badge.
