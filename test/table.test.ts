@@ -867,11 +867,32 @@ describe("table depth: formats, tone, total, bar, fade", () => {
     expect(geo(ui("")).totals).toBeUndefined();
     expect(geo(ui("total=false")).totals).toBeUndefined();
   });
-  it("draws at 375 wide, scrolled both ways, in light and dark", () => {
+  it("draws a bar on its own track, never under the numbers", () => {
+    const g = geo(ui());
+    for (const ci of [1, 4]) {
+      const col = g.columns[ci]!, bar = col.bar!;
+      expect(bar).toBeDefined();
+      const widest = Math.max(...g.rows.map((r) => monoWidth(r.cells[ci]!.full, g.cellFont)), monoWidth(g.totals!.cells[ci]!.full, g.cellFont));
+      // Right-aligned numbers: the track ends before the widest value starts.
+      expect(bar.x + bar.w).toBeLessThanOrEqual(col.w - 12 - widest);
+      expect(bar.w).toBeGreaterThanOrEqual(24);
+    }
+  });
+  it("fades the cut-off edge: right at rest, both mid-scroll, left only at the far end", () => {
     for (const theme of [lightTheme, darkTheme]) {
       const u = render(`state rows=${rows}\ntable items=rows total=true\n${cols}\n`, { width: 375, theme });
       expect(geo(u).scroll).toBeDefined();
       expect(u.diagnostics).toEqual([]);
+      // A fade is a run of 1px strips in the surface colour, each a little more transparent.
+      const fades = () => u.drawOps.filter((o) => o.op === "fill" && o.fillStyle === theme.colors.raised && o.globalAlpha > 0 && o.globalAlpha < 1).length;
+      const box = u.find("table").box!, x = box.x + box.w / 2, y = box.y + 60;
+      const rest = fades();
+      expect(rest).toBeGreaterThan(20);
+      u.wheel(x, y, 0, { deltaX: 40 });
+      expect(fades()).toBe(rest * 2);
+      u.wheel(x, y, 0, { deltaX: 99999 });
+      expect(u.sayshape.viewState(u.find("table").node.id)?.x).toBeCloseTo(geo(u).scroll!.max, 6);
+      expect(fades()).toBe(rest);
     }
   });
 });

@@ -69,6 +69,9 @@ const BADGE_TONES = ["good", "warn", "bad", "accent", "muted"] as const;
 /** Padding either side of a badge's text, and extra room a bar needs in its column. */
 const BADGE_PAD = 10;
 const BAR_ROOM = 48;
+/** Gap between a bar's track and the numbers, and the narrowest track worth drawing. */
+const BAR_GAP = 8;
+const MIN_BAR_TRACK = 24;
 /** How far a scroll fade reaches, in pixels. */
 const FADE_W = 28;
 type Align = (typeof ALIGNS)[number];
@@ -112,7 +115,7 @@ export interface TableColumn {
   /** tone=: "sign" colours by sign, otherwise the row field whose value names a badge tone. */
   tone?: string;
   /** bar=true: an in-cell bar; the largest positive and negative values it is scaled to. */
-  bar?: { pos: number; neg: number };
+  bar?: { pos: number; neg: number; /** The track's left edge and width inside the column, clear of the numbers. */ x: number; w: number };
 }
 
 export interface TableCell {
@@ -454,6 +457,15 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     scrollParts = { pinned, view, content, max: Math.max(0, content - view) };
   }
 
+  // A bar has its own track beside the widest value, so it never runs under a number.
+  const barTrack = (b: { pos: number; neg: number } | undefined, w: number, ci: number): NonNullable<TableColumn["bar"]> | undefined => {
+    if (!b) return undefined;
+    const widest = Math.max(totalW[ci] ?? 0, ...textW.map((row) => row[ci]!));
+    const right = specs[ci]!.align === "right";
+    const x = right ? pad : pad + widest + BAR_GAP;
+    const room = w - 2 * pad - widest - BAR_GAP;
+    return room >= MIN_BAR_TRACK ? { ...b, x, w: room } : undefined;
+  };
   let x = 0;
   const columns: TableColumn[] = specs.map((c, ci) => {
     const w = widths[ci]!;
@@ -461,7 +473,7 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     const col: TableColumn = {
       ...spec, x, w,
       shownLabel: fit(c.label, w - 2 * pad - (sortable ? ARROW : 0), headerFont, m),
-      ...(bars[ci] ? { bar: bars[ci]! } : {}),
+      ...(barTrack(bars[ci], w, ci) ? { bar: barTrack(bars[ci], w, ci)! } : {}),
       sorted: sortField === c.field ? direction : null,
     };
     x += w;
@@ -841,15 +853,16 @@ function paintTable(box: Box, ctx: PaintContext): void {
 /** An in-cell bar, behind the number: from the left edge, or from a zero line when some values are negative. */
 function paintBar(ctx: PaintContext, col: TableColumn, frac: number, x: number, ry: number, rowH: number): void {
   const { g, theme } = ctx;
-  const pad = theme.space.md, room = col.w - 2 * pad;
-  const hasNeg = (col.bar?.neg ?? 0) > 0;
+  const bar = col.bar;
+  if (!bar) return;
+  const hasNeg = bar.neg > 0;
   const h = Math.max(6, Math.round(rowH * 0.5));
-  // With negatives, zero sits where the two sides' scales meet; otherwise at the left.
-  const total = (col.bar?.pos ?? 0) + (col.bar?.neg ?? 0);
-  const zero = x + pad + (hasNeg && total > 0 ? (room * col.bar!.neg) / total : 0);
-  const scale = Math.max(col.bar?.pos ?? 0, col.bar?.neg ?? 0);
+  // With negatives, zero sits where the two sides' scales meet; otherwise at the track's left.
+  const total = bar.pos + bar.neg;
+  const scale = Math.max(bar.pos, bar.neg);
+  const zero = x + bar.x + (hasNeg && total > 0 ? (bar.w * bar.neg) / total : 0);
   // Pixels per unit of value: both sides share one scale.
-  const unit = scale > 0 ? (hasNeg ? room / total : room / scale) : 0;
+  const unit = scale > 0 ? (hasNeg ? bar.w / total : bar.w / scale) : 0;
   const len = Math.abs(frac) * scale * unit;
   if (len < 0.5) return;
   const bx = frac < 0 ? zero - len : zero;
