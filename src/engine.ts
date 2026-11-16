@@ -135,6 +135,12 @@ export interface SayShapeOptions {
    * language is exactly what it was.
    */
   behavior?: boolean;
+  /**
+   * Opt-in presets: `report` blocks (src/presets/report.ts) are expanded into
+   * ordinary elements when the spec is read. `expandedSpec` shows what they
+   * became. Off (default), `report` is an unknown element, as before.
+   */
+  presets?: boolean;
   /** Where time comes from: scene motion, fade-ins and rules. Default the real clock; sayshape/testing passes one a test advances. */
   clock?: Clock;
   /**
@@ -304,6 +310,9 @@ export class SayShape {
     this.state.onDerivedError = (d, error) => this.loadingView().waitsFor(d.name) || this.warnOnce(`derive ${d.name} on line ${d.line} couldn't be worked out, so it shows as nothing: ${error}`);
     this.state.subscribe((key, value) => {
       this.events.emit("change", { key, value });
+      // A report names its table's columns from its data: read the spec again when the host's data for it arrives.
+      const p = this.parsed;
+      if (p?.presets?.reads.includes(key) && !p.state.some((s) => s.key === key)) this.invalidate("parse");
       this.invalidate("layout");
       this.rules?.check();
     });
@@ -328,6 +337,11 @@ export class SayShape {
 
   get spec(): string {
     return this.source;
+  }
+
+  /** With presets on, the spec as ordinary SayShape, what its reports became; otherwise the spec as written. */
+  get expandedSpec(): string {
+    return this.parsed?.presets?.expanded ?? this.source;
   }
 
   /** Start a new streamed spec (e.g. a model response). Clears state by default. */
@@ -495,6 +509,7 @@ export class SayShape {
       // State the app set itself counts as known, so reading it isn't flagged.
       knownNames: Object.keys(this.state.snapshot()),
       ...(this.opts.behavior ? { behavior: true } : {}),
+      ...(this.opts.presets ? { presets: true, presetValue: (n: string) => this.state.get(n) } : {}),
     });
     for (const { key, value } of this.parsed.state) this.state.declare(key, value);
     this.warned.clear();
