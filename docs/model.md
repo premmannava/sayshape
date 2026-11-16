@@ -202,7 +202,7 @@ import { generateSections } from "sayshape/model";
 const r = await generateSections({
   config, registry, request: "An orders dashboard", guide: { mode: "compact" },
   maxSections: 4,
-  onText: (text) => ui.appendSpec(text),          // the assembled spec, in screen order
+  onText: (text) => ui.push(text),                // the assembled spec, in screen order
   onSection: (index, text) => log(index, text),   // each section as it finishes, in any order
 });
 r.cost.overheadEstimatedTokens; // the extra input this cost compared with one call
