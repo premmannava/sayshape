@@ -41,6 +41,8 @@ Places children side by side, splitting the width equally. On narrow screens the
 | `pad` | number | Inner padding in pixels (default 0). |
 | `align` | `top` / `center` / `bottom` | Vertical alignment of children: top, center or bottom. |
 | `wrap` | boolean | Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line. |
+| `fit` | boolean | Keep children at their natural width. |
+| `justify` | `start` / `end` / `between` | Where children sit: start, end, or between (spread). Implies fit. |
 
 Children: any elements.
 
@@ -76,6 +78,7 @@ Places children in responsive equal columns. Cards in the same grid row automati
 | Prop | Type | Description |
 |---|---|---|
 | `min` | number | Narrowest a column may be, in pixels (default 200). |
+| `cols` | number | Most columns; fewer when min doesn't fit. |
 | `gap` | number | Space between children in pixels (default 14). |
 
 Children: any elements.
@@ -370,7 +373,7 @@ A small symbol on its own, like a status mark or a weather sign. To start a line
 
 | Prop | Type | Description |
 |---|---|---|
-| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders. |
+| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `size` | `sm` / `md` / `lg` | sm, md or lg. |
 | `label` | string | What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration. |
