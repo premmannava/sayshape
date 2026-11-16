@@ -1,6 +1,7 @@
 import type { ComponentDef } from "../component";
 import { wrapText } from "../text";
-import { fillTint, onProp, partBox, themeFont } from "./util";
+import { drawIcon, isIconName } from "../icons";
+import { fillTint, iconBefore, iconProblems, onProp, partBox, themeFont } from "./util";
 import { fitText } from "./input";
 import { paintGhost } from "../ghost";
 
@@ -57,7 +58,9 @@ export const empty: ComponentDef = {
     detail: { type: "string", description: "A line explaining what to do next." },
     action: { type: "string", description: "Label for a button under the message." },
     on: onProp("when the button is pressed"),
+    icon: { ...iconBefore("message"), description: "Icon name instead of the tray." },
   },
+  check: (props) => iconProblems(props.icon, "icon"),
   picks: [
     { for: "nothing to show yet, or no results", write: "empty \"No results\"" },
   ],
@@ -100,22 +103,28 @@ export const empty: ComponentDef = {
     g.lineWidth = 1;
     g.stroke();
     g.restore();
-    g.beginPath();
-    g.moveTo(cx - 9, y + 15);
-    g.lineTo(cx - 9, y + 25);
-    g.lineTo(cx + 9, y + 25);
-    g.lineTo(cx + 9, y + 15);
-    g.moveTo(cx - 9, y + 20);
-    g.lineTo(cx - 4, y + 20);
-    g.lineTo(cx - 2, y + 22);
-    g.lineTo(cx + 2, y + 22);
-    g.lineTo(cx + 4, y + 20);
-    g.lineTo(cx + 9, y + 20);
-    g.strokeStyle = c.muted;
-    g.lineWidth = 1.6;
-    g.lineJoin = "round";
-    g.lineCap = "round";
-    g.stroke();
+    const named = p.str("icon");
+    if (isIconName(named)) {
+      // The spec's own symbol in place of the tray.
+      drawIcon(g, named, cx - 11, y + (ICON - 22) / 2, 22, c.muted);
+    } else {
+      g.beginPath();
+      g.moveTo(cx - 9, y + 15);
+      g.lineTo(cx - 9, y + 25);
+      g.lineTo(cx + 9, y + 25);
+      g.lineTo(cx + 9, y + 15);
+      g.moveTo(cx - 9, y + 20);
+      g.lineTo(cx - 4, y + 20);
+      g.lineTo(cx - 2, y + 22);
+      g.lineTo(cx + 2, y + 22);
+      g.lineTo(cx + 4, y + 20);
+      g.lineTo(cx + 9, y + 20);
+      g.strokeStyle = c.muted;
+      g.lineWidth = 1.6;
+      g.lineJoin = "round";
+      g.lineCap = "round";
+      g.stroke();
+    }
     y += ICON + 14;
     g.textAlign = "center";
     g.textBaseline = "middle";

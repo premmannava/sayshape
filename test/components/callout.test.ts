@@ -19,7 +19,7 @@ describe("callout", () => {
   it("renders its example without diagnostics", () => {
     const ui = render(`${callout.example}\n`);
     expect(ui.diagnostics).toEqual([]);
-    expect(texts(ui)).toEqual(["Rock is 47% of revenue", "Up from 41% last year"]);
+    expect(texts(ui)).toEqual(["Rock is 47% of revenue", "Up from 41% last year", "See breakdown"]);
     ui.destroy();
   });
 
