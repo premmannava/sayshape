@@ -65,6 +65,7 @@ let components: ComponentDef[] = [...coreComponents, ...mapComponents];
 let registry = new Registry(components);
 let scenesOn = false;
 let behaviorOn = false;
+let layoutFirstOn = false;
 let imageHosts: readonly string[] = [];
 /**
  * The guide's sections, worked out once per mode. They depend only on the
@@ -114,6 +115,18 @@ export function setBehavior(on: boolean): void {
 }
 
 /**
+ * --layout-first: tell models to write the layout first and the data (state
+ * lines, long lists) last, so the view draws from the first element while the
+ * spec streams in (the view already shows placeholders for names not declared
+ * yet). Off by default: the guide, quick start and docs are then exactly what
+ * they were. Call before createServer; main.ts does.
+ */
+export function setLayoutFirst(on: boolean): void {
+  layoutFirstOn = on;
+  sectionsCache.clear();
+}
+
+/**
  * --image-hosts: the hosts images may load from (none by default). The model
  * is told them, and the view resource asks the chat app to allow them in its
  * CSP; the view's engine gets the same list through the view options. Call
@@ -155,12 +168,12 @@ const MCP_NOTES = `MCP RESULTS FROM A TRUSTED INTEGRATION
 
 /** The whole guide in one piece (the guide modes' full text plus these notes); kept for measuring and for clients that want it all. */
 export function guideText(withData = false): string {
-  return languageGuide(registry, { mode: "full", imageHosts, notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES, ...(behaviorOn ? { behavior: true } : {}) });
+  return languageGuide(registry, { mode: "full", imageHosts, notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES, ...(behaviorOn ? { behavior: true } : {}), ...(layoutFirstOn ? { layoutFirst: true } : {}) });
 }
 
 function sectionsOf(mode: "full" | "compact"): ReturnType<typeof guideSections> {
   let sections = sectionsCache.get(mode);
-  if (!sections) sectionsCache.set(mode, (sections = guideSections(registry, { mode, imageHosts, ...(behaviorOn ? { behavior: true } : {}) })));
+  if (!sections) sectionsCache.set(mode, (sections = guideSections(registry, { mode, imageHosts, ...(behaviorOn ? { behavior: true } : {}), ...(layoutFirstOn ? { layoutFirst: true } : {}) })));
   return sections;
 }
 
@@ -379,6 +392,8 @@ export interface ServerOptions {
    * Without it, nothing changes.
    */
   widgetDir?: string;
+  /** With widgetDir (main.ts --widget-inline): the engine as plain script text in each file, for apps that run no blob: script. */
+  widgetInline?: boolean;
   /** The packed engine for those files; by default dist/widget-engine.json, read when first needed. */
   widgetEngine?: () => Promise<PackedEngine>;
   /**
@@ -615,6 +630,7 @@ export function createServer(opts: ServerOptions): McpServer {
             scenes: scenesOn,
             behavior: behaviorOn,
             imageHosts,
+            ...(opts.widgetInline ? { inline: true } : {}),
             ...(hostSource !== undefined ? { host: hostSource } : {}),
             ...(opts.view?.theme ? { theme: opts.view.theme } : {}),
             ...(opts.view?.colors ? { colors: opts.view.colors } : {}),

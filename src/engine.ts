@@ -135,6 +135,20 @@ export interface SayShapeOptions {
    * language is exactly what it was.
    */
   behavior?: boolean;
+  /**
+   * For specs written layout first, data last. While a spec streams in
+   * (beginStream to endStream), a name an element reads that isn't declared
+   * yet draws as a loading placeholder (the same as setAwaiting(true)), and
+   * the "isn't state" warning for it waits until the stream ends. Default
+   * off: a streamed spec then behaves exactly as before.
+   */
+  streamPlaceholders?: boolean;
+  /**
+   * Opt-in presets: `report` blocks (src/presets/report.ts) are expanded into
+   * ordinary elements when the spec is read. `expandedSpec` shows what they
+   * became. Off (default), `report` is an unknown element, as before.
+   */
+  presets?: boolean;
   /** Where time comes from: scene motion, fade-ins and rules. Default the real clock; sayshape/testing passes one a test advances. */
   clock?: Clock;
   /**
@@ -304,6 +318,9 @@ export class SayShape {
     this.state.onDerivedError = (d, error) => this.loadingView().waitsFor(d.name) || this.warnOnce(`derive ${d.name} on line ${d.line} couldn't be worked out, so it shows as nothing: ${error}`);
     this.state.subscribe((key, value) => {
       this.events.emit("change", { key, value });
+      // A report names its table's columns from its data: read the spec again when the host's data for it arrives.
+      const p = this.parsed;
+      if (p?.presets?.reads.includes(key) && !p.state.some((s) => s.key === key)) this.invalidate("parse");
       this.invalidate("layout");
       this.rules?.check();
     });
@@ -322,6 +339,8 @@ export class SayShape {
     this.tipPinned = null;
     this.tipHidden = null;
     this.source = src;
+    // A stream cut short by a whole new spec stops waiting for names too.
+    if (this.streaming && this.opts.streamPlaceholders) this.setAwaiting(false);
     this.streaming = false;
     this.invalidate("parse");
   }
@@ -330,12 +349,18 @@ export class SayShape {
     return this.source;
   }
 
+  /** With presets on, the spec as ordinary SayShape, what its reports became; otherwise the spec as written. */
+  get expandedSpec(): string {
+    return this.parsed?.presets?.expanded ?? this.source;
+  }
+
   /** Start a new streamed spec (e.g. a model response). Clears state by default. */
   beginStream(opts: { keepState?: boolean } = {}): void {
     if (!opts.keepState) this.resetState();
     this.closePopup(false);
     this.source = "";
     this.streaming = true;
+    if (this.opts.streamPlaceholders) this.setAwaiting(true);
     this.invalidate("parse");
   }
 
@@ -346,6 +371,7 @@ export class SayShape {
   }
 
   endStream(): void {
+    if (this.opts.streamPlaceholders) this.setAwaiting(false);
     this.streaming = false;
     this.invalidate("parse");
   }
@@ -491,10 +517,12 @@ export class SayShape {
     const s = this.theme.space;
     this.parsed = parse(this.source, this.registry, {
       partial: this.streaming,
+      ...(this.opts.streamPlaceholders ? { deferUnknownNames: true } : {}),
       rootProps: { pad: String(this.opts.padding ?? 20), gap: String(s.md) },
       // State the app set itself counts as known, so reading it isn't flagged.
       knownNames: Object.keys(this.state.snapshot()),
       ...(this.opts.behavior ? { behavior: true } : {}),
+      ...(this.opts.presets ? { presets: true, presetValue: (n: string) => this.state.get(n) } : {}),
     });
     for (const { key, value } of this.parsed.state) this.state.declare(key, value);
     this.warned.clear();
@@ -515,7 +543,7 @@ export class SayShape {
     this.width = width;
     const lv = this.loadingView();
     const scope = this.state.scope;
-    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.warnOnce(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
+    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.layoutWarning(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
     if (this.opts.bareRootCard) {
       const root = this.parsed.root;
       const top = ctx.visibleChildren(root).filter((n) => !this.registry.get(n.type)?.overlay);
@@ -606,6 +634,17 @@ export class SayShape {
       }
     }
     return false;
+  }
+
+  /**
+   * A problem layout ran into. With streamPlaceholders, while the spec is still
+   * streaming it may be a list or field that's on its way (a select's items, a
+   * chart's data), so it waits: layout runs again when the stream ends, and
+   * reports whatever is still wrong then.
+   */
+  private layoutWarning(m: string): void {
+    if (this.streaming && this.opts.streamPlaceholders) return;
+    this.warnOnce(m);
   }
 
   /** Report a problem once per spec, however often layout runs into it. */

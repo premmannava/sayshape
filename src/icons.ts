@@ -26,6 +26,20 @@ function starPath(): string {
   return pts.join(" ") + " Z";
 }
 
+/** Eight teeth around a hub: each tooth is a short flat-topped bump on a round body. */
+function gearPath(): string {
+  const pts: string[] = [];
+  const at = (deg: number, r: number) => {
+    const a = (deg * Math.PI) / 180;
+    return `${(12 + r * Math.cos(a)).toFixed(2)} ${(12 + r * Math.sin(a)).toFixed(2)}`;
+  };
+  for (let i = 0; i < 8; i++) {
+    const t = i * 45;
+    for (const [d, r] of [[-15, 7.2], [-9, 9.6], [9, 9.6], [15, 7.2]] as const) pts.push(`${pts.length ? "L" : "M"}${at(t + d, r)}`);
+  }
+  return pts.join(" ") + " Z";
+}
+
 export const ICONS = {
   // Status
   check: ["M5 12.5 L10 17.5 L19 7"],
@@ -74,6 +88,7 @@ export const ICONS = {
   truck: ["M14 15.5 V7.5 C14 6.9 13.6 6.5 13 6.5 H3.5 C2.9 6.5 2.5 6.9 2.5 7.5 V15.5 H4.7", "M14 9.5 H17.8 L21 12.8 V15.5 H19.3", "M8.3 15.5 H15.7", "O 6.5 16.8 1.8", "O 17.5 16.8 1.8"],
   home: ["M3.5 11 L12 4 L20.5 11", "M5.5 9.5 V20 H18.5 V9.5", "M10 20 V14.5 H14 V20"],
   building: ["M5 21 V4.5 C5 3.9 5.4 3.5 6 3.5 H14 C14.6 3.5 15 3.9 15 4.5 V21", "M15 9.5 H18 C18.6 9.5 19 9.9 19 10.5 V21", "M3 21 H21", "D 8.5 7.5", "D 11.5 7.5", "D 8.5 11", "D 11.5 11", "D 8.5 14.5", "D 11.5 14.5"],
+  map: ["M3.5 6.5 L9 4.5 L15 6.5 L20.5 4.5 V17.5 L15 19.5 L9 17.5 L3.5 19.5 Z", "M9 4.5 V17.5", "M15 6.5 V19.5"],
   // Business and data
   dollar: ["M16.5 7.5 C15.8 6.2 14.2 5.5 12 5.5 C9.4 5.5 7.8 6.8 7.8 8.6 C7.8 13 16.2 10.6 16.2 15.3 C16.2 17.2 14.4 18.5 12 18.5 C9.6 18.5 8 17.6 7.3 16.2", "M12 3 V5.5", "M12 18.5 V21"],
   card: ["R 3 5.5 18 13 2", "M3 10 H21", "M6.5 14.5 H10"],
@@ -89,6 +104,11 @@ export const ICONS = {
   bolt: ["M13 2.8 L5 13.5 H11.5 L10.5 21.2 L19 10.5 H12.5 Z"],
   idea: ["M9 17.5 V15.6 C7.2 14.4 6 12.4 6 10.2 C6 6.8 8.7 4 12 4 C15.3 4 18 6.8 18 10.2 C18 12.4 16.8 14.4 15 15.6 V17.5 Z", "M9.5 20.5 H14.5"],
   lock: ["R 5 10.5 14 10 2", "M8 10.5 V7.5 C8 5.3 9.8 3.5 12 3.5 C14.2 3.5 16 5.3 16 7.5 V10.5"],
+  shield: ["M12 3 L19.5 6 V11.5 C19.5 16 16.5 19.5 12 21 C7.5 19.5 4.5 16 4.5 11.5 V6 Z"],
+  key: ["O 8 16 4", "M10.8 13.2 L20 4", "M17 7 L19.5 9.5", "M14 10 L16.5 12.5"],
+  wallet: ["R 3 6.5 18 13.5 2.5", "R 14 10.5 7 4.5 2", "D 17 12.75", "M5.5 6.5 L15 3.5 C15.6 3.3 16.5 3.7 16.5 4.4 V6.5"],
+  bank: ["M3.5 9 L12 4 L20.5 9 Z", "M6.5 12 V17", "M12 12 V17", "M17.5 12 V17", "M4 20.5 H20"],
+  receipt: ["M6 3.5 H18 V20.5 L15 18.5 L12 20.5 L9 18.5 L6 20.5 Z", "M9.5 8 H14.5", "M9.5 11.5 H14.5", "M9.5 15 H12.5"],
   // People and time
   user: ["O 12 8 4", "M4.5 20.5 C4.5 16.6 7.9 13.8 12 13.8 C16.1 13.8 19.5 16.6 19.5 20.5"],
   users: ["O 9 8.5 3.5", "M2.5 20 C2.5 16.6 5.4 14 9 14 C12.6 14 15.5 16.6 15.5 20", "M15.5 5.2 C17.2 5.6 18.3 7 18.3 8.6 C18.3 10.2 17.2 11.6 15.5 12", "M17.5 14.3 C19.8 15 21.5 17.2 21.5 20"],
@@ -97,6 +117,9 @@ export const ICONS = {
   phone: ["R 7 2.5 10 19 2", "M10.5 18.5 H13.5"],
   chat: ["M4 5.5 C4 4.9 4.4 4.5 5 4.5 H19 C19.6 4.5 20 4.9 20 5.5 V15.5 C20 16.1 19.6 16.5 19 16.5 H9.5 L5.5 20 V16.5 H5 C4.4 16.5 4 16.1 4 15.5 Z"],
   star: [starPath()],
+  sparkle: ["M10.5 6 C11 10.2 12.3 12.5 17.5 13 C12.3 13.5 11 15.8 10.5 20 C10 15.8 8.7 13.5 3.5 13 C8.7 12.5 10 10.2 10.5 6 Z", "M18.5 3 V8", "M16 5.5 H21"],
+  trophy: ["M7.5 4 H16.5 V10.5 C16.5 13.3 14.5 15.5 12 15.5 C9.5 15.5 7.5 13.3 7.5 10.5 Z", "M7.5 6 H4.5 C4.5 9 5.5 10.5 7.7 11", "M16.5 6 H19.5 C19.5 9 18.5 10.5 16.3 11", "M12 15.5 V19", "M8.5 20.5 H15.5"],
+  flag: ["M5.5 21 V3.5", "M5.5 4.5 C8 3.5 10 5.5 12.5 4.5 C14.5 3.7 16 3.8 18.5 4.5 V13.5 C16 12.8 14.5 12.7 12.5 13.5 C10 14.5 8 12.5 5.5 13.5"],
   heart: ["M12 20 C12 20 3.5 15 3.5 9.2 C3.5 6.4 5.6 4.5 8 4.5 C9.7 4.5 11.1 5.4 12 6.8 C12.9 5.4 14.3 4.5 16 4.5 C18.4 4.5 20.5 6.4 20.5 9.2 C20.5 15 12 20 12 20 Z"],
   // Card suits, with heart above: the same weight of line, each about as big.
   // A spade is a heart turned over, on a flared stem.
@@ -121,6 +144,25 @@ export const ICONS = {
     "M14 10 C12.8 8.7 11 8.6 9.7 9.8 L6.4 13.1 C5.1 14.4 5.1 16.5 6.4 17.8 C7.7 19.1 9.8 19.1 11.1 17.8 L12.1 16.8",
   ],
   sliders: ["M4 7 H7", "M11 7 H20", "O 9 7 2", "M4 12 H13", "M17 12 H20", "O 15 12 2", "M4 17 H5", "M9 17 H20", "O 7 17 2"],
+  settings: [gearPath(), "O 12 12 3"],
+  edit: ["M4 20 L5 15.5 L15.5 5 C16.3 4.2 17.7 4.2 18.5 5 L19 5.5 C19.8 6.3 19.8 7.7 19 8.5 L8.5 19 Z", "M13.5 7 L17 10.5"],
+  trash: ["M4 7 H20", "M9.5 7 V5 C9.5 4.4 9.9 4 10.5 4 H13.5 C14.1 4 14.5 4.4 14.5 5 V7", "M6 7 L7 19.5 C7 20.3 7.7 21 8.5 21 H15.5 C16.3 21 17 20.3 17 19.5 L18 7", "M10 11 V17", "M14 11 V17"],
+  eye: ["M2.5 12 C5 7.5 8.3 5.5 12 5.5 C15.7 5.5 19 7.5 21.5 12 C19 16.5 15.7 18.5 12 18.5 C8.3 18.5 5 16.5 2.5 12 Z", "O 12 12 3"],
+  upload: ["M12 15 V3.5", "M7 8.5 L12 3.5 L17 8.5", "M4 20 H20"],
+  external: ["M18 13.5 V18 C18 19.1 17.1 20 16 20 H6 C4.9 20 4 19.1 4 18 V8 C4 6.9 4.9 6 6 6 H10.5", "M14 4 H20 V10", "M20 4 L11 13"],
+  // Files and code
+  folder: ["M3.5 6.5 C3.5 5.4 4.4 4.5 5.5 4.5 H9.5 C10 4.5 10.5 4.7 10.8 5.1 L12 6.5 H18.5 C19.6 6.5 20.5 7.4 20.5 8.5 V17.5 C20.5 18.6 19.6 19.5 18.5 19.5 H5.5 C4.4 19.5 3.5 18.6 3.5 17.5 Z"],
+  database: ["M4.5 6.5 C4.5 5.1 7.9 4 12 4 C16.1 4 19.5 5.1 19.5 6.5 C19.5 7.9 16.1 9 12 9 C7.9 9 4.5 7.9 4.5 6.5 Z", "M4.5 6.5 V17.5 C4.5 18.9 7.9 20 12 20 C16.1 20 19.5 18.9 19.5 17.5 V6.5", "M4.5 12 C4.5 13.4 7.9 14.5 12 14.5 C16.1 14.5 19.5 13.4 19.5 12"],
+  server: ["R 3.5 4 17 6.5 2", "R 3.5 13.5 17 6.5 2", "D 7.5 7.25", "D 7.5 16.75", "M12 7.25 H17", "M12 16.75 H17"],
+  code: ["M8.5 7 L3.5 12 L8.5 17", "M15.5 7 L20.5 12 L15.5 17", "M13.5 5 L10.5 19"],
+  // An open-ended spanner on the diagonal: a rounded handle widening into a ring with a slot at its tip.
+  wrench: ["M3.1 18.7 L2.8 19.4 L2.8 20.2 L3.1 20.9 L3.8 21.2 L4.6 21.2 L5.3 20.9 L12.7 13.4 L14.3 13.9 L16 13.8 L17.6 13.2 L18.9 12 L19.6 10.5 L19.8 8.8 L19.5 7.2 L15.7 10.9 L13.1 8.3 L16.9 4.6 L15.2 4.2 L13.6 4.4 L12 5.1 L10.9 6.4 L10.2 7.9 L10.1 9.6 L10.6 11.2 Z"],
+  bug: ["R 7.5 7.5 9 12.5 4.5", "O 12 5.2 2", "M12 10 V18", "M7.5 11 L4 9.5", "M7.5 14 H4", "M7.5 17 L4.5 19", "M16.5 11 L20 9.5", "M16.5 14 H20", "M16.5 17 L19.5 19"],
+  // Media and reading
+  play: ["M8 5.5 L18.5 12 L8 18.5 Z"],
+  pause: ["M8 5.5 V18.5", "M16 5.5 V18.5"],
+  image: ["R 3.5 4.5 17 15 2", "O 8.5 9.5 1.5", "M4 17.5 L9.5 12.5 L14 16.5 L16 14.8 L20 18"],
+  book: ["M12 6.5 C10 5 7 4.5 4 5 V18 C7 17.5 10 18 12 19.5 C14 18 17 17.5 20 18 V5 C17 4.5 14 5 12 6.5 Z", "M12 6.5 V19.5"],
 } satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICONS;
@@ -138,14 +180,14 @@ export function nearestIcon(name: string): IconName | null {
     alert: "warning", caution: "warning", question: "help", time: "clock", up: "arrow-up", down: "arrow-down",
     increase: "trend-up", growth: "trend-up", decrease: "trend-down", decline: "trend-down", add: "plus", remove: "minus",
     sunny: "sun", night: "moon", cloudy: "cloud", rainy: "rain", snowy: "snow", lightning: "storm", thunder: "storm",
-    temperature: "thermometer", water: "droplet", location: "pin", place: "pin", map: "pin", world: "globe", earth: "globe",
+    temperature: "thermometer", water: "droplet", location: "pin", place: "pin", world: "globe", earth: "globe",
     flight: "plane", airplane: "plane", travel: "plane", house: "home", office: "building", company: "building",
     money: "dollar", price: "dollar", payment: "card", creditcard: "card", shopping: "cart", order: "package", box: "package",
     delivery: "truck", shipping: "truck", chart: "bar-chart", graph: "bar-chart", pie: "pie-chart", label: "tag",
     work: "briefcase", job: "briefcase", document: "file", goal: "target", energy: "bolt", power: "bolt", insight: "idea",
     tip: "idea", security: "lock", person: "user", people: "users", team: "users", date: "calendar", email: "mail",
     message: "chat", favorite: "star", rating: "star", like: "heart", hearts: "heart", spades: "spade", clubs: "club", diamonds: "diamond", notification: "bell", find: "search",
-    export: "download", duplicate: "copy", clipboard: "copy", settings: "sliders", options: "sliders", reload: "refresh", sync: "refresh",
+    export: "download", duplicate: "copy", clipboard: "copy", options: "sliders", delete: "trash", bin: "trash", pencil: "edit", view: "eye", gear: "settings", cog: "settings", storage: "database", host: "server", password: "key", invoice: "receipt", award: "trophy", ai: "sparkle", magic: "sparkle", photo: "image", picture: "image", tool: "wrench", fix: "wrench", script: "code", reload: "refresh", sync: "refresh",
   };
   if (Object.hasOwn(ALIASES, n)) return ALIASES[n]!;
   return ICON_NAMES.find((i) => i.replace(/-/g, "") === n || i.startsWith(n) || n.startsWith(i.replace(/-.*/, ""))) ?? null;
