@@ -1,4 +1,4 @@
-import { SayShape, coreComponents, languageGuide, type Diagnostic, type SayShapeNode } from "../src";
+import { SayShape, COMMON_IMAGE_HOSTS, coreComponents, languageGuide, type Diagnostic, type SayShapeNode } from "../src";
 import { mapComponents } from "../src/components/map";
 import { sceneComponents } from "../src/components/scene";
 import { setupAppearance } from "./appearance/panel";
@@ -15,7 +15,8 @@ const gutter = $("gutter");
 const canvas = $<HTMLCanvasElement>("cv");
 
 // The samples use real photos from Unsplash; images from any other host are blocked.
-const imageHosts = ["images.unsplash.com"];
+// The sites models know image addresses on; the samples' photos are from one of them (images.unsplash.com).
+const imageHosts = [...COMMON_IMAGE_HOSTS];
 // Experimental scenes are off unless the address asks for them: /playground/index.html?scene=1
 const scenes = new URLSearchParams(location.search).get("scene") === "1";
 // Experimental behavior (rules that tick, dragging in scenes) is off unless asked for too: ?behavior=1

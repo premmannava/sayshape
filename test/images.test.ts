@@ -1,12 +1,56 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fitRect, ratioValue } from "../src/components/media";
-import { resolveImageUrl, type LoadedImage } from "../src/images";
+import { COMMON_IMAGE_HOSTS, resolveImageUrl, type LoadedImage } from "../src/images";
 import { coreComponents } from "../src/components";
 import { SayShape } from "../src/engine";
 import { FakeCanvas, render } from "../src/testing";
 
 const policy = { origin: "https://shop.example", base: "https://shop.example/products/", hosts: ["cdn.example.com", "*.imgs.example.net"] };
 const allowed = (src: string) => "url" in resolveImageUrl(src, policy);
+
+describe("the common image hosts", () => {
+  const common = { origin: "https://app.example", base: "https://app.example/", hosts: COMMON_IMAGE_HOSTS };
+  const loads = (src: string) => "url" in resolveImageUrl(src, common);
+
+  it("is a list of plain host names, each once, that nothing uses unless a host passes it", () => {
+    const host = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+    for (const h of COMMON_IMAGE_HOSTS) expect(h, h).toMatch(host);
+    expect(new Set(COMMON_IMAGE_HOSTS).size).toBe(COMMON_IMAGE_HOSTS.length);
+    expect(Object.isFrozen(COMMON_IMAGE_HOSTS)).toBe(true);
+    // The engine's own default is still the page's site only.
+    const ui = render(`image "Fox" src="https://upload.wikimedia.org/fox.jpg"\n`, { loadImage: async () => { throw new Error("not asked"); } });
+    expect(ui.warnings).toEqual([expect.stringMatching(/upload\.wikimedia\.org isn't in imageHosts/)]);
+  });
+
+  it("loads the sites models write, and still nothing else", () => {
+    for (const src of [
+      "https://upload.wikimedia.org/wikipedia/commons/4/47/Fox.png",
+      "https://images.unsplash.com/photo-1551632811-561732d1e306?w=800",
+      "https://picsum.photos/seed/trail/600/400",
+      "https://flagcdn.com/w320/jp.png",
+      "https://image.tmdb.org/t/p/w500/poster.jpg",
+      "https://covers.openlibrary.org/b/isbn/9780140328721-M.jpg",
+      "https://is1-ssl.mzstatic.com/image/thumb/a/100x100bb.jpg",
+    ]) expect(loads(src), src).toBe(true);
+    for (const src of [
+      "https://tracker.example.org/p.gif",
+      "http://upload.wikimedia.org/a.png",
+      "https://upload.wikimedia.org.evil.example/a.png",
+      "https://mzstatic.com.evil.example/a.png",
+      "data:image/png;base64,AAAA",
+    ]) expect(loads(src), src).toBe(false);
+  });
+
+  it("leaves out hosts that fetch an address for you, and storage anyone can rent", () => {
+    // Either would let a spec reach any server again: see the list's comment in src/images.ts.
+    const never = [
+      "wsrv.nl", "images.weserv.nl", "i0.wp.com", "res.cloudinary.com", "www.gravatar.com", "img.shields.io", "icon.horse", "www.google.com",
+      "image.thum.io", "api.microlink.io", "storage.googleapis.com", "firebasestorage.googleapis.com", "s3.amazonaws.com",
+    ];
+    for (const h of never) expect(loads(`https://${h}/x.png`), h).toBe(false);
+    for (const h of COMMON_IMAGE_HOSTS) expect(h, h).not.toMatch(/^\*\.(amazonaws\.com|cloudfront\.net|googleapis\.com|github\.io|vercel\.app|netlify\.app|pages\.dev|workers\.dev|r2\.dev|web\.app|herokuapp\.com)$/);
+  });
+});
 
 describe("image URL policy", () => {
   it("allows the page's own origin, including relative paths", () => {

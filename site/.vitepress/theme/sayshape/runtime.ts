@@ -37,6 +37,11 @@ export interface CreateOptions {
   padding?: number | "auto";
   /** Draw `report` blocks (the opt-in preset): the chat page's model may answer with one. */
   presets?: boolean;
+  /**
+   * Load images from the sites models know addresses on (COMMON_IMAGE_HOSTS), for
+   * answers a model writes: the chat page. Off, only this site's own images load.
+   */
+  images?: boolean;
   /** While a spec streams, draw what reads names not yet declared as loading placeholders (for layout-first answers). */
   streamPlaceholders?: boolean;
 }
@@ -69,8 +74,8 @@ export async function createSayShape(canvas: HTMLCanvasElement, opts: CreateOpti
     components,
     // The site shell decides light or dark; see watchSiteTheme.
     theme: isSiteDark() ? m.darkTheme : m.lightTheme,
-    // Only the site's own origin: the examples ship no remote images.
-    imageHosts: [],
+    // Only the site's own origin, since the examples ship no remote images; the chat page adds the common hosts.
+    imageHosts: opts.images ? [...m.COMMON_IMAGE_HOSTS] : [],
     onWarning: opts.onWarning ?? (() => {}),
     today: opts.today ? () => opts.today! : undefined,
     padding: opts.padding === "auto" ? (window.matchMedia("(max-width: 560px)").matches ? 4 : undefined) : opts.padding,

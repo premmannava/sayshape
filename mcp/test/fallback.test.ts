@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { cannotDrawViews, colorsNote, createServer, NO_EMIT, quickStart, REPEAT_TEXT } from "../src/server";
+import { cannotDrawViews, colorsNote, createServer, NO_EMIT, quickStart, REPEAT_TEXT, setImageHosts } from "../src/server";
 import { McpResultStore } from "../src/mcp-results";
 import { engineScriptUrl, fallbackPage, fenced, NOTHING_SENT, PAGE_COLOR_TOKENS, PAGE_DATASETS_TEXT, PAGE_ENGINE_VERSION, PAGE_REPEAT_TEXT, PAGE_TEXT, pageColors, scriptJson, usesMap } from "../src/fallback";
 import { lightTheme, darkTheme, extendTheme, type Theme } from "../../src/theme";
@@ -234,6 +234,27 @@ describe("emit: in chat apps that can't draw views", () => {
     const show2 = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
     expect(show2.description).not.toContain(NO_EMIT);
     expect(show2.description).toContain(quickStart(false, true));
+  });
+});
+
+describe("images on the page", () => {
+  const spec = 'image "A red fox" src="https://upload.wikimedia.org/fox.jpg"\n';
+
+  it("loads from the server's image hosts, and is the same page as before without any", async () => {
+    const plain = fallbackPage({ spec });
+    expect(plain).not.toContain("imageHosts");
+    expect(fallbackPage({ spec, imageHosts: [] })).toBe(plain);
+    const page = fallbackPage({ spec, imageHosts: ["upload.wikimedia.org", "*.img.example.com"] });
+    expect(page).toContain('theme: theme(), imageHosts: ["upload.wikimedia.org","*.img.example.com"] });');
+    expect(runPage(page).drawn.spec).toBe(spec);
+    // Through the server: the page gets the list the model's docs name.
+    try {
+      setImageHosts(["upload.wikimedia.org"]);
+      const { client } = await connect();
+      expect(pageIn(await show(client, { spec }))).toBe(fallbackPage({ spec, imageHosts: ["upload.wikimedia.org"] }));
+    } finally {
+      setImageHosts([]);
+    }
   });
 });
 

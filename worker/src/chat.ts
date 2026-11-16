@@ -19,6 +19,7 @@ import { parse } from "../../src/parser";
 import type { Diagnostic } from "../../src/types";
 import type { GuideOptions } from "../../src/prompt";
 import type { Registry } from "../../src/registry";
+import { COMMON_IMAGE_HOSTS } from "../../src/images";
 
 export const MAX_MESSAGE_CHARS = 400;
 /** Follow-ups sent as text before the current one. The page stops a chat well before this. */
@@ -114,7 +115,8 @@ export function chatRequest(message: string): string {
 export function chatGuide(registry: Registry): GuideOptions {
   const leftOut = new Set<string>(CHAT_LEFT_OUT);
   return {
-    imageHosts: [],
+    // The same list the chat page's engine loads from (ChatAnswer.vue), so the model is told what really draws.
+    imageHosts: COMMON_IMAGE_HOSTS,
     mode: "compact",
     workedExamples: false,
     // The layout first and long lists last, so the answer starts drawing at once (the page draws placeholders meanwhile).

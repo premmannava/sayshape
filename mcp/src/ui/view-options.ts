@@ -22,7 +22,9 @@
  *   --logo <https url>  a logo in the corner of every slide of a deck; its host is added to --image-hosts
  *   --slides            accepted and ignored: slide decks are always on
  *   --behavior          turn on experimental behavior: rules that tick, and dragging in scenes (off by default)
- *   --image-hosts <list>  hosts images may load from, comma-separated: cdn.example.com,*.images.example.com (none by default)
+ *   --image-hosts <list>  the only hosts images may load from, comma-separated: cdn.example.com,*.images.example.com
+ *                         (left out: the sites models know image addresses on, COMMON_IMAGE_HOSTS)
+ *   --no-image-hosts      no images from anywhere
  *
  * main.ts reads them from the command line; the server writes them into the
  * view's HTML as one <meta> tag; the view reads them back. Pure, so the server,
@@ -30,6 +32,7 @@
  */
 import { PRESETS, resolveTheme, type PresetId } from "../../../playground/appearance/presets";
 import { colorList, MAX_COLORS, normalizeHex } from "../../../playground/appearance/color";
+import { COMMON_IMAGE_HOSTS } from "../../../src/images";
 
 export interface ViewOptions {
   themePicker: boolean;
@@ -63,7 +66,8 @@ export interface ViewOptions {
   /**
    * Hosts images may load from (the engine's imageHosts; the server must agree:
    * setImageHosts, and the view resource's CSP). Absent means none: the view has
-   * no origin of its own to load from, so no images show.
+   * no origin of its own to load from, so no images show. parseViewArgs fills it
+   * in with COMMON_IMAGE_HOSTS unless the command line says otherwise.
    */
   imageHosts?: string[];
 }
@@ -76,8 +80,8 @@ const isPreset = (v: string | null | undefined): v is PresetId => !!v && PRESET_
 
 /** A host name, or "*.example.com" for its subdomains: no scheme, port, path or bare "*". */
 const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
-/** More would make the CSP and the guide long for no real use. */
-export const MAX_IMAGE_HOSTS = 20;
+/** Room for COMMON_IMAGE_HOSTS and a logo's host. More would make the CSP and the guide long for no real use. */
+export const MAX_IMAGE_HOSTS = 80;
 
 /** The hosts in a comma-separated list, lower-cased, without repeats; null if any isn't a host name. */
 function hostList(raw: string): string[] | null {
@@ -117,6 +121,12 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   }
   if (colorsAt >= 0) out.colors = parseColors(args[colorsAt + 1]);
   const hostsAt = args.indexOf("--image-hosts");
+  const noHosts = args.includes("--no-image-hosts");
+  if (hostsAt >= 0 && noHosts) {
+    throw new Error("Use --image-hosts or --no-image-hosts, not both: --image-hosts lists the only hosts images may load from, and --no-image-hosts allows none.");
+  }
+  // Left out, the sites models know image addresses on: with no hosts at all, no image ever shows.
+  if (hostsAt < 0 && !noHosts) out.imageHosts = [...COMMON_IMAGE_HOSTS];
   if (hostsAt >= 0) {
     const raw = args[hostsAt + 1];
     const hosts = raw && !raw.startsWith("--") ? hostList(raw) : null;

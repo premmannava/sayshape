@@ -141,6 +141,8 @@ Add them after `"sayshape-mcp"` in `args`:
 | `--theme-picker` | A theme selector in the interface's toolbar |
 | `--scene` | Experimental scenes, off unless you ask for them |
 | `--logo https://cdn.example.com/logo.png` | A small logo in the corner of every slide of a deck. Its host is allowed to load images, like `--image-hosts` |
+| `--image-hosts cdn.example.com,*.img.example.com` | The only hosts images may load from. Left out, images load from the common sites models know addresses on (`COMMON_IMAGE_HOSTS`) |
+| `--no-image-hosts` | Allow no images from anywhere. Not with `--image-hosts` |
 | `--data db.sqlite` | Answers from a SQLite database (needs Node.js 22.13 or later) |
 
 ### If it doesn't start
