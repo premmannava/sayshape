@@ -1,6 +1,7 @@
 import type { ComponentDef, PaintContext } from "../component";
 import type { Box } from "../types";
-import { fillTint } from "./util";
+import { fillTint, themeFont } from "./util";
+import { fitLines } from "../text";
 import { fitText } from "./input";
 
 const RATIOS = ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4"] as const;
@@ -68,18 +69,36 @@ export const image: ComponentDef = {
     src: { type: "string", required: true, description: "The image URL. Only the app's own site and hosts it allows will load." },
     ratio: { type: "enum", values: RATIOS, default: "16:9", description: "Width to height: 16:9, 4:3, 3:2, 1:1, 2:3 or 3:4. The space is kept while the image loads." },
     fit: { type: "enum", values: FITS, default: "cover", description: "cover fills the space and crops the edges; contain shows the whole image." },
+    caption: { type: "string", description: "A muted line under the image." },
   },
   example: `image "Ridgeline trail runners, side view" src="/images/ridgeline.jpg" ratio=4:3`,
   semantics(box, ctx) {
-    return { role: "img", name: ctx.props(box.node).text() };
+    const caption = ctx.props(box.node).str("caption");
+    return { role: "img", name: ctx.props(box.node).text(), description: caption || undefined };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    box.h = Math.round(box.w / ratioValue(p.oneOf("ratio", RATIOS, "16:9")));
+    const pictureH = Math.round(box.w / ratioValue(p.oneOf("ratio", RATIOS, "16:9")));
+    // A caption goes under the picture: its lines (at most two) add to the height.
+    const t = ctx.theme;
+    const caption = p.has("caption") ? fitLines(p.str("caption"), Math.max(20, box.w), themeFont(t, 400, t.text.caption), ctx.measure, 2) : [];
+    const lh = Math.round(t.text.caption * 1.4);
+    box.data = { pictureH, caption, lh };
+    box.h = pictureH + (caption.length ? t.space.sm + caption.length * lh : 0);
   },
-  paint(box, ctx) {
-    const p = ctx.props(box.node);
+  paint(whole, ctx) {
+    const p = ctx.props(whole.node);
     const { g, theme } = ctx;
+    const d = whole.data as { pictureH: number; caption: string[]; lh: number };
+    // The picture is the top of the box; a caption, if any, is under it.
+    const box = { ...whole, h: d.pictureH };
+    if (d.caption.length) {
+      g.font = ctx.font(400, theme.text.caption);
+      g.fillStyle = theme.colors.muted;
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      d.caption.forEach((l, i) => g.fillText(l, whole.x, whole.y + d.pictureH + theme.space.sm + d.lh * i + d.lh / 2 + 1));
+    }
     const state = ctx.image(p.str("src"));
     g.save();
     ctx.roundRect(box.x, box.y, box.w, box.h, theme.radius.md);

@@ -1,8 +1,8 @@
-import { ICON_NAMES, isIconName, nearestIcon } from "../icons";
-import type { LayoutContext, PressContext, PropDef } from "../component";
+import { drawIcon, ICON_NAMES, isIconName, nearestIcon, type IconName } from "../icons";
+import type { LayoutContext, PaintContext, PressContext, PropDef } from "../component";
 import type { Theme } from "../theme";
 import type { Box, SayShapeNode } from "../types";
-import { fitLines } from "../text";
+import { ellipsize, fitLines } from "../text";
 
 export const TONES = ["default", "muted", "accent", "good", "warn", "bad"] as const;
 export type Tone = (typeof TONES)[number];
@@ -298,9 +298,63 @@ export function labelLines(ctx: LayoutContext, text: string, width: number, maxL
 /** icon= on text and list-item: a symbol before the words, from the icon element's list. */
 export const iconProp: PropDef = { type: "string", description: "An icon before the text, by name from icon's list, e.g. icon=check-circle." };
 
+/** icon= on controls and labels: the same name list as iconProp, in fewer words for the guide. */
+export const iconBefore = (what: string): PropDef => ({ type: "string", description: `Icon name before the ${what}.` });
+
+/** detail= on controls: a quiet second line. */
+export const detailProp = (under: string): PropDef => ({ type: "string", description: `A muted line under the ${under}.` });
+
 /** A warning for an icon name that doesn't exist, with the nearest one and the full list. */
 export function iconProblems(raw: string | undefined, prop: string): string[] {
   if (raw === undefined || raw.includes("{") || isIconName(raw)) return [];
   const near = nearestIcon(raw);
   return [`${prop}="${raw}" isn't an icon.${near ? ` Did you mean ${prop}=${near}?` : ""} Icons: ${ICON_NAMES.join(", ")}`];
+}
+
+/** A small label pill (badge, a list row's tagged value, a tab's count): soft tint, solid fill or outline. */
+export const PILL_VARIANTS = ["soft", "solid", "outline"] as const;
+/** The tone roles a pill or an edge stripe takes (no plain ink). */
+export const PILL_TONES = ["accent", "good", "warn", "bad", "muted"] as const;
+export type PillVariant = (typeof PILL_VARIANTS)[number];
+const PILL_PAD = 8, PILL_DOT = 12, PILL_ICON = 18;
+
+/** What starts a pill: a status dot, an icon, or nothing. */
+export type PillLead = "dot" | IconName | null;
+
+/** A pill's width: its label with padding, and room for what leads it. */
+export function pillWidth(ctx: LayoutContext, label: string, lead: PillLead): number {
+  return Math.ceil(textWidth(ctx, label, 600, 12) + PILL_PAD * 2 + (lead === "dot" ? PILL_DOT : lead ? PILL_ICON : 0));
+}
+
+/** Draw a pill (w from pillWidth) in a tone color: the label in that color, or the theme's on-accent color on a solid fill. */
+export function paintPill(ctx: PaintContext, at: { x: number; y: number; w: number; h: number }, label: string, color: string, variant: PillVariant, lead: PillLead): void {
+  const { g, theme } = ctx;
+  const ink = variant === "solid" ? theme.colors.onAccent : color;
+  g.font = ctx.font(600, 12);
+  if (variant === "outline") {
+    ctx.roundRect(at.x + 0.5, at.y + 0.5, at.w - 1, at.h - 1, theme.radius.sm);
+    g.strokeStyle = color;
+    g.lineWidth = 1;
+    g.stroke();
+  } else {
+    ctx.roundRect(at.x, at.y, at.w, at.h, theme.radius.sm);
+    if (variant === "solid") { g.fillStyle = color; g.fill(); }
+    else fillTint(g, color, color === theme.colors.muted ? 0.1 : 0.12);
+  }
+  g.fillStyle = ink;
+  let room = PILL_PAD;
+  if (lead === "dot") {
+    // A status dot leads the label, so the color reads at a glance even where tints are faint.
+    g.beginPath();
+    g.arc(at.x + PILL_PAD + 3, at.y + at.h / 2, 3, 0, Math.PI * 2);
+    g.fill();
+    room += PILL_DOT;
+  } else if (lead) {
+    drawIcon(g, lead, at.x + PILL_PAD, at.y + (at.h - 14) / 2, 14, ink);
+    room += PILL_ICON;
+  }
+  g.textAlign = "left";
+  g.textBaseline = "middle";
+  g.fillStyle = ink;
+  g.fillText(ellipsize(label, at.w - PILL_PAD - room, g.font, { width: (t) => g.measureText(t).width }), at.x + room, at.y + at.h / 2 + 1);
 }

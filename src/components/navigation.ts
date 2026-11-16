@@ -4,7 +4,7 @@ import type { ComponentDef, LayoutContext, PropReader } from "../component";
 import type { Box, SayShapeNode, Value } from "../types";
 import { wrapText } from "../text";
 import { fitText } from "./input";
-import { chevron, fillTint, gapProp, onProp, partBox, runOn, stack, themeFont } from "./util";
+import { chevron, fillTint, gapProp, onProp, paintPill, partBox, pillWidth, runOn, stack, themeFont } from "./util";
 
 // ---------------------------------------------------------------- tabs
 
@@ -21,7 +21,10 @@ function selectedTab(tabs: SayShapeNode[], current: Value | undefined, props: (n
   return tabs.find((t) => tabValue(t, props) === current) ?? tabs[0];
 }
 
-interface TabCell { node: SayShapeNode; label: string; value: Value; x: number; w: number }
+interface TabCell { node: SayShapeNode; label: string; value: Value; x: number; w: number; badge: string; pillW: number }
+
+/** A tab's count pill: its height, and the space between it and the label. */
+const TAB_PILL_H = 18, TAB_PILL_GAP = 6;
 
 export const tabs: ComponentDef = {
   type: "tabs",
@@ -44,7 +47,7 @@ tabs bind=view
     return {
       role: "tablist",
       contentAfter: true,
-      parts: cells.map((cell) => ({ detail: cell.value, role: "tab" as const, name: cell.label, selected: cell.node.id === selected })),
+      parts: cells.map((cell) => ({ detail: cell.value, role: "tab" as const, name: cell.badge ? `${cell.label}, ${cell.badge}` : cell.label, selected: cell.node.id === selected })),
     };
   },
   layout(box, ctx) {
@@ -53,13 +56,15 @@ tabs bind=view
     const current = p.bound();
     const selected = selectedTab(kids, current, ctx.props);
     const font = themeFont(ctx.theme, 600, 14);
-    const natural = kids.map((k) => ctx.measure.width(ctx.props(k).text(), font) + TAB_PAD * 2);
+    const badges = kids.map((k) => ctx.props(k).str("badge"));
+    const pills = badges.map((b) => (b ? pillWidth(ctx, b, null) : 0));
+    const natural = kids.map((k, i) => ctx.measure.width(ctx.props(k).text(), font) + (pills[i] ? pills[i]! + TAB_PILL_GAP : 0) + TAB_PAD * 2);
     const total = natural.reduce((a, b) => a + b, 0);
     const scale = total > box.w ? box.w / total : 1;
     let x = box.x;
     const cells: TabCell[] = kids.map((k, i) => {
       const w = natural[i]! * scale;
-      const cell = { node: k, label: ctx.props(k).text(), value: tabValue(k, ctx.props), x, w };
+      const cell = { node: k, label: ctx.props(k).text(), value: tabValue(k, ctx.props), x, w, badge: badges[i]!, pillW: pills[i]! };
       x += w;
       return cell;
     });
@@ -102,7 +107,18 @@ tabs bind=view
         if (selectedBg > 0) fillTint(g, c.accent, 0.05 * selectedBg);
       }
       g.fillStyle = on ? c.ink : c.muted;
-      g.fillText(fitText(g, cell.label, Math.max(0, cell.w - 8)), cell.x + cell.w / 2, box.y + BAR_H / 2);
+      if (cell.badge) {
+        // The label and its count pill are centred together.
+        const room = Math.max(0, cell.w - 8 - cell.pillW - TAB_PILL_GAP);
+        const label = fitText(g, cell.label, room);
+        const textW = g.measureText(label).width;
+        const left = cell.x + (cell.w - (textW + TAB_PILL_GAP + cell.pillW)) / 2;
+        g.textAlign = "left";
+        g.fillText(label, left, box.y + BAR_H / 2);
+        paintPill(ctx, { x: left + textW + TAB_PILL_GAP, y: box.y + (BAR_H - TAB_PILL_H) / 2, w: cell.pillW, h: TAB_PILL_H }, cell.badge, on ? c.accent : c.muted, "soft", null);
+        g.font = font;
+        g.textAlign = "center";
+      } else g.fillText(fitText(g, cell.label, Math.max(0, cell.w - 8)), cell.x + cell.w / 2, box.y + BAR_H / 2);
       if (on) {
         // A slim accent rule on the baseline, rounded at its ends.
         const underlineX = ctx.tween(box.node, "tabs:underline:x", cell.x + 8, MOTION.navigation);
@@ -129,6 +145,7 @@ export const tab: ComponentDef = {
   text: { description: "The tab's label.", required: true },
   props: {
     value: { type: "string", description: "What the tabs' bind= holds while this tab is selected (default: the label)." },
+    badge: { type: "string", description: "A small count after the label." },
     gap: gapProp(12),
   },
   children: "any",

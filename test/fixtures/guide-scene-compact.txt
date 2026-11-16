@@ -35,24 +35,24 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - row gap=number pad=number align=top|center|bottom wrap=true|false fit=true|false justify=start|end|between [holds elements] — Places children side by side, splitting the width equally.
 - overlap at=top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right inset=number [holds elements] — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card.
 - grid min=number cols=number gap=number [holds elements] — Places children in responsive equal columns.
-- card gap=number pad=number variant=raised|hero|tinted|outline on=action [holds elements] — A surface that groups related content, stacked vertically.
+- card gap=number pad=number variant=raised|hero|tinted|outline on=action tone=accent|good|warn|bad|muted [holds elements] — A surface that groups related content, stacked vertically.
 - list [holds elements] — A bordered list of rows, separated by lines.
-- list-item "text" detail=text trailing=text icon=text on=action [holds elements; only in list] — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title.
-- accordion "text" bind=path! gap=number on=action [holds elements] — A heading that shows or hides the content under it when pressed.
-- divider — A thin horizontal line separating sections.
+- list-item "text" detail=text trailing=text tone=accent|good|warn|bad|muted icon=text on=action [holds elements; only in list] — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title.
+- accordion "text" bind=path! gap=number on=action detail=text [holds elements] — A heading that shows or hides the content under it when pressed.
+- divider ["text"] — A thin horizontal line separating sections.
 - spacer size=number — Empty vertical space.
 - each items=expr! as=name index=name key=expr [holds elements] — Repeats what's inside it once per item of a list, in place, with no look of its own; inside, the current item is called item (or the name given by as=).
 - timeline gap=number [holds step] — Steps in order with a line joining them: itineraries, how-to guides, order tracking, project history.
-- step "text" status=done|current|upcoming detail=text time=text icon=text [only in timeline] — One step of a timeline: a title, an optional detail line and time, and whether it's done, current or upcoming.
+- step "text" status=done|current|upcoming|blocked detail=text time=text icon=text [only in timeline] — One step of a timeline: a title, an optional detail line and time, and whether it's done, current or upcoming.
 - carousel bind=path! min=number gap=number on=action [holds elements] — Cards side by side, a page at a time, with arrows and dots: a few options to browse, like products, hotels or recipes.
 - text "text" style=display|title|lead|body|caption weight=regular|semibold|bold tone=default|muted|accent|good|warn|bad align=left|center|right strike=true|false icon=text rich=true|false — A paragraph or heading that wraps to the available width.
-- image "text" src=text! ratio=16:9|4:3|3:2|1:1|2:3|3:4 fit=cover|contain — A picture, such as a product photo.
-- code "text" — A short piece of code or a command, in a monospaced font on a tinted block.
-- badge "text" tone=accent|good|warn|bad|muted — A small rounded label for a status or a short tag, like Shipped or New.
+- image "text" src=text! ratio=16:9|4:3|3:2|1:1|2:3|3:4 fit=cover|contain caption=text — A picture, such as a product photo.
+- code "text" title=text copy=true|false — A short piece of code or a command, in a monospaced font on a tinted block.
+- badge "text" tone=accent|good|warn|bad|muted variant=soft|solid|outline icon=text — A small rounded label for a status or a short tag, like Shipped or New.
 - avatar "text" detail=text size=sm|md|lg tone=accent|good|warn|bad|muted name=true|false — A person's initials in a circle, with their name and an optional detail line beside it.
-- callout "text" detail=text tone=info|accent|good|warn|bad icon=true|false — The one thing to notice in an answer: a key finding, a warning or a next step.
+- callout "text" detail=text tone=info|accent|good|warn|bad icon=true|false action=text on=action — The one thing to notice in an answer: a key finding, a warning or a next step.
 - icon name=text! tone=default|muted|accent|good|warn|bad size=sm|md|lg label=text — A small symbol on its own, like a status mark or a weather sign.
-- stat label=text! value=text! tone=default|muted|accent|good|warn|bad align=left|center change=text trend=up|down|flat good=up|down spark=expr — A labelled number, for key figures like totals or counts.
+- stat label=text! value=text! tone=default|muted|accent|good|warn|bad align=left|center change=text trend=up|down|flat good=up|down spark=expr icon=text detail=text short=true|false — A labelled number, for key figures like totals or counts.
 - rating value=number max=number bind=path label=text on=action — A star rating.
 - chart ["text"] kind=bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap|scatter|treemap|sankey items=expr! x=name! y=name,name! labels=text label=name size=name group=name from=name to=name rows=name target=name good=up|down total=text values=true|false highlight=text format=number|money|percent [holds chart-line, chart-rule, chart-band, chart-note] — A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, bullet for each KPI against its target, such as quarterly goals, heatmap for one number across two dimensions, such as retention by cohort, scatter for how two numbers relate, such as price against rating, treemap for how a total splits across many parts, such as costs by line item, or sankey for how amounts flow from sources to where they end up, such as budget to departments to projects.
 - chart-line ["text"] y=name! [only in chart] — Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars.
@@ -66,25 +66,25 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - compare-row ["text"] field=name! format=text|number|money best=low|high [only in compare] — One row of a comparison: an attribute and the field each option's value comes from.
 - details ["text"] subtitle=text [holds detail] — One record as label and value rows, for a single customer, order, policy or ticket: its fields one per line, with an optional status badge.
 - detail "text" value=text! tone=default|muted|accent|good|warn|bad [only in details] — One row of details: a field's name and its value.
-- button "text" on=action variant=primary|secondary|danger disabled=cond — A pressable button that runs actions.
-- link "text" on=action! — Pressable text for a secondary action, lighter than a button.
-- check "text" bind=path! — A checkbox that toggles a true/false state value.
-- switch "text" bind=path! on=action — An on/off switch with a label, for settings that take effect right away.
+- button "text" on=action variant=primary|secondary|danger disabled=cond icon=text size=md|sm fit=true|false — A pressable button that runs actions.
+- link "text" on=action! icon=text — Pressable text for a secondary action, lighter than a button.
+- check "text" bind=path! detail=text — A checkbox that toggles a true/false state value.
+- switch "text" bind=path! on=action detail=text — An on/off switch with a label, for settings that take effect right away.
 - radio "text" bind=path! value=text! on=action — One choice among several.
 - select ["text"] items=expr! value=name label=name bind=path! multiple=true|false placeholder=text unavailable=name disabled=cond on=action — A field that opens a list to pick one option from, for choices like a department, status or filter; compact where radio buttons would take too much room.
 - date-picker ["text"] bind=path! min=text max=text range=true|false placeholder=text required=true|false disabled=cond on=action — A field that opens a month calendar to pick one date, kept in bind= as YYYY-MM-DD text ("" for none), or with range=true a start and an end.
 - stepper ["text"] bind=path! min=number max=number step=number on=action — A number with minus and plus buttons, for small counts like a quantity.
 - slider ["text"] bind=path! min=number max=number step=number on=action — Picks a number in a range by dragging a handle, or with the arrow keys.
-- input ["text"] bind=path! placeholder=text kind=text|email|number|password|search lines=number required=cond error=text on=action disabled=cond max=number — A text field people type into, such as a name, an email, a search, a new item, or with lines= a note or a message.
+- input ["text"] bind=path! placeholder=text kind=text|email|number|password|search lines=number required=cond error=text on=action disabled=cond max=number icon=text — A text field people type into, such as a name, an email, a search, a new item, or with lines= a note or a message.
 - segmented bind=path! label=text options=text! on=action — Two to six short options in one track, one chosen, like Week, Month and Year, or Chart and Table.
 - screen name=name! title=text gap=number [holds elements; only in top level] — One screen of a multi-screen interface.
 - tabs bind=path! on=action [holds tab] — A row of tabs that switches between sections.
-- tab "text" value=text gap=number [holds elements; only in tabs] — One tab inside tabs: its label, and the content shown while it is selected.
+- tab "text" value=text badge=text gap=number [holds elements; only in tabs] — One tab inside tabs: its label, and the content shown while it is selected.
 - breadcrumb "text" bind=path on=action — Where the user is, as a path like Shop / Shoes / Trail runners.
 - pagination bind=path! pages=number! on=action — Previous, next and page-number buttons for moving through pages of results.
-- progress value=number! max=number label=text tone=default|muted|accent|good|warn|bad — A horizontal bar showing how far a value is toward a maximum.
+- progress value=number! max=number label=text tone=default|muted|accent|good|warn|bad show=percent|value — A horizontal bar showing how far a value is toward a maximum.
 - skeleton shape=text|block|circle lines=number height=number — A grey placeholder shown while content loads: lines of text, a block or a circle.
-- empty "text" detail=text action=text on=action — A friendly message for when there is nothing to show, with an optional button to move on.
+- empty "text" detail=text action=text on=action icon=text — A friendly message for when there is nothing to show, with an optional button to move on.
 - schedule ["text"] items=expr! view=day|week|timeline date=name start=name end=name label=name rows=name tone=name key=name bind=path on=action — Blocks laid out on time from a list: a week of shifts, the day's room bookings, an itinerary by hour (times as HH:MM), or a project plan across dates (view=timeline, dates as YYYY-MM-DD).
 - board ["text"] items=expr! stage=name! stages=text title=name detail=name value=name format=text|number|money sum=name tone=name key=name bind=path move=true|false on=action — Columns of cards by stage, from a list: a sales pipeline, a task board, hiring stages, support tickets.
 - tree ["text"] items=expr! id=name parent=name label=name detail=name value=name format=text|number|money kind=list|org open=number bind=path on=action — A hierarchy from a flat list where each record names its parent: an org chart, folders, a budget by department.

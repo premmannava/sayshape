@@ -100,6 +100,7 @@ A surface that groups related content, stacked vertically. Give it on= to make t
 | `pad` | number | Inner padding in pixels (default 22). |
 | `variant` | `raised` / `hero` / `tinted` / `outline` | raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only). |
 | `on` | action | Actions to run when the card is pressed, e.g. emit:changed. Separate several with ; |
+| `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Color role of a left edge stripe. |
 
 Children: any elements.
 
@@ -133,6 +134,7 @@ One row of a list: a title, an optional detail line and value on the right, and 
 | `"text"` | text, required | The row's title. |
 | `detail` | string | A second, quieter line under the title. |
 | `trailing` | string | A short value on the right, like a price or a count. |
+| `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Draws trailing as a badge in this color role. |
 | `icon` | string | An icon before the text, by name from icon's list, e.g. icon=check-circle. |
 | `on` | action | Actions to run when the row is pressed, e.g. emit:changed. Separate several with ; |
 
@@ -154,6 +156,7 @@ A heading that shows or hides the content under it when pressed. Stack several f
 | `bind` | state, required | A true/false state name: true while open. |
 | `gap` | number | Space between children in pixels (default 10). |
 | `on` | action | Actions to run after it opens or closes, e.g. emit:changed. Separate several with ; |
+| `detail` | string | A muted line under the title. |
 
 Children: any elements.
 
@@ -168,6 +171,10 @@ accordion "Shipping" bind=shipping
 ### `divider`
 
 A thin horizontal line separating sections.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | A label centred on the line. |
 
 ```
 divider
@@ -234,7 +241,7 @@ One step of a timeline: a title, an optional detail line and time, and whether i
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text, required | The step's title, e.g. Shipped. |
-| `status` | `done` / `current` / `upcoming` | Only to show progress: done for finished steps, current for where the person is now, upcoming for what's left (muted). Leave it out on every step for a plan, itinerary or how-to that hasn't started. |
+| `status` | `done` / `current` / `upcoming` / `blocked` | Only to show progress: done for finished steps, current for where the person is now, upcoming for what's left (muted), blocked (red). Leave it out on every step for a plan, itinerary or how-to that hasn't started. |
 | `detail` | string | A quieter line under the title, like a place or a note. |
 | `time` | string | A short date or time on the right, e.g. Oct 18 or 9:12 AM. |
 | `icon` | string | An icon in the step's marker instead of the check or dot, by name from icon's list, e.g. icon=truck. |
@@ -306,6 +313,7 @@ A picture, such as a product photo. The quoted text says what it shows, and is d
 | `src` | string, required | The image URL. Only the app's own site and hosts it allows will load. |
 | `ratio` | `16:9` / `4:3` / `3:2` / `1:1` / `2:3` / `3:4` | Width to height: 16:9, 4:3, 3:2, 1:1, 2:3 or 3:4. The space is kept while the image loads. |
 | `fit` | `cover` / `contain` | cover fills the space and crops the edges; contain shows the whole image. |
+| `caption` | string | A muted line under the image. |
 
 ```
 image "Ridgeline trail runners, side view" src="/images/ridgeline.jpg" ratio=4:3
@@ -318,6 +326,8 @@ A short piece of code or a command, in a monospaced font on a tinted block.
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text, required | The code. Long lines wrap. |
+| `title` | string | A header line, e.g. a file name. |
+| `copy` | boolean | A copy button. |
 
 ```
 code "npm install sayshape"
@@ -331,6 +341,8 @@ A small rounded label for a status or a short tag, like Shipped or New.
 |---|---|---|
 | `"text"` | text, required | The label, one or two words. |
 | `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Color role: accent, good, warn, bad or muted. |
+| `variant` | `soft` / `solid` / `outline` | soft (tint), solid or outline. |
+| `icon` | string | Icon name before the label. |
 
 ```
 badge "Shipped" tone=good
@@ -362,9 +374,11 @@ The one thing to notice in an answer: a key finding, a warning or a next step.
 | `detail` | string | An optional second line in muted text, e.g. what the finding is based on. |
 | `tone` | `info` / `accent` / `good` / `warn` / `bad` | info (default, the accent color) for a finding, good for good news, warn for something to watch, bad for a problem. accent is the same as info. |
 | `icon` | boolean | Show a small icon matching the tone: i, a tick, ! or ×. |
+| `action` | string | Label of a button inside it. |
+| `on` | action | Actions to run when the button is pressed, e.g. emit:changed. Separate several with ; |
 
 ```
-callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true
+callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true action="See breakdown" on=emit:open_breakdown
 ```
 
 ### `icon`
@@ -397,6 +411,9 @@ A labelled number, for key figures like totals or counts. Add change= to show ho
 | `trend` | `up` / `down` / `flat` | up, down or flat: which way the change went, for its arrow and color. Leave it out to take it from change's sign. |
 | `good` | `up` / `down` | Which way is good news: up (default, colored good) or down, for figures like costs or churn where falling is good. |
 | `spark` | expression | A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]}, spark=weekly, or from a list of records spark={pluck(sales, 'revenue')}. |
+| `icon` | string | Icon name before the label. |
+| `detail` | string | A muted line under the figure. |
+| `short` | boolean | Shorten 1,250,000 to 1.25M; false keeps it as given. |
 
 ```
 state price=24 qty=2
@@ -661,6 +678,9 @@ A pressable button that runs actions. Use emit: to tell the app what the user ch
 | `on` | action | What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ; |
 | `variant` | `primary` / `secondary` / `danger` | primary (filled), secondary (outlined) or danger. |
 | `disabled` | condition | Expression; when true the button is greyed out and can't be pressed. |
+| `icon` | string | Icon name before the label. |
+| `size` | `md` / `sm` | md or sm (smaller). |
+| `fit` | boolean | Natural width, even on a phone. |
 
 ```
 button "Book now" on=emit:book
@@ -675,6 +695,7 @@ Pressable text for a secondary action, lighter than a button.
 |---|---|---|
 | `"text"` | text, required | The link text. |
 | `on` | action, required | What happens when pressed, e.g. emit:size_guide. |
+| `icon` | string | Icon name before the text. |
 
 ```
 link "Size guide" on=emit:size_guide
@@ -688,6 +709,7 @@ A checkbox that toggles a true/false state value.
 |---|---|---|
 | `"text"` | text, required | The label next to the box. |
 | `bind` | state, required | The state name this checkbox reads and writes. |
+| `detail` | string | A muted line under the label. |
 
 ```
 state agreed=false
@@ -703,6 +725,7 @@ An on/off switch with a label, for settings that take effect right away.
 | `"text"` | text, required | The label for the setting. |
 | `bind` | state, required | The true/false state name this switch reads and writes. |
 | `on` | action | Actions to run after it is switched, e.g. emit:changed. Separate several with ; |
+| `detail` | string | A muted line under the label. |
 
 ```
 state updates=true
@@ -822,6 +845,7 @@ A text field people type into, such as a name, an email, a search, a new item, o
 | `on` | action | Actions to run when Enter is pressed, after the value is written, e.g. emit:changed. Separate several with ; |
 | `disabled` | condition | Expression; when true the field is greyed out and can't be typed in. |
 | `max` | number | Longest value in characters (at most 10000; 2000 when lines= is more than 1). |
+| `icon` | string | Icon name before the text, inside the field. |
 
 ```
 state task="" todos=[]
@@ -897,6 +921,7 @@ One tab inside tabs: its label, and the content shown while it is selected.
 |---|---|---|
 | `"text"` | text, required | The tab's label. |
 | `value` | string | What the tabs' bind= holds while this tab is selected (default: the label). |
+| `badge` | string | A small count after the label. |
 | `gap` | number | Space between children in pixels (default 12). |
 
 Children: any elements.
@@ -948,6 +973,7 @@ A horizontal bar showing how far a value is toward a maximum.
 | `max` | number | The full amount (default 100). |
 | `label` | string | Optional caption above the bar. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
+| `show` | `percent` / `value` | A readout: percent (60%) or value (3 / 5). |
 
 ```
 state done=3
@@ -979,6 +1005,7 @@ A friendly message for when there is nothing to show, with an optional button to
 | `detail` | string | A line explaining what to do next. |
 | `action` | string | Label for a button under the message. |
 | `on` | action | Actions to run when the button is pressed, e.g. emit:changed. Separate several with ; |
+| `icon` | string | Icon name instead of the tray. |
 
 ```
 empty "No results" detail="Try a wider price range." action="Clear filters" on=emit:clear_filters
