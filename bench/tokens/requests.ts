@@ -37,6 +37,9 @@ const field = (n: SayShapeNode, re: RegExp) => re.test(n.text ?? "") || re.test(
 
 const check = (label: string, test: PartCheck["test"]): PartCheck => ({ label, test });
 
+/** Every chart and table has something to show: none draws "No data". */
+const hasData: PartCheck = { label: "every chart and table shows data", test: (ui) => !ui.text().some((t) => /^No data/.test(t)) };
+
 /** Claim ids in the copied screen: tables copy every row, so this counts rows shown. */
 const claimIds = (ui: Rendered) => new Set(ui.copyText().match(/CL-\d{4}/g) ?? []).size;
 
@@ -71,6 +74,7 @@ const claimsParts: PartCheck[] = [
   check("a donut by line", (ui) => chartOf(ui, ["donut", "pie"]) && mentions(ui, "marine", "cyber")),
   check("a table of all 40 claims", (ui) => shown(ui, "table").length > 0 && claimIds(ui) >= 40),
   filtersByStatus,
+  hasData,
 ];
 
 export const REQUESTS: BenchRequest[] = [
@@ -84,6 +88,7 @@ export const REQUESTS: BenchRequest[] = [
         return /name/.test(heads) && /dep/.test(heads) && /salary/.test(heads) && /yoy|change|year/.test(heads);
       })),
       check("five employees", (ui) => { const t = shown(ui, "table")[0]; return !!t && ui.copyText().split("\n").filter((l) => l.includes("\t")).length >= 6; }),
+      hasData,
     ],
   },
   {
@@ -93,6 +98,7 @@ export const REQUESTS: BenchRequest[] = [
       check("a Total Revenue figure", (ui) => anyShown(ui, "stat", (n, t) => /revenue/i.test(n.props.label ?? t))),
       check("a bar chart", (ui) => chartOf(ui, ["bar", "hbar"])),
       check("six months of data", (ui) => ui.copyText().split("\n").filter((l) => /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\t/i.test(l)).length >= 6),
+      hasData,
     ],
   },
   {
@@ -114,6 +120,7 @@ export const REQUESTS: BenchRequest[] = [
       check("a pie chart of user acquisition", (ui) => anyShown(ui, "chart", (n, t) => ["pie", "donut"].includes(kindOf(n)) && /acqui/i.test(t + (n.props.title ?? "")))),
       check("a table of top features", (ui) => shown(ui, "table").length > 0),
       check("a line chart of MRR and ARR", (ui) => anyShown(ui, "chart", (n) => kindOf(n) === "line" && twoSeries(n)) && mentions(ui, "mrr", "arr")),
+      hasData,
     ],
   },
   {
