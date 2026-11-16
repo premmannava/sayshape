@@ -69,7 +69,8 @@ export function shareWidths(space: number, mins: readonly number[]): number[] {
  * more lines, so a row of controls becomes a column on a narrow screen. At
  * widths where everything fits, every child gets an equal share, as before.
  */
-export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (typeof ROW_ALIGN)[number], wrap = false): void {
+export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (typeof ROW_ALIGN)[number], wrap = false, fit?: RowFit): void {
+  if (fit && (fit.fit || fit.justify)) return fitRow(box, ctx, pad, gap, align, wrap, fit);
   const kids = ctx.visibleChildren(box.node);
   const innerW = Math.max(0, box.w - pad * 2);
   const mins = kids.map((k) => Math.min(innerW, ctx.minWidth(k)));
@@ -100,6 +101,72 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
     packButtons(placed, widths, box.x + pad, innerW, gap, ctx);
     // Cards form visual panels: match their bottom edges instead of centering
     // a shorter card. Explicit top/bottom alignment still takes precedence.
+    if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
+      for (const kb of placed) kb.h = tallest;
+    } else if (align !== "top") {
+      for (const kb of placed) {
+        const d = tallest - kb.h;
+        if (d > 0) ctx.shift(kb, 0, align === "center" ? d / 2 : d);
+      }
+    }
+    y += tallest;
+  });
+  box.h = y - box.y + pad;
+}
+
+export const ROW_JUSTIFY = ["start", "end", "between"] as const;
+export interface RowFit { fit: boolean; justify?: (typeof ROW_JUSTIFY)[number] }
+
+/**
+ * A row whose children keep their natural width (fit=true, or any justify).
+ * Each child is first laid out with the whole row to itself: one that hugs its
+ * content (a button, a badge) comes back narrower and keeps that width; the
+ * rest (text, cards) share what is left. Lines wrap on those widths, then each
+ * line is placed by justify (start, end, or between: spare room between children).
+ */
+function fitRow(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (typeof ROW_ALIGN)[number], wrap: boolean, fit: RowFit): void {
+  const kids = ctx.visibleChildren(box.node);
+  const innerW = Math.max(0, box.w - pad * 2);
+  const left = box.x + pad;
+  const mins = kids.map((k) => Math.min(innerW, ctx.minWidth(k)));
+  const trial = kids.map((k) => ctx.layout(k, left, box.y + pad, innerW));
+  const hugs = trial.map((kb) => kb.w < innerW - 1);
+  const need = kids.map((_k, i) => (hugs[i] ? Math.max(trial[i]!.w, mins[i]!) : mins[i]!));
+  const lines: number[][] = [];
+  let line: number[] = [], used = 0;
+  kids.forEach((_k, i) => {
+    const w = (line.length ? used + gap : 0) + need[i]!;
+    if (wrap && line.length && w > innerW + 0.01) { lines.push(line); line = []; used = 0; }
+    used = (line.length ? used + gap : 0) + need[i]!;
+    line.push(i);
+  });
+  if (line.length || !lines.length) lines.push(line);
+
+  let y = box.y + pad;
+  lines.forEach((idx, li) => {
+    if (li) y += gap;
+    const space = innerW - gap * Math.max(0, idx.length - 1);
+    const fill = idx.filter((i) => !hugs[i]);
+    const hugW = idx.reduce((t, i) => t + (hugs[i] ? need[i]! : 0), 0);
+    const shares = shareWidths(Math.max(0, space - hugW), fill.map((i) => mins[i]!));
+    const width = (i: number) => (hugs[i] ? trial[i]!.w : shares[fill.indexOf(i)]!);
+    const total = idx.reduce((t, i) => t + width(i), 0) + gap * Math.max(0, idx.length - 1);
+    const spare = Math.max(0, innerW - total);
+    const between = fit.justify === "between" && idx.length > 1 ? spare / (idx.length - 1) : 0;
+    let x = left + (fit.justify === "end" ? spare : 0);
+    if (!fit.justify && !fill.length && idx.every((i) => kids[i]!.type === "tile")) x = left + spare / 2;
+    let tallest = 0;
+    const placed: Box[] = [];
+    idx.forEach((i) => {
+      const w = width(i);
+      const kb = hugs[i] ? trial[i]! : ctx.layout(kids[i]!, x, y, w);
+      if (hugs[i]) ctx.shift(kb, x - kb.x, y - kb.y);
+      else if (Math.abs(kb.x - x) > 0.01) ctx.shift(kb, x - kb.x, 0);
+      placed.push(kb);
+      box.children.push(kb);
+      tallest = Math.max(tallest, kb.h);
+      x += w + gap + between;
+    });
     if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
       for (const kb of placed) kb.h = tallest;
     } else if (align !== "top") {

@@ -26,7 +26,7 @@ import { fieldOf, isList, isRecord } from "../../data";
 import { seriesColors, SERIES_COUNT } from "../../theme";
 import type { Value } from "../../types";
 import {
-  chartScale, fit, flowLegend, header, labelOf, MAX_CHART_ITEMS, numberAt, paintAxisGrid, plotHeight, preciseText, tickLabels,
+  chartScale, fieldTitle, fit, flowLegend, header, labelOf, MAX_CHART_ITEMS, numberAt, paintAxisGrid, plotHeight, preciseText, tickLabels,
   type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
@@ -70,9 +70,16 @@ export interface ScatterGeometry {
   xLabelY: number;
   xTitle: { text: string; x: number; y: number };
   yTitle: { text: string; x: number; y: number };
+  /** Names drawn beside the dots when there are few of them, as measured at layout (x, y: left edge and middle of the text). */
+  dotLabels?: Array<{ text: string; x: number; y: number }>;
   /** The dot the arrow keys are on, set in paint, for screen readers. */
   active?: number;
 }
+
+/** Dots are named on the plot up to this many. */
+const MAX_LABELLED_DOTS = 12;
+/** The longest a dot's name reads, in pixels, before it's cut. */
+const MAX_DOT_LABEL = 110;
 
 /** Each dot's radius: area in proportion to size=, between these. */
 const MIN_R = 4, DOT_R = 5;
@@ -103,12 +110,12 @@ export const scatter: ChartKindDef = {
     const where = `chart on line ${input.line}`;
     const labelField = input.extra.label ?? "", sizeField = input.extra.size ?? "", groupField = input.extra.group ?? "";
     const [xName = "", yName = ""] = input.labels;
-    const xTitle = xName || input.x || "x", yTitle = yName || input.y || "y";
+    const xTitle = xName || fieldTitle(input.x) || "x", yTitle = yName || fieldTitle(input.y) || "y";
 
     const items: Value | undefined = input.items;
     if (!isList(items) || !items.length) return done(say("No data to chart"));
     if (items.length > MAX_CHART_ITEMS) return done(say(`Too many items to chart: at most ${MAX_CHART_ITEMS}`));
-    type Raw = { label: string; x: number; y: number; size: number | null; group: string };
+    type Raw = { name: string; label: string; x: number; y: number; size: number | null; group: string };
     const raw: Raw[] = [];
     let gaps = 0;
     items.forEach((item, i) => {
@@ -117,7 +124,10 @@ export const scatter: ChartKindDef = {
       const label = labelField && isRecord(item) ? labelOf(fieldOf(item, labelField)) : `Item ${i + 1}`;
       const size = sizeField ? numberAt(item, sizeField) : null;
       const group = groupField && isRecord(item) ? labelOf(fieldOf(item, groupField)) : "";
-      raw.push({ label, x, y, size, group });
+      // The name drawn beside the dot: label= if given, else a name or label field the item has.
+      const nameField = labelField || (isRecord(item) && ["name", "label"].find((f) => typeof fieldOf(item, f) === "string") || "");
+      const name = nameField && isRecord(item) ? labelOf(fieldOf(item, nameField)) : "";
+      raw.push({ name, label, x, y, size, group });
     });
     if (gaps) ctx.warn?.(`${where}: ${gaps} of ${items.length} items have no number in ${input.x} or ${input.y}, so they aren't drawn`);
     const negative = sizeField ? raw.filter((r) => r.size !== null && r.size < 0).length : 0;
@@ -178,6 +188,30 @@ export const scatter: ChartKindDef = {
       };
     });
 
+    // Names beside the dots when there are few: right of the dot, else left, skipping any that would run into another name, a dot or the edge.
+    const dotLabels: NonNullable<ScatterGeometry["dotLabels"]> = [];
+    if (raw.length <= MAX_LABELLED_DOTS) {
+      const taken: Array<{ x0: number; x1: number; y0: number; y1: number }> = [];
+      const halfH = labelLH / 2;
+      raw.forEach((r, i) => {
+        const dot = dots[order.indexOf(i)]!;
+        if (!r.name) return;
+        const text = fit(r.name, MAX_DOT_LABEL, font, m);
+        if (!text) return;
+        const w = m.width(text, font);
+        for (const x of [dot.x + dot.r + 4, dot.x - dot.r - 4 - w]) {
+          const rect = { x0: x, x1: x + w, y0: dot.y - halfH, y1: dot.y + halfH };
+          if (rect.x0 < 0 || rect.x1 > box.w || rect.y0 < plot.y - 4 || rect.y1 > plot.y + plot.h + 4) continue;
+          const hits = (o: typeof rect) => rect.x0 < o.x1 && rect.x1 > o.x0 && rect.y0 < o.y1 && rect.y1 > o.y0;
+          if (taken.some(hits)) continue;
+          if (dots.some((o) => hits({ x0: o.x - o.r, x1: o.x + o.r, y0: o.y - o.r, y1: o.y + o.r }))) continue;
+          taken.push(rect);
+          dotLabels.push({ text, x, y: dot.y });
+          break;
+        }
+      });
+    }
+
     // Dots on the same spot can't be told apart by the pointer: the tip says how many more are there.
     slots.forEach((slot, i) => {
       const here = dots.filter((o, j) => j !== i && Math.abs(o.x - dots[i]!.x) < 1 && Math.abs(o.y - dots[i]!.y) < 1).length;
@@ -192,7 +226,7 @@ export const scatter: ChartKindDef = {
     }
     const ticks = yScale.ticks.map((v, i) => ({ value: v, y: yAt(v), label: yLabels[i]! }));
     const geometry: ScatterGeometry = {
-      dots, xTicks, xLabelY,
+      dots, xTicks, xLabelY, dotLabels,
       xTitle: { text: xT, x: plot.x + plot.w, y: titleY },
       yTitle: { text: fit(yTitle, box.w, font, m), x: 0, y: top + labelLH / 2 },
     };
@@ -260,6 +294,15 @@ export const scatter: ChartKindDef = {
       drawDot(g, shapeOf(dot.color), ox + dot.x, oy + dot.y, dot.r * grow,
         () => { g.save(); g.globalAlpha *= bubbles ? 0.72 : 0.92; g.fillStyle = color; g.fill(); g.restore(); },
         () => { g.lineWidth = 1; g.strokeStyle = bubbles ? color : c.raised; g.stroke(); });
+    }
+    // Names beside the dots, once they've grown in.
+    if (s.dotLabels?.length) {
+      g.globalAlpha = base * easeOut(reveal * 2.5);
+      g.font = d.labelFont;
+      g.fillStyle = c.muted;
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      for (const l of s.dotLabels) g.fillText(l.text, ox + l.x, oy + l.y);
     }
     g.globalAlpha = base * fade;
     // The legend shows each group's shape in its color.

@@ -103,7 +103,7 @@ EVERY ELEMENT ACCEPTS
 ELEMENTS AT A GLANCE
 - layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll, deck, slide
 - content: text, image, code, badge, avatar, callout, icon, tile
-- data: stat, rating, chart, chart-line, chart-rule, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
+- data: stat, rating, chart, chart-line, chart-rule, chart-band, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
 - navigation: screen, tabs, tab, breadcrumb, pagination
 - feedback: progress, skeleton, empty, dialog
@@ -119,6 +119,8 @@ ELEMENTS
     pad=<number>  Inner padding in pixels (default 0).
     align=<top|center|bottom>  Vertical alignment of children: top, center or bottom.
     wrap=<boolean>  Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line.
+    fit=<boolean>  Keep children at their natural width.
+    justify=<start|end|between>  Where children sit: start, end, or between (spread). Implies fit.
     children: any elements
 
   overlap  — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card. The first child sets the size.
@@ -128,6 +130,7 @@ ELEMENTS
 
   grid  — Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
     min=<number>  Narrowest a column may be, in pixels (default 200).
+    cols=<number>  Most columns; fewer when min doesn't fit.
     gap=<number>  Space between children in pixels (default 14).
     children: any elements
 
@@ -236,7 +239,7 @@ ELEMENTS
     on=<action>  Actions to run when the button is pressed, e.g. emit:changed. Separate several with ;
 
   icon  — A small symbol on its own, like a status mark or a weather sign. To start a line of text or a list row with one, use icon= on text or list-item instead.
-    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders.
+    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book.
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     size=<sm|md|lg>  sm, md or lg.
     label=<string>  What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration.
@@ -277,8 +280,10 @@ ELEMENTS
     target=<name>  Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal.
     good=<up|down>  Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time).
     total=<string>  Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income".
+    values=<boolean>  bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits.
+    highlight=<string>  bar, hbar, stacked: one item's x value, e.g. highlight="Mar"; its bar keeps full color, the others fade.
     format=<number|money|percent>  How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number.
-    children: chart-line, chart-rule, chart-note
+    children: chart-line, chart-rule, chart-band, chart-note
 
   chart-line "<text>"  — Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars. Name the chart's own bars in the legend with its labels=, like labels="This year".
     "<text>"  Its name in the legend. Defaults to the field name.
@@ -288,6 +293,13 @@ ELEMENTS
   chart-rule "<text>"  — Under a bar or line chart: a level drawn across the plot, such as a target, a budget or an average.
     "<text>"  What the level is, shown at its end, e.g. "Target".
     y=<expression, required>  The level, a number or a formula, e.g. y=50000 or y={avg(pluck(sales, 'revenue'))}.
+    only inside: chart
+
+  chart-band "<text>"  — Under a bar or line chart: a shaded range between two levels, drawn behind the data, such as a healthy range or a target zone.
+    "<text>"  What the range is, shown at its edge, e.g. "Healthy".
+    from=<expression, required>  One end of the range, a number or a formula.
+    to=<expression, required>  The other end, a number or a formula.
+    tone=<default|muted|accent|good|warn|bad>  Shading: default (neutral), muted, accent, good, warn or bad.
     only inside: chart
 
   chart-note "<text>"  — Under a bar or line chart: a marker at one item with a few words, such as a launch or an outage.
@@ -313,13 +325,16 @@ ELEMENTS
     sort=<state>  State that holds the field to sort by. Pressing a header sets it; missing values sort last.
     direction=<state>  State that holds asc or desc. Pressing the sorted header again flips it.
     on=<action>  Actions to run after a row is selected, with bind= already set, e.g. emit:changed. Separate several with ;
+    total=<string>  Add a totals row summing number, money and compact columns: true, or text for its first cell.
     children: table-column
 
   table-column "<text>"  — One column of a table: its header and the field it shows.
     "<text>"  The header. Defaults to the field name.
     field=<name, required>  The field of each record to show, e.g. field=price.
-    format=<text|number|money>  text, number (1,200.5) or money ($1,200.00, US dollars). number and money show only numbers; other values show —.
-    align=<left|right>  left or right. Default: right for number and money, left for text.
+    format=<text|number|money|percent|date|compact>  text, number (1,200.5), money ($1,200.00), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —.
+    align=<left|right>  left or right. Default: right for numbers, left for text and date.
+    tone=<name>  sign (negative bad, positive good) or a row field holding good, warn, bad, accent or muted to draw a badge.
+    bar=<boolean>  A bar behind each number, sized to the column's largest.
     only inside: table
 
   compare "<text>"  — Two to four options side by side with one row per attribute, marking the best value in each row: plans, products or choices to weigh up. Use compare-row children.

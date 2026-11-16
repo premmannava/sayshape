@@ -1,7 +1,7 @@
 import type { ComponentDef } from "../component";
 import { chart } from "./chart";
 import { table, tableColumn } from "./table";
-import { chartLine, chartRule, chartNote } from "./chart-layers";
+import { chartLine, chartRule, chartBand, chartNote } from "./chart-layers";
 import { select } from "./select";
 import { datePicker } from "./date-picker";
 import { avatar, badge, code, icon, progress, stat, text } from "./content";
@@ -31,7 +31,7 @@ import { slide } from "./slides/slide";
 export {
   column, row, overlap, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
   text, image, code, badge, avatar, callout, icon,
-  stat, rating, chart, chartLine, chartRule, chartNote, meter, table, tableColumn, compare, compareRow, details, detail,
+  stat, rating, chart, chartLine, chartRule, chartBand, chartNote, meter, table, tableColumn, compare, compareRow, details, detail,
   button, link, check, switchToggle, radio, select, datePicker, stepper, slider, input, segmented,
   screen, tabs, tab, breadcrumb, pagination,
   progress, skeleton, empty,
@@ -52,7 +52,7 @@ export {
 export const coreComponents: ComponentDef[] = [
   column, row, overlap, grid, card, list, listItem, accordion, divider, spacer, each, timeline, step, carousel,
   text, image, code, badge, avatar, callout, icon,
-  stat, rating, chart, chartLine, chartRule, chartNote, meter, table, tableColumn, compare, compareRow, details, detail,
+  stat, rating, chart, chartLine, chartRule, chartBand, chartNote, meter, table, tableColumn, compare, compareRow, details, detail,
   button, link, check, switchToggle, radio, select, datePicker, stepper, slider, input, segmented,
   screen, tabs, tab, breadcrumb, pagination,
   progress, skeleton, empty,

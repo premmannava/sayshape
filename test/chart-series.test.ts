@@ -166,7 +166,7 @@ describe("legend", () => {
   it("only shows with 2 or more series", () => {
     expect(geo(render(`${sales}\nchart kind=bar items=sales x=month y=revenue\n`)).legend).toEqual([]);
     expect(geo(render(SPECS["2-series bar"]!)).legend.map((l) => l.label)).toEqual(["This year", "Last year"]);
-    expect(geo(render(`${sales}\nchart kind=bar items=sales x=month y=revenue,last_year\n`)).legend.map((l) => l.label)).toEqual(["revenue", "last_year"]);
+    expect(geo(render(`${sales}\nchart kind=bar items=sales x=month y=revenue,last_year\n`)).legend.map((l) => l.label)).toEqual(["Revenue", "Last year"]);
   });
 
   it("wraps onto more lines at narrow widths", () => {

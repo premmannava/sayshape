@@ -5,7 +5,7 @@
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`overlap`](#overlap), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll), [`deck`](#deck), [`slide`](#slide) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon), [`tile`](#tile) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`chart-line`](#chart-line), [`chart-rule`](#chart-rule), [`chart-note`](#chart-note), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`chart-line`](#chart-line), [`chart-rule`](#chart-rule), [`chart-band`](#chart-band), [`chart-note`](#chart-note), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented), [`menu`](#menu), [`menu-item`](#menu-item) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty), [`dialog`](#dialog) |
@@ -41,6 +41,8 @@ Places children side by side, splitting the width equally. On narrow screens the
 | `pad` | number | Inner padding in pixels (default 0). |
 | `align` | `top` / `center` / `bottom` | Vertical alignment of children: top, center or bottom. |
 | `wrap` | boolean | Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line. |
+| `fit` | boolean | Keep children at their natural width. |
+| `justify` | `start` / `end` / `between` | Where children sit: start, end, or between (spread). Implies fit. |
 
 Children: any elements.
 
@@ -76,6 +78,7 @@ Places children in responsive equal columns. Cards in the same grid row automati
 | Prop | Type | Description |
 |---|---|---|
 | `min` | number | Narrowest a column may be, in pixels (default 200). |
+| `cols` | number | Most columns; fewer when min doesn't fit. |
 | `gap` | number | Space between children in pixels (default 14). |
 
 Children: any elements.
@@ -384,7 +387,7 @@ A small symbol on its own, like a status mark or a weather sign. To start a line
 
 | Prop | Type | Description |
 |---|---|---|
-| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders. |
+| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `size` | `sm` / `md` / `lg` | sm, md or lg. |
 | `label` | string | What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration. |
@@ -456,9 +459,11 @@ A chart of a list of records: bar or line for one or more numbers per item, such
 | `target` | name | Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal. |
 | `good` | `up` / `down` | Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time). |
 | `total` | string | Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income". |
+| `values` | boolean | bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits. |
+| `highlight` | string | bar, hbar, stacked: one item's x value, e.g. highlight="Mar"; its bar keeps full color, the others fade. |
 | `format` | `number` / `money` / `percent` | How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number. |
 
-Children: `chart-line`, `chart-rule`, `chart-note`.
+Children: `chart-line`, `chart-rule`, `chart-band`, `chart-note`.
 
 ```
 state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
@@ -493,6 +498,23 @@ Only inside: `chart`.
 
 ```
 chart-rule "Target" y=16000
+```
+
+### `chart-band`
+
+Under a bar or line chart: a shaded range between two levels, drawn behind the data, such as a healthy range or a target zone.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | What the range is, shown at its edge, e.g. "Healthy". |
+| `from` | expression, required | One end of the range, a number or a formula. |
+| `to` | expression, required | The other end, a number or a formula. |
+| `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Shading: default (neutral), muted, accent, good, warn or bad. |
+
+Only inside: `chart`.
+
+```
+chart-band "Healthy" from=10000 to=16000
 ```
 
 ### `chart-note`
@@ -543,6 +565,7 @@ Rows of a list of records, one table-column per field, for things like inventory
 | `sort` | state | State that holds the field to sort by. Pressing a header sets it; missing values sort last. |
 | `direction` | state | State that holds asc or desc. Pressing the sorted header again flips it. |
 | `on` | action | Actions to run after a row is selected, with bind= already set, e.g. emit:changed. Separate several with ; |
+| `total` | string | Add a totals row summing number, money and compact columns: true, or text for its first cell. |
 
 Children: `table-column`.
 
@@ -561,8 +584,10 @@ One column of a table: its header and the field it shows.
 |---|---|---|
 | `"text"` | text | The header. Defaults to the field name. |
 | `field` | name, required | The field of each record to show, e.g. field=price. |
-| `format` | `text` / `number` / `money` | text, number (1,200.5) or money ($1,200.00, US dollars). number and money show only numbers; other values show —. |
-| `align` | `left` / `right` | left or right. Default: right for number and money, left for text. |
+| `format` | `text` / `number` / `money` / `percent` / `date` / `compact` | text, number (1,200.5), money ($1,200.00), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —. |
+| `align` | `left` / `right` | left or right. Default: right for numbers, left for text and date. |
+| `tone` | name | sign (negative bad, positive good) or a row field holding good, warn, bad, accent or muted to draw a badge. |
+| `bar` | boolean | A bar behind each number, sized to the column's largest. |
 
 Only inside: `table`.
 

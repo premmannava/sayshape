@@ -202,7 +202,7 @@ describe("rating", () => {
 
   it("fills part of a star for a fractional value", () => {
     const ui = render(`rating value=2.5 max=3\n`);
-    expect(ui.drawOps.filter((d) => d.op === "fill" && d.fillStyle === ui.sayshape.theme.colors.warn)).toHaveLength(3);
+    expect(ui.drawOps.filter((d) => d.op === "fill" && d.fillStyle === ui.sayshape.theme.colors.warnFill)).toHaveLength(3);
   });
 });
 
