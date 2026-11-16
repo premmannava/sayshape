@@ -73,5 +73,8 @@ export const SELECTABLE = new Set(["text", "stat", "table"]);
 /** How long drawing must stay unchanged before the layer is rebuilt, so a streamed spec builds it once. */
 export const SETTLE_MS = 120;
 
+/** The longest the layer waits for drawing to settle, so text that never stops changing (a ticking number) still gets a layer. */
+export const TEXT_MAX_WAIT_MS = 1000;
+
 /** How far past the visible part of the page lines are kept, so a little scrolling needs no rebuild. */
 export const OVERSCAN = 400;

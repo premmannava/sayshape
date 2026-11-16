@@ -38,7 +38,7 @@ import { buildAccessibilityTree } from "./a11y/tree";
 import { plainText } from "./a11y/text";
 import { TextCollector } from "./text-layer/collect";
 import { domTextLayer } from "./text-layer/dom";
-import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, type TextLayerHost } from "./text-layer/host";
+import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, TEXT_MAX_WAIT_MS, type TextLayerHost } from "./text-layer/host";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
 import type { ExpressionFunctions, Scope } from "./expr";
 
@@ -232,6 +232,9 @@ export class SayShape {
   /** The text layer and what feeds it, or null when the selectText option is off (nothing is recorded or created then). */
   private text: { host: TextLayerHost; collector: TextCollector } | null = null;
   private textTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The hash of the last frame seen, and when the layer first fell behind it (null while it is up to date). */
+  private textSeen = -1;
+  private textSince: number | null = null;
   /** What the layer was last built from: the frame's lines (hash) and the part of the page they were kept for. */
   private textBuilt: { hash: number; from: number; to: number } | null = null;
   /** Whether the person has pressed or typed anything here (reduced motion: rules wait for it). */
@@ -733,15 +736,21 @@ export class SayShape {
     if (this.textBuilt && this.textBuilt.hash === t.collector.hash && this.textInView()) {
       // Nothing changed: a hover or a focus ring repainted. A pending rebuild is for a change that was undone.
       if (this.textTimer !== null) { clearTimeout(this.textTimer); this.textTimer = null; }
+      this.textSeen = t.collector.hash;
       return;
     }
-    this.scheduleText();
+    // Drawing that keeps repainting the same words must not keep the timer from running out.
+    if (t.collector.hash !== this.textSeen || this.textTimer === null) { this.textSeen = t.collector.hash; this.scheduleText(); }
   }
 
+  /** Wait for drawing to settle, but never longer than TEXT_MAX_WAIT_MS (a ticker that never stops changing). */
   private scheduleText(): void {
     if (!this.text || this.destroyed) return;
     if (this.textTimer !== null) clearTimeout(this.textTimer);
-    this.textTimer = setTimeout(() => { this.textTimer = null; this.buildText(); }, SETTLE_MS);
+    const now = Date.now();
+    if (this.textSince === null) this.textSince = now;
+    const wait = Math.max(0, Math.min(SETTLE_MS, this.textSince + TEXT_MAX_WAIT_MS - now));
+    this.textTimer = setTimeout(() => { this.textTimer = null; this.buildText(); }, wait);
   }
 
   /** Build the layer now, if it's out of date, instead of waiting for drawing to settle (for hosts and tests that can't wait). */
@@ -774,6 +783,7 @@ export class SayShape {
       forcedColors: typeof matchMedia !== "undefined" && matchMedia("(forced-colors: active)").matches,
     });
     this.textBuilt = { hash: t.collector.hash, from, to };
+    this.textSince = null;
   }
 
   /**

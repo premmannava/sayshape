@@ -3,7 +3,7 @@
  * (src/text-layer). The canvas stays the only renderer; these tests check the
  * lines the engine hands the layer, in Node, through sayshape/testing.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { monoWidth, render, type Rendered } from "../src/testing";
 
 const equipment = `state equipment=[{id: "laptop", name: "Laptop", price: 1200, stock: 12}, {id: "monitor", name: "Monitor", price: 350, stock: 24}, {id: "keyboard", name: "Keyboard", price: 79, stock: 41}] selected=""`;
@@ -299,6 +299,38 @@ describe("text layer: when it is built", () => {
     ui.sayshape.renderNow();
     ui.textLayer.settle();
     expect(ui.textLayer.builds).toBe(1);
+  });
+
+  it("builds by itself once drawing has been still for a moment, however often it repaints", () => {
+    vi.useFakeTimers();
+    try {
+      const ui = render(`state n=1\ntext "Count {n}"\n`, { width: 420 });
+      for (let i = 0; i < 30; i++) {
+        ui.sayshape.invalidate("paint");
+        ui.sayshape.renderNow();
+        vi.advanceTimersByTime(20);
+      }
+      expect(ui.textLayer.builds).toBe(1);
+      expect(words(ui)).toEqual(["Count 1"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still builds for text that never stops changing, after a longer wait", () => {
+    vi.useFakeTimers();
+    try {
+      const ui = render(`state n=1\ntext "Count {n}"\n`, { width: 420 });
+      for (let i = 0; i < 200; i++) {
+        ui.set("n", i);
+        vi.advanceTimersByTime(20);
+      }
+      // Four seconds of change: a few builds, not one per change.
+      expect(ui.textLayer.builds).toBeGreaterThan(0);
+      expect(ui.textLayer.builds).toBeLessThan(8);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("follows a state change", () => {
