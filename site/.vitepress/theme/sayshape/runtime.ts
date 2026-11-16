@@ -35,6 +35,10 @@ export interface CreateOptions {
    * the demo already gives it a margin and every pixel of width counts.
    */
   padding?: number | "auto";
+  /** Draw `report` blocks (the opt-in preset): the chat page's model may answer with one. */
+  presets?: boolean;
+  /** While a spec streams, draw what reads names not yet declared as loading placeholders (for layout-first answers). */
+  streamPlaceholders?: boolean;
 }
 
 export interface SayShapeModules {
@@ -70,6 +74,8 @@ export async function createSayShape(canvas: HTMLCanvasElement, opts: CreateOpti
     onWarning: opts.onWarning ?? (() => {}),
     today: opts.today ? () => opts.today! : undefined,
     padding: opts.padding === "auto" ? (window.matchMedia("(max-width: 560px)").matches ? 4 : undefined) : opts.padding,
+    ...(opts.presets ? { presets: true } : {}),
+    ...(opts.streamPlaceholders ? { streamPlaceholders: true } : {}),
   });
 }
 

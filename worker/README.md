@@ -17,6 +17,8 @@ the engine draws the answer as it arrives
 
 While the model thinks, chat answers stream its thinking as `{"t":"thought"}` events, up to 12,000 characters an answer, which the page shows above the answer. Thinking is free text, not SayShape, so while it's on the key can be used to get prose back that way; set `SHOW_THINKING = "false"` in `wrangler.toml` to stop sending it.
 
+With `REPORT_FIRST = "true"`, a new chat question is first asked with the report guide (the report preset, about 500 tokens: figures, charts, a table and filters from a few lines), and with the chat guide only when the model answers that a report can't show it or draws nothing. Follow-ups and spreadsheet questions never use it; a follow-up to a report is sent as the ordinary elements it became. The chat page draws with the engine's `presets` and `streamPlaceholders` on, and the chat guide asks for the layout first and long lists last, so an answer starts drawing while its data is still being written. Set it to `"false"` in `wrangler.toml` and deploy to go back to the chat guide alone.
+
 `GET /status` says whether answers are on, the model's name and whether answers can be saved (`"recording": true`, below), without calling the model or counting a question. The chat page asks it when someone starts to type.
 
 A refusal before any answer is JSON with a `reason` the page words itself: `off`, `unconfigured`, `rate`, `daily`, `check`, `too-big` or `bad-request`.
