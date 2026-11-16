@@ -47,7 +47,7 @@ The canvas is labelled "Generated interface" unless you set your own label. Pass
 ## Not covered yet
 
 - The world map can't be reached by keyboard (its places are still listed for screen readers).
-- Selecting text by touch, and selecting text in charts, scenes, slides and elements other than `text`, `stat` and `table`. `copyText()` gives the whole screen as plain text.
+- Selecting text by touch (built, off by default until checked on real phones), and selecting text in charts, scenes, slides and elements other than `text`, `stat`, `table`, `details`, `callout`, `badge` and list items. `copyText()` gives the whole screen as plain text.
 - Right-to-left text and complex script shaping beyond what the canvas does on its own.
 - The person's own text size setting.
 
