@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { render } from "../src/testing";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { coreComponents } from "../src/components";
@@ -69,5 +70,29 @@ describe("row fit and justify", () => {
   it("still wraps children that don't fit", () => {
     const r = lay(`row gap=10 fit=true\n${btns}`, 140);
     expect(new Set(r.children.map((c) => c.y)).size).toBeGreaterThan(1);
+  });
+});
+
+describe("through render() from sayshape/testing", () => {
+  const cardBoxes = (spec: string, width: number) => {
+    const ui = render(spec, { width });
+    const out = ui.findAll({ type: "card" }).map((f) => f.box!);
+    ui.destroy();
+    return out;
+  };
+  it("lands four cards where three fit as two rows of two", () => {
+    const b = cardBoxes(`grid min=140 gap=10\n${cards(4)}`, 500);
+    expect(rowsOf(b)).toEqual([2, 2]);
+  });
+  it("caps columns with cols=2 for five cards", () => {
+    const b = cardBoxes(`grid cols=2 gap=10\n${cards(5)}`, 700);
+    expect(rowsOf(b)).toEqual([2, 2, 1]);
+  });
+  it("puts a justify=end row's last button on the row's right edge", () => {
+    const ui = render(`row fit=true justify=end gap=10\n  button "One"\n  button "Two"\n`, { width: 600 });
+    const [, two] = ui.findAll({ type: "button" }).map((f) => f.box!);
+    const row = ui.find({ type: "row" }).box!;
+    expect(two!.x + two!.w).toBeCloseTo(row.x + row.w);
+    ui.destroy();
   });
 });
