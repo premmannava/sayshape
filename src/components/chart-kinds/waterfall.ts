@@ -19,7 +19,7 @@
 import { easeOut, staggered } from "../../ghost";
 import {
   barPath, barText, chartData, preciseText, chartScale, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintPremiumBar, paintSlotLabels, plotHeight,
-  slotLabels, tickLabels, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect,
+  slotLabels, labelRows, tickLabels, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
@@ -100,8 +100,8 @@ export const waterfall: ChartKindDef = {
     const slots: ChartSlot[] = [];
     const bars: WaterfallGeometry["bars"] = [];
     entries.forEach((e, i) => {
-      const { cx, shownLabel, labelX } = placed[i]!;
-      const slot: ChartSlot = { label: e.label, shownLabel, labelX, cx, value: e.value, values: [e.value] };
+      const { cx, shownLabel, shownLabel2, labelX } = placed[i]!;
+      const slot: ChartSlot = { label: e.label, shownLabel, ...(shownLabel2 ? { shownLabel2 } : {}), labelX, cx, value: e.value, values: [e.value] };
       if (e.span && e.value !== null) {
         const y1 = y(e.span.from), y2 = y(e.span.to);
         // A change of 0 still shows as a hairline, so the step isn't mistaken for a gap.
@@ -140,7 +140,7 @@ export const waterfall: ChartKindDef = {
         ...base, plot, slots, labelY, zeroY, min: scale.min, max: scale.max, custom: geometry,
         ticks: scale.ticks.map((v, i) => ({ value: v, y: y(v), label: tickText[i]! })),
       },
-      h: labelY + labelLH,
+      h: labelY + labelLH * labelRows(placed),
     };
   },
 

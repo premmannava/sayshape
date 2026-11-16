@@ -43,6 +43,49 @@ describe("the icon set", () => {
   });
 });
 
+const NEW_ICONS = [
+  "settings", "edit", "trash", "eye", "upload", "external", "folder", "database", "server", "shield", "flag", "key", "wallet",
+  "bank", "receipt", "play", "pause", "image", "book", "wrench", "bug", "code", "sparkle", "trophy", "map",
+] as const;
+
+describe("the newer icons", () => {
+  it("has each one, drawing strokes in the given color", () => {
+    for (const name of NEW_ICONS) {
+      expect(isIconName(name), name).toBe(true);
+      const { context, take } = createRecordingContext();
+      drawIcon(context, name, 0, 0, 28, darkTheme.colors.ink);
+      const ops = take();
+      expect(ops.some((o) => o.op === "stroke" || o.op === "fill"), name).toBe(true);
+      for (const op of ops) expect(op.fillStyle || op.strokeStyle, name).toBe(darkTheme.colors.ink);
+    }
+  });
+
+  it("keeps every shape at least a stroke's width inside the grid, so nothing is clipped", () => {
+    for (const name of NEW_ICONS) {
+      for (const shape of ICONS[name]) {
+        const n = (shape.match(/-?\d*\.?\d+/g) ?? []).map(Number);
+        const edges: number[] = [];
+        if (shape.startsWith("O") || shape.startsWith("A")) edges.push(n[0]! - n[2]!, n[0]! + n[2]!, n[1]! - n[2]!, n[1]! + n[2]!);
+        else if (shape.startsWith("R")) edges.push(n[0]!, n[0]! + n[2]!, n[1]!, n[1]! + n[3]!);
+        else edges.push(...n);
+        for (const e of edges) expect(e >= 1 && e <= 23, `${name}: ${shape}`).toBe(true);
+      }
+    }
+  });
+
+  it("is named in the icon element's guide text and works through the element", () => {
+    for (const name of NEW_ICONS) {
+      expect(warnings(`icon name=${name}\n`), name).toEqual([]);
+      const ui = render(`icon name=${name} size=lg\n`);
+      expect(ui.drawOps.some((o) => o.op === "stroke" || o.op === "fill"), name).toBe(true);
+      ui.destroy();
+    }
+    expect(warnings(`icon name=gear\n`)[0]).toMatch(/Did you mean name=settings\?/);
+    expect(nearestIcon("delete")).toBe("trash");
+    expect(nearestIcon("pencil")).toBe("edit");
+  });
+});
+
 describe("the icon element", () => {
   it("shows a known icon at its size, and warns about an unknown one with the nearest", () => {
     expect(warnings(`icon name=plane size=lg\n`)).toEqual([]);
