@@ -43,7 +43,7 @@ export interface ViewOptions {
    */
   modelColors?: boolean;
   saveImage: boolean;
-  /** The "Copy text" button: a canvas has no text to select, so this copies the screen's words instead. */
+  /** The "Copy text" button: this copies the screen's words as plain text (selected text copies as it is). */
   copyText: boolean;
   /**
    * False with --no-select-text: the engine adds no text layer, so nothing over the canvas can be selected or found.

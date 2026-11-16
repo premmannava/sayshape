@@ -294,3 +294,14 @@ const sayshape = new SayShape(canvas, { components: coreComponents });   // the 
 ```
 
 In tests, `render(spec).accessibility()` shows the screen as a screen reader gets it, `ui.announcements` what it was told, and `ui.mirror` sends a screen reader's actions; the visual suite runs [axe](https://github.com/dequelabs/axe-core) on every sample. Automated checks can't prove WCAG conformance on their own: [`docs/accessibility-testing.md`](accessibility-testing.md) is a short manual pass with VoiceOver and NVDA to run before claiming it. Still to do: reaching the map by keyboard.
+
+## Selectable text
+
+A canvas has no text to select, so the engine keeps a second invisible layer beside the accessibility mirror: one transparent real text node per drawn line of `text`, `stat` and `table`, at the same position, font and size. Dragging with a mouse or pen selects those words, Ctrl/Cmd+C copies them (a table selection copies one row per line, cells separated by tabs), and the browser's find (Ctrl/Cmd+F) reaches them. With nothing selected, Ctrl/Cmd+C still copies the whole screen through `copyText()`. The layer is marked `aria-hidden` (screen readers use the mirror), is rebuilt only once drawing has been still for a moment and only when the lines changed, holds only what is in view (a long table creates nodes for visible rows), and leaves out hidden, inactive and covered text. A plain click on selectable text still presses the card, row or link under it; only a drag selects. The canvas stays the only thing that draws.
+
+```js
+const sayshape = new SayShape(canvas, { components: coreComponents });   // the layer is on by default
+// new SayShape(canvas, { components: coreComponents, selectText: false }) leaves it out: no extra DOM
+```
+
+`sayshape-mcp --no-select-text` does the same for the MCP view. In tests, `render(spec).textLayer` lists the lines (`lines`, `builds`, `selection`), `settle()` builds it now and `dragText(from, to)` selects. Not covered: touch screens, chart labels, scenes and slides.

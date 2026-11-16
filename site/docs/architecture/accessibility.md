@@ -47,7 +47,7 @@ The canvas is labelled "Generated interface" unless you set your own label. Pass
 ## Not covered yet
 
 - The world map can't be reached by keyboard (its places are still listed for screen readers).
-- Text selection and the browser's find in page. To copy, hosts can offer a button that calls `copyText()`, which gives the whole screen as plain text (the MCP view has one).
+- Selecting text by touch, and selecting text in charts, scenes, slides and elements other than `text`, `stat` and `table`. `copyText()` gives the whole screen as plain text.
 - Right-to-left text and complex script shaping beyond what the canvas does on its own.
 - The person's own text size setting.
 

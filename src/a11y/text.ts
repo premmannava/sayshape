@@ -1,7 +1,8 @@
 /**
  * The interface as plain text, for copying: what a person would type out if
- * they retyped the screen. A canvas has no text to select, so hosts offer
- * this instead (the MCP view's Copy text button).
+ * they retyped the screen. Text the person selects with the mouse is copied as it is
+ * (src/text-layer); this is the whole screen, for when nothing is selected
+ * (the MCP view's Copy text button).
  *
  * It reads the accessibility tree (src/a11y/tree.ts), which already knows
  * every element's words and values as shown, in reading order:
