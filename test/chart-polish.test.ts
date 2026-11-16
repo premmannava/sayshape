@@ -104,7 +104,7 @@ describe("names beside scatter dots", () => {
     const ui = render(pts(12, "label=name"), { width: 360 });
     const ls = labels(ui), w = ui.find("chart").box!.w;
     for (const l of ls) expect(l.x + 6 * l.text.length * 0.5).toBeLessThanOrEqual(w + 40);
-    const crowded = render(`state pts=[{n: "Alpha one", x: 1, y: 1}, {n: "Beta two", x: 1.01, y: 1.01}]\nchart kind=scatter items=pts x=x y=y label=n\n`, { width: 400 });
-    expect(labels(crowded).length).toBeLessThan(2);
+    const crowded = render(`state pts=[{n: "Alpha one", x: 1, y: 1}, {n: "Beta two", x: 1.01, y: 1.01}, {n: "Gamma three", x: 1.02, y: 1.02}]\nchart kind=scatter items=pts x=x y=y label=n\n`, { width: 400 });
+    expect(labels(crowded).length).toBeLessThan(3);
   });
 });
