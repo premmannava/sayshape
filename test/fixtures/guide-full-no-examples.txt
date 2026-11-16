@@ -103,7 +103,7 @@ EVERY ELEMENT ACCEPTS
 ELEMENTS AT A GLANCE
 - layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll, deck, slide
 - content: text, image, code, badge, avatar, callout, icon, tile
-- data: stat, rating, chart, chart-line, chart-rule, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
+- data: stat, rating, chart, chart-line, chart-rule, chart-band, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow, map, pin
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
 - navigation: screen, tabs, tab, breadcrumb, pagination
 - feedback: progress, skeleton, empty, dialog
@@ -266,8 +266,10 @@ ELEMENTS
     target=<name>  Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal.
     good=<up|down>  Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time).
     total=<string>  Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income".
+    values=<boolean>  bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits.
+    highlight=<string>  bar, hbar, stacked: one item's x value, e.g. highlight="Mar"; its bar keeps full color, the others fade.
     format=<number|money|percent>  How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number.
-    children: chart-line, chart-rule, chart-note
+    children: chart-line, chart-rule, chart-band, chart-note
 
   chart-line "<text>"  — Under a bar or line chart: another field of the same items drawn as a line on top, on the same scale, such as a forecast or last year over this year's bars. Name the chart's own bars in the legend with its labels=, like labels="This year".
     "<text>"  Its name in the legend. Defaults to the field name.
@@ -277,6 +279,13 @@ ELEMENTS
   chart-rule "<text>"  — Under a bar or line chart: a level drawn across the plot, such as a target, a budget or an average.
     "<text>"  What the level is, shown at its end, e.g. "Target".
     y=<expression, required>  The level, a number or a formula, e.g. y=50000 or y={avg(pluck(sales, 'revenue'))}.
+    only inside: chart
+
+  chart-band "<text>"  — Under a bar or line chart: a shaded range between two levels, drawn behind the data, such as a healthy range or a target zone.
+    "<text>"  What the range is, shown at its edge, e.g. "Healthy".
+    from=<expression, required>  One end of the range, a number or a formula.
+    to=<expression, required>  The other end, a number or a formula.
+    tone=<default|muted|accent|good|warn|bad>  Shading: default (neutral), muted, accent, good, warn or bad.
     only inside: chart
 
   chart-note "<text>"  — Under a bar or line chart: a marker at one item with a few words, such as a launch or an outage.

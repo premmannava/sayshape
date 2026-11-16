@@ -10,7 +10,7 @@
 import type { ComponentDef, LayoutContext } from "../component";
 import { fitLines, wrapText, type TextMeasurer } from "../text";
 import { fieldOf, isList, isRecord } from "../data";
-import { mixColors, type Theme } from "../theme";
+import { isDark, isDarkTheme, mixColors, type Theme } from "../theme";
 import type { Value } from "../types";
 import { fillTint, themeFont } from "./util";
 
@@ -97,10 +97,16 @@ export interface ChartLayers {
   rules: Array<{ y: number; value: number; label: string; text: string }>;
   /** A marker at one item. */
   notes: Array<{ x: number; index: number; label: string }>;
+  /** A shaded range; top and bottom are where it's drawn, text its name and range as drawn, tone the color role. */
+  bands: Array<{ top: number; bottom: number; from: number; to: number; label: string; text: string; tone: string }>;
 }
 
 /** Everything paint needs, relative to the chart's box. */
 export type ChartGeometry = {
+  /** values=true on bar, hbar and stacked: write a value on every bar that has room. */
+  values?: boolean;
+  /** highlight= on bar, hbar and stacked: the slots kept in full color while the others are muted. */
+  highlight?: number[];
   /** Bar and line: what the chart-line, chart-rule and chart-note lines under it add. */
   layers?: ChartLayers;
   kind: Kind;
@@ -703,9 +709,9 @@ export function traceSmoothLine(
  * A value by its bar. One style for the whole chart: compact ($480K, $45K)
  * once any value reaches 10,000, so neighbouring labels read alike.
  */
-export function barText(v: number, format: Format, compact: boolean): string {
+export function barText(v: number, format: Format, compact: boolean, digits = 1): string {
   if (!compact || Math.abs(v) >= 1e15) return valueText(v, format);
-  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
+  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: digits };
   try {
     return formatter(format, opts).format(v);
   } catch {
@@ -713,3 +719,15 @@ export function barText(v: number, format: Format, compact: boolean): string {
   }
 }
 
+
+/** A bar's color when another item is highlighted: tinted toward the surface, still the same hue. */
+export function mutedBar(theme: Theme, color: string): string {
+  return mixColors(color, theme.colors.raised, isDarkTheme(theme) ? 0.62 : 0.68) ?? color;
+}
+
+/** Text that reads on a bar of this color: the theme's light or dark text, whichever contrasts. */
+export function onFill(theme: Theme, fill: string): string {
+  const { ink, raised } = theme.colors;
+  const [light, dark] = isDark(ink) ? [raised, ink] : [ink, raised];
+  return isDark(fill) ? light : dark;
+}
