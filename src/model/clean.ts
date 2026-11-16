@@ -22,6 +22,7 @@ export interface FilterOutput {
 }
 
 import { openBrackets } from "../parser";
+import { CHART_KINDS, FIGURE_OPS } from "../presets/report";
 
 const FENCE = /^\s*```/;
 
@@ -138,7 +139,9 @@ export class SpecFilter {
 }
 
 /** A line that could start a spec: a declaration, a comment, a condition block, or a known element name. */
-export function sayShapeLineTest(isElement: (name: string) => boolean, opts: { behavior?: boolean } = {}): (line: string) => boolean {
+const PRESET_PARTS = new Set<string>([...FIGURE_OPS, ...CHART_KINDS, "table"]);
+
+export function sayShapeLineTest(isElement: (name: string) => boolean, opts: { behavior?: boolean; presets?: boolean } = {}): (line: string) => boolean {
   return (line) => {
     const t = line.trim();
     if (!t) return false;
@@ -151,6 +154,8 @@ export function sayShapeLineTest(isElement: (name: string) => boolean, opts: { b
     if (word === "derive") return /^derive(\s|$)/.test(t);
     // Behavior on: a rule line, every 1s … (not the word "every" starting a sentence).
     if (word === "every" && opts.behavior) return /^every\s+(\d|\.\d)/.test(t);
+    // Presets on: a report and, indented under it, its parts (count, sum amount, bar month amount).
+    if (opts.presets && (word === "report" || (/^\s/.test(line) && PRESET_PARTS.has(word)))) return t.length === word.length || /\s/.test(t[word.length]!);
     // An element name alone, or followed by a space ("card", "text \"Hi\""), not prose ("Here's").
     return isElement(word) && (t.length === word.length || /\s/.test(t[word.length]!));
   };

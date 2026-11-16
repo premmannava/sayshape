@@ -102,6 +102,12 @@ export interface GenerateOptions {
    * so an element outside the profile is sent back for repair. Default false.
    */
   enforceProfile?: boolean;
+  /**
+   * Opt-in presets (`report`, src/presets/): specs are read with them expanded,
+   * so a report is checked as what it becomes. On by itself with the report
+   * guide (guide mode "report"). Default off.
+   */
+  presets?: boolean;
   /** Appended to the user's request, e.g. "/no_think" to turn off Qwen3's thinking. */
   userSuffix?: string;
   /**
@@ -153,7 +159,8 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
   const firstGuide = guideInfo(guideOpts ? guideOpts.mode ?? "full" : "custom");
   const checkWith = o.enforceProfile ? profile.registry : o.registry;
   const behavior = !!guideOpts?.behavior;
-  const isSayShapeLine = sayShapeLineTest((name) => o.registry.has(name), { behavior });
+  const presets = !!o.presets || guideOpts?.mode === "report";
+  const isSayShapeLine = sayShapeLineTest((name) => o.registry.has(name), { behavior, presets });
   const timings: GenerateResult["timings"] = { totalMs: 0 };
 
   // The guide first, then the context, then the request: the guide is the
@@ -208,7 +215,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
       const found = again.push(text).text + again.end().text;
       if (found.trim()) { recovered = true; emit({ text: found.trimEnd() + "\n", reset: false }); }
     }
-    const diagnostics = [...parse(spec, checkWith, { knownNames: o.stateNames, ...(behavior ? { behavior } : {}) }).diagnostics, ...(spec.trim() ? o.check?.(spec) ?? [] : [])];
+    const diagnostics = [...parse(spec, checkWith, { knownNames: o.stateNames, ...(behavior ? { behavior } : {}), ...(presets ? { presets } : {}) }).diagnostics, ...(spec.trim() ? o.check?.(spec) ?? [] : [])];
     const inputChars = msgs.reduce((n, m) => n + m.content.length, 0);
     const thinkingChars = thinking.length + filter.thinkingChars;
     return {
