@@ -13,6 +13,17 @@ describe("view options", () => {
     expect(parseViewArgs(["--no-copy-text"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, copyText: false });
   });
 
+  it("turns the text layer off with --no-select-text, and leaves it out of the tag when on", () => {
+    expect(parseViewArgs([])).not.toHaveProperty("selectText");
+    expect(parseViewArgs(["--no-select-text"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectText: false });
+    expect(encodeViewOptions(DEFAULT_VIEW_OPTIONS)).toBe("picker=0&theme=teal&save=1&copy=1");
+    const off = { ...DEFAULT_VIEW_OPTIONS, selectText: false };
+    expect(encodeViewOptions(off)).toBe("picker=0&theme=teal&save=1&copy=1&select=0");
+    expect(decodeViewOptions(encodeViewOptions(off))).toEqual(off);
+    // A tag written before the option existed keeps the layer on.
+    expect(decodeViewOptions("picker=0&theme=teal&save=1&copy=1")).not.toHaveProperty("selectText");
+  });
+
   it("says which themes exist when --theme names one it doesn't know", () => {
     expect(() => parseViewArgs(["--theme", "red"])).toThrow(/--theme needs one of teal, purple, blue, neutral, studio; got "red"/);
     expect(() => parseViewArgs(["--theme"])).toThrow(/--theme needs one of/);

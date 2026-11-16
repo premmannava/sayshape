@@ -52,6 +52,8 @@ export interface WidgetOptions {
   /** --scene, --behavior: the experimental elements the engine registers. */
   scenes?: boolean;
   behavior?: boolean;
+  /** False with --no-select-text: the engine adds no text layer. Absent means on. */
+  selectText?: boolean;
   /**
    * The JavaScript source of a function expression for a host (a chat app) to hook in. The loader calls it
    * once, after the first setSpec, as `(SOURCE)(ui, S, root)`: ui is the SayShape instance, S is the engine's
@@ -144,7 +146,7 @@ ${hostScript}<script>
       var chosen = root.getAttribute("data-theme");
       return chosen === "dark" || (chosen !== "light" && media && media.matches) ? themes.dark : themes.light;
     }
-    var ui = new S.SayShape(canvas, { components: components, theme: theme(), imageHosts: ${scriptJson(o.imageHosts ?? [])}${o.behavior ? ", behavior: true" : ""} });
+    var ui = new S.SayShape(canvas, { components: components, theme: theme(), imageHosts: ${scriptJson(o.imageHosts ?? [])}${o.behavior ? ", behavior: true" : ""}${o.selectText === false ? ", selectText: false" : ""} });
     function apply() {
       var t = theme();
       box.style.background = t.colors.surface;

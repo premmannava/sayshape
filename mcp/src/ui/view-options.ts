@@ -14,6 +14,8 @@
  *                       view ignores any it is sent anyway
  *   --no-save-image     hide the "Save image" button (shown where the chat app can download)
  *   --no-copy-text      hide the "Copy text" button (shown by default)
+ *   --no-select-text    no invisible text layer over the canvas: the words can't be selected, copied by
+ *                       dragging or found with Ctrl/Cmd+F, and nothing extra is added to the page (on by default)
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
  *   --logo <https url>  a logo in the corner of every slide of a deck; its host is added to --image-hosts
  *   --slides            accepted and ignored: slide decks are always on
@@ -43,6 +45,11 @@ export interface ViewOptions {
   saveImage: boolean;
   /** The "Copy text" button: a canvas has no text to select, so this copies the screen's words instead. */
   copyText: boolean;
+  /**
+   * False with --no-select-text: the engine adds no text layer, so nothing over the canvas can be selected or found.
+   * Absent means on.
+   */
+  selectText?: boolean;
   /** Experimental scenes are registered (the server must agree: setScenes). Absent means off. */
   scene?: boolean;
   /** Experimental behavior: rules and scene dragging (the server must agree: setBehavior). Absent means off. */
@@ -80,6 +87,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   if (args.includes("--theme-picker")) out.themePicker = true;
   if (args.includes("--no-save-image")) out.saveImage = false;
   if (args.includes("--no-copy-text")) out.copyText = false;
+  if (args.includes("--no-select-text")) out.selectText = false;
   if (args.includes("--no-model-colors")) out.modelColors = false;
   if (args.includes("--scene")) out.scene = true;
   if (args.includes("--behavior")) out.behavior = true;
@@ -211,7 +219,7 @@ export function encodeViewOptions(o: ViewOptions): string {
   // so a tag written before lists existed reads the same way; several are colors=rrggbb,rrggbb.
   const list = colorList(o.colors).map((c) => c.slice(1));
   const accent = list.length === 1 ? `&accent=${list[0]}` : list.length ? `&colors=${list.join(",")}` : "";
-  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.modelColors === false ? "&model=0" : ""}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
+  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.modelColors === false ? "&model=0" : ""}${o.selectText === false ? "&select=0" : ""}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
 }
 
 /** The settings from encodeViewOptions; anything missing or unknown keeps its default. */
@@ -222,6 +230,7 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   if (p.get("picker") === "1") out.themePicker = true;
   if (p.get("save") === "0") out.saveImage = false;
   if (p.get("copy") === "0") out.copyText = false;
+  if (p.get("select") === "0") out.selectText = false;
   if (p.get("model") === "0") out.modelColors = false;
   if (p.get("scene") === "1") out.scene = true;
   if (p.get("behavior") === "1") out.behavior = true;

@@ -610,6 +610,8 @@ async function start(): Promise<void> {
   sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
     ...(viewOptions.behavior ? { behavior: true } : {}),
+    // The invisible text layer (selecting, copying by drag, Ctrl/Cmd+F) unless --no-select-text.
+    ...(viewOptions.selectText === false ? { selectText: false } : {}),
     theme: faceTheme(theme),
     // The chat app already boxes the view: a card that is the whole interface draws no frame of its own.
     bareRootCard: true,

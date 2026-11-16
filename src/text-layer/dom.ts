@@ -61,8 +61,9 @@ export function domTextLayer(canvas: HTMLCanvasElement): TextLayerHost {
     lastRule = css;
     try {
       if (!sheet) {
-        sheet = new CSSStyleSheet();
-        document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+        const made = new CSSStyleSheet();
+        document.adoptedStyleSheets = [...document.adoptedStyleSheets, made];
+        sheet = made;
       }
       sheet.replaceSync(css);
     } catch {

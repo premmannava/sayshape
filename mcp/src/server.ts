@@ -614,6 +614,7 @@ export function createServer(opts: ServerOptions): McpServer {
             engine: await widgetEngine(),
             scenes: scenesOn,
             behavior: behaviorOn,
+            ...(opts.view?.selectText === false ? { selectText: false } : {}),
             imageHosts,
             ...(hostSource !== undefined ? { host: hostSource } : {}),
             ...(opts.view?.theme ? { theme: opts.view.theme } : {}),
