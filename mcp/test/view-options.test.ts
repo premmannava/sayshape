@@ -1,21 +1,27 @@
 import { describe, expect, it } from "vitest";
+import { COMMON_IMAGE_HOSTS } from "../../src/images";
 import { accentNotes, decodeViewOptions, DEFAULT_VIEW_OPTIONS, encodeViewOptions, MAX_IMAGE_HOSTS, parseViewArgs, readViewOptions, withViewOptions } from "../src/ui/view-options";
 
+/** What a server started without --image-hosts or --no-image-hosts allows. */
+const COMMON = { imageHosts: [...COMMON_IMAGE_HOSTS] };
+
 describe("view options", () => {
-  it("defaults to no theme picker, teal, and Save image and Copy text on", () => {
-    expect(parseViewArgs([])).toEqual({ themePicker: false, theme: "teal", saveImage: true, copyText: true });
+  it("defaults to no theme picker, teal, Save image and Copy text on, and images from the common hosts", () => {
+    expect(parseViewArgs([])).toEqual({ themePicker: false, theme: "teal", saveImage: true, copyText: true, ...COMMON });
+    // The view's own default is still none: only the server's command line turns the common hosts on.
+    expect(DEFAULT_VIEW_OPTIONS).not.toHaveProperty("imageHosts");
     expect(DEFAULT_VIEW_OPTIONS.themePicker).toBe(false);
   });
 
   it("reads the flags from the command line, next to the server's other flags", () => {
     expect(parseViewArgs(["--data", "x.db", "--theme-picker", "--theme", "blue", "--no-save-image"]))
-      .toEqual({ themePicker: true, theme: "blue", saveImage: false, copyText: true });
-    expect(parseViewArgs(["--no-copy-text"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, copyText: false });
+      .toEqual({ themePicker: true, theme: "blue", saveImage: false, copyText: true, ...COMMON });
+    expect(parseViewArgs(["--no-copy-text"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, copyText: false, ...COMMON });
   });
 
   it("turns the text layer off with --no-select-text, and leaves it out of the tag when on", () => {
     expect(parseViewArgs([])).not.toHaveProperty("selectText");
-    expect(parseViewArgs(["--no-select-text"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectText: false });
+    expect(parseViewArgs(["--no-select-text"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectText: false, ...COMMON });
     expect(encodeViewOptions(DEFAULT_VIEW_OPTIONS)).toBe("picker=0&theme=teal&save=1&copy=1");
     const off = { ...DEFAULT_VIEW_OPTIONS, selectText: false };
     expect(encodeViewOptions(off)).toBe("picker=0&theme=teal&save=1&copy=1&select=0");
@@ -26,8 +32,8 @@ describe("view options", () => {
 
   it("sets touch selection with --select-touch or --no-select-touch, and leaves it out of the tag when unset", () => {
     expect(parseViewArgs([])).not.toHaveProperty("selectTouch");
-    expect(parseViewArgs(["--select-touch"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectTouch: true });
-    expect(parseViewArgs(["--no-select-touch"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectTouch: false });
+    expect(parseViewArgs(["--select-touch"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectTouch: true, ...COMMON });
+    expect(parseViewArgs(["--no-select-touch"])).toEqual({ ...DEFAULT_VIEW_OPTIONS, selectTouch: false, ...COMMON });
     for (const [v, tag] of [[true, "&touch=1"], [false, "&touch=0"]] as const) {
       const o = { ...DEFAULT_VIEW_OPTIONS, selectTouch: v };
       expect(encodeViewOptions(o)).toBe(`picker=0&theme=teal&save=1&copy=1${tag}`);
@@ -66,7 +72,22 @@ describe("view options", () => {
     it("reads a comma-separated list of hosts, lower-cased and without repeats", () => {
       expect(parseViewArgs(["--image-hosts", "images.unsplash.com, CDN.Example.com,*.img.example.com,images.unsplash.com"]).imageHosts)
         .toEqual(["images.unsplash.com", "cdn.example.com", "*.img.example.com"]);
-      expect(parseViewArgs([]).imageHosts).toBeUndefined();
+    });
+
+    it("allows the common hosts when left out, only the listed ones when given, and none with --no-image-hosts", () => {
+      expect(parseViewArgs([]).imageHosts).toEqual([...COMMON_IMAGE_HOSTS]);
+      expect(parseViewArgs(["--image-hosts", "cdn.example.com"]).imageHosts).toEqual(["cdn.example.com"]);
+      expect(parseViewArgs(["--no-image-hosts"])).toEqual(DEFAULT_VIEW_OPTIONS);
+      expect(() => parseViewArgs(["--image-hosts", "cdn.example.com", "--no-image-hosts"])).toThrow(/Use --image-hosts or --no-image-hosts, not both/);
+      // A logo's host is allowed on top of whichever list is in use, even none.
+      expect(parseViewArgs(["--logo", "https://brand.example.com/logo.png"]).imageHosts).toEqual([...COMMON_IMAGE_HOSTS, "brand.example.com"]);
+      expect(parseViewArgs(["--no-image-hosts", "--logo", "https://brand.example.com/logo.png"]).imageHosts).toEqual(["brand.example.com"]);
+    });
+
+    it("gets the whole common list to the view: every entry is a host name, and there's room for a logo's", () => {
+      const o = parseViewArgs([]);
+      expect(decodeViewOptions(encodeViewOptions(o))).toEqual(o);
+      expect(COMMON_IMAGE_HOSTS.length).toBeLessThan(MAX_IMAGE_HOSTS);
     });
 
     it("says what it takes when given a URL, a bare * or nothing", () => {
@@ -76,7 +97,7 @@ describe("view options", () => {
       expect(() => parseViewArgs(["--image-hosts"])).toThrow(/--image-hosts needs .*images\.example\.com\.$/);
       expect(() => parseViewArgs(["--image-hosts", "--scene"])).toThrow(/--image-hosts needs .*images\.example\.com\.$/);
       const many = Array.from({ length: MAX_IMAGE_HOSTS + 1 }, (_, i) => `h${i}.example.com`).join(",");
-      expect(() => parseViewArgs(["--image-hosts", many])).toThrow(/up to 20 host names/);
+      expect(() => parseViewArgs(["--image-hosts", many])).toThrow(new RegExp(`up to ${MAX_IMAGE_HOSTS} host names`));
     });
 
     it("travels to the view with the other settings", () => {

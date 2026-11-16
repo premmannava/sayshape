@@ -21,13 +21,13 @@ This is the server at `https://mcp.sayshape.workers.dev/mcp` that Claude, ChatGP
 
 **Where the interface is drawn.** In your chat app, on your device. What you type or press in an interface stays there. If an interface has a button that sends your choice back, it goes to your chat app's model as part of your conversation, not to SayShape.
 
-**Images.** An interface can load images only from hosts the server's operator has allowed. The public server allows no outside hosts.
+**Images.** An interface can load images only from hosts the server's operator has allowed. Unless started with `--no-image-hosts`, the public server allows a list of well-known image sites (Wikimedia, Unsplash and the like). When an interface shows an image from one of them, your browser requests it from that site, which sees your IP address, as with any image on a web page. SayShape's server doesn't see or store the request.
 
 **Who runs the machines.** The server runs on Cloudflare and Google Cloud. Like any host, they keep their own technical records of requests, such as the time, the IP address, the path and the status. Those records don't include the content of a request, and SayShape doesn't use them to identify anyone.
 
 ## This website
 
-The website is static files on GitHub Pages. SayShape sets no cookies and runs no analytics. The only thing it stores in your browser is your choice on the chat page's "Help improve SayShape" switch, if you turn it on. GitHub keeps its own records of visits, as any host does.
+The website is static files on GitHub Pages. SayShape sets no cookies and runs no analytics. The only thing it stores in your browser is your choice on the chat page's "Help improve SayShape" switch, if you turn it on. GitHub keeps its own records of visits, as any host does. On the chat page, an answer can include an image from a list of well-known image sites; when it does, your browser requests it from that site, which sees your IP address. The rest of the site loads no images from other sites.
 
 **Playground, examples and compare.** These run in your browser. What you type in the playground isn't sent anywhere.
 

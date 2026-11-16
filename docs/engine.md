@@ -33,7 +33,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `minHeight` | `0` | Minimum canvas height |
 | `padding` | `20` | Space around the whole screen |
 | `animate` | `true` | Fade new elements in (off when the user prefers reduced motion) |
-| `imageHosts` | `[]` | Hosts images may load from besides your own site ([Images](#images)) |
+| `imageHosts` | `[]` | Hosts images may load from besides your own site; `COMMON_IMAGE_HOSTS` is a ready-made list ([Images](#images)) |
 | `loadImage` | an `<img>` with CORS | Custom image loading, for tests, server rendering or signed URLs |
 | `onWarning` | `console.warn` | Receives problems found while running, like a blocked image |
 | `editor` | an `<input>` over the field | How text fields are typed into ([Typing](#typing)); `sayshape/testing` passes a fake one |
@@ -167,7 +167,7 @@ const ui = new SayShape(canvas, {
 });
 ```
 
-Images load with CORS (`crossOrigin="anonymous"`), so their server must send `Access-Control-Allow-Origin` (most image CDNs do). The playground allows `images.unsplash.com`, and its "Trail gear" and "Gear finder" samples use real photos from there. The space for each image is kept from its `ratio=` while it loads, so the screen doesn't jump.
+Images load with CORS (`crossOrigin="anonymous"`), so their server must send `Access-Control-Allow-Origin` (most image CDNs do). `COMMON_IMAGE_HOSTS` (from `src/images.ts`) lists the sites models know image addresses on, each one serving its own files with CORS headers: pass it as `imageHosts` where a model writes the specs (the engine's own default stays none, and so does `languageGuide`'s). The MCP server and the website's chat page use it; `--image-hosts` replaces it there and `--no-image-hosts` allows none. The playground uses it too, and its "Trail gear" and "Gear finder" samples use real photos from there. The space for each image is kept from its `ratio=` while it loads, so the screen doesn't jump.
 
 ## Keyboard
 

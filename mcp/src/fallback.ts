@@ -87,6 +87,11 @@ export interface PageOptions {
    * operator's. Entries that aren't hex colors are ignored, and with none left the page has no colors.
    */
   colors?: readonly string[] | null;
+  /**
+   * The hosts the page's engine may load images from (the server's list: what the model was told).
+   * None, and the page is written exactly as before, with images only from wherever it's opened.
+   */
+  imageHosts?: readonly string[];
   version?: string;
 }
 
@@ -98,7 +103,7 @@ export interface PageOptions {
  * over those themes (S.extendTheme, which the pinned release has). The engine sizes the canvas to the page's width, so it
  * works on a phone with no sideways scrolling.
  */
-export function fallbackPage({ spec, title, scenes = false, colors, version = PAGE_ENGINE_VERSION }: PageOptions): string {
+export function fallbackPage({ spec, title, scenes = false, colors, imageHosts, version = PAGE_ENGINE_VERSION }: PageOptions): string {
   const map = usesMap(spec);
   const brand = pageColors(colors);
   const light = lightTheme.colors;
@@ -146,7 +151,7 @@ ${brand ? `  // Brand colors: the server worked out the values for each mode; th
     var chosen = root.getAttribute("data-theme");
     return chosen === "dark" || (chosen !== "light" && media && media.matches) ? ${brand ? "themes.dark" : "S.darkTheme"} : ${brand ? "themes.light" : "S.lightTheme"};
   }
-  var ui = new S.SayShape(document.getElementById("view"), { components: components, theme: theme() });
+  var ui = new S.SayShape(document.getElementById("view"), { components: components, theme: theme()${imageHosts?.length ? `, imageHosts: ${scriptJson(imageHosts)}` : ""} });
   function apply() {
     var t = theme();
     root.style.setProperty("--bg", t.colors.surface);

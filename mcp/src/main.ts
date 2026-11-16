@@ -21,7 +21,9 @@
  *                                (slide decks need no flag; --slides is accepted and does nothing)
  *   sayshape-mcp --behavior      experimental: rules that tick and, with --scene, shapes people drag (off by default)
  *   sayshape-mcp --image-hosts cdn.example.com,*.images.example.com
- *                                hosts images may load from (none by default; https only)
+ *                                the only hosts images may load from (https only; left out, the sites
+ *                                models know image addresses on, COMMON_IMAGE_HOSTS in src/images.ts)
+ *   sayshape-mcp --no-image-hosts  no images from anywhere
  *   sayshape-mcp --widget-dir <folder>  for chat apps that can't draw MCP Apps views but can show a widget
  *                                made from a file: write each interface there as one self-contained file
  *                                (stdio only; not with --http)
@@ -90,7 +92,7 @@ async function main(): Promise<void> {
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color | --colors list]",
       "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--no-select-text] [--select-touch] [--scene] [--behavior] [--layout-first] [--logo <https url>]",
-      "                    [--image-hosts host1,host2,...] [--widget-dir folder [--widget-inline] [--widget-host name]]",
+      "                    [--image-hosts host1,host2,... | --no-image-hosts] [--widget-dir folder [--widget-inline] [--widget-host name]]",
       "",
       "  --widget-dir <folder>  for chat apps that can't draw interfaces but can show a widget made from a file:",
       "                      write each interface there as one self-contained file, named by a hash of the",
@@ -128,8 +130,10 @@ async function main(): Promise<void> {
       "  --slides         does nothing: slide decks (deck, slide) are always on; kept so existing setups still start",
       "  --behavior       experimental: rules that tick (timers, simulations) and, with --scene, dragging (off by default)",
       "  --layout-first   tell models to write the layout first and the data last, so an interface draws while it is written (off by default)",
-      "  --image-hosts    hosts images may load from, comma-separated; *.example.com allows its subdomains",
-      "                   (none by default; https only, and the host must send CORS headers)",
+      "  --image-hosts    the only hosts images may load from, comma-separated; *.example.com allows its subdomains",
+      "                   (https only, and the host must send CORS headers; left out, images load from the",
+      "                   well-known sites models know addresses on, such as upload.wikimedia.org and images.unsplash.com)",
+      "  --no-image-hosts no images from anywhere",
     ].join("\n"));
     return;
   }

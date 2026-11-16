@@ -126,7 +126,7 @@ describe("the colors argument", () => {
 });
 
 describe("--no-model-colors", () => {
-  const locked = parseViewArgs(["--no-model-colors"]);
+  const locked = parseViewArgs(["--no-model-colors", "--no-image-hosts"]);
 
   it("is read from the command line and reaches the view in its meta tag", () => {
     expect(locked.modelColors).toBe(false);
@@ -134,7 +134,7 @@ describe("--no-model-colors", () => {
     expect(encodeViewOptions(locked)).toBe("picker=0&theme=teal&save=1&copy=1&model=0");
     expect(decodeViewOptions(encodeViewOptions(locked)).modelColors).toBe(false);
     // Without the flag the tag is what it was.
-    expect(encodeViewOptions(parseViewArgs([]))).toBe("picker=0&theme=teal&save=1&copy=1");
+    expect(encodeViewOptions(parseViewArgs(["--no-image-hosts"]))).toBe("picker=0&theme=teal&save=1&copy=1");
     expect(decodeViewOptions("picker=0&theme=teal&save=1&copy=1").modelColors).toBeUndefined();
   });
 

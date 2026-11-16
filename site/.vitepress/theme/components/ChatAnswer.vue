@@ -106,7 +106,8 @@ const { sayshape } = useSayShape(canvas, (l) => {
   return () => offs.forEach((off) => off());
 // The elements the model proxy teaches for chat answers: the core set, drawings (scene) and the world map.
 // presets: the proxy may answer with a report. streamPlaceholders: its guide asks for the layout first and the data last.
-}, { followSiteTheme: () => false, padding: 6, scene: true, map: true, presets: true, streamPlaceholders: true });
+// images: the proxy's guide lists the common image hosts, so the engine here loads from them.
+}, { followSiteTheme: () => false, padding: 6, scene: true, map: true, presets: true, streamPlaceholders: true, images: true });
 
 /** Bring the engine up to date with the turn: a new attempt, new lines, the end. */
 function sync() {

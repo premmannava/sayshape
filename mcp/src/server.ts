@@ -127,7 +127,8 @@ export function setLayoutFirst(on: boolean): void {
 }
 
 /**
- * --image-hosts: the hosts images may load from (none by default). The model
+ * The hosts images may load from: main.ts passes --image-hosts, else the common
+ * list, else none with --no-image-hosts (none until it's called). The model
  * is told them, and the view resource asks the chat app to allow them in its
  * CSP; the view's engine gets the same list through the view options. Call
  * before createServer; main.ts does, from the command line.
@@ -620,7 +621,7 @@ export function createServer(opts: ServerOptions): McpServer {
       const withPage = textOnly && !fileMode && toFix === 0 && !deckOnly;
       if (deckOnly) notes.push(PAGE_DECK_TEXT);
       // The conversation's colors, else the operator's (--colors, --accent); the page works out light and dark itself.
-      if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn, colors: colors.length ? colors : (opts.view?.colors ?? null) })));
+      if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn, colors: colors.length ? colors : (opts.view?.colors ?? null), imageHosts })));
       let widget = "";
       if (fileMode && toFix === 0) {
         try {

@@ -49,7 +49,8 @@ When none is on, there's no toolbar at all. Whoever installs the server chooses,
 | `--layout-first` | Tell models to write the layout first and the data last: elements, then `state` lines with long lists at the very end (small values a control starts from, like a selected tab, may still go first). The view draws from the first element while the spec streams in, with placeholders for data that hasn't arrived, instead of waiting for a long list to be written. Changes only the guide text in `show_interface`'s description and `sayshape_docs`; off by default, and then the text is exactly what it was. See [the model guide](../docs/model.md#layout-first-while-streaming). |
 | `--logo https://cdn.example.com/logo.png` | An https image drawn small in the corner of every slide of a deck. Its host is allowed like `--image-hosts`, so the logo loads. See [Slide decks](#slide-decks). |
 | `--slides` | Does nothing. Slide decks need no flag; this is accepted so setups written for an earlier version still start. |
-| `--image-hosts cdn.example.com,*.img.example.com` | Hosts `image` elements may load from, comma-separated; `*.example.com` allows its subdomains. None by default, so no images show. See [Images](#images). |
+| `--image-hosts cdn.example.com,*.img.example.com` | The only hosts `image` elements may load from, comma-separated; `*.example.com` allows its subdomains. Left out, images load from the common sites models know addresses on (`COMMON_IMAGE_HOSTS`). See [Images](#images). |
+| `--no-image-hosts` | Allow no images from anywhere. Not with `--image-hosts` |
 | `--widget-dir <folder>` | For chat apps that can't draw MCP Apps views but can show a widget made from a file: write each interface there as one self-contained file (stdio only; refused with `--http`). Off by default. See [Chat apps that show widgets from files](#chat-apps-that-show-widgets-from-files). |
 | `--widget-inline` | With `--widget-dir` only: write the engine into each file as plain script text, not packed. For chat apps that show the file but say the engine didn't start, because their sandbox runs a file's own scripts and no `blob:` script (Antigravity's embeds). Files are about twice the size. |
 | `--widget-host <name>` | With `--widget-dir` only: hook that chat app's adapter into every file, so `emit:` presses (and the interface's state) are saved for the model's next turn. Names: `muse`. An unknown name, or no `--widget-dir`, stops the server with a message. Off by default. See [Adapting a file to a chat app](#adapting-a-file-to-a-chat-app---widget-host). |
@@ -78,13 +79,13 @@ Then ask for something that moves or can be pressed: *"Draw a traffic light I ca
 
 ### Images
 
-The view has no website of its own, so an `image` only loads from a host you list with `--image-hosts`, usually your company's image CDN:
+The view has no website of its own, so an `image` only loads from a host on its list. By default that is `COMMON_IMAGE_HOSTS`, the sites models know image addresses on (Wikimedia, Unsplash, Picsum, flag, poster and cover sites and the like; the list and the rule for what may be on it are in `src/images.ts`). `--image-hosts` replaces it with only your hosts, usually your company's image CDN, and `--no-image-hosts` allows none, so no images show:
 
 ```json
 "sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--image-hosts", "cdn.acme.com,images.unsplash.com"] }
 ```
 
-The one list does three things: the view's engine loads from those hosts and no others, the server asks the chat app to allow them in the view's Content Security Policy (MCP Apps `resourceDomains`), and the model is told which hosts work, so it doesn't invent URLs elsewhere. Images must be https, and the host must send CORS headers (`Access-Control-Allow-Origin`), as image CDNs do, because the view keeps its canvas readable for Save image and Copy text. An image that can't load shows its description instead. Some chat apps may not honour a view's CSP request; then images show their descriptions there.
+Each image is requested from its host by the person's browser, so that host sees their IP address. The one list does three things: the view's engine loads from those hosts and no others, the server asks the chat app to allow them in the view's Content Security Policy (MCP Apps `resourceDomains`), and the model is told which hosts work, so it doesn't invent URLs elsewhere. Images must be https, and the host must send CORS headers (`Access-Control-Allow-Origin`), as image CDNs do, because the view keeps its canvas readable for Save image and Copy text. An image that can't load shows its description instead. Some chat apps may not honour a view's CSP request; then images show their descriptions there.
 
 ## In chat apps that can't draw interfaces
 
