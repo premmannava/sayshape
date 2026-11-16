@@ -370,3 +370,31 @@ describe("text layer: long tables", () => {
     expect(words(ui)).toContain("Row199");
   });
 });
+
+describe("text layer: details, callout, badge and list items", () => {
+  const layerWords = (spec: string) => {
+    const ui = shown(spec);
+    expect(ui.diagnostics).toEqual([]);
+    return { ui, words: words(ui) };
+  };
+
+  it("details: labels and values are lines of the layer", () => {
+    const { words: w } = layerWords(`details\n  detail "Order" value="A-1042"\n  detail "Status" value="Shipped"\n`);
+    expect(w).toEqual(expect.arrayContaining(["Order", "A-1042", "Status", "Shipped"]));
+  });
+
+  it("callout: its title and detail are lines of the layer", () => {
+    const { words: w } = layerWords(`callout "Heads up" detail="Rain on Saturday" tone=warn\n`);
+    expect(w).toEqual(expect.arrayContaining(["Heads up", "Rain on Saturday"]));
+  });
+
+  it("badge: its words are a line of the layer", () => {
+    const { words: w } = layerWords(`badge "Beta" tone=good\n`);
+    expect(w).toContain("Beta");
+  });
+
+  it("list items: each item's words are a line of the layer", () => {
+    const { words: w } = layerWords(`list\n  list-item "First thing"\n  list-item "Second thing"\n`);
+    expect(w).toEqual(expect.arrayContaining(["First thing", "Second thing"]));
+  });
+});

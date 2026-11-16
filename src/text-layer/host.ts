@@ -68,7 +68,7 @@ export interface TextLayerHost {
 export const noTextLayer: TextLayerHost = { update() {}, destroy() {} };
 
 /** Which elements' text is in the layer. Controls (buttons, inputs, selects, switches) are never in it. */
-export const SELECTABLE = new Set(["text", "stat", "table"]);
+export const SELECTABLE = new Set(["text", "stat", "table", "details", "callout", "badge", "list-item"]);
 
 /** How long drawing must stay unchanged before the layer is rebuilt, so a streamed spec builds it once. */
 export const SETTLE_MS = 120;
