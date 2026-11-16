@@ -244,6 +244,61 @@ describe("the widget fragment", () => {
   });
 });
 
+describe("the inline fragment (--widget-inline)", () => {
+  it("carries the engine as plain script text: nothing packed, nothing unpacked, no blob: script", async () => {
+    const html = widgetFragment(base({ inline: true }));
+    expect(html).not.toContain(STAND_IN.engine.base64);
+    expect(html).not.toMatch(/DecompressionStream|createObjectURL|atob\(|blob:/);
+    expect(html).toContain("w.sayshape = { SayShape: SayShape");
+    // Still one wrapping div with nothing from outside.
+    expect(html.startsWith("<div id=")).toBe(true);
+    expect(html.trimEnd().endsWith("</div>")).toBe(true);
+    expect(html).not.toMatch(/https?:\/\/|\bsrc=/);
+  });
+
+  it("starts the engine where the app can't unpack or run a blob: script", async () => {
+    const r = await run(widgetFragment(base({ inline: true })), { unpack: false });
+    expect(r.failures).toEqual([]);
+    expect(r.g.__spec).toBe(SPEC);
+    expect(r.g.__order).toEqual(["new", "setSpec"]);
+    expect(r.note.hidden).toBe(true);
+  });
+
+  it("carries the map's script only for a map, and the same settings and host hook", async () => {
+    const withMap = await run(widgetFragment(base({ inline: true, spec: MAP })));
+    expect(withMap.g.__opts.components).toEqual(["core", "map"]);
+    expect(widgetFragment(base({ inline: true }))).not.toContain("sayshapeMap = {");
+    const r = await run(widgetFragment(base({ inline: true, scenes: true, behavior: true, imageHosts: ["a.example"], host: "function (ui, S, root) { window.__host = [ui === window.__ui, root.id]; }" })));
+    expect(r.g.__opts.components).toEqual(["core", "scene"]);
+    expect(r.g.__opts.behavior).toBe(true);
+    expect(r.g.__opts.imageHosts).toEqual(["a.example"]);
+    expect(r.g.__host).toEqual([true, r.id]);
+  });
+
+  it("says the engine didn't start when it defines nothing, or starting throws", async () => {
+    const empty = await run(widgetFragment(base({ inline: true, engine: { ...STAND_IN, engine: pack("var nothing = 1;") } })));
+    expect(empty.note.textContent).toBe(NO_START);
+    expect(empty.canvas.style.display).toBe("none");
+    const throws = await run(widgetFragment(base({ inline: true, engine: { ...STAND_IN, engine: pack("window.sayshape = { SayShape: function () { throw new Error('no'); }, coreComponents: [] };") } })));
+    expect(throws.note.textContent).toBe(NO_START);
+  });
+
+  it("keeps an engine's own </script> and <!-- from ending its script", async () => {
+    const tricky = pack(STAND_IN.engine.base64 && gunzipSync(Buffer.from(STAND_IN.engine.base64, "base64")).toString("utf8") + '\nwindow.__tricky = "</script><!--";');
+    const html = widgetFragment(base({ inline: true, engine: { ...STAND_IN, engine: tricky } }));
+    const r = await run(html);
+    expect(r.failures).toEqual([]);
+    expect(r.g.__tricky).toBe("</script><!--");
+    expect(r.g.__spec).toBe(SPEC);
+  });
+
+  it("is another file than the packed one, and leaves the packed one as it was", () => {
+    expect(widgetFileName(base({ inline: true }))).not.toBe(widgetFileName(base()));
+    expect(widgetFileName(base({ inline: false }))).toBe(widgetFileName(base()));
+    expect(widgetFragment(base({ inline: false }))).toBe(widgetFragment(base()));
+  });
+});
+
 describe("the host hook", () => {
   const HOST = `function (ui, S, root) {
     window.__hostArgs = [typeof ui.on, typeof S.SayShape, root.id, window.__spec];
@@ -436,6 +491,14 @@ describe("show_interface with --widget-dir", () => {
     expect(text).not.toContain(STAND_IN.engine.base64);
   });
 
+  it("writes the inline file with widgetInline, and the packed one without", async () => {
+    const c = await connect(undefined, true, { widgetInline: true });
+    const text = (await show(c, { spec: SPEC })).content[0]!.text;
+    const path = /^(\/\S+\.html)$/m.exec(text)?.[1];
+    expect(await readFile(path!, "utf8")).toBe(widgetFragment({ spec: SPEC, engine: STAND_IN, inline: true }));
+    expect(text).toMatch(/Create the widget from that file exactly as it is/);
+  });
+
   it("reports problems to fix as today, with no file", async () => {
     const dirBefore = (await readdir(dir)).length;
     const c = await connect(undefined);
@@ -538,6 +601,20 @@ describe("the real packed engine", () => {
     }
     const engine = gunzipSync(Buffer.from(real.engine.base64, "base64")).toString("utf8");
     expect(engine).toMatch(/sceneComponents/);
+  });
+
+  it("fits in an inline file under 1 MB, where its scripts run as written and define the engine", () => {
+    const html = widgetFragment({ spec: SPEC, engine: real, inline: true });
+    console.log(`inline widget file sizes: plain ${Buffer.byteLength(html)} bytes, with the map ${Buffer.byteLength(widgetFragment({ spec: MAP, engine: real, inline: true }))} bytes`);
+    expect(Buffer.byteLength(html)).toBeLessThan(WIDGET_MAX_BYTES);
+    expect(html).not.toMatch(/localStorage|sessionStorage|indexedDB|openDatabase/);
+    // The engine's script, as it sits in the file (after the guards for </script and <!--), still runs.
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]!);
+    expect(scripts.length).toBe(2);
+    const ctx = createContext({});
+    runInContext(scripts[0]!, ctx);
+    expect(runInContext("typeof sayshape.SayShape", ctx)).toBe("function");
+    expect(runInContext("sayshape.coreComponents.length", ctx)).toBeGreaterThan(50);
   });
 
   it("defines the globals the loader uses, when run as a plain script", () => {

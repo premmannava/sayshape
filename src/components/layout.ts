@@ -1,10 +1,10 @@
 import type { ComponentDef } from "../component";
 import type { Box } from "../types";
-import { wrapText } from "../text";
+import { ellipsize, fitLines, wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
 import { isDarkTheme, mixColors, parseColor } from "../theme";
 import { MOTION } from "../design";
-import { chevron, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, partBox, row as rowLayout, ROW_ALIGN, rowMinWidth, runOn, stack, themeFont } from "./util";
+import { chevron, detailProp, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, paintPill, partBox, PILL_TONES, pillWidth, row as rowLayout, ROW_ALIGN, ROW_JUSTIFY, rowMinWidth, runOn, stack, themeFont, toneColor } from "./util";
 
 /** A parent card is already the frame; let nested tables use its surface. */
 function markTablesInsideCard(box: Box): void {
@@ -84,6 +84,8 @@ export const row: ComponentDef = {
     pad: padProp(0),
     align: { type: "enum", values: ROW_ALIGN, default: "center", description: "Vertical alignment of children: top, center or bottom." },
     wrap: { type: "boolean", default: true, description: "Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line." },
+    fit: { type: "boolean", default: false, description: "Keep children at their natural width." },
+    justify: { type: "enum", values: ROW_JUSTIFY, description: "Where children sit: start, end, or between (spread). Implies fit." },
   },
   children: "any",
   example: `row gap=10
@@ -92,7 +94,10 @@ export const row: ComponentDef = {
   semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    rowLayout(box, ctx, p.num("pad", 0), p.num("gap", 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true));
+    rowLayout(box, ctx, p.num("pad", 0), p.num("gap", 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true), {
+      fit: p.bool("fit", false),
+      justify: ROW_JUSTIFY.find((v) => v === p.str("justify")),
+    });
   },
   minWidth(node, ctx) {
     const p = ctx.props(node);
@@ -149,6 +154,7 @@ export const card: ComponentDef = {
     pad: padProp(22),
     variant: { type: "enum", values: CARD_VARIANTS, default: "raised", description: "raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only)." },
     on: onProp("when the card is pressed"),
+    tone: { type: "enum", values: PILL_TONES, description: "Color role of a left edge stripe." },
   },
   children: "any",
   example: `card variant=hero
@@ -273,6 +279,15 @@ card on=emit:open_order
       g.stroke();
       g.restore();
     }
+    if (p.has("tone")) {
+      // A stripe down the left edge, cut to the card's rounded corners.
+      g.save();
+      ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
+      g.clip();
+      g.fillStyle = toneColor(theme, p.oneOf("tone", PILL_TONES, "accent"));
+      g.fillRect(box.x, box.y, theme.space.xs, box.h);
+      g.restore();
+    }
     if (pressable) ctx.addHit(box);
   },
 };
@@ -281,17 +296,38 @@ export const divider: ComponentDef = {
   type: "divider",
   category: "layout",
   description: "A thin horizontal line separating sections.",
+  text: { description: "A label centred on the line." },
   props: {},
   example: "divider",
-  semantics: () => false,
-  layout(box) {
-    box.h = 1;
+  semantics(box, ctx) {
+    const label = ctx.props(box.node).text();
+    return label ? { role: "separator", name: label } : false;
+  },
+  layout(box, ctx) {
+    box.h = ctx.props(box.node).text() ? DIVIDER_LABEL_H : 1;
   },
   paint(box, ctx) {
-    ctx.g.fillStyle = ctx.theme.colors.line;
-    ctx.g.fillRect(box.x, box.y, box.w, 1);
+    const { g, theme } = ctx;
+    const label = ctx.props(box.node).text();
+    g.fillStyle = theme.colors.line;
+    if (!label) { g.fillRect(box.x, box.y, box.w, 1); return; }
+    // The line runs either side of the label, with a gap round it.
+    g.font = ctx.font(400, theme.text.caption);
+    const gap = theme.space.sm;
+    const shown = ellipsize(label, Math.max(0, box.w - gap * 2 - 40), g.font, { width: (t) => g.measureText(t).width });
+    const w = g.measureText(shown).width;
+    const mid = box.y + box.h / 2, left = box.x + (box.w - w) / 2;
+    g.fillRect(box.x, Math.round(mid), Math.max(0, left - gap - box.x), 1);
+    g.fillRect(left + w + gap, Math.round(mid), Math.max(0, box.x + box.w - (left + w + gap)), 1);
+    g.fillStyle = theme.colors.muted;
+    g.textAlign = "left";
+    g.textBaseline = "middle";
+    g.fillText(shown, left, mid + 1);
   },
 };
+
+/** A divider with a label is as tall as a line of caption text. */
+const DIVIDER_LABEL_H = 18;
 
 export const spacer: ComponentDef = {
   type: "spacer",
@@ -311,6 +347,7 @@ export const grid: ComponentDef = {
   description: "Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.",
   props: {
     min: { type: "number", default: 200, description: "Narrowest a column may be, in pixels (default 200)." },
+    cols: { type: "number", description: "Most columns; fewer when min doesn't fit." },
     gap: gapProp(14),
   },
   children: "any",
@@ -325,14 +362,20 @@ export const grid: ComponentDef = {
     const kids = ctx.visibleChildren(box.node);
     // A column is never narrower than its widest child needs, whatever min= says.
     const min = Math.max(1, p.num("min", 200), ...kids.map((k) => Math.min(box.w, ctx.minWidth(k))));
-    const cols = Math.max(1, Math.min(kids.length || 1, Math.floor((box.w + gap) / (min + gap))));
+    const wanted = Math.floor(p.num("cols", 0));
+    const fits = Math.max(1, Math.min(kids.length || 1, Math.floor((box.w + gap) / (min + gap))));
+    const most = wanted >= 1 ? Math.min(wanted, fits) : fits;
+    // Balance the rows: as many as the columns need, filled so they differ by at most one.
+    const rows = Math.max(1, Math.ceil(kids.length / most));
+    const cols = Math.max(1, Math.ceil(kids.length / rows));
     const cw = Math.max(0, (box.w - gap * (cols - 1)) / cols);
+    const sizes = Array.from({ length: rows }, (_, r) => Math.floor(kids.length / rows) + (r < kids.length % rows ? 1 : 0));
     let y = box.y;
-    for (let start = 0; start < kids.length; start += cols) {
-      if (start) y += gap;
+    for (let r = 0, start = 0; r < rows; start += sizes[r]!, r++) {
+      if (r) y += gap;
       let tallest = 0;
       const placed: Box[] = [];
-      kids.slice(start, start + cols).forEach((k, i) => {
+      kids.slice(start, start + sizes[r]!).forEach((k, i) => {
         const kb = ctx.layout(k, box.x + i * (cw + gap), y, cw);
         box.children.push(kb);
         placed.push(kb);
@@ -411,6 +454,7 @@ export const listItem: ComponentDef = {
   props: {
     detail: { type: "string", description: "A second, quieter line under the title." },
     trailing: { type: "string", description: "A short value on the right, like a price or a count." },
+    tone: { type: "enum", values: PILL_TONES, description: "Draws trailing as a badge in this color role." },
     icon: iconProp,
     on: onProp("when the row is pressed"),
   },
@@ -430,14 +474,15 @@ export const listItem: ComponentDef = {
     const t = ctx.theme;
     const titleFont = themeFont(t, 600, t.text.body), detailFont = themeFont(t, 400, 13);
     const trailing = p.str("trailing");
-    const trailingW = trailing ? ctx.measure.width(trailing, titleFont) + 12 : 0;
+    const pillW = p.has("tone") && trailing ? pillWidth(ctx, trailing, null) : 0;
+    const trailingW = trailing ? (pillW || ctx.measure.width(trailing, titleFont)) + 12 : 0;
     const chevronW = p.has("on") ? 20 : 0;
     const iconW = isIconName(p.str("icon")) ? ITEM_ICON + ITEM_ICON_GAP : 0;
     const textW = Math.max(40, box.w - ITEM_PAD_X * 2 - trailingW - chevronW - iconW);
     const title = wrapText(p.text(), textW, titleFont, ctx.measure);
     const detail = p.has("detail") ? wrapText(p.str("detail"), textW, detailFont, ctx.measure) : [];
     const titleLH = Math.round(t.text.body * 1.35), detailLH = 18;
-    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW };
+    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW };
     let y = box.y + ITEM_PAD_Y + title.length * titleLH + (detail.length ? 2 + detail.length * detailLH : 0);
     // Elements inside go under the text, lined up with it.
     const left = ITEM_PAD_X + iconW;
@@ -452,7 +497,7 @@ export const listItem: ComponentDef = {
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number };
+    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number };
     const p = ctx.props(box.node);
     const pressable = p.has("on");
     if (pressable) {
@@ -481,7 +526,11 @@ export const listItem: ComponentDef = {
       for (const l of d.detail) { g.fillText(l, tx, y + d.detailLH / 2); y += d.detailLH; }
     }
     const right = box.x + box.w - ITEM_PAD_X - (pressable ? 20 : 0);
-    if (d.trailing) {
+    if (d.trailing && d.pillW) {
+      // A tagged value is a badge, level with the title's first line.
+      const w = d.pillW, h = 22;
+      paintPill(ctx, { x: right - w, y: box.y + ITEM_PAD_Y + (d.titleLH - h) / 2, w, h }, d.trailing, toneColor(theme, p.oneOf("tone", PILL_TONES, "accent")), "soft", null);
+    } else if (d.trailing) {
       g.font = d.titleFont;
       g.textAlign = "right";
       g.fillStyle = c.ink;
@@ -494,7 +543,7 @@ export const listItem: ComponentDef = {
   },
 };
 
-const HEADER_H = 48;
+const HEADER_H = 48, ACCORDION_DETAIL_LH = 18;
 
 export const accordion: ComponentDef = {
   type: "accordion",
@@ -505,6 +554,7 @@ export const accordion: ComponentDef = {
     bind: { type: "state", required: true, description: "A true/false state name: true while open." },
     gap: gapProp(10),
     on: onProp("after it opens or closes"),
+    detail: detailProp("title"),
   },
   children: "any",
   example: `state returns=true
@@ -514,7 +564,7 @@ accordion "Shipping" bind=shipping
   text "Ships in two business days."`,
   semantics(box, ctx) {
     const p = ctx.props(box.node);
-    return { role: "group", parts: [{ detail: "header", role: "button", name: p.text(), expanded: !!p.bound() }] };
+    return { role: "group", parts: [{ detail: "header", role: "button", name: [p.text(), p.str("detail")].filter(Boolean).join(", "), expanded: !!p.bound() }] };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
@@ -523,8 +573,9 @@ accordion "Shipping" bind=shipping
     const font = themeFont(t, 600, t.text.body);
     const lines = wrapText(p.text(), Math.max(40, box.w - 32), font, ctx.measure);
     const lh = Math.round(t.text.body * 1.35);
-    const headerH = Math.max(HEADER_H, lines.length * lh + 24);
-    box.data = { lines, font, lh, headerH, open };
+    const detail = p.has("detail") ? fitLines(p.str("detail"), Math.max(40, box.w - 32), themeFont(t, 400, 13), ctx.measure, 2) : [];
+    const headerH = Math.max(HEADER_H, lines.length * lh + detail.length * ACCORDION_DETAIL_LH + 24);
+    box.data = { lines, font, lh, headerH, open, detail };
     if (!open) { box.h = headerH; return; }
     const gap = Math.max(0, p.num("gap", 10));
     let y = box.y + headerH;
@@ -539,7 +590,7 @@ accordion "Shipping" bind=shipping
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const d = box.data as { lines: string[]; font: string; lh: number; headerH: number; open: boolean };
+    const d = box.data as { lines: string[]; font: string; lh: number; headerH: number; open: boolean; detail: string[] };
     const header = partBox(box, box.x, box.y, box.w, d.headerH);
     if (ctx.isHovered(box.node, "header")) {
       ctx.roundRect(header.x - 6, header.y + 2, header.w + 12, header.h - 4, theme.radius.sm);
@@ -549,8 +600,15 @@ accordion "Shipping" bind=shipping
     g.fillStyle = c.ink;
     g.textAlign = "left";
     g.textBaseline = "middle";
-    const top = box.y + (d.headerH - d.lines.length * d.lh) / 2;
+    // The title and its detail line are centred in the header together.
+    const textH = d.lines.length * d.lh + d.detail.length * ACCORDION_DETAIL_LH;
+    const top = box.y + (d.headerH - textH) / 2;
     d.lines.forEach((l, i) => g.fillText(l, box.x, top + d.lh * i + d.lh / 2));
+    if (d.detail.length) {
+      g.font = ctx.font(400, 13);
+      g.fillStyle = c.muted;
+      d.detail.forEach((l, i) => g.fillText(l, box.x, top + d.lines.length * d.lh + ACCORDION_DETAIL_LH * i + ACCORDION_DETAIL_LH / 2));
+    }
     chevron(g, box.x + box.w - 10, box.y + d.headerH / 2, 10, d.open ? "up" : "down", c.muted);
     g.fillStyle = c.line;
     g.fillRect(box.x, box.y + box.h - 1, box.w, 1);

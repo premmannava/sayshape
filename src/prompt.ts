@@ -24,6 +24,10 @@ import { EXPRESSION_FUNCTIONS } from "./expr";
 import { parse } from "./parser";
 import { resolveProfile, type ComponentProfile } from "./profiles";
 import type { Registry } from "./registry";
+import { reportGuide } from "./presets/report";
+
+/** What a model answers, alone, when the report guide (mode "report") can't show what was asked. */
+export const REPORT_FALLBACK = "FULL";
 
 /** An emit: action the host app listens for. */
 export interface AppAction {
@@ -50,7 +54,12 @@ export interface GuideOptions {
   examples?: boolean;
   /** Extra instructions from the app, such as its domain, audience or tone. */
   notes?: string;
-  /** "full" (default) or "compact". */
+  /**
+   * "full" (default), "compact", or "report": only the report preset (data
+   * answers: figures, charts, a table and filters, see src/presets/report.ts),
+   * with the word to answer when a request needs more (REPORT_FALLBACK). The
+   * engine must have presets on to draw what it writes.
+   */
   mode?: GuideMode;
   /**
    * Which elements the model is told about: a profile name ("forms",
@@ -75,9 +84,16 @@ export interface GuideOptions {
    * Off (default), the guide is exactly what it was.
    */
   behavior?: boolean;
+  /**
+   * Tell the model to write the layout first and state last, with long lists
+   * at the very end, so the screen draws while the spec streams in (pair it
+   * with the engine's streamPlaceholders). Off (default), the guide is exactly
+   * what it was.
+   */
+  layoutFirst?: boolean;
 }
 
-export type GuideMode = "full" | "compact";
+export type GuideMode = "full" | "compact" | "report";
 export type WorkedExampleName = "todo" | "form" | "cart" | "orders" | "booking" | "equipment" | "calculator" | "shopping";
 
 function propLine(name: string, d: PropDef): string {
@@ -366,6 +382,10 @@ function dataSection(ctx: GuideContext): string {
   return [lines.join("\n"), ...examples].join("\n\n");
 }
 
+/** The state line of the format section with layoutFirst: elements draw as they arrive, data comes last. */
+const LAYOUT_FIRST_FULL = `- Write elements first so they draw as you write, then unindented state and derive lines at the end, long lists last of all: state count=0 name="Ada". Small values a control starts from (state tab="All") may go first.`;
+const LAYOUT_FIRST_COMPACT = `- Elements first (they draw as you write), then unindented state at the end, every value on one line, long lists last: state count=0 name="Ada" todos=[{text: "Water", done: false}]. Small control values (state tab="All") may go first.`;
+
 function fullSections(ctx: GuideContext): GuideSection[] {
   const { comps, has, opts } = ctx;
   const examples = opts.examples ?? true;
@@ -383,7 +403,7 @@ function fullSections(ctx: GuideContext): GuideSection[] {
   else
     text "Keep going" tone=muted
 - SayShape is not JavaScript: never write let, const, var, function, return, for, while, braces around blocks or // comments. A value worked out from state is derive name={…}; a choice is if={…} and else lines${has("each") ? "; repeating is each items=list as=x" : ""}; comments start with #
-- Declare state first, at the top, unindented: state count=0 done=false name="Ada"
+${opts.layoutFirst ? LAYOUT_FIRST_FULL : `- Declare state first, at the top, unindented: state count=0 done=false name="Ada"`}
 - Work a value out once with derive, unindented, one per line: derive total={sum(cart, 'price', 'qty')}. Read it like state ({total}), in text, props and other derive lines; it updates by itself. bind= and actions can't change it, and a derive can't read itself
 - Every element and every state value fits on one line, even a long list: state trails=[{name: "Camelback", miles: 2.5}, {name: "Piestewa", miles: 2.1}]
 - Lines starting with # are comments.`);
@@ -469,7 +489,7 @@ function compactSections(ctx: GuideContext): GuideSection[] {
 - One element per line: type "text" prop=value prop="quoted value" prop={expression}. Indent children 2 spaces.
 - Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true; else after it, otherwise.
 - Not JavaScript: no let, for or braces; use derive, if=/else${has("each") ? ", each" : ""}.
-- State first, unindented, every value on one line: state count=0 name="Ada" todos=[{text: "Water", done: false}]
+${opts.layoutFirst ? LAYOUT_FIRST_COMPACT : `- State first, unindented, every value on one line: state count=0 name="Ada" todos=[{text: "Water", done: false}]`}
 - derive name={expr}, unindented, one per line, keeps a value worked out from state: derive total={sum(cart, 'price', 'qty')}, then {total}. Read-only (no bind= or actions); no loops through itself
 - # starts a comment.`);
   add("expressions", `EXPRESSIONS
@@ -528,6 +548,7 @@ export interface GuideSection {
 /** The guide in sections, in order. languageGuide() joins them with blank lines. */
 export function guideSections(registry: Registry, opts: GuideOptions = {}): GuideSection[] {
   const ctx = context(registry, opts);
+  if (ctx.mode === "report") return [{ name: "report", text: reportGuide(REPORT_FALLBACK) }, ...(opts.notes?.trim() ? [{ name: "notes", text: `ABOUT THIS APP\n${opts.notes.trim()}` }] : [])];
   return ctx.mode === "compact" ? compactSections(ctx) : fullSections(ctx);
 }
 

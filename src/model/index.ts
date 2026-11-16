@@ -10,3 +10,5 @@ export { refineMessages, nextRefineContext, sumUsage, DEFAULT_MAX_CHANGES, type 
 export { cachedPrompt, type CachedPrompt, type CachedPromptOptions, type CacheTtl, type TextBlock } from "./cache";
 export { streamChat, ModelError, type ChatMessage, type ModelConfig, type StreamPart, type Usage } from "./stream";
 export { SpecFilter, sayShapeLineTest, tidySpec, type FilterOutput } from "./clean";
+export { generateSections, parsePlan, planText, plannerInstructions, sectionInstructions, DEFAULT_MAX_SECTIONS, MAX_SECTIONS_LIMIT, type Plan, type SectionsOptions, type SectionsResult, type SectionsCost, type SectionCall, type CallRole } from "./sections";
+export { generateReport, asksForFullGuide, type ReportOptions, type ReportResult } from "./report";
