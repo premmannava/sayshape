@@ -226,6 +226,37 @@ It sends the original task, the `requirements` that must always hold, the change
 
 `result.messages` is the conversation that produced the accepted spec: the guide, the context, the request and the final spec. A rejected repair isn't in it, and a kept repair replaces the first spec. (Before, it included the repair exchange.) `result.transcript` has everything that was sent and received. Passing `result.messages` as `history` still works for apps that want the whole conversation.
 
+### Parallel sections (experimental)
+
+`generateSections` is an opt-in alternative to `generateSpec` for long screens. It takes the same options plus `maxSections` (default 6, at most 12) and `onSection`. Nothing else changes: `generateSpec` doesn't know about it, and it can be deleted with one file (`src/model/sections.ts`) and one export line.
+
+```ts
+import { generateSections } from "sayshape/model";
+
+const r = await generateSections({
+  config, registry, request: "An orders dashboard", guide: { mode: "compact" },
+  maxSections: 4,
+  onText: (text) => ui.push(text),                // the assembled spec, in screen order
+  onSection: (index, text) => log(index, text),   // each section as it finishes, in any order
+});
+r.cost.overheadEstimatedTokens; // the extra input this cost compared with one call
+```
+
+How it works:
+
+1. **One call plans.** The model answers in a small plain-text format: `state` and `derive` lines for what several sections share (small starting values only), a `data` line naming the app's own state (only names you pass as `stateNames` are kept), and one `section:` line per section, top to bottom. Reading it is tolerant of fences, thinking, bullets, bold marks and numbering (`parsePlan`).
+2. **Several calls write the sections at once.** Each gets the same guide, the request and the plan (so they agree on names), then which section to write. The guide, request and plan are identical across these calls, with the section's own instruction last, so servers with prefix caching can reuse them.
+3. **The parts are put together in order.** The plan's shared lines come first (they are tiny and known the moment the plan is, so no prefix reads a name that isn't declared yet), then section 1, 2, and so on. `onText` gets the assembled spec in order: the section whose turn it is streams live, and a later section that finishes early is held and shown whole when its turn comes. `onSection` fires as each one finishes, whatever the order.
+4. **One repair, as before.** The assembled spec is checked with the parser (and `check`, `stateNames`, `enforceProfile`) and sent back once with `repairPrompt`, a full-spec call.
+
+If the plan can't be read, or has a single section, one ordinary `generateSpec` call writes the screen (`result.mode` is `"fallback"`, with `fallbackReason`); the planning call is still counted in the cost. `refine` and `history` always use one call, since changing a screen isn't split into sections.
+
+**Cost.** The guide and the request are sent once for the plan and once per section, so with `n` sections the input grows by about `n × (guide + request)` characters plus the plan and instructions in every call. `result.cost` lists the characters of every call (`perCall`, `inputChars`) and the overhead against one call (`overheadChars`, and `overheadEstimatedTokens` = characters / 4). With the compact guide (about 20,600 characters, 5,100 tokens, for `coreComponents`) and three short sections, four calls send about 84,900 characters against 20,600 for one call: about 64,300 characters, 16,000 tokens, more. Output tokens stay about the same, plus the plan. `result.usage` adds up what the server reported for every call (a total is `undefined` when any call didn't report it), `result.calls` has each call's attempt, and `result.timings` has `planMs`, `firstLineMs`, `firstSectionLineMs` and `totalMs`.
+
+**When it might help.** A long screen with sections that don't depend on each other, where writing time dominates; on a provider with prompt caching, where the repeated guide is read from the cache at a fraction of the price (set `config.cache`). It will not help a short screen: the plan call adds a wait before anything is shown, and the repair is still one slow, sequential call. Sections can't see each other's elements, so a screen where parts must line up is better written in one call.
+
+**Not measured.** No model is configured where this was built, so whether it saves wall-clock time is unmeasured: tests with a fake model prove only that the section calls run at the same time, in order, and what the extra input is. Try it against your model before relying on it. Thinking text isn't passed to `onThinking`, since several calls would interleave.
+
 ### Usage and timing
 
 `result.usage` adds up the server's token counts over the first try and the repair: `promptTokens`, `completionTokens`, and `reasoningTokens` (part of the completion tokens, not added again). A total is `undefined`, meaning unknown, when any attempt didn't report it; `usage.reported` says how many did. Each attempt also has `inputChars` and `estimatedInputTokens` (characters / 4), `estimatedThinkingTokens`, the guide it used and how long it took. A reasoning model's thinking is often most of the wait: `config.reasoningEffort` sends `reasoning_effort` in the server's own words (DeepSeek: `none`, `low`, `high`, `max`, and `high` when it's left out). Many servers only report usage while streaming when asked; set `config.streamUsage: true` for those that support `stream_options` (OpenAI, vLLM, recent LM Studio and llama.cpp).
