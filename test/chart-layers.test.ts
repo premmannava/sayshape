@@ -64,3 +64,50 @@ describe("chart layers", () => {
     expect(clear.y).toBe(at(`  chart-rule "Target" y=10000\n`).y);
   });
 });
+
+describe("chart-band", () => {
+  it("shades a range behind the bars, and the scale makes room for it", () => {
+    const ui = render(chart("bar", `  chart-band "Healthy" from=30000 to=60000\n`), { width: 600 });
+    expect(ui.diagnostics).toEqual([]);
+    expect(ui.warnings).toEqual([]);
+    const d = geo(ui);
+    expect(d.max).toBeGreaterThanOrEqual(60000);
+    const band = d.layers!.bands[0]!;
+    expect(band.top).toBeLessThan(band.bottom);
+    expect(band.text).toBe("Healthy $30,000 to $60,000");
+    // Drawn before the first bar fill, named after the bars.
+    const ops = ui.drawOps;
+    const shade = ops.findIndex((o) => o.op === "fillRect");
+    const name = ops.findIndex((o) => o.op === "fillText" && String(o.args[0]).startsWith("Healthy"));
+    expect(shade).toBeGreaterThanOrEqual(0);
+    expect(name).toBeGreaterThan(shade);
+  });
+
+  it("takes either order, formulas and a tone, and works on a line chart", () => {
+    const d = geo(render(chart("line", `  chart-band "Zone" from={2 * 20000} to={10000} tone=good\n`), { width: 600 }));
+    expect(d.layers!.bands[0]).toMatchObject({ from: 10000, to: 40000, tone: "good" });
+  });
+
+  it("warns, and draws the chart, when it can't be drawn", () => {
+    const ui = render(chart("bar", `  chart-band "A" from=abc to=5\n  chart-band "B" from=5 to=5\n`), { width: 600 });
+    expect(ui.warnings.join("\n")).toMatch(/from and to must both be numbers/);
+    expect(ui.warnings.join("\n")).toMatch(/no range to shade/);
+    expect(geo(ui).slots.length).toBe(3);
+    expect(render(chart("donut", `  chart-band "A" from=1 to=2\n`), { width: 600 }).warnings.join("\n")).toMatch(/kind=bar and kind=line only/);
+  });
+
+  it("limits how many it draws, and tells screen readers about each", () => {
+    const many = Array.from({ length: 5 }, (_, i) => `  chart-band "B${i}" from=${i * 1000} to=${i * 1000 + 500}\n`).join("");
+    const ui = render(chart("bar", many), { width: 600 });
+    expect(geo(ui).layers!.bands.length).toBe(4);
+    expect(ui.warnings.join("\n")).toMatch(/at most 4 chart-band/);
+    expect(ui.accessibility({ full: true }).children[0]!.description).toMatch(/B0: \$0 to \$500\./);
+  });
+
+  it("keeps its name off a level's", () => {
+    const ui = render(chart("bar", `  chart-band "Healthy" from=30000 to=60000\n  chart-rule "Target" y=60000\n`), { width: 600 });
+    const at = (t: string) => { const o = ui.drawOps.find((x) => x.op === "fillText" && String(x.args[0]).startsWith(t))!; return { x: Number(o.args[1]), y: Number(o.args[2]) }; };
+    const a = at("Healthy"), b = at("Target");
+    expect(a.x === b.x && a.y === b.y).toBe(false);
+  });
+});

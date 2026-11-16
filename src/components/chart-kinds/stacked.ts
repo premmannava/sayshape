@@ -11,11 +11,13 @@
  * - Positive values stack up from 0 and negative ones down from it, so a
  *   bar's height is never a sum of things going opposite ways.
  * - A field without a number is left out of that bar (a gap), never 0.
- * - The total sits above each bar when every bar has room for it.
+ * - The total sits above each bar when every bar has room for it. With
+ *   values=true it sits above every bar it fits over, and each segment tall
+ *   and wide enough shows its own value.
  */
 import { easeOut, staggered } from "../../ghost";
 import {
-  barPath, barText, chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels,
+  barPath, barText, mutedBar, onFill, chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels,
   plotHeight, preciseText, slotLabels, labelRows, fieldTitle, tickLabels, type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import { fillTint } from "../util";
@@ -26,6 +28,8 @@ import type { ChartKindDef } from "./types";
 const MIN_STACK_SLOT = 10;
 /** The surface-colored line between two segments, so neighbouring colors stay apart. */
 const SEAM = 1.5;
+/** The least height of a segment that holds its own value (values=true). */
+const SEGMENT_TEXT_H = 16;
 
 /** One segment of a bar: which series, and where it is relative to the box. */
 export interface StackSegment {
@@ -35,6 +39,8 @@ export interface StackSegment {
   end: boolean;
   /** Above 0 or below it. */
   up: boolean;
+  /** values=true: this part's value, when the segment is big enough to hold it. */
+  text?: string;
 }
 
 export interface StackedGeometry {
@@ -88,7 +94,9 @@ export const stacked: ChartKindDef = {
     const y = (v: number) => plot.y + INSET + (plot.h - 2 * INSET) * (1 - (v / 2 - scale.min / 2) / (scale.max / 2 - scale.min / 2));
     const barW = Math.min(slotW * 0.6, 44);
     const placed = slotLabels(d.slots.map((s) => s.label), plot, box.w, labelFont, ctx);
-    const showTotals = n <= 8 && slotW >= 54;
+    const showValues = input.extra.values === "true";
+    // values=true: a total over every bar it fits over, measured, not only up to 8 wide bars.
+    const showTotals = showValues || (n <= 8 && slotW >= 54);
     const compact = ends.some((e) => Math.abs(e.pos) >= 10_000 || Math.abs(e.neg) >= 10_000);
 
     const bars: StackSegment[][] = [];
@@ -102,7 +110,12 @@ export const stacked: ChartKindDef = {
         const from = v > 0 ? up : down, to = from + v;
         if (v > 0) up = to; else down = to;
         const y1 = y(from), y2 = y(to);
-        segs.push({ series: k, rect: { x: cx - barW / 2, y: Math.min(y1, y2), w: barW, h: Math.abs(y2 - y1) }, end: false, up: v > 0 });
+        const seg: StackSegment = { series: k, rect: { x: cx - barW / 2, y: Math.min(y1, y2), w: barW, h: Math.abs(y2 - y1) }, end: false, up: v > 0 };
+        if (showValues) {
+          const text = barText(v, input.format, compact);
+          if (seg.rect.h >= SEGMENT_TEXT_H && m.width(text, labelFont) * 1.1 + 6 <= barW) seg.text = text;
+        }
+        segs.push(seg);
       });
       // The outermost segment on each side gets the rounded end.
       const lastUp = segs.filter((g) => g.up).at(-1), lastDown = segs.filter((g) => !g.up).at(-1);
@@ -111,7 +124,8 @@ export const stacked: ChartKindDef = {
       bars.push(segs);
       const total = s.values.reduce<number>((a, v) => a + (v ?? 0), 0);
       const known = s.values.some((v) => v !== null);
-      totals.push(showTotals && known ? barText(total, input.format, compact) : null);
+      const totalText = known ? barText(total, input.format, compact) : null;
+      totals.push(showTotals && totalText && (!showValues || m.width(totalText, labelFont) * 1.1 + 4 <= slotW) ? totalText : null);
       const notes: string[] = [], noteSeries: Array<number | null> = [];
       s.values.forEach((v, k) => {
         if (v === null) return;
@@ -169,7 +183,9 @@ export const stacked: ChartKindDef = {
         if (h <= 0.25) continue;
         if (seg.end) barPath(g, ox + r.x, oy + top, r.w, h, Math.min(6, r.w / 2, h), seg.up);
         else { g.beginPath(); g.rect(ox + r.x, oy + top, r.w, h); }
-        g.fillStyle = palette[seg.series % palette.length]!;
+        const color = palette[seg.series % palette.length]!;
+        const fill = d.highlight && !d.highlight.includes(i) ? mutedBar(theme, color) : color;
+        g.fillStyle = fill;
         g.fill();
         if (glow > 0) fillTint(g, c.raised, 0.14 * glow);
         // A thin seam in the surface color where it meets the segment before it (not on the zero line).
@@ -177,6 +193,15 @@ export const stacked: ChartKindDef = {
         if (Math.abs(joint - zero) > 0.5) {
           g.fillStyle = c.raised;
           g.fillRect(ox + r.x, oy + joint - SEAM / 2, r.w, SEAM);
+        }
+        if (seg.text && h >= SEGMENT_TEXT_H && grow >= 1) {
+          g.save();
+          g.font = ctx.font(600, 11);
+          g.textAlign = "center";
+          g.textBaseline = "middle";
+          g.fillStyle = onFill(theme, fill);
+          g.fillText(seg.text, ox + r.x + r.w / 2, oy + top + h / 2);
+          g.restore();
         }
       }
       const total = s.totals[i];

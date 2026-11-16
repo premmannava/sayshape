@@ -5,7 +5,7 @@
 |---|---|
 | Layout | [`column`](#column), [`row`](#row), [`overlap`](#overlap), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll), [`deck`](#deck), [`slide`](#slide) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon), [`tile`](#tile) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`chart-line`](#chart-line), [`chart-rule`](#chart-rule), [`chart-note`](#chart-note), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`chart-line`](#chart-line), [`chart-rule`](#chart-rule), [`chart-band`](#chart-band), [`chart-note`](#chart-note), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented), [`menu`](#menu), [`menu-item`](#menu-item) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty), [`dialog`](#dialog) |
@@ -439,9 +439,11 @@ A chart of a list of records: bar or line for one or more numbers per item, such
 | `target` | name | Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal. |
 | `good` | `up` / `down` | Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time). |
 | `total` | string | Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income". |
+| `values` | boolean | bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits. |
+| `highlight` | string | bar, hbar, stacked: one item's x value, e.g. highlight="Mar"; its bar keeps full color, the others fade. |
 | `format` | `number` / `money` / `percent` | How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number. |
 
-Children: `chart-line`, `chart-rule`, `chart-note`.
+Children: `chart-line`, `chart-rule`, `chart-band`, `chart-note`.
 
 ```
 state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
@@ -476,6 +478,23 @@ Only inside: `chart`.
 
 ```
 chart-rule "Target" y=16000
+```
+
+### `chart-band`
+
+Under a bar or line chart: a shaded range between two levels, drawn behind the data, such as a healthy range or a target zone.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | What the range is, shown at its edge, e.g. "Healthy". |
+| `from` | expression, required | One end of the range, a number or a formula. |
+| `to` | expression, required | The other end, a number or a formula. |
+| `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Shading: default (neutral), muted, accent, good, warn or bad. |
+
+Only inside: `chart`.
+
+```
+chart-band "Healthy" from=10000 to=16000
 ```
 
 ### `chart-note`
