@@ -709,9 +709,9 @@ export function traceSmoothLine(
  * A value by its bar. One style for the whole chart: compact ($480K, $45K)
  * once any value reaches 10,000, so neighbouring labels read alike.
  */
-export function barText(v: number, format: Format, compact: boolean): string {
+export function barText(v: number, format: Format, compact: boolean, digits = 1): string {
   if (!compact || Math.abs(v) >= 1e15) return valueText(v, format);
-  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
+  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: digits };
   try {
     return formatter(format, opts).format(v);
   } catch {

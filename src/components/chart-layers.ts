@@ -295,20 +295,42 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
   // Names already placed, so a band's name and a level's don't land on each other.
   const taken: Array<[number, number, number, number]> = [];
   const clear = (x: number, y: number, w: number) => !taken.some(([tx, ty, tw, th]) => x < tx + tw && x + w > tx && y < ty + th && y + plateH > ty);
+  // Bars, as drawn: a band's name keeps off them as well as off lines.
+  const bars: Array<[number, number, number, number]> = [];
+  for (const sl of d.slots) for (const b of sl.bars ?? []) if (b) bars.push([ox + b.x, oy + b.y, b.w, b.h]);
+  const onBar = (x: number, y: number, w: number) => bars.some(([bx, by, bw, bh]) => x < bx + bw && x + w > bx && y < by + bh && y + plateH > by);
   const tags = [
-    ...L.rules.map((r) => ({ y: oy + r.y, text: r.text, inside: false })),
+    ...L.rules.map((r) => ({ y: oy + r.y, bottom: 0, text: r.text, alt: "", band: false, inside: false })),
     // A band's name sits just inside its top edge.
-    ...L.bands.map((b) => ({ y: oy + b.top, text: b.text, inside: oy + b.bottom - (oy + b.top) >= plateH + 8 })),
+    ...L.bands.map((b) => ({ y: oy + b.top, bottom: oy + b.bottom, text: b.text, alt: b.label && b.label !== b.text ? b.label : "", band: true, inside: oy + b.bottom - (oy + b.top) >= plateH + 8 })),
   ];
   for (const r of tags) {
     const y = r.y;
-    const w = g.measureText(r.text).width + padX * 2;
-    const up = y - 3 - plateH, down = y + 3;
     const fits = (py: number) => py >= top && py + plateH <= bottom;
-    const spots: Array<[number, number]> = r.inside
+    const widthOf = (t: string) => g.measureText(t).width + padX * 2;
+    let text = r.text;
+    let w = widthOf(text);
+    const up = y - 3 - plateH, down = y + 3;
+    let spots: Array<[number, number]> = r.inside
       ? [[right - w, down], [left, down], [right - w, up], [left, up]]
       : [[right - w, up], [right - w, down], [left, up], [left, down]];
-    const [px, py] = spots.find(([sx, sy]) => fits(sy) && !covers(sx, sy, w) && clear(sx, sy, w))
+    let found: [number, number] | undefined;
+    if (r.band) {
+      // Both ends at the top edge, then inside the bottom edge, then outside either edge; with the range, then the name alone.
+      const lowIn = r.bottom - 3 - plateH, lowOut = r.bottom + 3;
+      for (const t of r.alt ? [r.text, r.alt] : [r.text]) {
+        const tw = widthOf(t);
+        const tries: Array<[number, number]> = [
+          ...(r.inside ? [[right - tw, down], [left, down], [right - tw, lowIn], [left, lowIn]] as Array<[number, number]> : []),
+          [right - tw, up], [left, up], [right - tw, lowOut], [left, lowOut],
+        ];
+        found = tries.find(([sx, sy]) => fits(sy) && !covers(sx, sy, tw) && !onBar(sx, sy, tw) && clear(sx, sy, tw));
+        if (found) { text = t; w = tw; break; }
+      }
+      if (!found) { text = r.text; w = widthOf(text); spots = [[right - w, down], [left, down], [right - w, up], [left, up]]; }
+    }
+    const [px, py] = found
+      ?? spots.find(([sx, sy]) => fits(sy) && !covers(sx, sy, w) && clear(sx, sy, w))
       ?? spots.find(([sx, sy]) => fits(sy) && clear(sx, sy, w)) ?? spots.find(([, sy]) => fits(sy)) ?? spots[0]!;
     taken.push([px, py, w, plateH]);
     g.beginPath();
@@ -317,7 +339,7 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
     g.fill();
     g.fillStyle = c.ink;
     g.textAlign = "left";
-    g.fillText(r.text, px + padX, py + plateH / 2);
+    g.fillText(text, px + padX, py + plateH / 2);
   }
   g.restore();
 }

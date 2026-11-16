@@ -111,3 +111,20 @@ describe("chart-band", () => {
     expect(a.x === b.x && a.y === b.y).toBe(false);
   });
 });
+
+describe("chart-band name placement", () => {
+  it("keeps the plate off the bars", () => {
+    const D = `state m=[{month: "Jan", r: 12000}, {month: "Feb", r: 18400}, {month: "Mar", r: 15200}, {month: "Apr", r: 9800}, {month: "May", r: 21000}, {month: "Jun", r: 16500}]\n`;
+    const ui = render(`${D}chart "R" kind=bar items=m x=month y=r format=money\n  chart-band "Healthy" from=14000 to=20000\n`, { width: 700 });
+    const d = geo(ui);
+    const op = ui.drawOps.find((o) => o.op === "fillText" && String(o.args[0]).startsWith("Healthy"))!;
+    const box = ui.find({ type: "chart" }).box!;
+    const x = Number(op.args[1]) - box.x, y = Number(op.args[2]) - box.y;
+    const w = String(op.args[0]).length * 6;
+    for (const s of d.slots) for (const b of s.bars ?? []) {
+      if (!b) continue;
+      const hit = x < b.x + b.w && x + w > b.x && y > b.y && y < b.y + b.h;
+      expect(hit).toBe(false);
+    }
+  });
+});

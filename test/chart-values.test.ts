@@ -87,3 +87,17 @@ describe("chart highlight= in words", () => {
     expect(ui.accessibility({ full: true }).children[0]!.description).toMatch(/Highlighted: Mar\./);
   });
 });
+
+describe("stacked part values", () => {
+  it("labels every segment that is tall and wide enough, with $18.4K as $18K when it must", () => {
+    const rows = [[12000, 9000], [18400, 15000], [15200, 21000], [9800, 8000], [21000, 12000], [16500, 7000], [14000, 10000], [20000, 9000]];
+    const list = rows.map(([a, b], i) => `{m: "M${i}", a: ${a}, b: ${b}}`).join(", ");
+    const ui = render(`state s=[${list}]\nchart "S" items=s x=m y=a,b format=money kind=stacked values=true\n`, { width: 700 });
+    const segs = (geo(ui).custom as { bars: Array<Array<{ series: number; text?: string }>> }).bars;
+    // All eight bottom segments, and all eight tops, have a value.
+    expect(segs.map((bar) => bar.find((s) => s.series === 0)?.text)).toEqual(["$12K", "$18K", "$15K", "$9.8K", "$21K", "$17K", "$14K", "$20K"]);
+    expect(segs.every((bar) => bar.every((s) => s.text))).toBe(true);
+    const drawn = words(ui);
+    for (const t of ["$18K", "$15K", "$17K"]) expect(drawn).toContain(t);
+  });
+});

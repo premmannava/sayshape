@@ -112,8 +112,12 @@ export const stacked: ChartKindDef = {
         const y1 = y(from), y2 = y(to);
         const seg: StackSegment = { series: k, rect: { x: cx - barW / 2, y: Math.min(y1, y2), w: barW, h: Math.abs(y2 - y1) }, end: false, up: v > 0 };
         if (showValues) {
-          const text = barText(v, input.format, compact);
-          if (seg.rect.h >= SEGMENT_TEXT_H && m.width(text, labelFont) * 1.1 + 6 <= barW) seg.text = text;
+          // The same style as the totals; whole thousands ($18K) when $18.4K is too wide for the bar.
+          if (seg.rect.h >= SEGMENT_TEXT_H) {
+            const fit = (t: string) => m.width(t, labelFont) * 1.1 + 6 <= barW;
+            const text = [barText(v, input.format, compact), barText(v, input.format, compact, 0)].find(fit);
+            if (text) seg.text = text;
+          }
         }
         segs.push(seg);
       });
