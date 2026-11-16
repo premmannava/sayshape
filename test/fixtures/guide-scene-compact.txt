@@ -32,9 +32,9 @@ DATA AND LISTS
 ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path a state name or t.field, action an on= value; ["text"] is optional quoted text, written without the brackets: "Sales", never ["Sales"])
 - every element: if=cond
 - column gap=number pad=number [holds elements] — Stacks its children vertically.
-- row gap=number pad=number align=top|center|bottom wrap=true|false [holds elements] — Places children side by side, splitting the width equally.
+- row gap=number pad=number align=top|center|bottom wrap=true|false fit=true|false justify=start|end|between [holds elements] — Places children side by side, splitting the width equally.
 - overlap at=top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right inset=number [holds elements] — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card.
-- grid min=number gap=number [holds elements] — Places children in responsive equal columns.
+- grid min=number cols=number gap=number [holds elements] — Places children in responsive equal columns.
 - card gap=number pad=number variant=raised|hero|tinted|outline on=action [holds elements] — A surface that groups related content, stacked vertically.
 - list [holds elements] — A bordered list of rows, separated by lines.
 - list-item "text" detail=text trailing=text icon=text on=action [holds elements; only in list] — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title.
@@ -60,8 +60,8 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - chart-band ["text"] from=expr! to=expr! tone=default|muted|accent|good|warn|bad [only in chart] — Under a bar or line chart: a shaded range between two levels, drawn behind the data, such as a healthy range or a target zone.
 - chart-note "text" at=text! [only in chart] — Under a bar or line chart: a marker at one item with a few words, such as a launch or an outage.
 - meter ["text"] value=expr! kind=ring|gauge min=number max=number bands=text good=up|down format=number|money|percent — One number against its range, as a ring or a gauge: progress toward a goal, a score, utilization or a budget used.
-- table ["text"] items=expr! key=name bind=path sort=path direction=path on=action [holds table-column] — Rows of a list of records, one table-column per field, for things like inventory, orders or expenses.
-- table-column ["text"] field=name! format=text|number|money align=left|right [only in table] — One column of a table: its header and the field it shows.
+- table ["text"] items=expr! key=name bind=path sort=path direction=path on=action total=text [holds table-column] — Rows of a list of records, one table-column per field, for things like inventory, orders or expenses.
+- table-column ["text"] field=name! format=text|number|money|percent|date|compact align=left|right tone=name bar=true|false [only in table] — One column of a table: its header and the field it shows.
 - compare ["text"] items=expr! name=name pick=text [holds compare-row] — Two to four options side by side with one row per attribute, marking the best value in each row: plans, products or choices to weigh up.
 - compare-row ["text"] field=name! format=text|number|money best=low|high [only in compare] — One row of a comparison: an attribute and the field each option's value comes from.
 - details ["text"] subtitle=text [holds detail] — One record as label and value rows, for a single customer, order, policy or ticket: its fields one per line, with an optional status badge.

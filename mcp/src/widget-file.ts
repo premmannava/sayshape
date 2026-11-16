@@ -19,12 +19,19 @@
  * - The frame is about 656 px wide, its height follows the content and its
  *   default font is Times: the wrapping <div> sets its own font and width.
  *
+ * Some apps (Antigravity's embeds are the one seen) run a script written into
+ * the file but refuse a blob: script, so the loader above shows NO_START there.
+ * For those, `inline` (--widget-inline) writes the engine into the file as it
+ * is, in a <script> of its own: about twice the size, nothing to unpack and
+ * nothing run from a URL of any kind.
+ *
  * The fragment draws like the page for text-only apps (fallback.ts), which
  * stays as it is: the same loader steps, but with the engine from the package,
  * and with the server's own settings (--theme, --accent or --colors, --image-hosts,
  * --scene, --behavior) carried across.
  */
 import { createHash } from "node:crypto";
+import { gunzipSync } from "node:zlib";
 import { mkdir, readdir, rename, stat, unlink, utimes, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { resolveTheme, type PresetId } from "../../playground/appearance/presets";
@@ -59,6 +66,11 @@ export interface WidgetOptions {
    * optional emit(action): actions other than a link go there. A host that throws never stops the drawing.
    */
   host?: string;
+  /**
+   * --widget-inline: carry the engine as plain script text in the file, not gzipped for the loader to unpack
+   * and run as a blob: script. For apps whose sandbox runs scripts written into the file but no blob: script.
+   */
+  inline?: boolean;
 }
 
 /**
@@ -82,44 +94,19 @@ export const NO_UNPACK = "This chat app can't unpack the SayShape engine that dr
 /** What shows if it unpacked but didn't start. */
 export const NO_START = "The SayShape engine didn't start in this chat app, so this interface can't be shown here.";
 
+/** A packed script as it was before packing, safe inside a <script>. Unpacked once per pack, not per file. */
+const unpacked = new Map<string, string>();
+function plainScript(base64: string): string {
+  let code = unpacked.get(base64);
+  if (code === undefined) unpacked.set(base64, (code = inertSource(gunzipSync(Buffer.from(base64, "base64")).toString("utf8"))));
+  return code;
+}
+
 /** The wrapping <div>'s font: HTML text in a widget's frame would otherwise be Times. */
 const FONT = "15px/1.5 system-ui,-apple-system,'Segoe UI',sans-serif";
 
-interface Parts {
-  /** Ids in the file all start with this, so no two files (and nothing around them) share one. */
-  id: string;
-}
-
-/** The fragment for an id. Built twice by fragment(): once with no id to name the file, once with its own. */
-function body(o: WidgetOptions, { id }: Parts): string {
-  const map = usesMap(o.spec);
-  const themes = {
-    light: resolveTheme(o.theme ?? "teal", "light", o.colors ?? null).theme,
-    dark: resolveTheme(o.theme ?? "teal", "dark", o.colors ?? null).theme,
-  };
-  if (o.logo) for (const t of [themes.light, themes.dark]) t.deck = { ...t.deck, logo: o.logo };
-  const packs = [o.engine.engine.base64, ...(map ? [o.engine.map.base64] : [])];
-  const components =
-    "S.coreComponents" +
-    (o.scenes ? ".concat(S.sceneComponents)" : "") +
-    (map ? ".concat(window.sayshapeMap ? window.sayshapeMap.mapComponents : [])" : "");
-  // The host's function sits in a script of its own, so even source that doesn't parse can't stop the main one.
-  const hostScript = o.host === undefined ? "" : `<script>\ndocument.getElementById(${scriptJson(id)}).sayshapeHost = (\n${inertSource(o.host)}\n);\n</script>\n`;
-  const hosted = o.host === undefined ? "" : `
-    // A host (a chat app) hooks in here, once the interface is drawn; if it throws, nothing is lost.
-    try { var made = box.sayshapeHost(ui, S, box); if (made && typeof made === "object") hooks = made; } catch (e) {}`;
-  return `<div id="${id}" style="box-sizing:border-box;width:100%;max-width:760px;margin:0 auto;font:${FONT}">
-<canvas id="${id}-view" aria-label="An interface drawn by SayShape" style="display:block;max-width:100%"></canvas>
-<p id="${id}-note" hidden style="margin:20px"></p>
-${hostScript}<script>
-(function () {
-  var box = document.getElementById(${scriptJson(id)}), canvas = document.getElementById(${scriptJson(`${id}-view`)}), note = document.getElementById(${scriptJson(`${id}-note`)});
-  var spec = ${inertJson(o.spec)};
-  var themes = ${inertJson(themes)};
-  var packs = ${scriptJson(packs)};
-  var hooks = null;
-  function fail(text) { canvas.style.display = "none"; note.textContent = text; note.hidden = false; }
-  if (!(window.DecompressionStream && window.Blob && window.Response && window.atob && window.URL && URL.createObjectURL)) { fail(${scriptJson(NO_UNPACK)}); return; }
+/** The loader's unpacking steps: the check that the app can unpack at all, and load(). */
+const UNPACK = `  if (!(window.DecompressionStream && window.Blob && window.Response && window.atob && window.URL && URL.createObjectURL)) { fail(${scriptJson(NO_UNPACK)}); return; }
   // The engine is carried gzipped: unpack it and run it as a blob: script, so nothing is fetched.
   function load(b64) {
     var bin = atob(b64), bytes = new Uint8Array(bin.length);
@@ -135,7 +122,44 @@ ${hostScript}<script>
       });
     });
   }
-  function start() {
+`;
+
+interface Parts {
+  /** Ids in the file all start with this, so no two files (and nothing around them) share one. */
+  id: string;
+}
+
+/** The fragment for an id. Built twice by fragment(): once with no id to name the file, once with its own. */
+function body(o: WidgetOptions, { id }: Parts): string {
+  const map = usesMap(o.spec);
+  const themes = {
+    light: resolveTheme(o.theme ?? "teal", "light", o.colors ?? null).theme,
+    dark: resolveTheme(o.theme ?? "teal", "dark", o.colors ?? null).theme,
+  };
+  if (o.logo) for (const t of [themes.light, themes.dark]) t.deck = { ...t.deck, logo: o.logo };
+  const packs = [o.engine.engine.base64, ...(map ? [o.engine.map.base64] : [])];
+  // Inline: each script in a <script> of its own, before the loader, so they have run by the time it does.
+  const engineScripts = o.inline ? packs.map((p) => `<script>\n${plainScript(p)}\n</script>\n`).join("") : "";
+  const components =
+    "S.coreComponents" +
+    (o.scenes ? ".concat(S.sceneComponents)" : "") +
+    (map ? ".concat(window.sayshapeMap ? window.sayshapeMap.mapComponents : [])" : "");
+  // The host's function sits in a script of its own, so even source that doesn't parse can't stop the main one.
+  const hostScript = o.host === undefined ? "" : `<script>\ndocument.getElementById(${scriptJson(id)}).sayshapeHost = (\n${inertSource(o.host)}\n);\n</script>\n`;
+  const hosted = o.host === undefined ? "" : `
+    // A host (a chat app) hooks in here, once the interface is drawn; if it throws, nothing is lost.
+    try { var made = box.sayshapeHost(ui, S, box); if (made && typeof made === "object") hooks = made; } catch (e) {}`;
+  return `<div id="${id}" style="box-sizing:border-box;width:100%;max-width:760px;margin:0 auto;font:${FONT}">
+<canvas id="${id}-view" aria-label="An interface drawn by SayShape" style="display:block;max-width:100%"></canvas>
+<p id="${id}-note" hidden style="margin:20px"></p>
+${engineScripts}${hostScript}<script>
+(function () {
+  var box = document.getElementById(${scriptJson(id)}), canvas = document.getElementById(${scriptJson(`${id}-view`)}), note = document.getElementById(${scriptJson(`${id}-note`)});
+  var spec = ${inertJson(o.spec)};
+  var themes = ${inertJson(themes)};
+${o.inline ? "" : `  var packs = ${scriptJson(packs)};\n`}  var hooks = null;
+  function fail(text) { canvas.style.display = "none"; note.textContent = text; note.hidden = false; }
+${o.inline ? "" : UNPACK}  function start() {
     var S = window.sayshape, root = document.documentElement;
     if (!S) { fail(${scriptJson(NO_START)}); return; }
     var components = ${components};
@@ -170,9 +194,10 @@ ${hostScript}<script>
     });
     ui.setSpec(spec);${hosted}
   }
-  var loading = load(packs[0]);
+${o.inline ? `  // The engine's scripts above have already run: start now.
+  try { start(); } catch (e) { fail(${scriptJson(NO_START)}); }` : `  var loading = load(packs[0]);
   for (var n = 1; n < packs.length; n++) loading = loading.then(load.bind(null, packs[n]));
-  loading.then(start).then(null, function () { fail(${scriptJson(NO_START)}); });
+  loading.then(start).then(null, function () { fail(${scriptJson(NO_START)}); });`}
 })();
 </script>
 </div>

@@ -379,6 +379,8 @@ export interface ServerOptions {
    * Without it, nothing changes.
    */
   widgetDir?: string;
+  /** With widgetDir (main.ts --widget-inline): the engine as plain script text in each file, for apps that run no blob: script. */
+  widgetInline?: boolean;
   /** The packed engine for those files; by default dist/widget-engine.json, read when first needed. */
   widgetEngine?: () => Promise<PackedEngine>;
   /**
@@ -615,6 +617,7 @@ export function createServer(opts: ServerOptions): McpServer {
             scenes: scenesOn,
             behavior: behaviorOn,
             imageHosts,
+            ...(opts.widgetInline ? { inline: true } : {}),
             ...(hostSource !== undefined ? { host: hostSource } : {}),
             ...(opts.view?.theme ? { theme: opts.view.theme } : {}),
             ...(opts.view?.colors ? { colors: opts.view.colors } : {}),

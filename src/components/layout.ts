@@ -4,7 +4,7 @@ import { wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
 import { isDarkTheme, mixColors, parseColor } from "../theme";
 import { MOTION } from "../design";
-import { chevron, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, partBox, row as rowLayout, ROW_ALIGN, rowMinWidth, runOn, stack, themeFont } from "./util";
+import { chevron, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, partBox, row as rowLayout, ROW_ALIGN, ROW_JUSTIFY, rowMinWidth, runOn, stack, themeFont } from "./util";
 
 /** A parent card is already the frame; let nested tables use its surface. */
 function markTablesInsideCard(box: Box): void {
@@ -84,6 +84,8 @@ export const row: ComponentDef = {
     pad: padProp(0),
     align: { type: "enum", values: ROW_ALIGN, default: "center", description: "Vertical alignment of children: top, center or bottom." },
     wrap: { type: "boolean", default: true, description: "Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line." },
+    fit: { type: "boolean", default: false, description: "Keep children at their natural width." },
+    justify: { type: "enum", values: ROW_JUSTIFY, description: "Where children sit: start, end, or between (spread). Implies fit." },
   },
   children: "any",
   example: `row gap=10
@@ -92,7 +94,10 @@ export const row: ComponentDef = {
   semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    rowLayout(box, ctx, p.num("pad", 0), p.num("gap", 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true));
+    rowLayout(box, ctx, p.num("pad", 0), p.num("gap", 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true), {
+      fit: p.bool("fit", false),
+      justify: ROW_JUSTIFY.find((v) => v === p.str("justify")),
+    });
   },
   minWidth(node, ctx) {
     const p = ctx.props(node);
@@ -311,6 +316,7 @@ export const grid: ComponentDef = {
   description: "Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.",
   props: {
     min: { type: "number", default: 200, description: "Narrowest a column may be, in pixels (default 200)." },
+    cols: { type: "number", description: "Most columns; fewer when min doesn't fit." },
     gap: gapProp(14),
   },
   children: "any",
@@ -325,14 +331,20 @@ export const grid: ComponentDef = {
     const kids = ctx.visibleChildren(box.node);
     // A column is never narrower than its widest child needs, whatever min= says.
     const min = Math.max(1, p.num("min", 200), ...kids.map((k) => Math.min(box.w, ctx.minWidth(k))));
-    const cols = Math.max(1, Math.min(kids.length || 1, Math.floor((box.w + gap) / (min + gap))));
+    const wanted = Math.floor(p.num("cols", 0));
+    const fits = Math.max(1, Math.min(kids.length || 1, Math.floor((box.w + gap) / (min + gap))));
+    const most = wanted >= 1 ? Math.min(wanted, fits) : fits;
+    // Balance the rows: as many as the columns need, filled so they differ by at most one.
+    const rows = Math.max(1, Math.ceil(kids.length / most));
+    const cols = Math.max(1, Math.ceil(kids.length / rows));
     const cw = Math.max(0, (box.w - gap * (cols - 1)) / cols);
+    const sizes = Array.from({ length: rows }, (_, r) => Math.floor(kids.length / rows) + (r < kids.length % rows ? 1 : 0));
     let y = box.y;
-    for (let start = 0; start < kids.length; start += cols) {
-      if (start) y += gap;
+    for (let r = 0, start = 0; r < rows; start += sizes[r]!, r++) {
+      if (r) y += gap;
       let tallest = 0;
       const placed: Box[] = [];
-      kids.slice(start, start + cols).forEach((k, i) => {
+      kids.slice(start, start + sizes[r]!).forEach((k, i) => {
         const kb = ctx.layout(k, box.x + i * (cw + gap), y, cw);
         box.children.push(kb);
         placed.push(kb);

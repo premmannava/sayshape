@@ -119,6 +119,8 @@ ELEMENTS
     pad=<number>  Inner padding in pixels (default 0).
     align=<top|center|bottom>  Vertical alignment of children: top, center or bottom.
     wrap=<boolean>  Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line.
+    fit=<boolean>  Keep children at their natural width.
+    justify=<start|end|between>  Where children sit: start, end, or between (spread). Implies fit.
     children: any elements
 
   overlap  — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card. The first child sets the size.
@@ -128,6 +130,7 @@ ELEMENTS
 
   grid  — Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
     min=<number>  Narrowest a column may be, in pixels (default 200).
+    cols=<number>  Most columns; fewer when min doesn't fit.
     gap=<number>  Space between children in pixels (default 14).
     children: any elements
 
@@ -225,7 +228,7 @@ ELEMENTS
     icon=<boolean>  Show a small icon matching the tone: i, a tick, ! or ×.
 
   icon  — A small symbol on its own, like a status mark or a weather sign. To start a line of text or a list row with one, use icon= on text or list-item instead.
-    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders.
+    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book.
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     size=<sm|md|lg>  sm, md or lg.
     label=<string>  What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration.
@@ -308,13 +311,16 @@ ELEMENTS
     sort=<state>  State that holds the field to sort by. Pressing a header sets it; missing values sort last.
     direction=<state>  State that holds asc or desc. Pressing the sorted header again flips it.
     on=<action>  Actions to run after a row is selected, with bind= already set, e.g. emit:changed. Separate several with ;
+    total=<string>  Add a totals row summing number, money and compact columns: true, or text for its first cell.
     children: table-column
 
   table-column "<text>"  — One column of a table: its header and the field it shows.
     "<text>"  The header. Defaults to the field name.
     field=<name, required>  The field of each record to show, e.g. field=price.
-    format=<text|number|money>  text, number (1,200.5) or money ($1,200.00, US dollars). number and money show only numbers; other values show —.
-    align=<left|right>  left or right. Default: right for number and money, left for text.
+    format=<text|number|money|percent|date|compact>  text, number (1,200.5), money ($1,200.00), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —.
+    align=<left|right>  left or right. Default: right for numbers, left for text and date.
+    tone=<name>  sign (negative bad, positive good) or a row field holding good, warn, bad, accent or muted to draw a badge.
+    bar=<boolean>  A bar behind each number, sized to the column's largest.
     only inside: table
 
   compare "<text>"  — Two to four options side by side with one row per attribute, marking the best value in each row: plans, products or choices to weigh up. Use compare-row children.
