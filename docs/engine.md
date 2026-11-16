@@ -40,6 +40,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `today` | the device's local day | Today's date as `() => "YYYY-MM-DD"`, for date pickers; fix it in tests and screenshots |
 | `viewport` | from the window | The part of the canvas people can see, `() => ({ top, bottom })` in canvas pixels, for placing a select's list ([Popups](#popups)) |
 | `pixelRatio` | the window's `devicePixelRatio` | Device pixels per CSS pixel in the canvas bitmap |
+| `streamPlaceholders` | `false` | For specs written layout first, data last: while a spec streams in, names an element reads before their `state` line arrives draw as placeholders and aren't reported until `endStream()` ([Layout first while streaming](model.md#layout-first-while-streaming)) |
 | `behavior` | `false` | Experimental: `every` rules and dragging in scenes ([Behavior](#behavior-experimental-off-by-default)) |
 | `clock` | the real clock | Where time comes from (`now`, `setTimeout`, `clearTimeout`): scene motion, fade-ins and rules. `sayshape/testing` passes one a test advances |
 | `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it, rules wait for a first press or key |

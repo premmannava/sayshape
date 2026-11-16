@@ -167,6 +167,17 @@ Three sets of elements are involved, and they're separate:
 
 Examples are chosen explicitly: `examples` turns each element's own short example on or off (default on in full mode, off in compact), and `workedExamples` picks the larger ones by name (`["todo", "cart"]`, `["equipment"]` for a filterable order calculator, or `false` for none). With a profile, an example that uses an element outside it is never shown.
 
+### Layout first while streaming
+
+By default the guide says "state first", so a model writes its data (a 40-row list, say) before any element, and nothing draws until all of it has been written. `layoutFirst` tells it to write the elements first and the `state` lines last, with long lists at the very end; small values a control starts from (`state tab="All"`) may still go first. The first element then draws after a few dozen characters, not after the data.
+
+```ts
+guide: { layoutFirst: true }          // off by default: the guide is then exactly what it was
+const ui = new SayShape(canvas, { streamPlaceholders: true });
+```
+
+`streamPlaceholders` is the engine's half. While a spec streams in (`beginStream` to `endStream`), a name an element reads before its `state` or `derive` line has arrived draws as a loading placeholder (the same as [`setAwaiting`](language.md#lists)), and no warning is shown for it: not the "isn't state" diagnostic, and not a layout warning like a select's items not being a list yet. When the stream ends the screen is checked as usual, so a name that is still undeclared is reported then. With it off, a streamed spec behaves exactly as before. The MCP server's `--layout-first` changes its guide text the same way; its view already draws placeholders while a spec streams in.
+
 ### Repairs
 
 `generateSpec` asks once for a fix when the parser finds problems (`repairOn: "any" | "errors" | "never"`). With a compact guide, `repairGuide: "full"` sends the full guide for that one repair, still limited to the profile. Each attempt reports the guide it used (`result.first.guide`, `result.repair?.guide`); `npm run eval -- --guide compact --repair-guide same,full` measures whether it helps.
