@@ -72,6 +72,12 @@ function defOf(type: string, registry: Registry): ComponentDef | undefined {
 export interface ParseOptions {
   /** Ignore the last line if it has no trailing newline (it may still be streaming). */
   partial?: boolean;
+  /**
+   * Used with partial: a name read before its state line (layout first, data
+   * last) isn't reported as unknown yet, since the line may still be on its
+   * way. Without partial, or off (default), nothing changes.
+   */
+  deferUnknownNames?: boolean;
   /** Props given to the invisible root column. */
   rootProps?: Record<string, string>;
   /**
@@ -901,7 +907,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   for (const d of derivedLines) if (d.reads.length) outsideUses.push({ line: d.line, names: d.reads });
   const defined = new Set([...state.map((s) => s.key), ...derivedLines.map((d) => d.name)]);
   // A state value that couldn't be read is reported on its own line; saying again on every line that uses it hides that.
-  checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics);
+  checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics, !!(opts.partial && opts.deferUnknownNames));
   // Stable sort keeps each line's diagnostics in the order they were found.
   const kept = opts.behavior ? checkRules(rules, controls, dialogs, diagnostics) : undefined;
   diagnostics.sort((a, b) => a.line - b.line);
@@ -953,7 +959,7 @@ const ENGINE_STATE = ["screen"];
  * otherwise just show a dash: a loop variable outside its each, or a word
  * meant as text but left unquoted ({done ? Yes : No}).
  */
-function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayShapeNode[], stateKeys: Set<string>, written: Set<string>, diags: Diagnostic[]): void {
+function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayShapeNode[], stateKeys: Set<string>, written: Set<string>, diags: Diagnostic[], deferUnknown = false): void {
   const defined = new Map<string, { each: SayShapeNode; prop: string }>();
   for (const e of eaches) {
     const as = e.props.as ?? "item";
@@ -966,6 +972,8 @@ function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayS
       const d = defined.get(name);
       // Writing t.done outside its each doesn't make t exist there, so loop variables are checked first.
       if (!d && written.has(name)) continue;
+      // Layout first: the state line may still be streaming in; the last parse reports it.
+      if (!d && deferUnknown) continue;
       diags.push(d
         ? { line, severity: "warning", message: `"${name}" only exists inside the each on line ${d.each.line} (${d.prop}). Indent this line under it, or use a state name` }
         : { line, severity: "warning", message: `"${name}" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: '${name}'. To use state, declare it: state ${name}=…` });
