@@ -1,0 +1,2 @@
+@replace 19
+    chart "Incurred by month" kind=line items={monthly} x=month y=incurred format=money

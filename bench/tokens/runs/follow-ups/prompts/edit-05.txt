@@ -1,0 +1,51 @@
+===== USER =====
+A claims review. The app supplies the data as state, by name; never write its rows:
+- claims: 40 rows {id, opened, line, site, status, incurred, days}. status is one of Open, In review, Closed, Denied. line is one of Auto, Property, Liability, Workers comp, Marine, Cyber. incurred is dollars, opened is YYYY-MM-DD.
+- monthly: 12 rows {month, opened, closed, incurred}, month is Jan to Dec.
+- byLine: 6 rows {line, count, incurred}.
+Show a title, four headline figures, a bar chart by month, a line chart of opened and closed, a donut by line, a table of all 40 claims, and a filter by status.
+
+===== ASSISTANT =====
+1|state status="All"
+2|derive shown={status == 'All' ? claims : filter(claims, 'status', status)}
+3|derive totalIncurred={sum(claims, 'incurred')}
+4|derive openCount={count(claims, 'status', 'Open')}
+5|derive reviewCount={count(claims, 'status', 'In review')}
+6|derive avgDays={avg(claims, 'days')}
+7|text "Claims review" style=title
+8|grid min=170 gap=12
+9|  card pad=18 gap=10
+10|    stat label="Total claims" value={len(claims)}
+11|  card pad=18 gap=10
+12|    stat label="Total incurred" value={compact(totalIncurred, 'USD')}
+13|  card pad=18 gap=10
+14|    stat label="Open claims" value={openCount} tone=accent change={reviewCount + ' in review'}
+15|  card pad=18 gap=10
+16|    stat label="Avg days open" value={round(avgDays)}
+17|grid min=300 gap=12
+18|  card pad=18 gap=10
+19|    chart "Incurred by month" kind=bar items={monthly} x=month y=incurred format=money
+20|  card pad=18 gap=10
+21|    chart "Claims opened and closed by month" kind=line items={monthly} x=month y=opened,closed
+22|  card pad=18 gap=10
+23|    chart "Incurred by line" kind=donut items={byLine} x=line y=incurred format=money
+24|card pad=18 gap=10
+25|  text "All claims" style=title
+26|  segmented bind=status label="Filter by status" options="All,Open,In review,Closed,Denied"
+27|  text "{len(shown)} of {len(claims)} claims" tone=muted
+28|  table "Claims" items={shown} key=id
+29|    table-column "ID" field=id
+30|    table-column "Opened" field=opened
+31|    table-column "Line" field=line
+32|    table-column "Site" field=site
+33|    table-column "Status" field=status
+34|    table-column "Incurred" field=incurred format=money align=right
+35|    table-column "Days" field=days format=number align=right
+
+===== USER =====
+Change the interface above: Make the status filter a dropdown.
+Its lines are numbered "N|" for reference; never write the numbers. Answer only with edits to those lines, numbered as shown (earlier edits don't shift them). New lines go under the command, indented as in the interface:
+@replace 4-5
+@insert 7   (after line 7; 0 = at the top)
+@delete 9-10
+Keep everything else as it is, including any edits made by hand. If most of the interface changes, write the whole interface instead.
