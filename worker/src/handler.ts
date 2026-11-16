@@ -18,7 +18,7 @@
  *       {"t":"phase","v":"writing"}   what the model is doing
  *       {"t":"text","v":"card\n"}     clean SayShape lines, to push into the engine
  *       {"t":"reset"}                 throw away what was shown: a repair is coming
- *       {"t":"done","spec":"…","problems":0,"repaired":false,"ms":1234,"model":"…","tokens":{"in":10900,"out":180}}
+ *       {"t":"done","spec":"…","problems":0,"repaired":false,"ms":1234,"model":"…","tokens":{"in":10900,"out":180,"cached":10500,"cacheWrite":0}}  (cached and cacheWrite only when the provider reports them)
  *       {"t":"thought","v":"…"}       the model's thinking, as it streams (chat only, up to MAX_THOUGHT_CHARS; SHOW_THINKING="false" turns it off)
  *       {"t":"error","message":"…"}   a message to show; the stream ends
  *   → or before streaming, a JSON error: {"error": "…", "reason": "off" | "unconfigured" | "rate" | "daily" | "check" | "too-big" | "bad-request"}
@@ -35,12 +35,11 @@
  * Plain functions with no Cloudflare types, so test/worker.test.ts can run
  * it in Node with a fake model.
  */
-import { generateSpec, ModelError, type GenerateOptions, type Phase } from "../../src/model";
+import { cachedPrompt, generateSpec, ModelError, type GenerateOptions, type Phase } from "../../src/model";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { sceneComponents } from "../../src/components/scene";
 import { Registry } from "../../src/registry";
-import { languageGuide } from "../../src/prompt";
 import { answerGuide, answerRequest, checkAnswer, DATA, readQuestion } from "./answer";
 import { chatGuide, chatRequest, checkDrawing, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
 import { applyFeedback, MAX_FEEDBACK_BYTES, readFeedback, readRecordRequest, saveAnswer, type AnswerRow, type RecordStore } from "./records";
@@ -72,6 +71,15 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   /** Turnstile secret. When set, every request needs a valid token. */
   TURNSTILE_SECRET?: string;
+  /**
+   * Marks the guide for the provider's prompt cache (cache_control on the system message's one text
+   * block): "true" or "5m" for about 5 minutes, "1h" for an hour. Empty or anything else leaves it
+   * off, as plain text, which is also what providers that cache on their own (OpenAI, DeepSeek) need.
+   * Turn it on for Anthropic models, directly or through OpenRouter. If the provider rejects the
+   * marked form (a 400 or 422 before anything streams), that request is sent again unmarked and the
+   * worker stops marking for that model until it restarts.
+   */
+  PROMPT_CACHE?: string;
   /** "false" turns answers off without redeploying the site. */
   GENERATION_ENABLED?: string;
   /**
@@ -127,9 +135,26 @@ const registry = new Registry(coreComponents);
  * world map. Spreadsheet answers keep to the core elements, and to their smaller guide.
  */
 export const chatRegistry = new Registry([...coreComponents, ...sceneComponents, ...mapComponents]);
-/** The chat guide's text, built once per worker instance, not per question: it's the same every time. */
-let chatGuideText: string | undefined;
-const chatGuideOnce = () => (chatGuideText ??= languageGuide(chatRegistry, chatGuide(chatRegistry)));
+/**
+ * The system prompts, built once per worker instance, not per question: each is the same for every
+ * visitor and every question (the guide and this page's lasting notes, nothing per request), so it
+ * is the stable, cacheable part. cachedPrompt builds it with no per-request context: the visitor's
+ * words, a spreadsheet's columns and a follow-up's latest answer all go in the user messages after
+ * it. test/worker-cache.test.ts keeps it that way.
+ */
+let chatPrompt: string | undefined;
+let dataPrompt: string | undefined;
+export const chatStable = () => (chatPrompt ??= cachedPrompt(chatRegistry, { guide: chatGuide(chatRegistry) }).stable);
+export const dataStable = () => (dataPrompt ??= cachedPrompt(registry, { guide: answerGuide() }).stable);
+
+/** PROMPT_CACHE as the model client's `cache` setting: undefined (off), true (5 minutes) or "1h". */
+export function cacheSetting(env: Env): true | "1h" | undefined {
+  const v = (env.PROMPT_CACHE ?? "").trim().toLowerCase();
+  if (v === "1h") return "1h";
+  return v === "true" || v === "5m" || v === "on" || v === "1" ? true : undefined;
+}
+/** Providers (url and model) that refused the marked form, so later requests don't try it again. */
+const cacheRefused = new Set<string>();
 
 const json = (status: number, body: unknown, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
@@ -214,7 +239,7 @@ function chatJob(body: Record<string, unknown>): Job | { error: string } {
   return {
     registry: chatRegistry,
     // A follow-up's request is the visitor's words; refineMessages frames them as a change to the latest answer.
-    options: c.refine ? { request: c.message, refine: c.refine, guide: chatGuideOnce(), check } : { request: chatRequest(c.message), guide: chatGuideOnce(), check },
+    options: c.refine ? { request: c.message, refine: c.refine, guide: chatStable(), check } : { request: chatRequest(c.message), guide: chatStable(), check },
     unanswered: "The model didn't draw anything for that. Try asking it another way.",
     saved: { question: c.message, followup: !!c.refine },
   };
@@ -225,7 +250,7 @@ function dataJob(body: Record<string, unknown>): Job | { error: string } {
   if ("error" in q) return q;
   return {
     registry,
-    options: { request: answerRequest(q), guide: answerGuide(), stateNames: [DATA], check: checkAnswer },
+    options: { request: answerRequest(q), guide: dataStable(), stateNames: [DATA], check: checkAnswer },
     unanswered: "The model couldn't answer that one from the spreadsheet. Try asking it another way.",
   };
 }
@@ -313,14 +338,20 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
       row = { id: recordId, chat: rec.chat, turn: rec.turn, width: rec.width, at: (deps.now?.() ?? new Date()).toISOString(), followup: job.saved.followup, question: job.saved.question, model: label, ...r };
     };
     try {
-      const result = await generateSpec({
+      const url = env.MODEL_URL ?? DEFAULT_URL;
+      const refusedKey = `${url}|${env.MODEL}`;
+      // Nothing has reached the page yet: set once the model has said anything, after which a failed call can't be retried quietly.
+      let started = false;
+      const call = (cache: true | "1h" | undefined) => generateSpec({
         config: {
-          url: env.MODEL_URL ?? DEFAULT_URL,
+          url,
           model: env.MODEL!,
           apiKey: env.MODEL_API_KEY,
           maxTokens: MAX_TOKENS,
           streamUsage: env.STREAM_USAGE !== "false",
           ...(env.REASONING_EFFORT?.trim() ? { reasoningEffort: env.REASONING_EFFORT.trim() } : {}),
+          // The guide, the one stable system message, goes as its own marked text block, first.
+          ...(cache ? { cache } : {}),
         },
         registry: job.registry,
         ...job.options,
@@ -328,19 +359,31 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
         repairOn: "errors",
         signal: req.signal,
         fetch: doFetch,
-        onText: (v) => void send({ t: "text", v }),
+        onText: (v) => { started = true; void send({ t: "text", v }); },
         onReset: () => void send({ t: "reset" }),
         onPhase: (v: Phase) => void send({ t: "phase", v }),
-        onThinking: showThinking ? (v) => {
-          if (thought >= MAX_THOUGHT_CHARS) return;
+        onThinking: (v) => {
+          started = true;
+          if (!showThinking || thought >= MAX_THOUGHT_CHARS) return;
           const part = v.slice(0, MAX_THOUGHT_CHARS - thought);
           thought += part.length;
           pending += part;
           if (pending.length >= THOUGHT_BATCH_CHARS) flush();
-        } : undefined,
+        },
       });
+      const wanted = cacheSetting(env);
+      const marked = wanted && !cacheRefused.has(refusedKey) ? wanted : undefined;
+      let result;
+      try {
+        result = await call(marked);
+      } catch (e) {
+        // A provider that doesn't take cache markers must not break the page: say it once, send the request plain.
+        if (!marked || started || !(e instanceof ModelError) || (e.status !== 400 && e.status !== 422)) throw e;
+        cacheRefused.add(refusedKey);
+        result = await call(undefined);
+      }
       const errors = result.diagnostics.filter((d) => d.severity === "error");
-      const { promptTokens, completionTokens } = result.usage;
+      const { promptTokens, completionTokens, cachedTokens, cacheWriteTokens } = result.usage;
       const ms = Math.round(result.timings.totalMs);
       const how = { spec: result.spec, problems: result.diagnostics.length, repaired: !!result.repair, ms, tokensIn: promptTokens ?? null, tokensOut: completionTokens ?? null };
       if (!result.spec.trim() || errors.some((d) => /never reads data|Don't declare data/.test(d.message))) {
@@ -356,7 +399,10 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
         repaired: !!result.repair,
         ms,
         model: label,
-        ...(promptTokens !== undefined && completionTokens !== undefined ? { tokens: { in: promptTokens, out: completionTokens } } : {}),
+        ...(promptTokens !== undefined && completionTokens !== undefined
+          // cached and cacheWrite (parts of in) only when the provider reports them: how to tell the cache works.
+          ? { tokens: { in: promptTokens, out: completionTokens, ...(cachedTokens !== undefined ? { cached: cachedTokens } : {}), ...(cacheWriteTokens !== undefined ? { cacheWrite: cacheWriteTokens } : {}) } }
+          : {}),
         ...(row ? { record: recordId } : {}),
       });
     } catch (e) {

@@ -221,6 +221,8 @@ It sends the original task, the `requirements` that must always hold, the change
 
 ### Prompt caching
 
+For a short guide to what to send first, which provider needs what and the mistakes that break it, see [Prompt caching](prompt-caching.md).
+
 The guide is the same on every request and comes first, so a provider's prompt cache can serve it: after the first request, those tokens cost a fraction of the input price. With the full guide at about 10,500 tokens of input per request, this is most of the cost of a request.
 
 ```ts

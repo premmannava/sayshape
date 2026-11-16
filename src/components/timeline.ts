@@ -17,7 +17,7 @@ import { wrapText } from "../text";
 import type { Box } from "../types";
 import { gapProp, iconProblems, iconProp, stack, themeFont } from "./util";
 
-const STATUSES = ["done", "current", "upcoming"] as const;
+const STATUSES = ["done", "current", "upcoming", "blocked"] as const;
 /** "plain" is a step with no status: a plan or itinerary, where nothing is done yet or tracked. */
 type Status = (typeof STATUSES)[number] | "plain";
 
@@ -88,10 +88,11 @@ timeline
       const icon = ctx.props(k.node).str("icon");
       g.beginPath();
       g.arc(cx, y, MARK / 2 - 1, 0, Math.PI * 2);
-      if (status === "done") {
-        g.fillStyle = c.accent;
+      if (status === "done" || status === "blocked") {
+        // Filled: done in the accent with a tick, blocked in the bad color with a cross.
+        g.fillStyle = status === "blocked" ? c.bad : c.accent;
         g.fill();
-        drawIcon(g, isIconName(icon) ? icon : "check", cx - 7, y - 7, 14, c.onAccent);
+        drawIcon(g, isIconName(icon) ? icon : status === "blocked" ? "x" : "check", cx - 7, y - 7, 14, c.onAccent);
       } else {
         g.fillStyle = c.surface;
         g.fill();
@@ -119,7 +120,7 @@ export const step: ComponentDef = {
   props: {
     status: {
       type: "enum", values: STATUSES,
-      description: "Only to show progress: done for finished steps, current for where the person is now, upcoming for what's left (muted). Leave it out on every step for a plan, itinerary or how-to that hasn't started.",
+      description: "Only to show progress: done for finished steps, current for where the person is now, upcoming for what's left (muted), blocked (red). Leave it out on every step for a plan, itinerary or how-to that hasn't started.",
     },
     detail: { type: "string", description: "A quieter line under the title, like a place or a note." },
     time: { type: "string", description: "A short date or time on the right, e.g. Oct 18 or 9:12 AM." },
