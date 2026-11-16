@@ -1,0 +1,880 @@
+{
+  "tokenizer": "o200k_base (gpt-tokenizer)",
+  "variant": "compact",
+  "guideTokens": 5534,
+  "results": [
+    {
+      "request": "r1-table",
+      "run": "1",
+      "outputTokens": 211,
+      "firstPaintTokens": 135,
+      "composition": {
+        "data": 133,
+        "structure": 53,
+        "words": 22,
+        "formulas": 3
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r1-table",
+      "run": "2",
+      "outputTokens": 200,
+      "firstPaintTokens": 135,
+      "composition": {
+        "data": 133,
+        "structure": 48,
+        "words": 18,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r1-table",
+      "run": "3",
+      "outputTokens": 206,
+      "firstPaintTokens": 141,
+      "composition": {
+        "data": 133,
+        "structure": 51,
+        "words": 22,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "1",
+      "outputTokens": 178,
+      "firstPaintTokens": 94,
+      "composition": {
+        "data": 75,
+        "structure": 63,
+        "words": 25,
+        "formulas": 14
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "2",
+      "outputTokens": 179,
+      "firstPaintTokens": 94,
+      "composition": {
+        "data": 75,
+        "structure": 62,
+        "words": 21,
+        "formulas": 22
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "3",
+      "outputTokens": 181,
+      "firstPaintTokens": 94,
+      "composition": {
+        "data": 75,
+        "structure": 61,
+        "words": 21,
+        "formulas": 26
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r3-contact",
+      "run": "1",
+      "outputTokens": 256,
+      "firstPaintTokens": 40,
+      "composition": {
+        "data": 32,
+        "structure": 95,
+        "words": 115,
+        "formulas": 28
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Name, Email and Phone fields",
+          "passed": true
+        },
+        {
+          "label": "a Subject dropdown",
+          "passed": true
+        },
+        {
+          "label": "a Message text area",
+          "passed": true
+        },
+        {
+          "label": "Submit and Cancel buttons",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r3-contact",
+      "run": "2",
+      "outputTokens": 274,
+      "firstPaintTokens": 48,
+      "composition": {
+        "data": 40,
+        "structure": 98,
+        "words": 123,
+        "formulas": 22
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Name, Email and Phone fields",
+          "passed": true
+        },
+        {
+          "label": "a Subject dropdown",
+          "passed": true
+        },
+        {
+          "label": "a Message text area",
+          "passed": true
+        },
+        {
+          "label": "Submit and Cancel buttons",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r3-contact",
+      "run": "3",
+      "outputTokens": 274,
+      "firstPaintTokens": 57,
+      "composition": {
+        "data": 14,
+        "structure": 99,
+        "words": 115,
+        "formulas": 54
+      },
+      "errors": 0,
+      "warnings": 2,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Name, Email and Phone fields",
+          "passed": true
+        },
+        {
+          "label": "a Subject dropdown",
+          "passed": true
+        },
+        {
+          "label": "a Message text area",
+          "passed": true
+        },
+        {
+          "label": "Submit and Cancel buttons",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": [
+        "line 2 warning: derive subjects needs an expression in braces, like derive subjects={price * qty}. For a fixed starting value, use state subjects=…",
+        "line 9 warning: \"subjects\" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: 'subjects'. To use state, declare it: state subjects=…"
+      ]
+    },
+    {
+      "request": "r4-analytics",
+      "run": "1",
+      "outputTokens": 849,
+      "firstPaintTokens": 446,
+      "composition": {
+        "data": 389,
+        "structure": 252,
+        "words": 101,
+        "formulas": 114
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r4-analytics",
+      "run": "2",
+      "outputTokens": 1051,
+      "firstPaintTokens": 590,
+      "composition": {
+        "data": 493,
+        "structure": 287,
+        "words": 115,
+        "formulas": 164
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r4-analytics",
+      "run": "3",
+      "outputTokens": 989,
+      "firstPaintTokens": 553,
+      "composition": {
+        "data": 455,
+        "structure": 269,
+        "words": 108,
+        "formulas": 163
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r5-pricing",
+      "run": "1",
+      "outputTokens": 852,
+      "firstPaintTokens": 158,
+      "composition": {
+        "data": 150,
+        "structure": 374,
+        "words": 321,
+        "formulas": 7
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "three tiers",
+          "passed": true
+        },
+        {
+          "label": "a feature comparison table",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r5-pricing",
+      "run": "2",
+      "outputTokens": 822,
+      "firstPaintTokens": 180,
+      "composition": {
+        "data": 172,
+        "structure": 368,
+        "words": 277,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "three tiers",
+          "passed": true
+        },
+        {
+          "label": "a feature comparison table",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r5-pricing",
+      "run": "3",
+      "outputTokens": 826,
+      "firstPaintTokens": 178,
+      "composition": {
+        "data": 9,
+        "structure": 372,
+        "words": 265,
+        "formulas": 182
+      },
+      "errors": 1,
+      "warnings": 2,
+      "clean": false,
+      "parts": [
+        {
+          "label": "three tiers",
+          "passed": true
+        },
+        {
+          "label": "a feature comparison table",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": [
+        "line 3 warning: derive plans needs an expression in braces, like derive plans={price * qty}. For a fixed starting value, use state plans=…",
+        "line 17 error: Unknown element \"ul_placeholder_removed\". It was skipped, along with anything inside it",
+        "line 46 warning: \"plans\" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: 'plans'. To use state, declare it: state plans=…"
+      ]
+    },
+    {
+      "request": "r6-settings",
+      "run": "1",
+      "outputTokens": 310,
+      "firstPaintTokens": 34,
+      "composition": {
+        "data": 25,
+        "structure": 149,
+        "words": 135,
+        "formulas": 16
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Profile, Security and Notifications tabs",
+          "passed": true
+        },
+        {
+          "label": "a name field and an avatar on Profile",
+          "passed": true
+        },
+        {
+          "label": "a 2FA toggle on Security",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r6-settings",
+      "run": "2",
+      "outputTokens": 325,
+      "firstPaintTokens": 32,
+      "composition": {
+        "data": 23,
+        "structure": 154,
+        "words": 148,
+        "formulas": 17
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Profile, Security and Notifications tabs",
+          "passed": true
+        },
+        {
+          "label": "a name field and an avatar on Profile",
+          "passed": true
+        },
+        {
+          "label": "a 2FA toggle on Security",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r6-settings",
+      "run": "3",
+      "outputTokens": 368,
+      "firstPaintTokens": 64,
+      "composition": {
+        "data": 56,
+        "structure": 150,
+        "words": 164,
+        "formulas": 14
+      },
+      "errors": 0,
+      "warnings": 1,
+      "clean": true,
+      "parts": [
+        {
+          "label": "Profile, Security and Notifications tabs",
+          "passed": true
+        },
+        {
+          "label": "a name field and an avatar on Profile",
+          "passed": true
+        },
+        {
+          "label": "a 2FA toggle on Security",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": [
+        "line 15 warning: Unexpected \"else\". Props look like name=value"
+      ]
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "1",
+      "outputTokens": 2646,
+      "firstPaintTokens": 2269,
+      "composition": {
+        "data": 2208,
+        "structure": 248,
+        "words": 104,
+        "formulas": 82
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "2",
+      "outputTokens": 2717,
+      "firstPaintTokens": 2331,
+      "composition": {
+        "data": 2245,
+        "structure": 233,
+        "words": 127,
+        "formulas": 115
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "3",
+      "outputTokens": 2611,
+      "firstPaintTokens": 2243,
+      "composition": {
+        "data": 2210,
+        "structure": 217,
+        "words": 108,
+        "formulas": 77
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "1",
+      "outputTokens": 478,
+      "firstPaintTokens": 93,
+      "composition": {
+        "data": 5,
+        "structure": 249,
+        "words": 101,
+        "formulas": 125
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "2",
+      "outputTokens": 392,
+      "firstPaintTokens": 35,
+      "composition": {
+        "data": 5,
+        "structure": 224,
+        "words": 100,
+        "formulas": 64
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "3",
+      "outputTokens": 393,
+      "firstPaintTokens": 35,
+      "composition": {
+        "data": 5,
+        "structure": 220,
+        "words": 103,
+        "formulas": 66
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    }
+  ]
+}
