@@ -71,6 +71,13 @@ describe("prompt helpers", () => {
     expect(edit.messages[2]!.content).toContain('Current values from the app (use these names in state):\n{"n":1}');
     expect(edit.messages[2]!.content).not.toContain("Write the whole interface.");
   });
+  it("keeps every line of a change written over several lines", () => {
+    const edit = refineEditMessages(ctx, "Rename the title.\n\nAlso add a footer.\nKeep it short.", {});
+    const text = edit.messages[2]!.content;
+    expect(text).toContain("Change the interface above: Rename the title.\n\nAlso add a footer.\nKeep it short.\n");
+    expect(text).toContain("@delete 9-10");
+    expect(text).not.toContain("Write the whole interface.");
+  });
 });
 
 describe("generateSpec with edits", () => {

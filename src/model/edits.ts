@@ -192,13 +192,16 @@ export function editInstructions(): string {
  */
 export function refineEditMessages(ctx: RefineContext, request: string, policy: ContextPolicy = {}): { messages: ChatMessage[]; info: ContextInfo } {
   const plain = refineMessages(ctx, request, policy);
-  const last = plain.messages[2]!.content.split("\n\n");
-  // The change line and the "Keep everything else…" paragraph (the first two) become the change and the edit instructions; any state paragraph stays.
-  const lead = last[0]!.split("\n")[0]!;
+  // The plain request is the change, then the "Keep everything else…" paragraph, then any state.
+  // Keep the state paragraph as it is; the change and the edit instructions replace the rest.
+  const last = plain.messages[2]!.content;
+  const keep = last.indexOf("\n\nKeep everything else as it is");
+  const afterKeep = keep < 0 ? -1 : last.indexOf("\n\n", keep + 2);
+  const state = afterKeep < 0 ? "" : last.slice(afterKeep);
   const messages: ChatMessage[] = [
     plain.messages[0]!,
     { role: "assistant", content: numberSpec(ctx.spec) },
-    { role: "user", content: [`${lead}\n${editInstructions()}`, ...last.slice(2)].join("\n\n") },
+    { role: "user", content: `Change the interface above: ${request.trim()}\n${editInstructions()}${state}` },
   ];
   return { messages, info: { ...plain.info, chars: messages.reduce((n, m) => n + m.content.length, 0) } };
 }
