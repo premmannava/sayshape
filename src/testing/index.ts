@@ -19,6 +19,8 @@ import { eachInstances, scopeOf } from "../each";
 import type { EditorEvents, EditorHost, EditorSpec } from "../editor";
 import type { AccessibilityHost, MirrorEvents, Politeness } from "../a11y/host";
 import type { AccessibleNode } from "../a11y/semantics";
+import { type PointerInfo, type TextLayerHost, type TextLine } from "../text-layer/host";
+import { LineSelection, lineAtPoint, nearestLine, selectionText, pieceOf } from "../text-layer/selection";
 import { isVisible, walkBoxes } from "../layout";
 import { lightTheme, type Theme } from "../theme";
 import type { Box, Diagnostic, HitRegion, SayShapeNode, Value } from "../types";
@@ -51,6 +53,8 @@ export interface RenderOptions {
    * Default: on with behavior, off otherwise.
    */
   clock?: boolean;
+  /** The text layer (selectable text) as the engine's selectText option; default true, as in the engine. false: no layer, nothing recorded. */
+  selectText?: boolean;
   /** Scene motion and fade-ins. Default false, so screens are still. Pair with clock to draw a scene at a chosen time. */
   animate?: boolean;
   /** As if the person prefers reduced motion: rules wait for a first press or key. Default false. */
@@ -128,6 +132,8 @@ export interface Rendered {
   readonly mirror: Mirror;
   /** The test's clock (render with behavior: true or clock: true). */
   readonly clock: TestClock;
+  /** The text layer as the engine drives it: the lines it shows, how often it was rebuilt, and what a selection copies. */
+  readonly textLayer: TextLayerView;
 
   /**
    * The screen as a screen reader gets it: each shown element's role, name
@@ -152,6 +158,12 @@ export interface Rendered {
   press(query: Query): void;
   /** Click at a point, in CSS pixels from the canvas's top-left corner. */
   click(x: number, y: number): void;
+  /**
+   * Drag across drawn text through the real pointer path, as a mouse would: from the start of the
+   * first line whose text matches `from` to the end of the first line matching `to` (`from` again when
+   * left out). Fails when no drawn line matches.
+   */
+  dragText(from: string | RegExp, to?: string | RegExp): void;
   /**
    * Press an element, move the pointer to a point in a few steps, and let go,
    * through the real pointer path. Points are CSS pixels from the canvas's
@@ -201,12 +213,14 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     destroy() {},
   };
   let editingNode = (): string | null => null;
+  const layer = new RecordingTextLayer();
   const editor = new FakeEditorHost(() => editingNode());
   const manual = opts.clock ?? !!opts.behavior ? new ManualClock(() => flushLater()) : null;
   let flushLater = () => {};
   const sayshape: SayShape = new SayShape(canvas as unknown as HTMLCanvasElement, {
     editor,
     accessibility,
+    selectText: opts.selectText === false ? false : layer,
     components: opts.components ?? coreComponents,
     theme: opts.theme ?? lightTheme,
     width: opts.width ?? 600,
@@ -276,7 +290,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     throw new Error(`${all.length} elements match ${describeQuery(query)} (${where}). Add text, line or id to the query`);
   };
 
-  const pointer = (type: string, x: number, y: number) => canvas.dispatch(type, { clientX: x, clientY: y, pointerId: 1 });
+  const pointer = (type: string, x: number, y: number) => canvas.dispatch(type, { clientX: x, clientY: y, pointerId: 1, pointerType: "mouse", button: 0 });
 
   /** A point inside the element's first pressable region that the element itself receives. */
   const pressPoint = (query: Query): readonly [number, number] => {
@@ -319,6 +333,20 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
         manual.advance(ms);
       },
       get pending() { return manual?.pending ?? 0; },
+    },
+    textLayer: {
+      get lines() { return layer.lines; },
+      get builds() { return layer.builds; },
+      get selection() { return layer.selectedText(); },
+      settle: () => sayshape.settleText(),
+      copy: () => layer.selectedText() ?? sayshape.copyText(),
+      select(from, to) {
+        const find = (q: string | RegExp) => layer.lines.findIndex((l) => (typeof q === "string" ? l.text === q : q.test(l.text)));
+        const a = find(from), b = find(to ?? from);
+        if (a < 0 || b < 0) throw new Error(`No text in the layer matches ${String(a < 0 ? from : to)}`);
+        layer.selection.select(a, b);
+      },
+      clear: () => layer.selection.clear(),
     },
     mirror: {
       get focused() { return mirrorState.focused; },
@@ -383,6 +411,25 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
       pointer("pointermove", x, y);
       pointer("pointerdown", x, y);
       pointer("pointerup", x, y);
+      flush();
+    },
+
+    dragText(from, to) {
+      const lineOf = (q: string | RegExp) => {
+        const l = layer.lines.find((x) => (typeof q === "string" ? x.text === q : q.test(x.text)));
+        if (!l) throw new Error(`No drawn text matches ${String(q)}. The layer builds once drawing settles: call ui.textLayer.settle() first`);
+        return l;
+      };
+      const a = lineOf(from), b = lineOf(to ?? from);
+      const x0 = a.x + 1, y0 = a.y + a.h / 2, x1 = b.x + b.w - 1, y1 = b.y + b.h / 2;
+      pointer("pointermove", x0, y0);
+      pointer("pointerdown", x0, y0);
+      flush();
+      for (const f of [0.25, 0.5, 0.75, 1]) {
+        pointer("pointermove", x0 + (x1 - x0) * f, y0 + (y1 - y0) * f);
+        flush();
+      }
+      pointer("pointerup", x1, y1);
       flush();
     },
 
@@ -539,3 +586,72 @@ class FakeEditorHost implements EditorHost {
     this.current = null;
   }
 }
+
+
+/** The text layer, as sayshape/testing records it. */
+export interface TextLayerView {
+  /** The lines the layer shows now, in reading order: where, how big and in what font each was drawn. */
+  readonly lines: readonly TextLine[];
+  /** How many times the layer was rebuilt. It builds once drawing has settled, not once per frame or per streamed line. */
+  readonly builds: number;
+  /** What the selection would copy (a table's cells tab-separated), or null with no selection. */
+  readonly selection: string | null;
+  /** Build the layer now instead of waiting for drawing to settle (in a browser that takes a moment). */
+  settle(): void;
+  /** What Ctrl/Cmd+C copies: the selection when there is one, else the whole interface (copyText()). */
+  copy(): string;
+  /** Select the lines from the one whose text matches `from` to the one matching `to` (`from` again when left out). */
+  select(from: string | RegExp, to?: string | RegExp): void;
+  clear(): void;
+}
+
+/** A text layer with no DOM: it keeps the lines it's given and models a selection over whole lines. */
+class RecordingTextLayer implements TextLayerHost {
+  lines: readonly TextLine[] = [];
+  builds = 0;
+  readonly selection = new LineSelection();
+  private start: { x: number; y: number } | null = null;
+  private anchor = -1;
+  private selecting = false;
+
+  update(lines: readonly TextLine[]): void {
+    this.lines = lines;
+    this.builds++;
+    this.selection.clear();
+  }
+
+  pointerDown(x: number, y: number, info: PointerInfo): void {
+    this.start = null;
+    this.selecting = false;
+    if (info.pointerType === "touch" || info.button !== 0) return;
+    this.selection.clear();
+    this.anchor = lineAtPoint(this.lines, x, y);
+    if (this.anchor >= 0) this.start = { x, y };
+  }
+
+  pointerMove(x: number, y: number): boolean {
+    if (!this.start) return false;
+    if (!this.selecting && Math.hypot(x - this.start.x, y - this.start.y) < 4) return false;
+    this.selecting = true;
+    this.selection.select(this.anchor, nearestLine(this.lines, x, y));
+    return true;
+  }
+
+  pointerUp(): boolean {
+    const was = this.selecting;
+    this.start = null;
+    this.selecting = false;
+    return was;
+  }
+
+  lineAt(x: number, y: number): boolean {
+    return lineAtPoint(this.lines, x, y) >= 0;
+  }
+
+  selectedText(): string | null {
+    return this.selection.active ? selectionText(this.selection.of(this.lines).map((l) => pieceOf(l))) : null;
+  }
+
+  destroy(): void {}
+}
+

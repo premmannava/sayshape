@@ -17,3 +17,4 @@ export type { SayShapeNode, Box, Diagnostic, Value, HitTarget, Rect } from "./ty
 export { ROLES, accessibleKey, type Role, type Semantics, type ElementSemantics, type PartSemantics, type SemanticsResult, type SemanticsContext, type AccessibleNode, type RangeValue } from "./a11y/semantics";
 export { noAccessibility, type AccessibilityHost, type Politeness } from "./a11y/host";
 export { plainText } from "./a11y/text";
+export { noTextLayer, type TextLayerHost, type TextLayerInfo, type TextLine } from "./text-layer/host";

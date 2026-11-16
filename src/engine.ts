@@ -36,6 +36,9 @@ import { noAccessibility, type AccessibilityHost, type MirrorEvents, type Mirror
 import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
 import { plainText } from "./a11y/text";
+import { TextCollector } from "./text-layer/collect";
+import { domTextLayer } from "./text-layer/dom";
+import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, type TextLayerHost } from "./text-layer/host";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
 import type { ExpressionFunctions, Scope } from "./expr";
 
@@ -130,6 +133,13 @@ export interface SayShapeOptions {
    */
   accessibility?: AccessibilityHost | "off";
   /**
+   * Make the text on the canvas selectable, copyable and findable (Ctrl/Cmd+F):
+   * an invisible layer of real text over the canvas, for text, stat and table
+   * elements. The canvas stays the only thing that draws. Default true; false
+   * adds nothing to the page. sayshape/testing passes a recording layer.
+   */
+  selectText?: boolean | TextLayerHost;
+  /**
    * Experimental, opt-in behavior (docs/plans/behavior.md): `every` rules that
    * change state on an interval, and dragging in scenes. Default off: the
    * language is exactly what it was.
@@ -219,6 +229,11 @@ export class SayShape {
   private ruleDriven = false;
   private lastQuietUpdate = -Infinity;
   private a11yTimer: unknown = null;
+  /** The text layer and what feeds it, or null when the selectText option is off (nothing is recorded or created then). */
+  private text: { host: TextLayerHost; collector: TextCollector } | null = null;
+  private textTimer: ReturnType<typeof setTimeout> | null = null;
+  /** What the layer was last built from: the frame's lines (hash) and the part of the page they were kept for. */
+  private textBuilt: { hash: number; from: number; to: number } | null = null;
   /** Whether the person has pressed or typed anything here (reduced motion: rules wait for it). */
   private interacted = false;
   private behaviorBound = false;
@@ -310,6 +325,7 @@ export class SayShape {
     this.bindInput();
     this.bindEnvironment();
     this.a11y.connect?.(this.mirrorEvents());
+    this.bindTextLayer();
   }
 
   // ---------------------------------------------------------------- spec
@@ -634,10 +650,13 @@ export class SayShape {
     g.clearRect(0, 0, this.metrics.width, this.metrics.height);
     this.hits = [];
     this.clips = [];
+    this.text?.collector.begin();
     const ctx = this.paintContext(g);
     this.paintBox(this.rootBox, ctx, 1);
     this.modalFrom = -1;
     if (this.modal) {
+      // What's behind an open dialog isn't reachable, so its words aren't in the layer either.
+      this.text?.collector.discardFrame();
       // The screen behind is dimmed and inert; only the overlay's regions count from here on.
       g.fillStyle = this.theme.colors.scrim;
       g.fillRect(0, 0, this.metrics.width, this.metrics.height);
@@ -665,6 +684,7 @@ export class SayShape {
     this.inspector.endCapture();
     this.metrics.paintMs = this.clock.now() - t;
     this.noteRegionChanges(t);
+    this.syncText();
     this.syncAccessibility();
     this.events.emit("render", { ...this.metrics });
   }
@@ -688,6 +708,72 @@ export class SayShape {
     if (!was || this.a11yDirty) { this.regionsMovedAt = t; return; }
     if (was.keys !== keys) { this.a11yDirty = true; this.regionsMovedAt = t; }
     else if (was.spot !== spot && t - this.regionsMovedAt > REGION_REFRESH_MS) { this.a11yDirty = true; this.regionsMovedAt = t; }
+  }
+
+  // ---------------------------------------------------------------- text layer
+
+  /** Set up the text layer from the selectText option: a real one in browsers, none when off or with no document. */
+  private bindTextLayer(): void {
+    const opt = this.opts.selectText;
+    const host = opt === false ? noTextLayer : typeof opt === "object" ? opt : typeof document !== "undefined" ? domTextLayer(this.canvas) : noTextLayer;
+    if (host === noTextLayer) return;
+    const collector = new TextCollector(this.g, (t, f) => this.measurer.width(t, f), () => this.clips[this.clips.length - 1]?.rect ?? null);
+    this.text = { host, collector };
+  }
+
+  /**
+   * After a frame: when what the canvas drew as text changed, rebuild the layer
+   * once drawing has settled (a streamed spec, a number counting up and a
+   * table sliding in all keep changing it), never once per frame or per line.
+   */
+  private syncText(): void {
+    const t = this.text;
+    if (!t) return;
+    t.collector.finish(this.popup?.area ?? null);
+    if (this.textBuilt && this.textBuilt.hash === t.collector.hash && this.textInView()) {
+      // Nothing changed: a hover or a focus ring repainted. A pending rebuild is for a change that was undone.
+      if (this.textTimer !== null) { clearTimeout(this.textTimer); this.textTimer = null; }
+      return;
+    }
+    this.scheduleText();
+  }
+
+  private scheduleText(): void {
+    if (!this.text || this.destroyed) return;
+    if (this.textTimer !== null) clearTimeout(this.textTimer);
+    this.textTimer = setTimeout(() => { this.textTimer = null; this.buildText(); }, SETTLE_MS);
+  }
+
+  /** Build the layer now, if it's out of date, instead of waiting for drawing to settle (for hosts and tests that can't wait). */
+  settleText(): void {
+    if (this.textTimer !== null) { clearTimeout(this.textTimer); this.textTimer = null; }
+    if (this.text && this.textBuilt && this.textBuilt.hash === this.text.collector.hash && this.textInView()) return;
+    this.buildText();
+  }
+
+  /** Whether the part of the page in sight is still inside what the layer was built for. */
+  private textInView(): boolean {
+    const b = this.textBuilt;
+    if (!b) return false;
+    const vp = this.viewport();
+    return (b.from <= 0 || vp.top >= b.from + OVERSCAN / 2) && (b.to >= this.metrics.height || vp.bottom <= b.to - OVERSCAN / 2);
+  }
+
+  private buildText(): void {
+    const t = this.text;
+    if (!t || this.destroyed || !this.rootBox) return;
+    if (this.dirty.parse || this.dirty.layout) return; // the next frame ends in syncText again
+    const vp = this.viewport();
+    // Long tables get lines only for rows near what's in sight; scrolling the page brings the rest.
+    const from = vp.top - OVERSCAN, to = vp.bottom + OVERSCAN;
+    const lines = t.collector.lines.filter((l) => l.y + l.h >= from && l.y <= to);
+    t.host.update(lines, {
+      width: this.metrics.width,
+      height: this.metrics.height,
+      accent: this.theme.colors.accent,
+      forcedColors: typeof matchMedia !== "undefined" && matchMedia("(forced-colors: active)").matches,
+    });
+    this.textBuilt = { hash: t.collector.hash, from, to };
   }
 
   /**
@@ -872,10 +958,14 @@ export class SayShape {
     ctx.g.globalAlpha = alpha;
     const loading = !!def && ctx.isLoading(box.node);
     const before = this.hits.length;
+    // The words a selectable element draws go to the text layer (never inside a scaled slide, which it can't follow).
+    const collector = this.text && !this.xform && SELECTABLE.has(box.node.type) ? this.text.collector : null;
+    const outer = collector?.enter(box);
     // Data on its way: the element's own placeholder, or a plain one for a leaf.
     if (loading && def.paintLoading) def.paintLoading(box, ctx);
     else if (loading && !box.children.length) paintGenericGhost(ctx, box);
     else def?.paint?.(box, ctx);
+    collector?.enter(outer ?? null);
     ctx.g.restore();
     const clipHere = this.clips[this.clips.length - 1];
     const under = def?.surface?.(box, ctx);
@@ -910,7 +1000,9 @@ export class SayShape {
     if (def?.paintOver && !(loading && (def.paintLoading || !box.children.length))) {
       ctx.g.save();
       ctx.g.globalAlpha = alpha;
+      const over = collector?.enter(box);
       def.paintOver(box, ctx);
+      collector?.enter(over ?? null);
       ctx.g.restore();
     }
     // An element with a tip gets a region for it under its children's and its own parts, so the
@@ -972,6 +1064,7 @@ export class SayShape {
         pixelRatio: opts.pixelRatio ?? 2,
         animate: false,
         editor: noEditor,
+        selectText: false,
         onWarning: () => {},
       });
       copy.setSpec(this.source);
@@ -2086,11 +2179,22 @@ export class SayShape {
 
     const onMove = (e: PointerEvent) => {
       this.pointer = local(e);
+      // A drag that began on text selects it: the press (or the element's own drag, like a table's
+      // sideways scroll) under it is given up, so releasing doesn't press anything.
+      if (this.text?.host.pointerMove?.(this.pointer.x, this.pointer.y)) {
+        // The element's drag is dropped without its end (a table's end is a press); it starts afresh next time.
+        if (this.dragging) { this.dragging = null; this.dragHeld = []; }
+        this.pressed = null;
+        this.hover = null;
+        this.invalidate("paint");
+        c.style.cursor = "text";
+        return;
+      }
       if (this.dragging) { c.style.cursor = "grabbing"; this.dragTo("move", this.pointer.x, this.pointer.y); return; }
       if (this.inspector.inspecting) { this.inspector.pointerMove(this.pointer.x, this.pointer.y); return; }
       const t = this.targetAt(this.pointer.x, this.pointer.y);
       const def = t ? this.registry.get(t.node.type) : undefined;
-      c.style.cursor = t ? (t.detail === TIP || isTipPart(t.detail) ? "default" : def?.cursor?.(t) ?? "pointer") : "default";
+      c.style.cursor = t ? (t.detail === TIP || isTipPart(t.detail) ? "default" : def?.cursor?.(t) ?? "pointer") : this.text?.host.lineAt?.(this.pointer.x, this.pointer.y) ? "text" : "default";
       // Moving over a shown tip keeps it (it can be read and selected by eye without vanishing).
       if (this.tipShown) this.invalidate("paint");
       if (!sameTarget(t, this.hover)) { this.hover = t; this.invalidate("paint"); }
@@ -2138,6 +2242,8 @@ export class SayShape {
       this.lastPressY = p.y;
       this.downAt = p;
       this.pressed = this.targetAt(p.x, p.y);
+      // Text under the pointer may become a selection if this turns into a drag; a plain click still presses.
+      this.text?.host.pointerDown?.(p.x, p.y, { pointerType: e.pointerType, button: e.button });
       // Pressing inside a popup leaves keyboard focus on its owner.
       if (this.pressed?.layer === "popup") { this.invalidate("paint"); return; }
       if (this.pressed) { this.focus = this.pressed; this.invalidate("paint"); }
@@ -2150,6 +2256,8 @@ export class SayShape {
     };
     const onUp = (e: PointerEvent) => {
       const p = local(e);
+      // Letting go after selecting text is the end of the selection, not a click.
+      if (this.text?.host.pointerUp?.()) { this.pressed = null; this.dragging = null; c.style.cursor = "text"; this.invalidate("paint"); return; }
       if (this.swallowRelease) { this.swallowRelease = false; this.pressed = null; this.invalidate("paint"); return; }
       if (this.dragging) {
         this.pressed = null;
@@ -2288,6 +2396,8 @@ export class SayShape {
     document.addEventListener("pointerdown", onPagePress, true);
     this.cleanup.push(() => document.removeEventListener("pointerdown", onPagePress, true));
     const onScroll = () => {
+      // Lines are kept for the part of the page near what's in sight; scrolling past it rebuilds the layer.
+      if (this.text && this.textBuilt && !this.textInView()) this.scheduleText();
       if (this.toast) this.invalidate("paint");
       // An open popup is placed in the visible part of the canvas, which scrolling moves.
       if (this.popup) this.invalidate("layout");
@@ -2367,6 +2477,10 @@ export class SayShape {
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     if (this.frame && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(this.frame);
     this.cleanup.forEach((f) => f());
+    if (this.textTimer !== null) { clearTimeout(this.textTimer); this.textTimer = null; }
+    this.text?.collector.dispose();
+    this.text?.host.destroy();
+    this.text = null;
     this.a11y.destroy();
     this.events.clear();
   }
