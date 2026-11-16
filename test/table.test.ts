@@ -50,7 +50,7 @@ describe("table specs", () => {
     const msgs = (spec: string) => parse(`${equipment}\n${spec}\n`, registry).diagnostics.map((d) => d.message);
     expect(msgs(`table key=id\n  table-column field=name`)).toEqual([`"table" needs items=`]);
     expect(msgs(`table items=equipment\n  table-column "Name"`)).toEqual([`"table-column" needs field=`]);
-    expect(msgs(`table items=equipment\n  table-column field=price format=euro`)).toEqual([`format should be one of text, number, money; got "euro"`]);
+    expect(msgs(`table items=equipment\n  table-column field=price format=euro`)).toEqual([`format should be one of text, number, money, percent, date, compact; got "euro"`]);
     expect(msgs(`table items=equipment key="the id"\n  table-column field=name`)[0]).toMatch(/key should be a plain name/);
     expect(msgs(`table items=equipment bind="a b"\n  table-column field=name`)[0]).toMatch(/bind should be a state name or a path/);
     expect(msgs(`table items=equipment color=red\n  table-column field=name`)[0]).toMatch(/"table" has no prop "color"/);
@@ -820,5 +820,58 @@ describe("table sort arrows", () => {
     const ui = render(spec("bind=selected"), { width: 360 });
     expect(arrows(ui, lightTheme.colors.muted)).toHaveLength(0);
     expect(arrows(ui, lightTheme.colors.ink)).toHaveLength(0);
+  });
+});
+
+describe("table depth: formats, tone, total, bar, fade", () => {
+  const rows = `[{n: "A", rev: 1250000, pct: 42.5, due: "2026-03-14", d: -4, st: "bad"}, {n: "B", rev: 480000, pct: 7, due: "2026-12-01", d: 6.5, st: "good"}, {n: "C", rev: 2000, pct: 1, due: "nope", d: 0, st: "weird"}]`;
+  const cols = [
+    `  table-column "N" field=n`,
+    `  table-column "Rev" field=rev format=compact bar=true`,
+    `  table-column "Pct" field=pct format=percent`,
+    `  table-column "Due" field=due format=date`,
+    `  table-column "D" field=d format=number tone=sign bar=true`,
+    `  table-column "S" field=n tone=st`,
+  ].join("\n");
+  const ui = (props = "total=true") => render(`state rows=${rows}\ntable items=rows ${props}\n${cols}\n`, { width: 800 });
+
+  it("shows percent, compact and date text", () => {
+    const g = geo(ui());
+    expect(g.rows[0]!.cells.map((c) => c.full)).toEqual(["A", "1.25M", "42.5%", "Mar 14, 2026", "-4", "A"]);
+    expect(g.rows[2]!.cells[3]!.full).toBe(EMPTY_CELL);
+    expect(cellText("2026-02-30", "date").incompatible).toBe(true);
+    expect(cellText("x", "percent").incompatible).toBe(true);
+    expect(g.columns.map((c) => c.align)).toEqual(["left", "right", "right", "left", "right", "left"]);
+  });
+  it("warns once for a value a format can't show", () => {
+    expect(ui().warnings.join("\n")).toMatch(/1 cells hold a value/);
+  });
+  it("tones by sign and by a row field", () => {
+    const g = geo(ui());
+    expect(g.rows.map((r) => r.cells[4]!.sign)).toEqual(["bad", "good", undefined]);
+    expect(g.rows.map((r) => r.cells[5]!.badge)).toEqual(["bad", "good", undefined]);
+  });
+  it("bars are proportional to the column's largest value, negatives to the left", () => {
+    const g = geo(ui());
+    expect(g.rows.map((r) => r.cells[1]!.bar)).toEqual([1, 480000 / 1250000, 2000 / 1250000]);
+    expect(g.rows[0]!.cells[4]!.bar).toBeCloseTo(-4 / 6.5);
+    expect(g.rows[1]!.cells[4]!.bar).toBe(1);
+    expect(g.rows[0]!.cells[2]!.bar).toBeUndefined();
+  });
+  it("adds a totals row formatted by column, and reads it out", () => {
+    const u = ui();
+    const t = geo(u).totals!;
+    expect(t.cells.map((c) => c.full)).toEqual(["Total", "1.73M", "", "", "2.5", ""]);
+    expect(u.copyText()).toContain("Total");
+    expect(geo(ui("total=Sum")).totals!.cells[0]!.full).toBe("Sum");
+    expect(geo(ui("")).totals).toBeUndefined();
+    expect(geo(ui("total=false")).totals).toBeUndefined();
+  });
+  it("draws at 375 wide, scrolled both ways, in light and dark", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const u = render(`state rows=${rows}\ntable items=rows total=true\n${cols}\n`, { width: 375, theme });
+      expect(geo(u).scroll).toBeDefined();
+      expect(u.diagnostics).toEqual([]);
+    }
   });
 });
