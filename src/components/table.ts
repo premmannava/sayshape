@@ -250,6 +250,25 @@ export function keyOf(item: Value, field: string): string | number | null {
 const rowDetail = (key: string | number) => `row:${typeof key === "number" ? "n" : "s"}:${key}`;
 const sortDetail = (field: string) => `sort:${field}`;
 
+/**
+ * The field the table is sorted by. sort= names state that holds it; while
+ * that state is unset, a sort= that is itself one of the fields is the
+ * starting sort, since models often write sort=open meaning "by open".
+ */
+function sortedBy(p: PropReader, isField: (name: string) => boolean): string | null {
+  const v = p.bound("sort");
+  if (typeof v === "string") return isField(v) ? v : null;
+  const raw = p.raw("sort");
+  return v === undefined && raw !== undefined && isField(raw) ? raw : null;
+}
+
+/** The sort direction: direction= state's asc or desc, or, while that state is unset, direction=asc or direction=desc as written. */
+function sortDirection(p: PropReader): "asc" | "desc" {
+  const v = p.bound("direction");
+  const word = v === undefined ? p.raw("direction") : v;
+  return word === "desc" ? "desc" : "asc";
+}
+
 /** The key a row detail stands for. */
 function keyFromDetail(detail: string): string | number | null {
   const m = /^row:([ns]):([\s\S]*)$/.exec(detail);
@@ -364,9 +383,8 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
 
   // Sorting: only by a field one of the columns shows.
   const sortable = p.has("sort");
-  const sortValue = p.bound("sort");
-  const sortField = typeof sortValue === "string" && specs.some((c) => c.field === sortValue) ? sortValue : null;
-  const direction = p.bound("direction") === "desc" ? "desc" : "asc";
+  const sortField = sortedBy(p, (name) => specs.some((c) => c.field === name));
+  const direction = sortDirection(p);
   const order = sortedOrder(items, sortField, direction);
 
   // Keys, in list order, so the first of two rows with one key keeps it however they're sorted.
@@ -1116,8 +1134,8 @@ function pressTable(ctx: PressContext): void {
     const field = detail.slice(5);
     const sortPath = p.raw("sort"), dirPath = p.raw("direction");
     if (!sortPath) return;
-    if (p.bound("sort") === field && dirPath) {
-      ctx.set(dirPath, p.bound("direction") === "desc" ? "asc" : "desc");
+    if (sortedBy(p, (name) => name === field) === field && dirPath) {
+      ctx.set(dirPath, sortDirection(p) === "desc" ? "asc" : "desc");
     } else {
       ctx.set(sortPath, field);
       if (dirPath) ctx.set(dirPath, "asc");
