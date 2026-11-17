@@ -20,8 +20,8 @@ import { isList, makeList } from "./data";
 import { findItem, getIn, PATH, placeOf, setIn, type Locate, type Place } from "./paths";
 import { applyTransform, composeTransform, createLayoutContext, isVisible, screenBoxes, walkBoxes } from "./layout";
 import { Loading, type LoadingView } from "./loading";
-import { MotionValues } from "./motion";
-import { easeOut, paintGenericGhost } from "./ghost";
+import { APPEAR_MS, ENTER_MS, ENTER_ROLES, enterPose, lineShift, MAX_STAGGER_STEPS, MotionStarts, MotionValues, SIGHT_PX, STAGGER_MS, type EnterPose, type EnterRole } from "./motion";
+import { easeInOut, easeOut, paintGenericGhost } from "./ghost";
 import { placePopup, POPUP_MARGIN, type PopupState, type Viewport } from "./popup";
 import { localToday, parseDate } from "./dates";
 import { parse, type ParseResult } from "./parser";
@@ -92,7 +92,11 @@ export interface SayShapeOptions {
   minHeight?: number;
   /** Padding around the whole screen. */
   padding?: number;
-  /** Fade new elements in. Default true, off when the user prefers reduced motion. */
+  /**
+   * Motion: new elements fade in, enter= entrances play, values glide. Default
+   * true. Reduced motion (the reducedMotion option, else the system setting)
+   * turns it off whatever this says: everything is drawn in its final state.
+   */
   animate?: boolean;
   /**
    * Hosts images may load from, besides the page's own origin, e.g.
@@ -169,7 +173,8 @@ export interface SayShapeOptions {
   clock?: Clock;
   /**
    * Whether the person prefers reduced motion. Default: the system setting.
-   * With it, rules don't start until the person first presses or types something here.
+   * With it, nothing animates (as with animate: false), and rules don't start
+   * until the person first presses or types something here.
    */
   reducedMotion?: boolean;
   /**
@@ -228,7 +233,14 @@ export class SayShape {
   private lastPressY: number | null = null;
   /** The focused region last scrolled into sight, so a person's own scrolling isn't undone. */
   private revealed = "";
-  private seen = new Map<string, number>();
+  /** When each element's fade-in, entrance or long-running motion began, by id; see MotionStarts. */
+  private starts = new MotionStarts();
+  /** This frame: some entrance is waiting to be scrolled into sight (scrolling then repaints). */
+  private waitingForSight = false;
+  /** The part of the canvas in sight, read at most once per frame, when an entrance first asks. */
+  private sightArea: Viewport | null = null;
+  /** Where each element's entrance was in the last frame, by id, for tools and tests. */
+  private entrances = new Map<string, { role: EnterRole; progress: number }>();
   private transitions = new MotionValues();
   /** Per-element view state (a table's scroll offset), by element id; see ElementView. */
   private views = new Map<string, ElementView>();
@@ -367,6 +379,8 @@ export class SayShape {
   /** Replace the whole spec. State is kept unless resetState is true. */
   setSpec(src: string, opts: { resetState?: boolean } = {}): void {
     if (opts.resetState) this.resetState();
+    // An edit moves lines: what was already shown keeps its place in motion and doesn't play again.
+    else if (src !== this.source) this.starts.remap(lineShift(this.source, src));
     this.closePopup(false);
     // A new spec starts with no tip pinned or hidden (its elements may share ids with the old one's).
     this.tipPinned = null;
@@ -714,6 +728,9 @@ export class SayShape {
     g.clearRect(0, 0, this.metrics.width, this.metrics.height);
     this.hits = [];
     this.clips = [];
+    this.waitingForSight = false;
+    this.entrances.clear();
+    this.sightArea = null;
     this.text?.collector.begin();
     const ctx = this.paintContext(g);
     this.paintBox(this.rootBox, ctx, 1);
@@ -963,7 +980,7 @@ export class SayShape {
     const theme = this.theme;
     const readers = new WeakMap<SayShapeNode, PropReader>();
     const scope = this.state.scope;
-    const animate = this.opts.animate ?? !(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const animate = this.motionOn();
     const t = this.clock.now();
     const lv = this.loadingView();
     const same = (a: HitTarget | null, n: SayShapeNode, detail?: unknown) =>
@@ -1001,11 +1018,23 @@ export class SayShape {
       ...(this.opts.behavior ? { behavior: true } : {}),
       appear: (n) => {
         if (!animate || n.id === "root") return 1;
-        let first = this.seen.get(n.id);
-        if (first === undefined) this.seen.set(n.id, (first = t));
-        const a = Math.min(1, (t - first) / 240);
+        let first = this.starts.get(n.id, "appear");
+        if (first === undefined) this.starts.set(n.id, "appear", (first = t));
+        const a = Math.min(1, (t - first) / APPEAR_MS);
         if (a < 1) this.invalidate("paint");
         return a;
+      },
+      progress: (box, key, ms, ease = "inOut") => {
+        if (!animate || !(ms > 0)) return 1;
+        const name = `progress:${key}`;
+        let start = this.starts.get(box.node.id, name);
+        if (start === undefined) {
+          if (!this.inSight(box)) { this.waitingForSight = true; return 0; }
+          this.starts.set(box.node.id, name, (start = t));
+        }
+        const p = Math.max(0, Math.min(1, (t - start) / ms));
+        if (p < 1) this.invalidate("paint");
+        return ease === "linear" ? p : ease === "out" ? easeOut(p) : easeInOut(p);
       },
       requestFrame: () => this.invalidate("paint"),
       tween: (node, key, target, duration = 220) =>
@@ -1022,14 +1051,25 @@ export class SayShape {
     };
   }
 
-  private paintBox(box: Box, outerCtx: PaintContext, parentAlpha: number): void {
+  private paintBox(box: Box, outerCtx: PaintContext, parentAlpha: number, cue?: StaggerCue): void {
     const def = this.registry.get(box.node.type);
     const own = def?.theme?.(outerCtx.theme);
     const ctx = own && own !== outerCtx.theme ? { ...outerCtx, theme: own } : outerCtx;
     // A leaf without its own draw-in fades in when its data arrives; containers leave it to their children.
     const leaf = !def?.paintLoading && !box.children.length;
-    const alpha = parentAlpha * ctx.appear(box.node) * (leaf ? easeOut(ctx.reveal(box.node) * 2) : 1);
+    const drawIn = leaf ? easeOut(ctx.reveal(box.node) * 2) : 1;
+    // An entrance (enter=, or a staggering parent's turn) takes the place of the plain fade-in.
+    const role = this.enterRole(box.node, def, ctx) ?? cue?.role ?? null;
+    const entrance = role ? this.entrancePose(box, role, ctx, cue) : null;
+    const alpha = parentAlpha * (entrance ? entrance.pose.alpha : ctx.appear(box.node)) * drawIn;
+    // stagger=true: the children come in by turns, so the element's own entrance moves only itself.
+    const staggers = box.node.props.stagger !== undefined && !!def && !def.props.stagger && box.children.length > 0 && ctx.props(box.node).bool("stagger");
+    const kids: StaggerCue | undefined = staggers ? { role: role ?? "fade", base: entrance?.start ?? ctx.now, slot: 0 } : undefined;
+    const pose = entrance && (entrance.pose.dy !== 0 || entrance.pose.scale !== 1) ? entrance.pose : null;
+    // Motion changes only the drawing: boxes, hit regions, clips and the text layer stay where layout put them.
+    if (pose && !staggers) { ctx.g.save(); applyPose(ctx.g, box, pose); }
     ctx.g.save();
+    if (pose && staggers) applyPose(ctx.g, box, pose);
     ctx.g.globalAlpha = alpha;
     const loading = !!def && ctx.isLoading(box.node);
     const before = this.hits.length;
@@ -1069,17 +1109,20 @@ export class SayShape {
       const p = inner.pointer;
       if (p) inner = { ...inner, pointer: { x: (p.x - tr.dx) / tr.scale, y: (p.y - tr.dy) / tr.scale } };
     }
-    for (const k of box.children) this.paintBox(k, inner, alpha);
+    const kidsAlpha = staggers ? parentAlpha * drawIn : alpha;
+    for (const k of box.children) this.paintBox(k, inner, kidsAlpha, kids);
     if (tr) { this.xform = xf; ctx.g.restore(); }
     if (clip) { this.clips.pop(); ctx.g.restore(); }
     if (def?.paintOver && !(loading && (def.paintLoading || !box.children.length))) {
       ctx.g.save();
+      if (pose && staggers) applyPose(ctx.g, box, pose);
       ctx.g.globalAlpha = alpha;
       const over = collector?.enter(box);
       def.paintOver(box, ctx);
       collector?.enter(over ?? null);
       ctx.g.restore();
     }
+    if (pose && !staggers) ctx.g.restore();
     // An element with a tip gets a region for it under its children's and its own parts, so the
     // pointer shows the tip anywhere on it. When it isn't pressable on its own, the region is a
     // Tab stop too, so the keyboard and a tap reach it. (A scene draws its shapes' tips itself.)
@@ -1089,6 +1132,68 @@ export class SayShape {
       const placed = xf ? applyTransform(box, xf) : box;
       this.hits.splice(before, 0, { box: own ? placed : atLeastTarget(placed), detail: TIP, focusable: !own, ...(xf ? { local: { box, transform: xf } } : {}), ...(clipHere ? { clip: clipHere.rect, clipOwner: clipHere.owner } : {}) });
     }
+  }
+
+  /** An element's own enter= role, or null (none, a component's own enter prop, or the root). */
+  private enterRole(node: SayShapeNode, def: ComponentDef | undefined, ctx: PaintContext): EnterRole | null {
+    if (node.props.enter === undefined || node.id === "root" || !def || def.props.enter) return null;
+    const v = ctx.props(node).str("enter");
+    return (ENTER_ROLES as readonly string[]).includes(v) ? (v as EnterRole) : null;
+  }
+
+  /**
+   * Where an element's entrance is this frame. It starts the first time the
+   * element is painted in sight (a staggering parent's children a step apart),
+   * and is remembered by id, so it plays once. Until then the element is drawn
+   * at its starting pose, invisible. With motion off it's at rest.
+   */
+  private entrancePose(box: Box, role: EnterRole, ctx: PaintContext, cue?: StaggerCue): { pose: EnterPose; start: number } | null {
+    const id = box.node.id;
+    const rise = ctx.theme.space.md;
+    if (!ctx.motion) { this.entrances.set(id, { role, progress: 1 }); return null; }
+    const t = ctx.now;
+    let start = this.starts.get(id, "enter");
+    if (start === undefined) {
+      if (!this.inSight(box)) {
+        this.waitingForSight = true;
+        this.entrances.set(id, { role, progress: 0 });
+        return { pose: enterPose(role, 0, rise), start: t };
+      }
+      start = cue ? Math.max(t, cue.base) + Math.min(cue.slot++, MAX_STAGGER_STEPS) * STAGGER_MS : t;
+      this.starts.set(id, "enter", start);
+    }
+    const p = Math.max(0, Math.min(1, (t - start) / ENTER_MS));
+    if (p < 1) this.invalidate("paint");
+    this.entrances.set(id, { role, progress: p });
+    return { pose: enterPose(role, p, rise), start };
+  }
+
+  /**
+   * Whether enough of a box is in sight to play its entrance: inside the part
+   * of the canvas people can see and the scrolling element around it, if any.
+   * Where that isn't known (Node, a host without a window), everything is.
+   */
+  private inSight(laid: Box): boolean {
+    const r = this.xform ? applyTransform(laid, this.xform) : laid;
+    const area = (this.sightArea ??= this.viewport());
+    const clip = this.clips[this.clips.length - 1]?.rect;
+    const top = Math.max(area.top, clip ? clip.y : -Infinity), bottom = Math.min(area.bottom, clip ? clip.y + clip.h : Infinity);
+    const left = clip ? clip.x : -Infinity, right = clip ? clip.x + clip.w : Infinity;
+    if (r.w <= 0 || r.h <= 0) return r.y >= top && r.y <= bottom && r.x >= left && r.x <= right;
+    const seenH = Math.min(r.y + r.h, bottom) - Math.max(r.y, top);
+    const seenW = Math.min(r.x + r.w, right) - Math.max(r.x, left);
+    // Half a pixel of slack: an element wholly in sight works out a hair short in floating point.
+    return seenW > 0 && seenH > 0 && seenH >= Math.min(r.h, SIGHT_PX) - 0.5;
+  }
+
+  /** Motion is on: the animate option isn't false and the person doesn't prefer reduced motion. */
+  private motionOn(): boolean {
+    return this.opts.animate !== false && !(this.opts.reducedMotion ?? prefersReducedMotion());
+  }
+
+  /** Where an element's entrance was in the last frame (role, and progress 0..1), or null when it has no enter= and no staggering parent. */
+  entranceOf(id: string): { role: EnterRole; progress: number } | null {
+    return this.entrances.get(id) ?? null;
   }
 
   // ---------------------------------------------------------------- images
@@ -1224,7 +1329,7 @@ export class SayShape {
     const age = this.clock.now() - this.toast.shownAt;
     const ms = this.toast.ms;
     if (age >= ms) { this.toast = null; return; }
-    const animate = this.opts.animate ?? !(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const animate = this.motionOn();
     let alpha = 1;
     if (animate) {
       alpha = Math.min(1, age / TOAST_FADE, (ms - age) / TOAST_FADE);
@@ -1521,7 +1626,7 @@ export class SayShape {
 
   private resetState(): void {
     this.state.clear();
-    this.seen.clear();
+    this.starts.clear();
     this.views.clear();
     this.history = [];
   }
@@ -2502,6 +2607,12 @@ export class SayShape {
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     this.cleanup.push(() => window.removeEventListener("scroll", onScroll));
+    // An entrance waits until its element is scrolled into sight: the page, or any scrolling box the canvas is in.
+    const onSight = () => { if (this.waitingForSight) this.invalidate("paint"); };
+    // A window that grows taller (a host sizing its frame to the content) shows more without scrolling.
+    document.addEventListener("scroll", onSight, { capture: true, passive: true });
+    window.addEventListener("resize", onSight, { passive: true });
+    this.cleanup.push(() => { document.removeEventListener("scroll", onSight, { capture: true }); window.removeEventListener("resize", onSight); });
     if (this.opts.width === undefined && this.canvas.parentElement && typeof ResizeObserver !== "undefined") {
       const ro = new ResizeObserver(() => {
         const w = this.canvas.parentElement?.clientWidth || 0;
@@ -2628,6 +2739,20 @@ function scaledEditor(spec: EditorSpec, t: ChildTransform): EditorSpec {
 
 function sameRegion(h: HitRegion, t: HitTarget): boolean {
   return h.box.node.id === t.node.id && h.detail === t.detail;
+}
+
+/** A staggering parent's children's turns: their role, when the first may start, and how many have started this frame. */
+interface StaggerCue { role: EnterRole; base: number; slot: number }
+
+/** Draw an entrance's pose: moved down by dy and scaled about the box's centre. */
+function applyPose(g: CanvasRenderingContext2D, box: Box, pose: EnterPose): void {
+  if (pose.dy) g.translate(0, pose.dy);
+  if (pose.scale !== 1) {
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    g.translate(cx, cy);
+    g.scale(pose.scale, pose.scale);
+    g.translate(-cx, -cy);
+  }
 }
 
 /** How often, at most, the mirror follows regions that move without layout (an animated scene's shapes). */

@@ -89,7 +89,7 @@ const PRESS_SHAPE: Record<string, PropDef> = {
   name: { type: "string", description: "Screen-reader name." },
 };
 
-const leaf = { layout: (box: Box) => { box.h = 0; }, semantics: () => false as const, parents: IN_SCENE } satisfies Partial<ComponentDef>;
+const leaf = { layout: (box: Box) => { box.h = 0; }, semantics: () => false as const, parents: IN_SCENE, noBox: true } satisfies Partial<ComponentDef>;
 
 /** The scene's time in seconds for this frame, asking for the next frame while it moves. */
 export function sceneTime(box: Box, ctx: PaintContext, duration: number, loop: boolean): number {
@@ -375,6 +375,7 @@ const group: ComponentDef = {
   props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), ...PRESS, ...DRAG },
   children: SHAPES,
   parents: IN_SCENE,
+  noBox: true,
   example: `group x={600*((t/3) % 1)} y=200
   rect x=-40 y=-20 w=80 h=24 rx=6 fill="#E63946"
   circle x=-22 y=6 r=9 fill="#222222"
@@ -391,6 +392,7 @@ const define: ComponentDef = {
   props: {},
   children: SHAPES,
   parents: ["scene"],
+  noBox: true,
   provides: { anyNames: true },
   example: `define "cactus"
   rect x=-8 y={-h} w=16 h={h} rx=8 fill="#1B4332"

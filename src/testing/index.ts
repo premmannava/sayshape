@@ -60,9 +60,9 @@ export interface RenderOptions {
   clock?: boolean;
   /** The text layer (selectable text) as the engine's selectText option; default true, as in the engine. false: no layer, nothing recorded. */
   selectText?: boolean;
-  /** Scene motion and fade-ins. Default false, so screens are still. Pair with clock to draw a scene at a chosen time. */
+  /** Scene motion, fade-ins and enter= entrances. Default false, so screens are still. Pair with clock to draw a frame at a chosen time. */
   animate?: boolean;
-  /** As if the person prefers reduced motion: rules wait for a first press or key. Default false. */
+  /** As if the person prefers reduced motion: nothing animates (even with animate: true), and rules wait for a first press or key. Default false. */
   reducedMotion?: boolean;
   /** The engine's bareRootCard option: a card that is the only top-level element draws no frame. Default false. */
   bareRootCard?: boolean;
@@ -197,6 +197,13 @@ export interface Rendered {
   type(query: Query, text: string, opts?: { replace?: boolean }): void;
   /** The text box over the field being typed in, or null. */
   readonly editor: FakeEditor | null;
+
+  /**
+   * Where an element's entrance (enter=, or its turn under a parent's
+   * stagger=true) was in the last frame: its role and progress, 0 before it
+   * starts (or while out of sight) to 1 at rest. null when it has none.
+   */
+  entrance(query: Query): { role: string; progress: number } | null;
 
   /** Replace the spec. State is kept unless resetState is true. */
   setSpec(spec: string, opts?: { resetState?: boolean }): void;
@@ -392,6 +399,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     isShown: (query) => find(query).box !== null,
     text: () => drawOps.filter((d) => d.op === "fillText").map((d) => String(d.args[0])),
     copyText: () => sayshape.copyText(),
+    entrance: (query) => sayshape.entranceOf(find(query).node.id),
 
     wheel(x, y, deltaY, o = {}) {
       canvas.dispatch("wheel", { clientX: x, clientY: y, deltaY, deltaX: o.deltaX ?? 0, shiftKey: !!o.shift });

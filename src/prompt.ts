@@ -19,7 +19,7 @@
  * guide never shows the model something it can't use.
  */
 import { ACTION_OPS, ACTION_SYNTAX } from "./actions";
-import { CATEGORIES, COMMON_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
+import { CATEGORIES, COMMON_PROPS, MOTION_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
 import { EXPRESSION_FUNCTIONS } from "./expr";
 import { parse } from "./parser";
 import { resolveProfile, type ComponentProfile } from "./profiles";
@@ -98,6 +98,23 @@ export interface GuideOptions {
    * default). Off (default), the guide is exactly what it was.
    */
   look?: boolean;
+  /**
+   * Explain entrance motion (enter=fade|rise|scale and stagger=true on any
+   * element, MOTION_PROPS), for apps that let it play. Off (default), the
+   * guide is exactly what it was; the parser accepts the props either way.
+   */
+  motion?: boolean;
+}
+
+/** What the guide says about entrance motion (GuideOptions.motion), from MOTION_PROPS. */
+export function motionGuide(mode: "full" | "compact"): string {
+  const roles = (MOTION_PROPS.enter!.values ?? []).join("|");
+  if (mode === "compact") {
+    return `MOTION (optional, any element): enter=${roles} plays once when it comes into sight; stagger=true on a container brings its children in one after another. Never durations or distances.`;
+  }
+  return `MOTION (optional)
+${Object.entries(MOTION_PROPS).map(([n, d]) => propLine(n, d)).join("\n")}
+- Use it for a page's main parts (a heading, a row of cards with stagger=true), not every line. It never changes where anything is, and the app chooses the timing.`;
 }
 
 export type GuideMode = "full" | "compact" | "report";
@@ -427,6 +444,7 @@ ${opts.layoutFirst ? LAYOUT_FIRST_FULL : `- Declare state first, at the top, uni
 - Run several with ; e.g. on="set:step:2;emit:next"
 - Quote on= when it has spaces: on="inc:n;notify:'Saved {n}'"`);
   if (opts.look) add("look", lookGuide("full"));
+  if (opts.motion) add("motion", motionGuide("full"));
   if (has("each")) add("data", dataSection(ctx));
   if (opts.behavior) add("behavior", behaviorSection(has("scene")));
   if (opts.actions?.length) {
@@ -512,6 +530,7 @@ ${opts.layoutFirst ? LAYOUT_FIRST_COMPACT : `- State first, unindented, every va
 - Tell the app (host event): emit:name[:value]. Use emit for anything the app must do, like book, pay or save
 ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty, set:t.text:'Done'\n" : ""}- A key can be a path into a record: set:form.email:'', toggle:settings.dark`);
   if (opts.look) add("look", lookGuide("compact"));
+  if (opts.motion) add("motion", motionGuide("compact"));
   if (opts.behavior) add("behavior", `CHANGING BY ITSELF: every 1s if={running} do=dec:left (unindented; 16ms-60s; while if= holds)
 - do= only inc/dec/toggle/set/add/remove/clear, in order, each seeing the last; dec stops at 0; sin cos sqrt clamp lerp work. Add a pause: if={running}, button on=toggle:running. Never to show data`);
   if (has("each")) {

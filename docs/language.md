@@ -441,6 +441,28 @@ stat label="Open orders" value={open} tip="Paid, not yet handed to the carrier"
 button "Ship all" on=set:open:0 tip="Marks every open order shipped"
 ```
 
+## Motion
+
+Every element with a box of its own accepts `enter=`: how it comes in the first time it's drawn in sight. A container with `stagger=true` brings its children in one after another instead of all at once:
+
+```
+column enter=rise
+  text "Yosemite weekend" style=title
+row stagger=true enter=rise
+  stat label="Days" value="2"
+  stat label="Hikers" value="3"
+  stat label="Water (L)" value="18"
+button "Plan it" on=emit:plan enter=scale
+```
+
+- **Roles, not timings.** `fade` fades in; `rise` fades in moving up a little; `scale` fades in growing from a little smaller. The engine chooses the duration, the distance and the easing; a spec never names them.
+- **Once, when it comes into sight.** An element further down the page plays its entrance when it's scrolled to, and never again: not after scrolling away and back, not when state changes, not when a later line of a streamed spec arrives. A line that arrives while a spec streams in enters as it arrives. An edit to the spec keeps what was already shown at rest, even when lines above it were added or removed; a changed line plays as new.
+- **`stagger=true`.** Each child takes its turn with its own `enter=`, else the container's, else `fade`, a short step apart (children past the tenth go with the tenth). With `each` inside, every copy takes a turn. The container's own `enter=` then moves only its own frame, not its children.
+- **Only the drawing moves.** Layout, pressing, Tab and screen readers see every element where it will end up, from the first frame.
+- **Reduced motion wins.** With reduced motion (the person's setting) or the engine's `animate: false`, everything is drawn in its final state at once, as in a saved picture.
+- **Problems the parser reports**, each a warning that keeps the element: a role that isn't one of the three, a `stagger=` that isn't `true` or `false`, either prop on `each` or `if` (put it on the element around it), on an element its parent draws (a `menu-item`, a `table-column`, a chart layer), and `stagger=` on an element without children. A component's own prop named `enter` or `stagger` keeps its meaning.
+- The model guide explains these only with `GuideOptions.motion`.
+
 ## Rules (experimental)
 
 Off unless the host turns on behavior ([the engine](engine.md#behavior-experimental-off-by-default)); without it, `every` is an unknown element. A rule changes state by itself on an interval, while its condition holds:

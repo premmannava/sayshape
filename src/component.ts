@@ -6,6 +6,7 @@
 import { toNumber } from "./data";
 import { bareExpression, evaluate, formatValue, interpolate, wholeExpression, type ExpressionFunctions, type Scope } from "./expr";
 import { literal } from "./actions";
+import { ENTER_ROLES } from "./motion";
 import type { EditorSpec } from "./editor";
 import type { ImageState } from "./images";
 import type { Theme } from "./theme";
@@ -164,6 +165,17 @@ export interface PaintContext {
    * On first paint or with reduced motion it returns the target immediately.
    */
   tween(node: SayShapeNode, key: string, target: number, duration?: number): number;
+  /**
+   * 0..1, eased: how far a long-running motion of this element has got (a
+   * slow zoom on an image), `ms` after it started. It starts at the first call
+   * made while the box is in sight, so call it only once there is something to
+   * move (the image has loaded). Kept by the element's id and `key`, so it
+   * carries on across re-parses and streamed lines instead of restarting, and
+   * plays once. Asks for frames itself while running, none once done or while
+   * out of sight. With motion off (animate: false, reduced motion, picture())
+   * it is 1 at once: check ctx.motion to rest somewhere else.
+   */
+  progress(box: Box, key: string, ms: number, ease?: "out" | "inOut" | "linear"): number;
   /** Whether this element reads data that's still loading; paintLoading is drawing it. */
   isLoading(node: SayShapeNode): boolean;
   /**
@@ -371,6 +383,12 @@ export interface ComponentDef {
    */
   drawnByParent?: boolean;
   /**
+   * Has no box of its own: its parent draws it or reads it as data (a table-column, a detail row,
+   * a chart layer). Unlike drawnByParent, tip= may still show (through the parent's partTip); the
+   * parser warns only that enter= and stagger= on it don't play. Implied by drawnByParent.
+   */
+  noBox?: boolean;
+  /**
    * For an element that draws its children's labels itself (compare's rows, details' rows, a
    * table's column headers): the child whose tip= a part shows, by the detail the part was
    * painted with. The element registers a region for each such part, so the pointer, Tab and a
@@ -454,6 +472,23 @@ export const COMMON_PROPS: Record<string, PropDef> = {
   if: { type: "condition", description: "Show only when this expression is true, e.g. if=done or if={count>0}." },
   tip: { type: "string", description: "A short explanation shown on hover, keyboard focus or a tap, e.g. tip=\"Orders not yet shipped\": for a term or a number some people won't know, instead of more words on screen. It makes the element a Tab stop if it isn't one." },
 };
+
+/**
+ * Entrance motion, accepted on every element that has a box of its own
+ * (src/motion.ts). Kept apart from COMMON_PROPS so the model guide, the docs
+ * and the "Known props" list stay as they were unless a guide asks for
+ * motion (GuideOptions.motion). Motion only changes how a frame is painted,
+ * never where anything is laid out.
+ */
+export const MOTION_PROPS: Record<string, PropDef> = {
+  enter: { type: "enum", values: ENTER_ROLES, description: "How the element comes in the first time it's drawn in sight: fade, rise (fades in moving up a little) or scale (fades in growing from a little smaller). An element further down plays it when it's scrolled to. The app sets the timing; with reduced motion it's simply there." },
+  stagger: { type: "boolean", default: false, description: "On an element with children: they come in one after another instead of all at once, each with its own enter= or else this element's (fade when neither)." },
+};
+
+/** A prop every element takes: COMMON_PROPS, then MOTION_PROPS. */
+export function universalProp(name: string): PropDef | undefined {
+  return COMMON_PROPS[name] ?? MOTION_PROPS[name];
+}
 
 /**
  * Reads a node's raw prop strings as typed values, evaluating `{expressions}`

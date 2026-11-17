@@ -30,6 +30,7 @@ const leaf = {
   category: "data",
   parents: ["chart"],
   // No box of its own: the chart draws it and describes it.
+  noBox: true,
   semantics: () => null,
   layout(box) { box.h = 0; },
 } satisfies Partial<ComponentDef>;

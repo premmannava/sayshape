@@ -13,7 +13,7 @@
  * mistake costs one element, not the whole screen.
  */
 import { actionExpressions, parseActions } from "./actions";
-import { COMMON_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
+import { COMMON_PROPS, propsFor, universalProp, type ComponentDef, type PropDef } from "./component";
 import { MAX_RULES, MAX_RULE_ACTIONS, MAX_RULE_INTERVAL, MIN_RULE_INTERVAL, RULE_OPS, SCREEN_STATE, type RuleDef } from "./behavior";
 import { RULE_FUNCTIONS } from "./math";
 import { dragAxis, readPaths } from "./drag-axis";
@@ -450,7 +450,7 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
   const template = (s: string) => { for (const p of splitTemplate(s)) if ("expr" in p) out.push(p.expr); };
   if (text !== undefined) template(text);
   for (const [name, raw] of Object.entries(props)) {
-    const def = defs[name] ?? COMMON_PROPS[name];
+    const def = defs[name] ?? universalProp(name);
     if (!def) continue;
     const whole = wholeExpression(raw);
     if (def.type === "action") {
@@ -462,6 +462,22 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
     else if (def.type === "condition" || def.type === "expression") out.push(raw);
     else if (def.type === "number" && BARE_NAME.test(raw)) out.push(raw);
     else if (raw.includes("{")) template(raw);
+  }
+  return out;
+}
+
+/**
+ * enter= and stagger= where they can't play: on an element drawn by its
+ * parent or one that only stands for others (each, if), or stagger= on an
+ * element without children. Component props of the same name are its own.
+ */
+function motionProblems(type: string, props: Record<string, string>, def: ComponentDef): string[] {
+  const out: string[] = [];
+  for (const name of ["enter", "stagger"] as const) {
+    if (!(name in props) || def.props[name]) continue;
+    if (def.drawnByParent || def.noBox) out.push(`${name}= on a ${type} doesn't play, since its ${def.parents?.[0] ?? "parent"} draws it. Put ${name}= on the ${def.parents?.[0] ?? "parent"}`);
+    else if (type === "each" || type === "if") out.push(`${name}= on ${type} doesn't play: ${type} has no look of its own. Put ${name}= on the element around it (stagger=true there brings its items in one after another), or on the lines inside`);
+    else if (name === "stagger" && !def.children) out.push(`stagger= only works on an element with children, and "${type}" has none. Use enter= here, or put stagger=true on the element around it`);
   }
   return out;
 }
@@ -906,7 +922,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       diagnostics.push({ line: lineNo, severity: "warning", message: `${w} is a weight, not a style, so it was used as weight=${w}` });
     }
     for (const [name, rawValue] of Object.entries(tok.props)) {
-      const pdef = def.props[name] ?? COMMON_PROPS[name];
+      const pdef = def.props[name] ?? universalProp(name);
       if (!pdef) {
         const known = [...Object.keys(def.props), ...Object.keys(COMMON_PROPS)];
         diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" has no prop "${name}". Known props: ${known.join(", ")}` });
@@ -914,6 +930,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       }
       checkProp(name, rawValue, pdef, lineNo, diagnostics, fns);
     }
+    for (const message of motionProblems(tok.type, tok.props, def)) diagnostics.push({ line: lineNo, severity: "warning", message });
     if ("tip" in tok.props && def.drawnByParent && !def.props.tip) {
       const parent = def.parents?.[0] ?? "its parent";
       diagnostics.push({ line: lineNo, severity: "warning", message: `tip= on a ${tok.type} isn't shown, since its ${parent} draws it. Put the tip on the ${parent}, or on a text or icon near it` });
@@ -950,7 +967,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     const names = [...new Set(exprs.flatMap((e) => identifiers(e, fns)))].filter((n) => !inScope.has(n));
     if (names.length && !provided.anyNames) outsideUses.push({ line: lineNo, names });
     for (const [name, raw] of Object.entries(tok.props)) {
-      const pdef = def.props[name] ?? COMMON_PROPS[name];
+      const pdef = def.props[name] ?? universalProp(name);
       const wrote = (n: string) => { written.add(n); controls.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
       if (pdef?.type === "state" && PATH.test(raw)) wrote(raw.split(".")[0]!);
       if (pdef?.type === "action") {

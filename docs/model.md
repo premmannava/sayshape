@@ -186,6 +186,14 @@ const ui = new SayShape(canvas, { streamPlaceholders: true });
 guide: { look: true }                 // off by default: the guide is then exactly what it was
 ```
 
+### Motion
+
+`motion: true` adds a short MOTION section to the guide (full or compact, built from `MOTION_PROPS` in `src/component.ts`): `enter=fade|rise|scale` on any element and `stagger=true` on a container ([Motion](language.md#motion)). Off (default), the guide is exactly what it was. The parser accepts the props whatever the guide says, and the engine plays them unless motion is off.
+
+```ts
+guide: { motion: true }               // off by default: the guide is then exactly what it was
+```
+
 ### Data answers with the report preset (opt-in)
 
 Most of what a model writes for a data answer is layout it doesn't need to choose: where the figures go, which cards hold which chart, a table's columns, headers and formats. The `report` preset lets it name the data and what to show, and the engine writes the layout:
