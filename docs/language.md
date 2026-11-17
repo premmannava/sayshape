@@ -56,6 +56,34 @@ stat label="Total" value={total}
 - **Problems the parser reports**, each skipping only that value: an expression not in braces or with a syntax error, a name used twice, a name that's already state, a name expressions can't read (`__proto__`, `constructor`, `prototype`) or the engine uses (`screen`), a name nothing defines, and cycles, direct (`derive x={x + 1}`) or through others (`p` → `q` → `p`), which are left out with the loop named. A spec can derive at most 200 values.
 - Lists that derived values hold are new, frozen lists: filtering or sorting never changes the list in state.
 
+## Look
+
+One line, written first, chooses how the whole interface looks, so two answers don't have to look the same:
+
+```
+look mood=bold type=editorial shape=soft density=airy
+card
+  text "Yosemite weekend" style=title
+  text "Two days, three hikers, one long trail." tone=muted
+  button "Plan it" on=emit:plan
+```
+
+Every prop takes one named option, and leaving a prop out (or writing `default`) keeps the app's own look:
+
+| Prop | Options | What changes |
+|---|---|---|
+| `mood` | `quiet`, `bold` | How the app's accent is used. `quiet`: the accent alone, flat, and no shadows. `bold`: the accent as a gradient toward a deeper (or, with dark text on the accent, lighter) mix with the theme's own ink or surface, and deeper shadows. A theme that already has a gradient keeps its own. |
+| `type` | `editorial`, `classic`, `technical` | The typefaces. `editorial`: serif headings (`text style=title` and `display`), a step larger, over the app's text face. `classic`: serif headings and text. `technical`: the app's monospaced face for headings. |
+| `shape` | `sharp`, `soft`, `round` | Corner radii: about a third, one and a half times, or a little over twice the app's. |
+| `density` | `compact`, `airy` | Spacing (three quarters, or 1.35 times the app's) and control height (0.9 or 1.1 times, never under 28 px). |
+
+- **Never colors, fonts or sizes.** The options are roles, like `tone=` and `variant=`. Colors still come only from the app (its theme, brand colors, the MCP `colors` argument); `mood` only changes how the theme's own accent and shadow are used. Fonts come from a fixed list of stacks of faces the app may already have loaded, each ending in a system face (`Georgia, serif`, the app's own monospaced stack), so nothing a spec says makes the engine fetch a font. Sizes are worked out from the app's own, so a compact app stays compact.
+- **Readable whatever is chosen.** Every option keeps the contrast checks the themes pass (`test/a11y/beyond.test.ts`), in light, dark and the Studio themes. In a forced-colors mode (Windows Contrast Themes) the person's system colors still win over any look.
+- **First, unindented, once.** Write it before the first element, so the screen draws in its look from the start; `state` and `derive` lines may come before it. A look line after an element still applies to the whole interface, from the next layout after it arrives, with a warning to move it up: while streaming, what was already drawn changes its look when it arrives. An indented look line is ignored with a warning, and so is a second one (the first is kept).
+- **Problems the parser reports**, each a warning that keeps the rest of the line: a prop that isn't one of these four (a color, font or size prop is told that a look never sets them), an option that isn't one of its choices, a value or an expression, and quoted text.
+- **Hosts can turn it off.** With the engine's `look: false` (`render(spec, { look: false })`, `parse(…, { look: false })`), a look line is ignored with a warning and the app's look stays. A host's own element named `look` keeps its line. The model guide explains the line only with `GuideOptions.look`.
+- **Inside slides**, `density`, `shape` and `type`'s sizes don't apply (a slide has its own design size); `mood` and `type`'s faces do. Slide headings keep the text face.
+
 ## Expressions
 
 Anything inside `{…}` is evaluated against state.

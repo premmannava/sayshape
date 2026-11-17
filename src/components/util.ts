@@ -1,6 +1,7 @@
 import { drawIcon, ICON_NAMES, isIconName, nearestIcon, type IconName } from "../icons";
 import type { LayoutContext, PaintContext, PressContext, PropDef } from "../component";
 import type { Theme } from "../theme";
+import { displayFamily } from "../look";
 import type { Box, SayShapeNode } from "../types";
 import { ellipsize, fitLines } from "../text";
 
@@ -229,7 +230,9 @@ export function textMetrics(theme: Theme, style: TextStyle, weight?: (typeof WEI
   const w = weight ?? (style === "display" || style === "title" ? "semibold" : "regular");
   const numeric = { regular: 400, semibold: 600, bold: 700 }[w];
   const leading = style === "display" ? 1.2 : style === "title" ? 1.3 : style === "lead" ? 1.4 : 1.45;
-  return { size, weight: numeric, lineHeight: Math.round(size * leading * 10) / 10 };
+  // Headings take the theme's display face when a look gives them one.
+  const family = style === "display" || style === "title" ? displayFamily(theme) : theme.font.family;
+  return { size, weight: numeric, lineHeight: Math.round(size * leading * 10) / 10, family };
 }
 
 /** A CSS font string from the theme's family. */

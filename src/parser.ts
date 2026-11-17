@@ -25,6 +25,7 @@ import { PATH } from "./paths";
 import { literal } from "./actions";
 import type { Registry } from "./registry";
 import { expandPresets } from "./presets/report";
+import { LOOK_DEFAULT, LOOK_OPTIONS, LOOK_PROPS, lookOptions, type Look, type LookProp } from "./look";
 import type { Diagnostic, SayShapeNode, Value } from "./types";
 
 /**
@@ -103,7 +104,16 @@ export interface ParseOptions {
    * so a report can name a table's columns and choose number formats from them.
    */
   presetValue?: (name: string) => unknown;
+  /**
+   * Read a look line (`look mood=bold type=editorial`, src/look.ts), which
+   * chooses the look of the whole interface. Default true; false ignores
+   * look lines with a warning, for hosts that keep their own look.
+   */
+  look?: boolean;
 }
+
+/** A spec's look line: the choices it made, and its line. */
+export type LookLine = Look & { line: number };
 
 /** A derive line's value: a name, its expression, and the names that expression reads. */
 export interface DerivedDef {
@@ -134,6 +144,8 @@ export interface ParseResult {
    * everywhere else in the result are the original spec's.
    */
   presets?: { expanded: string; reads: string[] };
+  /** The look line's choices, when the spec has one that chose something (and look lines are on). */
+  look?: LookLine;
 }
 
 interface LineTokens {
@@ -624,6 +636,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   for (const st of result.state) st.line = orig(st.line);
   for (const d of result.derived) d.line = orig(d.line);
   for (const r of result.rules ?? []) r.line = orig(r.line);
+  if (result.look) result.look.line = orig(result.look.line);
   const diagnostics = [...result.diagnostics.map((d) => ({ ...d, line: orig(d.line) })), ...x.diagnostics].sort((a, b) => a.line - b.line);
   return { ...result, diagnostics, lines: (src.match(/\n/g) ?? []).length, presets: { expanded: x.text, reads: x.reads } };
 }
@@ -663,6 +676,10 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
   const rules: RuleDef[] = [];
   const controls = new Set<string>();
   const dialogs = new Set<string>();
+  // The look line (the first one), and the first element, which a look should come before.
+  let look: LookLine | undefined;
+  let lookLine: number | null = null;
+  let firstElement: number | null = null;
 
   const lines = src.split("\n");
   if (lines.at(-1) === "") lines.pop();
@@ -692,6 +709,23 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
         const exprs = [...(rule.if === undefined ? [] : [rule.if]), ...actionExpressions(rule.actions)];
         const names = [...new Set(exprs.flatMap((e) => identifiers(e, RULE_FUNCTIONS)))];
         if (names.length) outsideUses.push({ line: lineNo, names });
+      }
+      return;
+    }
+
+    // A host's own element named look keeps its line.
+    if (/^look(\s|$)/.test(body) && !registry.has("look")) {
+      if (opts.look === false) {
+        diagnostics.push({ line: lineNo, severity: "warning", message: `This app keeps its own look, so the look line was ignored. Leave it out` });
+      } else if (indent > 0) {
+        diagnostics.push({ line: lineNo, severity: "warning", message: `look goes at the top level, unindented, as the first line: it chooses the look of the whole interface, not one element. This one was ignored` });
+      } else if (lookLine !== null) {
+        diagnostics.push({ line: lineNo, severity: "warning", message: `The look was already chosen on line ${lookLine}, so this line was ignored. Put every choice on that one line, like look mood=bold type=editorial` });
+      } else {
+        lookLine = lineNo;
+        if (firstElement !== null) diagnostics.push({ line: lineNo, severity: "warning", message: `look goes before the first element (line ${firstElement}), so the screen doesn't change its look while it draws. It still applies to the whole interface; move it to the top` });
+        const chosen = parseLookLine(body.slice(4), lineNo, diagnostics);
+        if (Object.keys(chosen).length) look = { ...chosen, line: lineNo };
       }
       return;
     }
@@ -950,6 +984,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     else if (tok.props.if !== undefined) chains.set(node, [bareExpression(tok.props.if)]);
     pendingChain = null;
     nodeCount++;
+    firstElement ??= lineNo;
     if (tok.type === "each") eaches.push(node);
     if (tok.type === "dialog" && tok.props.bind !== undefined) dialogs.add(tok.props.bind.split(".")[0]!);
     if (def.children) stack.push(node);
@@ -964,7 +999,41 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
   // Stable sort keeps each line's diagnostics in the order they were found.
   const kept = opts.behavior ? checkRules(rules, controls, dialogs, diagnostics) : undefined;
   diagnostics.sort((a, b) => a.line - b.line);
-  return { root, state, derived, diagnostics, nodeCount, lines: lines.length, ...(kept ? { rules: kept } : {}) };
+  return { root, state, derived, diagnostics, nodeCount, lines: lines.length, ...(kept ? { rules: kept } : {}), ...(look ? { look } : {}) };
+}
+
+/** Words for what a look never sets, so a model reaching for one hears why. */
+const NOT_LOOK = /^(colou?rs?|accent|background|bg|fg|foreground|font|fonts|family|face|size|sizes|radius|corners|spacing|padding|gap|palette|brand|theme|dark|light)$/i;
+
+/**
+ * A look line's props: one named option each. An unknown prop or option is
+ * left out with a warning that lists what's there; the rest still apply.
+ */
+function parseLookLine(body: string, line: number, diags: Diagnostic[]): Look {
+  const t = tokenizeLine("look " + body);
+  const out: Record<string, string> = {};
+  const known = LOOK_PROPS.join(", ");
+  for (const m of t.problems) diags.push({ line, severity: "warning", message: `look: ${m}` });
+  if (t.text !== undefined) diags.push({ line, severity: "warning", message: `look takes named choices, not quoted text, so "${t.text}" was ignored. Write look ${LOOK_PROPS.map((p) => `${p}=…`).join(" ")}` });
+  for (const [name, raw] of Object.entries(t.props)) {
+    if (!(LOOK_PROPS as string[]).includes(name)) {
+      diags.push({ line, severity: "warning", message: NOT_LOOK.test(name)
+        ? `look never sets colors, fonts or sizes (the app chooses those), so ${name}= was ignored. look takes ${known}`
+        : `look has no "${name}", so it was ignored. look takes ${known}` });
+      continue;
+    }
+    const prop = name as LookProp;
+    const options = lookOptions(prop);
+    const value = raw.trim();
+    if (!options.includes(value)) {
+      diags.push({ line, severity: "warning", message: /^[{#]|\d/.test(value)
+        ? `look ${prop}= takes one of its names, never a value or an expression, so ${prop}=${value} was ignored. Use one of: ${options.join(", ")}`
+        : `look ${prop}=${value} isn't one of its choices, so it was ignored. Use one of: ${options.join(", ")}` });
+      continue;
+    }
+    if (value !== LOOK_DEFAULT && value in LOOK_OPTIONS[prop]) out[prop] = value;
+  }
+  return out as Look;
 }
 
 /**

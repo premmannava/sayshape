@@ -66,6 +66,8 @@ export interface RenderOptions {
   reducedMotion?: boolean;
   /** The engine's bareRootCard option: a card that is the only top-level element draws no frame. Default false. */
   bareRootCard?: boolean;
+  /** The engine's look option: false ignores a spec's look line with a warning. Default true, as in the engine. */
+  look?: boolean;
 }
 
 /** The test's clock: advance it to run rules' ticks and move scenes on, without waiting. */
@@ -238,6 +240,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     ...(manual ? { clock: manual } : {}),
     reducedMotion: !!opts.reducedMotion,
     ...(opts.bareRootCard ? { bareRootCard: true } : {}),
+    ...(opts.look === false ? { look: false } : {}),
     loadImage: opts.loadImage,
     onWarning: (m) => warnings.push(m),
     viewport: opts.viewport ? () => opts.viewport! : undefined,

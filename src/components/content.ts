@@ -59,18 +59,18 @@ text "**Free** cancellation until *2 days* before; see [the terms](https://north
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", WEIGHTS, "regular") : undefined);
-    const f = `${m.weight} ${m.size}px ${ctx.theme.font.family}`;
+    const f = `${m.weight} ${m.size}px ${m.family}`;
     const icon = textIcon(p.str("icon"), m.size);
     const width = Math.max(0, box.w - (icon ? icon.indent : 0));
     if (p.bool("rich")) {
       // Markers come from the spec's own words; values from state are filled in as plain words.
       const runs = parseRich(p.template(), (t) => p.fill(t));
-      const fontOf = richFont(ctx.theme, m.weight, m.size);
+      const fontOf = richFont(ctx.theme, m.weight, m.size, m.family);
       const lines = wrapRich(runs, width, fontOf, ctx.measure);
       const links: RichText["links"] = [];
       for (const r of runs) if (r.link !== undefined && !links.some((l) => l.index === r.link)) links.push({ index: r.link, text: runs.filter((x) => x.link === r.link).map((x) => x.text).join(""), href: r.href! });
       const rich: RichText = { runs, lines: lines, links };
-      box.data = { lines: [], font: f, lineHeight: m.lineHeight, icon, rich, weight: m.weight, size: m.size };
+      box.data = { lines: [], font: f, lineHeight: m.lineHeight, icon, rich, weight: m.weight, size: m.size, family: m.family };
       box.h = Math.max(1, lines.length) * m.lineHeight;
       return;
     }
@@ -86,7 +86,7 @@ text "**Free** cancellation until *2 days* before; see [the terms](https://north
     // Rich text needs its longest word as shown, without markers or link addresses.
     const shown = p.bool("rich") ? parseRich(p.template(), (t) => p.fill(t)).map((r) => r.text).join("") : p.text();
     const words = shown.split(/\s+/).filter(Boolean);
-    return Math.min(100, Math.max(0, ...words.map((w) => textWidth(ctx, w, m.weight, m.size))));
+    return Math.min(100, Math.max(0, ...words.map((w) => ctx.measure.width(w, `${m.weight} ${m.size}px ${m.family}`))));
   },
   press(ctx) {
     // A link in rich text: sent to the host as emit:link with its address. SayShape never opens it.
@@ -147,23 +147,23 @@ function richSegments(runs: readonly Run[]): Array<{ key: string; text: string }
 }
 
 /** The font for a styled stretch of rich text, from the text's own weight and size. */
-function richFont(theme: Theme, weight: number, size: number): (s: RichStyle) => string {
+function richFont(theme: Theme, weight: number, size: number, family: string): (s: RichStyle) => string {
   return (s) => s.code
     ? `${s.bold ? 700 : 500} ${Math.max(10, size - 1)}px ${theme.font.mono}`
-    : `${s.italic ? "italic " : ""}${s.bold ? Math.max(700, weight) : weight} ${size}px ${theme.font.family}`;
+    : `${s.italic ? "italic " : ""}${s.bold ? Math.max(700, weight) : weight} ${size}px ${family}`;
 }
 
 /** Rich text: each stretch in its own font, code on a faint pill, links in the accent and underlined. */
 function paintRich(box: Box, ctx: PaintContext): void {
   const p = ctx.props(box.node);
-  const d = box.data as { rich: RichText; lineHeight: number; icon: TextIcon | null; weight: number; size: number };
+  const d = box.data as { rich: RichText; lineHeight: number; icon: TextIcon | null; weight: number; size: number; family: string };
   const { g, theme } = ctx;
   const c = theme.colors;
   const color = toneColor(theme, p.oneOf("tone", TONES, "default"));
   const align = p.oneOf("align", ALIGN, "left");
   const left = box.x + (d.icon ? d.icon.indent : 0);
   if (d.icon) drawIcon(g, d.icon.name, box.x, box.y + (d.lineHeight - d.icon.size) / 2, d.icon.size, color);
-  const fontOf = richFont(theme, d.weight, d.size);
+  const fontOf = richFont(theme, d.weight, d.size, d.family);
   g.textBaseline = "middle";
   g.textAlign = "left";
   const linkSeen = new Set<number>();

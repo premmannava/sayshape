@@ -29,6 +29,7 @@ import { Registry } from "./registry";
 import { Store } from "./state";
 import { CanvasMeasurer, ellipsize, font as fontString, wrapText } from "./text";
 import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
+import { applyLook, lookKey, type Look } from "./look";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
 import { domAccessibilityHost } from "./a11y/dom";
@@ -177,6 +178,12 @@ export interface SayShapeOptions {
    * Nested cards keep their frame. Default false.
    */
   bareRootCard?: boolean;
+  /**
+   * Whether a spec's look line (`look mood=bold type=editorial`, src/look.ts)
+   * changes the look: tokens laid over this theme, never colors of its own.
+   * Default true; false keeps the host's look and reports the line with a warning.
+   */
+  look?: boolean;
 }
 
 /** The widest picture() draws, in CSS pixels, so a very wide table can't make a huge image. */
@@ -194,6 +201,8 @@ export class SayShape {
   private measurer: CanvasMeasurer;
   private opts: SayShapeOptions;
   theme: Theme;
+  /** The spec's look line's choices, laid over the host's theme (null: none). */
+  private lookChoice: Look | null = null;
 
   private source = "";
   private streaming = false;
@@ -547,7 +556,15 @@ export class SayShape {
       knownNames: Object.keys(this.state.snapshot()),
       ...(this.opts.behavior ? { behavior: true } : {}),
       ...(this.opts.presets ? { presets: true, presetValue: (n: string) => this.state.get(n) } : {}),
+      ...(this.opts.look === false ? { look: false } : {}),
     });
+    // A look line that arrived or changed: from the next layout on, the screen draws in it.
+    const look = this.parsed.look ?? null;
+    if (lookKey(look) !== lookKey(this.lookChoice)) {
+      this.lookChoice = look;
+      this.theme = this.resolveTheme();
+    }
+    this.parsed.root.props.gap = String(this.theme.space.md);
     for (const { key, value } of this.parsed.state) this.state.declare(key, value);
     this.warned.clear();
     this.state.derive(this.parsed.derived);
@@ -1108,7 +1125,7 @@ export class SayShape {
    * in another theme (a deck's slides without their rounded frame).
    */
   async picture(opts: { pixelRatio?: number; background?: boolean; widen?: boolean; width?: number; state?: Record<string, Value>; frame?: (box: Box) => boolean; theme?: Theme } = {}): Promise<HTMLCanvasElement> {
-    const theme = opts.theme ?? this.theme;
+    const theme = opts.theme ? applyLook(opts.theme, this.lookChoice) : this.theme;
     let width = opts.width ?? (this.metrics.width || this.opts.width || 600);
     let cut: Rect | null = null;
     let out!: HTMLCanvasElement;
@@ -2512,8 +2529,14 @@ export class SayShape {
     }
   }
 
+  /** The spec's look line's choices, or null when it has none (or the host turned look lines off). */
+  get look(): Look | null {
+    return this.lookChoice;
+  }
+
   private resolveTheme(): Theme {
-    const chosen = this.chosenTheme();
+    // The look over the host's theme, then (in a forced-colors mode) the person's colors over both.
+    const chosen = applyLook(this.chosenTheme(), this.lookChoice);
     // In a forced-colors mode the person's own colors win over any theme.
     if (typeof matchMedia !== "undefined" && matchMedia("(forced-colors: active)").matches) {
       return forcedColorsTheme(chosen, (name) => this.systemColor(name));

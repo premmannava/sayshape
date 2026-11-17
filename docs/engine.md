@@ -42,6 +42,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `pixelRatio` | the window's `devicePixelRatio` | Device pixels per CSS pixel in the canvas bitmap |
 | `streamPlaceholders` | `false` | For specs written layout first, data last: while a spec streams in, names an element reads before their `state` line arrives draw as placeholders and aren't reported until `endStream()` ([Layout first while streaming](model.md#layout-first-while-streaming)) |
 | `presets` | `false` | Expand `report` blocks into ordinary elements when the spec is read; `expandedSpec` shows the result ([the report preset](model.md#data-answers-with-the-report-preset-opt-in)) |
+| `look` | `true` | Read a spec's look line (`look mood=bold type=editorial`), which lays look tokens over this theme, never colors of its own; `false` keeps the theme as it is and reports the line with a warning ([Look](language.md#look)). `sayshape.look` holds the choices in use |
 | `behavior` | `false` | Experimental: `every` rules and dragging in scenes ([Behavior](#behavior-experimental-off-by-default)) |
 | `clock` | the real clock | Where time comes from (`now`, `setTimeout`, `clearTimeout`): scene motion, fade-ins and rules. `sayshape/testing` passes one a test advances |
 | `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it, rules wait for a first press or key |

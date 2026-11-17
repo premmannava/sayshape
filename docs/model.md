@@ -178,6 +178,14 @@ const ui = new SayShape(canvas, { streamPlaceholders: true });
 
 `streamPlaceholders` is the engine's half. While a spec streams in (`beginStream` to `endStream`), a name an element reads before its `state` or `derive` line has arrived draws as a loading placeholder (the same as [`setAwaiting`](language.md#lists)), and no warning is shown for it: not the "isn't state" diagnostic, and not a layout warning like a select's items not being a list yet. When the stream ends the screen is checked as usual, so a name that is still undeclared is reported then. With it off, a streamed spec behaves exactly as before. The MCP server's `--layout-first` changes its guide text the same way; its view already draws placeholders while a spec streams in.
 
+### The look line
+
+`look: true` adds a short LOOK section to the guide (full or compact, built from `LOOK_OPTIONS` in `src/look.ts`): the line `look mood=… type=… shape=… density=…`, its options, and that it goes first ([Look](language.md#look)). Off (default), the guide is exactly what it was. The engine reads look lines whatever the guide says (its `look` option, on by default), so pass `look: false` to `generateSpec` too when the engine has it off: a look line the model writes is then reported, and repaired away. The prose filter keeps a line like `look mood=bold` (`look` followed by `name=option` pairs) and drops a sentence starting with "Look".
+
+```ts
+guide: { look: true }                 // off by default: the guide is then exactly what it was
+```
+
 ### Data answers with the report preset (opt-in)
 
 Most of what a model writes for a data answer is layout it doesn't need to choose: where the figures go, which cards hold which chart, a table's columns, headers and formats. The `report` preset lets it name the data and what to show, and the engine writes the layout:
