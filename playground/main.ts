@@ -1,9 +1,11 @@
 import { SayShape, COMMON_IMAGE_HOSTS, coreComponents, languageGuide, type Diagnostic, type SayShapeNode } from "../src";
 import { mapComponents } from "../src/components/map";
+import { pageComponents } from "../src/components/page";
 import { sceneComponents } from "../src/components/scene";
 import { setupAppearance } from "./appearance/panel";
 import { setupAsk } from "./ask";
 import { samples as coreSamples } from "./samples";
+import { pageSamples } from "./page-samples";
 import { sceneSamples } from "./scene-samples";
 import { slideSamples } from "./slides-samples";
 import { behaviorSamples, behaviorSceneSamples } from "./behavior-samples";
@@ -19,14 +21,17 @@ const canvas = $<HTMLCanvasElement>("cv");
 const imageHosts = [...COMMON_IMAGE_HOSTS];
 // Experimental scenes are off unless the address asks for them: /playground/index.html?scene=1
 const scenes = new URLSearchParams(location.search).get("scene") === "1";
+// The experimental page elements (hero, section, band...) are off unless asked for too: ?page=1
+const pages = new URLSearchParams(location.search).get("page") === "1";
 // Experimental behavior (rules that tick, dragging in scenes) is off unless asked for too: ?behavior=1
 const behavior = new URLSearchParams(location.search).get("behavior") === "1";
-const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : [])], imageHosts, behavior }).expose("sayshape");
+const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : []), ...(pages ? pageComponents : [])], imageHosts, behavior }).expose("sayshape");
 // Scene and behavior samples only work with those on. Slide decks are always on.
 const samples = {
   ...coreSamples,
   ...slideSamples,
   ...(scenes ? sceneSamples : {}),
+  ...(pages ? pageSamples : {}),
   ...(behavior ? behaviorSamples : {}),
   ...(behavior && scenes ? behaviorSceneSamples : {}),
 };
@@ -45,7 +50,7 @@ setupAppearance(sayshape);
 // The same guide a model gets from "Ask a model", so copying it into a chat app works the same way.
 // Leave room for the request, generated spec and a repair on local 8K models.
 // Keep the library default unchanged; this is the playground's configuration.
-const guideOptions = { ...playgroundGuide(imageHosts), ...(behavior ? { behavior: true } : {}) };
+const guideOptions = { ...playgroundGuide(imageHosts), ...(behavior ? { behavior: true } : {}), ...(pages ? { profile: "page" } : {}) };
 const guideText = languageGuide(sayshape.registry, guideOptions);
 $("guide").textContent = guideText;
 $("copyGuide").addEventListener("click", async (e) => {

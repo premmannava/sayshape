@@ -36,6 +36,25 @@ export const PROFILES: Readonly<Record<string, readonly string[]>> = {
 };
 
 /**
+ * Profiles for opt-in elements: they exist only where a host registers those
+ * elements (sayshape/page), so they stay out of PROFILES, which every
+ * registry can resolve. Naming one against a registry without them is the
+ * same configuration mistake as any other missing element.
+ */
+export const OPT_IN_PROFILES: Readonly<Record<string, readonly string[]>> = {
+  page: ["hero", "section", "band", "feature", "quote", "pricing", "plan", "footer", "text", "image", "button", "link", "badge", "icon", "divider", "stat", "card", "row", "grid", "column", "input", "each"],
+};
+
+/**
+ * Guide sections a profile turns on by itself, unless the guide's options say
+ * otherwise: the page profile is for designed pages, so it explains the look
+ * line, entrance motion and pictures with the elements.
+ */
+export const PROFILE_GUIDE: Readonly<Record<string, { look?: boolean; motion?: boolean; pictures?: boolean }>> = {
+  page: { look: true, motion: true, pictures: true },
+};
+
+/**
  * Every profile includes these: the parser treats the top level as a column,
  * and nearly every screen has text, so the guide's own examples can rely on it.
  */
@@ -64,8 +83,8 @@ export function resolveProfile(renderer: Registry, profile?: string | ComponentP
     return { name: "all", types: renderer.all().map((c) => c.type), registry: renderer };
   }
   const name = typeof profile === "string" ? profile : Array.isArray(profile) ? "custom" : (profile as ComponentProfile).name;
-  const listed = typeof profile === "string" ? PROFILES[profile] : Array.isArray(profile) ? profile : (profile as ComponentProfile).components;
-  if (!listed) throw new Error(`Unknown component profile "${String(profile)}". Use one of: all, ${Object.keys(PROFILES).join(", ")}, or a list of component names`);
+  const listed = typeof profile === "string" ? PROFILES[profile] ?? OPT_IN_PROFILES[profile] : Array.isArray(profile) ? profile : (profile as ComponentProfile).components;
+  if (!listed) throw new Error(`Unknown component profile "${String(profile)}". Use one of: all, ${[...Object.keys(PROFILES), ...Object.keys(OPT_IN_PROFILES)].join(", ")}, or a list of component names`);
 
   const want = new Set<string>([...ALWAYS_EXPOSED, ...listed]);
   for (const t of want) {

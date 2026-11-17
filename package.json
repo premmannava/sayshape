@@ -43,6 +43,10 @@
       "types": "./dist/types/components/scene/index.d.ts",
       "import": "./dist/scene.js"
     },
+    "./page": {
+      "types": "./dist/types/components/page/index.d.ts",
+      "import": "./dist/page.js"
+    },
     "./slides": {
       "types": "./dist/types/components/slides/index.d.ts",
       "import": "./dist/slides.js"

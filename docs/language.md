@@ -479,6 +479,38 @@ image "Lake at dawn" src="/lake.jpg" ratio=16:9 zoom=slow
 - **`shape=rounded|square|circle`.** The outline (rounded is the default and follows the theme's corners; `circle` is fully rounded, so `ratio=1:1` gives a round avatar). `fit=cover` (default) crops the edges to fill the space and `fit=contain` shows the whole picture.
 - **`zoom=slow`.** The photo drifts about 10% closer over several seconds, once, when it comes into sight. It changes how the picture is painted, never where anything sits. With reduced motion or `animate: false` the picture stays still.
 
+## Page elements (experimental)
+
+For a website or landing page, `sayshape/page` adds elements made for one, so a model writes a designed page instead of an app screen. They are off unless a host registers `pageComponents` (without them `hero` is an unknown element), and the `page` profile (`languageGuide(registry, { profile: "page" })`) tells a model about them and also explains the look line, entrance motion and pictures.
+
+```text
+look mood=bold type=editorial density=airy
+hero "Trips that plan themselves" eyebrow="Now in beta" lead="Tell us where and when." src="/images/ridge.jpg" zoom=slow
+  button "Plan a trip" on=emit:start
+  button "See an example" variant=secondary on=emit:example
+section "Why people use it" stagger=true enter=rise
+  grid min=200
+    feature "Real itineraries" icon=map body="Every stop is timed."
+band "Loved by people who hate planning"
+  quote "We stopped writing itineraries by hand." by="Maya Ortiz" role="Northwind"
+pricing "Simple pricing"
+  plan "Pro" price="$12" per="/ month" features="Unlimited trips; Offline plans" highlight=true
+    button "Start free trial" on=emit:trial
+band "Ready when you are" tone=accent align=center
+  button "Start planning" on=emit:start
+footer "Northwind" note="© 2026 Northwind"
+```
+
+- `hero "Headline" eyebrow= lead= src= zoom=slow align=left|center`: the top of the page; with `src=` the photo is an image's own painting on its scrim, so the words always read. Buttons and links under it sit on one line.
+- `section "Heading" eyebrow= lead= align=`: a titled part with room around it.
+- `band "Heading" eyebrow= lead= tone=soft|plain|accent align=`: a full-width strip; `accent` is the accent color, with the words and a solid button turned light.
+- `feature "Title" icon= body= align=`: an icon, a title and a sentence; several in a `grid` or `row` stack on a phone.
+- `quote "What they said" by= role= align=`: a large quotation with its source.
+- `pricing "Heading" eyebrow= lead= align=` holds `plan "Name" price= per= detail= features="a; b; c" badge= highlight=true`; plans share a height, put their buttons at the bottom and stack on a phone.
+- `footer "Name" lead= note=`: columns of links (written as `column`s) and the small print.
+
+Headings use the theme's display face and grow with the width from the theme's own type sizes; nothing takes a color, font or size. `enter=` and `stagger=` work on all of them.
+
 ## Rules (experimental)
 
 Off unless the host turns on behavior ([the engine](engine.md#behavior-experimental-off-by-default)); without it, `every` is an unknown element. A rule changes state by itself on an interval, while its condition holds:

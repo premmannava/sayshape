@@ -33,6 +33,8 @@ export default defineConfig(({ mode }) => {
           map: resolve(__dirname, "src/components/map/index.ts"),
           // Experimental and opt-in: hosts that don't import it don't have scenes.
           scene: resolve(__dirname, "src/components/scene/index.ts"),
+          // Experimental and opt-in too: hero, section, band and the other elements for a landing page.
+          page: resolve(__dirname, "src/components/page/index.ts"),
           // Experimental and opt-in too: deck and slide, a trial for slide decks.
           slides: resolve(__dirname, "src/components/slides/index.ts"),
           testing: resolve(__dirname, "src/testing/index.ts"),

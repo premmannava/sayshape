@@ -22,7 +22,7 @@ import { ACTION_OPS, ACTION_SYNTAX } from "./actions";
 import { CATEGORIES, COMMON_PROPS, MOTION_PROPS, PICTURE_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
 import { EXPRESSION_FUNCTIONS } from "./expr";
 import { parse } from "./parser";
-import { resolveProfile, type ComponentProfile } from "./profiles";
+import { PROFILE_GUIDE, resolveProfile, type ComponentProfile } from "./profiles";
 import type { Registry } from "./registry";
 import { reportGuide } from "./presets/report";
 import { lookGuide } from "./look";
@@ -354,7 +354,9 @@ interface GuideContext {
   valid: (spec: string) => boolean;
 }
 
-function context(registry: Registry, opts: GuideOptions): GuideContext {
+function context(registry: Registry, given: GuideOptions): GuideContext {
+  // A profile can turn guide sections on (page: look, motion, pictures); what the options say wins.
+  const opts = typeof given.profile === "string" && PROFILE_GUIDE[given.profile] ? { ...PROFILE_GUIDE[given.profile], ...given } : given;
   const profile = resolveProfile(registry, opts.profile);
   const exposed = profile.registry;
   const behavior = !!opts.behavior;
