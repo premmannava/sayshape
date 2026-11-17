@@ -80,13 +80,23 @@ const isPreset = (v: string | null | undefined): v is PresetId => !!v && PRESET_
 
 /** A host name, or "*.example.com" for its subdomains: no scheme, port, path or bare "*". */
 const HOST = /^(\*\.)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
-/** Room for COMMON_IMAGE_HOSTS and a logo's host. More would make the CSP and the guide long for no real use. */
-export const MAX_IMAGE_HOSTS = 80;
+/**
+ * How long the hosts may be in all, as the view's CSP lists them ("https://" each, a space apart).
+ * Chat apps repeat the list in each source of the view's content policy (images, media, fonts,
+ * styles, scripts) and refuse to open the view when the policy passes 8 KiB; 1,200 characters
+ * keeps it well under, with room for COMMON_IMAGE_HOSTS and a logo's host.
+ */
+export const MAX_IMAGE_HOSTS_CHARS = 1200;
+
+/** The length of the hosts as the CSP writes them. */
+export function imageHostsChars(hosts: readonly string[]): number {
+  return hosts.reduce((n, h) => n + "https://".length + h.length + 1, 0);
+}
 
 /** The hosts in a comma-separated list, lower-cased, without repeats; null if any isn't a host name. */
 function hostList(raw: string): string[] | null {
   const hosts = [...new Set(raw.split(",").map((h) => h.trim().toLowerCase()).filter(Boolean))];
-  return hosts.length && hosts.length <= MAX_IMAGE_HOSTS && hosts.every((h) => HOST.test(h)) ? hosts : null;
+  return hosts.length && imageHostsChars(hosts) <= MAX_IMAGE_HOSTS_CHARS && hosts.every((h) => HOST.test(h)) ? hosts : null;
 }
 
 /** Read the view's flags from the server's command line. Throws, in plain words, on a theme or color it doesn't know. */
@@ -131,7 +141,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
     const raw = args[hostsAt + 1];
     const hosts = raw && !raw.startsWith("--") ? hostList(raw) : null;
     if (!hosts) {
-      throw new Error(`--image-hosts needs up to ${MAX_IMAGE_HOSTS} host names separated by commas, without https:// or a path, such as cdn.example.com,*.images.example.com${raw && !raw.startsWith("--") ? `; got "${raw}"` : ""}.`);
+      throw new Error(`--image-hosts needs host names separated by commas (${MAX_IMAGE_HOSTS_CHARS} characters in all at most, counting https:// on each), without https:// or a path, such as cdn.example.com,*.images.example.com${raw && !raw.startsWith("--") ? `; got "${raw}"` : ""}.`);
     }
     out.imageHosts = hosts;
   }
@@ -142,7 +152,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
     if (!logo) throw new Error(`--logo needs the https address of an image, such as https://cdn.example.com/logo.png${raw && !raw.startsWith("--") ? `; got "${raw}"` : ""}.`);
     const host = new URL(logo).hostname;
     const hosts = [...new Set([...(out.imageHosts ?? []), host])];
-    if (hosts.length > MAX_IMAGE_HOSTS) throw new Error(`--logo's host, ${host}, would be one more than the ${MAX_IMAGE_HOSTS} hosts --image-hosts allows.`);
+    if (imageHostsChars(hosts) > MAX_IMAGE_HOSTS_CHARS) throw new Error(`--logo's host, ${host}, makes the image hosts longer than the ${MAX_IMAGE_HOSTS_CHARS} characters chat apps allow: list fewer with --image-hosts.`);
     out.logo = logo;
     // The logo loads like any image: the engine and the chat app's sandbox must allow its host.
     out.imageHosts = hosts;

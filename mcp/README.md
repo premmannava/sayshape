@@ -79,7 +79,7 @@ Then ask for something that moves or can be pressed: *"Draw a traffic light I ca
 
 ### Images
 
-The view has no website of its own, so an `image` only loads from a host on its list. By default that is `COMMON_IMAGE_HOSTS`, the sites models know image addresses on (Wikimedia, Unsplash, Picsum, flag, poster and cover sites and the like; the list and the rule for what may be on it are in `src/images.ts`). `--image-hosts` replaces it with only your hosts, usually your company's image CDN, and `--no-image-hosts` allows none, so no images show:
+The view has no website of its own, so an `image` only loads from a host on its list. By default that is `COMMON_IMAGE_HOSTS`, the sites models know image addresses on (Wikimedia, Unsplash, Picsum, flag, poster and cover sites and the like; the list and the rule for what may be on it are in `src/images.ts`). `--image-hosts` replaces it with only your hosts, usually your company's image CDN, and `--no-image-hosts` allows none, so no images show. Chat apps repeat the hosts throughout the view's content policy and won't open a view whose policy passes 8 KiB, so the hosts may come to 1,200 characters in all, counting `https://` on each (`MAX_IMAGE_HOSTS_CHARS`, about 35 typical hosts):
 
 ```json
 "sayshape": { "command": "node", "args": ["/full/path/to/sayshape/mcp/dist/server.js", "--image-hosts", "cdn.acme.com,images.unsplash.com"] }

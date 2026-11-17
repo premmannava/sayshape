@@ -42,46 +42,29 @@ export interface ImageState {
  *   storage anyone can rent (`*.amazonaws.com`, `*.cloudfront.net`,
  *   `storage.googleapis.com`): either would let a spec reach any server again.
  * - No paid stock libraries, whose addresses need a signature a model can't know.
+ * - It stays short: the sites models write most, not every site they might.
+ *   A chat app repeats the MCP view's hosts in each source of its content policy
+ *   and refuses a policy over 8 KiB (MAX_IMAGE_HOSTS_CHARS in mcp/).
  */
 export const COMMON_IMAGE_HOSTS: readonly string[] = Object.freeze([
   // Reference pictures and photos
   "upload.wikimedia.org", "images.unsplash.com", "images.pexels.com", "cdn.pixabay.com", "picsum.photos", "fastly.picsum.photos",
   // Placeholders and avatars
-  "placehold.co", "via.placeholder.com", "dummyimage.com", "ui-avatars.com", "api.dicebear.com", "avatars.githubusercontent.com",
+  "placehold.co", "via.placeholder.com", "ui-avatars.com", "api.dicebear.com", "avatars.githubusercontent.com",
   // Sample data
-  "dummyjson.com", "cdn.dummyjson.com", "fakestoreapi.com",
+  "cdn.dummyjson.com", "fakestoreapi.com",
   // Files in public repositories and packages
-  "raw.githubusercontent.com", "cdn.jsdelivr.net", "unpkg.com", "cdnjs.cloudflare.com",
+  "raw.githubusercontent.com", "cdn.jsdelivr.net",
   // Logos, icons and flags
-  "cdn.simpleicons.org", "api.iconify.design", "img.icons8.com", "cdn-icons-png.flaticon.com", "flagcdn.com", "flagicons.lipis.dev",
-  // Films, television and video
-  "image.tmdb.org", "m.media-amazon.com", "images-na.ssl-images-amazon.com", "i.ytimg.com", "img.youtube.com",
-  // Music
-  "i.scdn.co", "*.mzstatic.com",
-  // Games and anime
-  "images.igdb.com", "cdn.akamai.steamstatic.com", "shared.akamai.steamstatic.com", "cdn.myanimelist.net",
+  "cdn.simpleicons.org", "api.iconify.design", "flagcdn.com",
+  // Films, video and music
+  "image.tmdb.org", "m.media-amazon.com", "i.ytimg.com", "i.scdn.co", "*.mzstatic.com",
   // Books
-  "covers.openlibrary.org", "archive.org", "*.us.archive.org", "i.gr-assets.com",
-  // Food
-  "www.themealdb.com", "www.thecocktaildb.com", "images.openfoodfacts.org",
-  // Animals
-  "images.dog.ceo", "cdn2.thedogapi.com",
-  // Space
-  "images-assets.nasa.gov", "cdn.esahubble.org", "cdn.eso.org",
-  // Sport
-  "a.espncdn.com", "www.mlbstatic.com", "media.api-sports.io",
-  // Weather
-  "openweathermap.org", "cdn.weatherapi.com",
-  // Money
-  "coin-images.coingecko.com",
-  // Pictures people share
-  "i.imgur.com", "pbs.twimg.com", "lh3.googleusercontent.com", "media.giphy.com", "i.giphy.com",
-  // Shops
-  "cdn.shopify.com", "i.ebayimg.com",
-  // News
-  "ichef.bbci.co.uk",
-  // QR codes
-  "api.qrserver.com",
+  "covers.openlibrary.org", "archive.org", "*.us.archive.org",
+  // Food, animals, space, money
+  "www.themealdb.com", "images.dog.ceo", "images-assets.nasa.gov", "coin-images.coingecko.com",
+  // Pictures people share, shops, QR codes
+  "i.imgur.com", "cdn.shopify.com", "api.qrserver.com",
 ]);
 
 export type ImageLoader = (url: string) => Promise<LoadedImage>;
