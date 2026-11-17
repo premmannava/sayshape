@@ -20,8 +20,8 @@
       /* Its right edge lines up with the interface's: the toolbar's own 4px padding plus 16 makes the engine's 20. */
       #bar { display: flex; justify-content: flex-end; position: absolute; top: 0; right: 0; z-index: 1; padding-right: 16px; }
       #bar[hidden] { display: none; }
-      /* A slide deck reaches into that corner, so there the strip takes a row above the interface. */
-      #wrap.deck #bar { position: static; }
+      /* When the interface reaches into that corner (a slide deck always does), the strip takes a row above it. */
+      #wrap.bar-row #bar { position: static; }
     </style>
   </head>
   <body>

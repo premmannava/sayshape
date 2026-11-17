@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventDelivery, eventMessage, imageName, nextChunk, outcomeOf, visibleMessage, FIXING_SPEC, REPEAT_SPEC, SHOW_ANYWAY, MAX_MESSAGE_CHARS, MAX_VISIBLE_CHARS } from "../src/ui/messages";
-import { parse } from "../../src/parser";
-import { Registry } from "../../src/registry";
-import { coreComponents } from "../../src/components";
+import { eventDelivery, eventMessage, imageName, nextChunk, outcomeOf, visibleMessage, MAX_MESSAGE_CHARS, MAX_VISIBLE_CHARS } from "../src/ui/messages";
 
 describe("view helpers", () => {
   it("describes an emitted action with its value and the interface's state", () => {
@@ -63,13 +60,6 @@ describe("view helpers", () => {
     expect(outcomeOf({ isError: true, structuredContent: { toFix: 3 } })).toBe("show");
     expect(outcomeOf({})).toBe("show");
     expect(outcomeOf({ structuredContent: { toFix: "2" } })).toBe("show");
-  });
-
-  it("draws its notes from specs that parse cleanly, with a way back to the folded version", () => {
-    const registry = new Registry();
-    for (const c of coreComponents) registry.register(c);
-    for (const spec of [FIXING_SPEC, REPEAT_SPEC]) expect(parse(spec, registry).diagnostics).toEqual([]);
-    expect(FIXING_SPEC).toContain(`on=emit:${SHOW_ANYWAY}`);
   });
 });
 

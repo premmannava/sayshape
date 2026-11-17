@@ -70,27 +70,10 @@ export function nextChunk(shown: string, next: string): { restart: boolean; add:
   return { restart: true, add: next };
 }
 
-/** The action behind "Show this version": handled by the view itself, never sent to the model. */
-export const SHOW_ANYWAY = "__sayshape_show";
-
-/**
- * What the view shows in place of an interface the server said needs fixing:
- * a short note, since the model is about to send a corrected one. The
- * button brings this version back, in case no correction comes.
- */
-export const FIXING_SPEC = `row
-  text "Fixing this interface. The corrected version appears below." tone=muted
-  button "Show this version" variant=secondary on=emit:${SHOW_ANYWAY}
-`;
-
-/** What the view shows in place of a copy of the interface just above it. */
-export const REPEAT_SPEC = `text "Same interface as above." tone=muted
-`;
-
 /**
  * What to do with an interface once its call's result is back: keep showing
- * it, fold it into a "being fixed" note (problems the model was asked to
- * fix), or into a one-line note (a repeat of the interface just shown).
+ * it, or hide it ("fixing": problems the model was asked to fix; "repeat": a
+ * copy of the interface just shown).
  */
 export function outcomeOf(result: { isError?: boolean; structuredContent?: unknown }): "show" | "fixing" | "repeat" {
   if (result.isError) return "show";

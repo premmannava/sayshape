@@ -337,21 +337,10 @@ try {
   };
   const fixing = await foldPage({ toFix: 2, repeat: false });
   await fixing.p.screenshot({ path: out + "7-fixing.png" });
-  check(fixing.folded < 200 && fixing.full > 300, `a view whose spec needs fixing folds into a short note (${fixing.full}px → ${fixing.folded}px)`);
-  const foldedFrame = fixing.p.frames().find((f) => f !== fixing.p.mainFrame());
-  await foldedFrame.locator("#sayshape").focus();
-  let restored = fixing.folded;
-  for (let i = 0; i < 4 && restored < 300; i++) {
-    await fixing.p.keyboard.press("Tab");
-    await fixing.p.keyboard.press("Enter");
-    await fixing.p.waitForTimeout(300);
-    restored = await fixing.p.evaluate(() => window.host.sizes.at(-1));
-  }
-  check(restored > 300, `"Show this version" brings it back (${restored}px)`);
-  check((await fixing.p.evaluate(() => window.host.messages)).length === 0, "and sends nothing to the model");
+  check(fixing.folded < 20 && fixing.full > 300, `a view whose spec needs fixing hides completely (${fixing.full}px → ${fixing.folded}px)`);
   const repeat = await foldPage({ toFix: 0, repeat: true });
   await repeat.p.screenshot({ path: out + "8-repeat.png" });
-  check(repeat.folded < 180, `a repeat of the interface above folds into one line (${repeat.folded}px)`);
+  check(repeat.folded < 20, `a repeat of the interface above hides completely (${repeat.folded}px)`);
   const kept = await foldPage({ toFix: 0, repeat: false });
   check(kept.folded > 300, `a good interface stays as it is (${kept.folded}px)`);
 
