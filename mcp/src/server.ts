@@ -238,6 +238,8 @@ export function quickStart(withData = false, withMcp = false, textOnly = false, 
     `${PICKS_HEADING_SHORT}\n${pickList(components).replace(/, such as [^:\n]*(?=: )/g, "").replace(/ \((?![^)\n]*=)[^)\n]*\)(?=: )/g, "")}`,
     "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
     "A PRESENTATION: a deck at the top level, not inside a card; a slide per idea, its title in the slide's own text.",
+    // Only where those topics exist (ownEngine), so a model that reads this knows when to ask for them.
+    ...(ownEngine(textOnly, fileMode) ? ["Polished screens: sayshape_docs topics look (style), motion (entrances), pictures (over photos)."] : []),
     `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp, textOnly, fileMode)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");

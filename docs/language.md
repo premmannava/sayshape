@@ -474,7 +474,7 @@ image "Lake at dawn" src="/lake.jpg" ratio=16:9 zoom=slow
   button "Book" on=emit:book
 ```
 
-- **Elements under an image** are laid over it. The picture is at least as tall as its `ratio=` and grows to hold them; short content sits in the middle. Buttons and other controls over it work as anywhere. `caption=` isn't shown on such an image (a warning says so): write the words as a `text` line.
+- **Elements under an image** are laid over it. The picture is at least as tall as its `ratio=` and grows to hold them; short content sits in the middle. The engine darkens the photo only as much as the words need: most behind them, less above and below. Buttons and other controls over it work as anywhere. `caption=` isn't shown on such an image (a warning says so): write the words as a `text` line.
 - **Readable by construction.** The app, not the spec, darkens the photo and draws what is over it in light text, so it reads on any photo, light, dark or busy, at the same contrast as text anywhere else (4.5:1). Specs never choose an overlay, color or shade. In a forced-colors mode (Windows Contrast Themes) the photo is left out and the words sit on the person's own colors.
 - **`shape=rounded|square|circle`.** The outline (rounded is the default and follows the theme's corners; `circle` is fully rounded, so `ratio=1:1` gives a round avatar). `fit=cover` (default) crops the edges to fill the space and `fit=contain` shows the whole picture.
 - **`zoom=slow`.** The photo drifts about 10% closer over several seconds, once, when it comes into sight. It changes how the picture is painted, never where anything sits. With reduced motion or `animate: false` the picture stays still.

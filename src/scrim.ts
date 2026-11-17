@@ -12,8 +12,15 @@
  */
 import { darkTheme, isDark, mixColors, parseColor, type Theme } from "./theme";
 
-/** The contrast ratio the words keep over the worst pixel (WCAG AA for text), with a little room for 8-bit rounding. */
-export const SCRIM_CONTRAST = 4.6;
+/**
+ * The contrast ratio the words keep over the worst pixel: WCAG AA (4.5) plus a
+ * sliver for the one-level differences browsers can make when they blend. The
+ * blend is already worked out in 8 bits a channel, so this is not for our own
+ * rounding.
+ */
+export const SCRIM_CONTRAST = 4.55;
+/** How strong the scrim is, as a share of its full strength, where no words sit above or below them. */
+export const SCRIM_EDGE = 0.2;
 /** The text colors a scrim has to keep readable: the ones elements draw words in. */
 const TEXT_COLORS = ["ink", "muted", "accent", "good", "warn", "bad"] as const;
 
@@ -76,6 +83,29 @@ export function scrimAlpha(theme: Theme): number {
   return alpha;
 }
 
+/** One stop of the scrim's strength down the picture: `offset` is 0 at the top and 1 at the bottom, `alpha` the scrim's opacity there. */
+export interface ScrimStop { offset: number; alpha: number }
+
+/**
+ * How strong the scrim is down a picture. The words sit in a band (`top` to
+ * `bottom`, with `pad` around it); the scrim has its full strength, the one
+ * `scrimAlpha` proves, across the whole band, and fades toward SCRIM_EDGE of it
+ * at the picture's top and bottom where there are no words, so the photo shows
+ * there. Strength only ever falls away from the band, so no word is on less
+ * than the proven strength. The same band in gives the same stops out.
+ */
+export function scrimProfile(alpha: number, y: number, h: number, top: number, bottom: number, pad: number): ScrimStop[] {
+  const at = (v: number) => (h > 0 ? Math.min(1, Math.max(0, (v - y) / h)) : 0);
+  const from = at(top - pad), to = at(bottom + pad);
+  const edge = alpha * SCRIM_EDGE;
+  return [
+    { offset: 0, alpha: from <= 0 ? alpha : edge },
+    ...(from > 0 ? [{ offset: from, alpha }] : []),
+    ...(to < 1 ? [{ offset: to, alpha }] : []),
+    { offset: 1, alpha: to >= 1 ? alpha : edge },
+  ];
+}
+
 const made = new WeakMap<Theme, Theme>();
 
 /** Whether a theme is a person's forced-colors choice, which nothing may recolor. */
@@ -99,9 +129,6 @@ export function overImageTheme(theme: Theme): Theme {
   made.set(theme, out);
   return out;
 }
-
-/** Extra strength over what the main text needs, so the quieter colors can stay close to their own. */
-const SCRIM_HEADROOM = 0.1;
 
 function build(theme: Theme): Theme {
   const c = theme.colors;
@@ -134,11 +161,14 @@ function build(theme: Theme): Theme {
   return finish(theme, colors);
 }
 
+/** Extra strength over what the main text needs, so the quieter colors keep a little of their own. */
+const SCRIM_HEADROOM = 0.05;
+
 /**
  * The theme over a picture, from dark colors: the scrim is the weakest that
- * keeps the main text at AA over any photo, plus some headroom, and every other
- * text color (muted, accent, good, warn, bad) is lifted toward the main text
- * just far enough to keep AA at that strength.
+ * keeps the main text at AA over any photo plus a little headroom, and every other text color (muted,
+ * accent, good, warn, bad) is lifted toward the main text just far enough to
+ * keep AA at that strength, so each keeps as much of its own color as it can.
  */
 function finish(theme: Theme, base: Theme["colors"]): Theme {
   const colors = { ...base };
