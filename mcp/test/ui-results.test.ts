@@ -15,7 +15,8 @@
  * Another, on purpose: button's new icon=, size= and fit= props changed the docs
  * shown in repair results, so main/ui-results.json has those three lines added.
  * And another: the look, motion and pictures topics joined sayshape_docs, which adds
- * their names to the topic list in both tools files.)
+ * their names to the topic list in both tools files. And another: the quick start gained one line
+ * saying what those topics are for, so models ask for motion too.)
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

@@ -1,6 +1,7 @@
 import { PICTURE_PROPS, PICTURE_SHAPES, type ComponentDef, type PaintContext } from "../component";
 import type { Box } from "../types";
-import { isForcedColors, overImageTheme, scrimAlpha } from "../scrim";
+import { isForcedColors, overImageTheme, scrimAlpha, scrimProfile } from "../scrim";
+import { parseColor } from "../theme";
 import { fillTint, themeFont } from "./util";
 import { fitLines } from "../text";
 import { fitText } from "./input";
@@ -165,10 +166,29 @@ export const image: ComponentDef = {
       placeholder(box, ctx, p.text());
     }
     if (over && !isForcedColors(theme)) {
-      // The scrim: the surface color at the weakest strength that keeps every text color readable over any photo.
+      // The scrim: the surface color at the weakest strength that keeps every text color readable over any photo,
+      // across the band the content sits in, and lighter above and below it where there are no words.
+      const alpha = scrimAlpha(theme);
+      const kids = whole.children;
       g.beginPath();
       g.rect(box.x, box.y, box.w, box.h);
-      fillTint(g, theme.colors.surface, scrimAlpha(theme));
+      if (!kids.length) {
+        fillTint(g, theme.colors.surface, alpha);
+      } else {
+        const top = Math.min(...kids.map((k) => k.y)), bottom = Math.max(...kids.map((k) => k.y + k.h));
+        const stops = scrimProfile(alpha, box.y, box.h, top, bottom, theme.space.lg);
+        if (stops.every((s) => s.alpha === alpha)) {
+          fillTint(g, theme.colors.surface, alpha);
+        } else {
+          const [r, gr, b] = parseColor(theme.colors.surface) ?? [0, 0, 0];
+          const gradient = g.createLinearGradient(0, box.y, 0, box.y + box.h);
+          for (const s of stops) gradient.addColorStop(s.offset, `rgba(${r}, ${gr}, ${b}, ${s.alpha})`);
+          g.save();
+          g.fillStyle = gradient;
+          g.fill();
+          g.restore();
+        }
+      }
     }
     g.restore();
   },

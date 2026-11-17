@@ -4,7 +4,7 @@ import { PICTURE_PROPS } from "../src/component";
 import { pictureRadius, ZOOM_MS, ZOOM_TO } from "../src/components/media";
 import { applyLook, LOOK_OPTIONS, LOOK_PROPS, type Look } from "../src/look";
 import { parseColor } from "../src/theme";
-import { contrastRatio, isForcedColors, overImageTheme, scrimAlpha } from "../src/scrim";
+import { blendOver, contrastRatio, isForcedColors, overImageTheme, SCRIM_EDGE, scrimAlpha, scrimProfile } from "../src/scrim";
 import { render } from "../src/testing";
 import type { LoadedImage } from "../src/images";
 import type { Box } from "../src/types";
@@ -207,7 +207,8 @@ describe("pictures: words over a photo", () => {
     const inner = overImageTheme(lightTheme);
     const ops = ui.drawOps;
     const imageAt = ops.findIndex((d) => d.op === "drawImage");
-    const scrimAt = ops.findIndex((d, i) => i > imageAt && d.op === "fill" && d.fillStyle === inner.colors.surface && Math.abs(d.globalAlpha - scrimAlpha(inner)) < 1e-9);
+    // Short content on a tall picture: the scrim is a gradient (the surface color, in the stops), full strength where the words are.
+    const scrimAt = ops.findIndex((d, i) => i > imageAt && d.op === "fill" && (d.gradientStops?.[0]?.color.startsWith("rgba(") ?? false));
     const textAt = ops.findIndex((d) => d.op === "fillText" && d.args[0] === "Quiet mornings");
     expect(imageAt).toBeGreaterThanOrEqual(0);
     expect(scrimAt).toBeGreaterThan(imageAt);
@@ -252,6 +253,66 @@ describe("pictures: words over a photo", () => {
     expect(fill("Before")).toBe(lightTheme.colors.ink);
     expect(fill("After")).toBe(lightTheme.colors.ink);
     expect(fill("Over")).toBe(overImageTheme(lightTheme).colors.ink);
+  });
+});
+
+describe("pictures: a lighter scrim", () => {
+  const stopsOf = (ui: ReturnType<typeof render>) => {
+    const ops = ui.drawOps;
+    const imageAt = ops.findIndex((d) => d.op === "drawImage");
+    return ops.find((d, i) => i > imageAt && d.op === "fill" && d.gradientStops)?.gradientStops;
+  };
+  const alphaIn = (color: string) => Number(/,\s*([\d.]+)\)$/.exec(color)![1]);
+
+  it("is lighter than before: under the old 0.73 and 0.74", () => {
+    for (const [theme, old] of [[lightTheme, 0.73], [darkTheme, 0.74]] as const) {
+      const a = scrimAlpha(overImageTheme(theme));
+      expect(a).toBeLessThan(old - 0.04);
+      expect(a).toBeGreaterThan(0.5);
+    }
+  });
+
+  it("scrimProfile: full strength across the band and a little around it, lighter toward the top and bottom, never less than the edge", () => {
+    const stops = scrimProfile(0.64, 0, 400, 150, 250, 10);
+    expect(stops.map((s) => [s.offset, s.alpha])).toEqual([[0, 0.64 * SCRIM_EDGE], [0.35, 0.64], [0.65, 0.64], [1, 0.64 * SCRIM_EDGE]]);
+    // Content to the top or bottom edge: full strength there, no fade on that side.
+    expect(scrimProfile(0.64, 0, 400, 0, 250, 10)[0]).toEqual({ offset: 0, alpha: 0.64 });
+    expect(scrimProfile(0.64, 0, 400, 150, 400, 10).at(-1)).toEqual({ offset: 1, alpha: 0.64 });
+    // Everything in the band: a flat scrim.
+    expect(scrimProfile(0.64, 0, 400, 0, 400, 10).every((s) => s.alpha === 0.64)).toBe(true);
+  });
+
+  it("short words on a tall picture: full strength behind every line, lighter above and below, and text still reads at the worst pixel", async () => {
+    const src = `image "Lake" src="/lake.jpg" ratio=2:3\n  text "Quiet"\n  button "Book" on=emit:book\n`;
+    const ui = render(src, { width: 360, theme: lightTheme, animate: false, ...loaded });
+    await ui.sayshape.imagesLoaded();
+    const inner = overImageTheme(lightTheme), full = scrimAlpha(inner);
+    const stops = stopsOf(ui)!;
+    expect(stops).toBeTruthy();
+    expect(alphaIn(stops[0]!.color)).toBeLessThan(full * 0.5);
+    const img = ui.find({ type: "image" })!.box!;
+    const at = (y: number) => {
+      const f = (y - img.y) / img.h;
+      const i = stops.findIndex((s) => s.offset >= f);
+      if (i <= 0) return alphaIn(stops[0]!.color);
+      const a = stops[i - 1]!, b = stops[i]!;
+      const t = b.offset === a.offset ? 1 : (f - a.offset) / (b.offset - a.offset);
+      return alphaIn(a.color) + (alphaIn(b.color) - alphaIn(a.color)) * t;
+    };
+    for (const t of ["Quiet", "Book"]) {
+      const b = ui.find({ text: t })!.box!;
+      for (const y of [b.y, b.y + b.h / 2, b.y + b.h]) expect(at(y)).toBeGreaterThanOrEqual(full - 1e-9);
+    }
+    // The text under its strength still holds AA over the whitest photo.
+    expect(contrastRatio(inner.colors.ink, `rgb(${blendOver(inner.colors.surface, full, 255).join(", ")})`)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("content that fills the picture is a flat scrim at scrimAlpha", async () => {
+    const ui = render(`image "x" src="/x.jpg" ratio=16:9\n  text "A"\n  text "B"\n  text "C"\n  text "D"\n  text "E"\n  text "F"\n`, { width: 360, theme: lightTheme, animate: false, ...loaded });
+    await ui.sayshape.imagesLoaded();
+    expect(stopsOf(ui)).toBeUndefined();
+    const inner = overImageTheme(lightTheme);
+    expect(ui.drawOps.some((d) => d.op === "fill" && d.fillStyle === inner.colors.surface && Math.abs(d.globalAlpha - scrimAlpha(inner)) < 1e-9)).toBe(true);
   });
 });
 
