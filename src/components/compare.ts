@@ -326,6 +326,7 @@ function paintBlocks(box: Box, ctx: PaintContext, d: CompareLayout, top: number)
 
 export const compareRow: ComponentDef = {
   type: "compare-row",
+  noBox: true,
   category: "data",
   description: "One row of a comparison: an attribute and the field each option's value comes from.",
   text: { description: "The attribute's name. Defaults to the field name." },

@@ -56,6 +56,34 @@ stat label="Total" value={total}
 - **Problems the parser reports**, each skipping only that value: an expression not in braces or with a syntax error, a name used twice, a name that's already state, a name expressions can't read (`__proto__`, `constructor`, `prototype`) or the engine uses (`screen`), a name nothing defines, and cycles, direct (`derive x={x + 1}`) or through others (`p` → `q` → `p`), which are left out with the loop named. A spec can derive at most 200 values.
 - Lists that derived values hold are new, frozen lists: filtering or sorting never changes the list in state.
 
+## Look
+
+One line, written first, chooses how the whole interface looks, so two answers don't have to look the same:
+
+```
+look mood=bold type=editorial shape=soft density=airy
+card
+  text "Yosemite weekend" style=title
+  text "Two days, three hikers, one long trail." tone=muted
+  button "Plan it" on=emit:plan
+```
+
+Every prop takes one named option, and leaving a prop out (or writing `default`) keeps the app's own look:
+
+| Prop | Options | What changes |
+|---|---|---|
+| `mood` | `quiet`, `bold` | How the app's accent is used. `quiet`: the accent alone, flat, and no shadows. `bold`: the accent as a gradient toward a deeper (or, with dark text on the accent, lighter) mix with the theme's own ink or surface, and deeper shadows. A theme that already has a gradient keeps its own. |
+| `type` | `editorial`, `classic`, `technical` | The typefaces. `editorial`: serif headings (`text style=title` and `display`), a step larger, over the app's text face. `classic`: serif headings and text. `technical`: the app's monospaced face for headings. |
+| `shape` | `sharp`, `soft`, `round` | Corner radii: about a third, one and a half times, or a little over twice the app's. |
+| `density` | `compact`, `airy` | Spacing (three quarters, or 1.35 times the app's) and control height (0.9 or 1.1 times, never under 28 px). |
+
+- **Never colors, fonts or sizes.** The options are roles, like `tone=` and `variant=`. Colors still come only from the app (its theme, brand colors, the MCP `colors` argument); `mood` only changes how the theme's own accent and shadow are used. Fonts come from a fixed list of stacks of faces the app may already have loaded, each ending in a system face (`Georgia, serif`, the app's own monospaced stack), so nothing a spec says makes the engine fetch a font. Sizes are worked out from the app's own, so a compact app stays compact.
+- **Readable whatever is chosen.** Every option keeps the contrast checks the themes pass (`test/a11y/beyond.test.ts`), in light, dark and the Studio themes. In a forced-colors mode (Windows Contrast Themes) the person's system colors still win over any look.
+- **First, unindented, once.** Write it before the first element, so the screen draws in its look from the start; `state` and `derive` lines may come before it. A look line after an element still applies to the whole interface, from the next layout after it arrives, with a warning to move it up: while streaming, what was already drawn changes its look when it arrives. An indented look line is ignored with a warning, and so is a second one (the first is kept).
+- **Problems the parser reports**, each a warning that keeps the rest of the line: a prop that isn't one of these four (a color, font or size prop is told that a look never sets them), an option that isn't one of its choices, a value or an expression, and quoted text.
+- **Hosts can turn it off.** With the engine's `look: false` (`render(spec, { look: false })`, `parse(…, { look: false })`), a look line is ignored with a warning and the app's look stays. A host's own element named `look` keeps its line. The model guide explains the line only with `GuideOptions.look`.
+- **Inside slides**, `density`, `shape` and `type`'s sizes don't apply (a slide has its own design size); `mood` and `type`'s faces do. Slide headings keep the text face.
+
 ## Expressions
 
 Anything inside `{…}` is evaluated against state.
@@ -412,6 +440,44 @@ state open=14
 stat label="Open orders" value={open} tip="Paid, not yet handed to the carrier"
 button "Ship all" on=set:open:0 tip="Marks every open order shipped"
 ```
+
+## Motion
+
+Every element with a box of its own accepts `enter=`: how it comes in the first time it's drawn in sight. A container with `stagger=true` brings its children in one after another instead of all at once:
+
+```
+column enter=rise
+  text "Yosemite weekend" style=title
+row stagger=true enter=rise
+  stat label="Days" value="2"
+  stat label="Hikers" value="3"
+  stat label="Water (L)" value="18"
+button "Plan it" on=emit:plan enter=scale
+```
+
+- **Roles, not timings.** `fade` fades in; `rise` fades in moving up a little; `scale` fades in growing from a little smaller. The engine chooses the duration, the distance and the easing; a spec never names them.
+- **Once, when it comes into sight.** An element further down the page plays its entrance when it's scrolled to, and never again: not after scrolling away and back, not when state changes, not when a later line of a streamed spec arrives. A line that arrives while a spec streams in enters as it arrives. An edit to the spec keeps what was already shown at rest, even when lines above it were added or removed; a changed line plays as new.
+- **`stagger=true`.** Each child takes its turn with its own `enter=`, else the container's, else `fade`, a short step apart (children past the tenth go with the tenth). With `each` inside, every copy takes a turn. The container's own `enter=` then moves only its own frame, not its children.
+- **Only the drawing moves.** Layout, pressing, Tab and screen readers see every element where it will end up, from the first frame.
+- **Reduced motion wins.** With reduced motion (the person's setting) or the engine's `animate: false`, everything is drawn in its final state at once, as in a saved picture.
+- **Problems the parser reports**, each a warning that keeps the element: a role that isn't one of the three, a `stagger=` that isn't `true` or `false`, either prop on `each` or `if` (put it on the element around it), on an element its parent draws (a `menu-item`, a `table-column`, a chart layer), and `stagger=` on an element without children. A component's own prop named `enter` or `stagger` keeps its meaning.
+- The model guide explains these only with `GuideOptions.motion`.
+
+## Pictures
+
+An `image` can be more than a picture in a column. These are kept out of the default model guide (like motion); the parser accepts them either way, and a guide option (`pictures: true`, [model.md](model.md)) tells the model about them:
+
+```
+image "Lake at dawn" src="/lake.jpg" ratio=16:9 zoom=slow
+  text "Quiet mornings" style=title
+  text "Cabins by the water"
+  button "Book" on=emit:book
+```
+
+- **Elements under an image** are laid over it. The picture is at least as tall as its `ratio=` and grows to hold them; short content sits in the middle. Buttons and other controls over it work as anywhere. `caption=` isn't shown on such an image (a warning says so): write the words as a `text` line.
+- **Readable by construction.** The app, not the spec, darkens the photo and draws what is over it in light text, so it reads on any photo, light, dark or busy, at the same contrast as text anywhere else (4.5:1). Specs never choose an overlay, color or shade. In a forced-colors mode (Windows Contrast Themes) the photo is left out and the words sit on the person's own colors.
+- **`shape=rounded|square|circle`.** The outline (rounded is the default and follows the theme's corners; `circle` is fully rounded, so `ratio=1:1` gives a round avatar). `fit=cover` (default) crops the edges to fill the space and `fit=contain` shows the whole picture.
+- **`zoom=slow`.** The photo drifts about 10% closer over several seconds, once, when it comes into sight. It changes how the picture is painted, never where anything sits. With reduced motion or `animate: false` the picture stays still.
 
 ## Rules (experimental)
 

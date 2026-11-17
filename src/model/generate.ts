@@ -138,6 +138,11 @@ export interface GenerateOptions {
    * guide (guide mode "report"). Default off.
    */
   presets?: boolean;
+  /**
+   * Pass false when the engine draws with look: false, so a look line the
+   * model writes is reported (and repaired away). Default: look lines are read.
+   */
+  look?: boolean;
   /** Appended to the user's request, e.g. "/no_think" to turn off Qwen3's thinking. */
   userSuffix?: string;
   /**
@@ -220,7 +225,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
   const sent: ChatMessage[] = [{ role: "system", content: guide }, ...context, request];
 
   const diagnose = (spec: string): Diagnostic[] => [
-    ...parse(spec, checkWith, { knownNames: o.stateNames, ...(behavior ? { behavior } : {}), ...(presets ? { presets } : {}) }).diagnostics,
+    ...parse(spec, checkWith, { knownNames: o.stateNames, ...(behavior ? { behavior } : {}), ...(presets ? { presets } : {}), ...(o.look === false ? { look: false } : {}) }).diagnostics,
     ...(spec.trim() ? o.check?.(spec) ?? [] : []),
   ];
 

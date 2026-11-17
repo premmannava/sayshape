@@ -32,7 +32,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `width` | parent width | A fixed width in CSS pixels |
 | `minHeight` | `0` | Minimum canvas height |
 | `padding` | `20` | Space around the whole screen |
-| `animate` | `true` | Fade new elements in (off when the user prefers reduced motion) |
+| `animate` | `true` | Motion: new elements fade in, `enter=` entrances play ([Motion](language.md#motion)), values glide. `false`, or reduced motion (`reducedMotion`, else the system setting, which wins even over `true`), draws everything in its final state at once |
 | `imageHosts` | `[]` | Hosts images may load from besides your own site; `COMMON_IMAGE_HOSTS` is a ready-made list ([Images](#images)) |
 | `loadImage` | an `<img>` with CORS | Custom image loading, for tests, server rendering or signed URLs |
 | `onWarning` | `console.warn` | Receives problems found while running, like a blocked image |
@@ -42,9 +42,10 @@ The canvas fills its parent's width and grows to fit its content.
 | `pixelRatio` | the window's `devicePixelRatio` | Device pixels per CSS pixel in the canvas bitmap |
 | `streamPlaceholders` | `false` | For specs written layout first, data last: while a spec streams in, names an element reads before their `state` line arrives draw as placeholders and aren't reported until `endStream()` ([Layout first while streaming](model.md#layout-first-while-streaming)) |
 | `presets` | `false` | Expand `report` blocks into ordinary elements when the spec is read; `expandedSpec` shows the result ([the report preset](model.md#data-answers-with-the-report-preset-opt-in)) |
+| `look` | `true` | Read a spec's look line (`look mood=bold type=editorial`), which lays look tokens over this theme, never colors of its own; `false` keeps the theme as it is and reports the line with a warning ([Look](language.md#look)). `sayshape.look` holds the choices in use |
 | `behavior` | `false` | Experimental: `every` rules and dragging in scenes ([Behavior](#behavior-experimental-off-by-default)) |
 | `clock` | the real clock | Where time comes from (`now`, `setTimeout`, `clearTimeout`): scene motion, fade-ins and rules. `sayshape/testing` passes one a test advances |
-| `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it, rules wait for a first press or key |
+| `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it nothing animates (as with `animate: false`), and rules wait for a first press or key |
 
 ## Methods
 
@@ -63,6 +64,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `imagesLoaded()` | A promise that resolves once every requested image has loaded or failed |
 | `picture({ pixelRatio?, background?, widen? })` | A promise of a new canvas with the screen as it is now (current state and screen), at 2× by default, on the theme's surface, without hover, focus, popups or messages. When a table scrolls sideways, the picture is drawn wider (up to 2,400 px) so every column shows; `widen: false` keeps the screen's width. Save it with `toBlob()` for a "Save image" button |
 | `copyText()` | The screen as plain text, for a "Copy text" button, since nothing on a canvas can be selected: headings and text as lines, fields as `Label: value`, checkboxes as `[x]`, and tables and chart data as tab-separated rows that paste into a spreadsheet as cells. Buttons are left out, and a password is never included |
+| `entranceOf(id)` | Where an element's entrance (`enter=`, or its turn under `stagger=true`) was in the last frame: `{ role, progress }`, progress 0 before it starts or while out of sight and 1 at rest; null without one. `sayshape/testing` has it as `ui.entrance(query)` |
 | `hiddenWidth()` | How much wider the screen would need to be for nothing to scroll sideways; 0 when nothing does |
 | `setTheme(theme)` | Switch themes |
 | `find(type)` | All nodes of a type, e.g. `ui.find("button")` |

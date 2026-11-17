@@ -152,6 +152,8 @@ export function sayShapeLineTest(isElement: (name: string) => boolean, opts: { b
     if (!word) return false;
     if (word === "state") return /^state(\s|$)/.test(t);
     if (word === "derive") return /^derive(\s|$)/.test(t);
+    // A look line chooses with name=option, never a sentence ("Look, here's…").
+    if (word === "look") return /^look(\s+[a-z]+=\S+)+\s*$/.test(t);
     // Behavior on: a rule line, every 1s … (not the word "every" starting a sentence).
     if (word === "every" && opts.behavior) return /^every\s+(\d|\.\d)/.test(t);
     // Presets on: a report and, indented under it, its parts (count, sum amount, bar month amount).

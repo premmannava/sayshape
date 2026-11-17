@@ -314,6 +314,10 @@ A picture, such as a product photo. The quoted text says what it shows, and is d
 | `ratio` | `16:9` / `4:3` / `3:2` / `1:1` / `2:3` / `3:4` | Width to height: 16:9, 4:3, 3:2, 1:1, 2:3 or 3:4. The space is kept while the image loads. |
 | `fit` | `cover` / `contain` | cover fills the space and crops the edges; contain shows the whole image. |
 | `caption` | string | A muted line under the image. |
+| `shape` | `rounded` / `square` / `circle` | The picture's outline: rounded (default), square, or circle (fully rounded; use ratio=1:1 for a round avatar). |
+| `zoom` | `none` / `slow` | slow: the picture drifts slowly closer, once, when it comes into sight. The app sets the timing; with reduced motion it stays still. |
+
+Children: any elements.
 
 ```
 image "Ridgeline trail runners, side view" src="/images/ridgeline.jpg" ratio=4:3

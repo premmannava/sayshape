@@ -62,7 +62,12 @@ export interface Theme {
   };
   space: { xs: number; sm: number; md: number; lg: number; xl: number };
   radius: { sm: number; md: number; lg: number };
-  font: { family: string; mono: string };
+  /**
+   * family: everything's face; mono: code. display: headings (text
+   * style=title and display), when a look's type= gives them a face of their
+   * own (src/look.ts). Missing: headings use family.
+   */
+  font: { family: string; mono: string; display?: string };
   text: { caption: number; body: number; lead: number; title: number; display: number };
   control: { height: number };
   /**
@@ -356,7 +361,8 @@ export function extendTheme(from: Theme, patch: DeepPartial<Theme>): Theme {
   const out = structuredClone(from) as Theme;
   for (const [k, v] of Object.entries(patch)) {
     const key = k as keyof Theme;
-    if (v && typeof v === "object") Object.assign(out[key] as object, v);
+    // A group the theme doesn't have yet (slide, deck) is added whole.
+    if (v && typeof v === "object") (out as unknown as Record<string, unknown>)[key] = Object.assign((out[key] as object | undefined) ?? {}, v);
     else (out as unknown as Record<string, unknown>)[key] = v;
   }
   if (patch.colors) {

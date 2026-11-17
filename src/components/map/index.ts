@@ -787,6 +787,7 @@ map bind=selected fit=pins cluster=true controls=true
 
 export const pin: ComponentDef = {
   type: "pin",
+  noBox: true,
   category: "data",
   description: "A labelled point on a Canvas map. The optional detail is shown in a multiline hover tooltip.",
   text: { description: "The place name shown next to the pin.", required: true },
