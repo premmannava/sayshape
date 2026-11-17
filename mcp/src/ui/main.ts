@@ -19,7 +19,7 @@ import { sceneComponents } from "../../../src/components/scene";
 import type { Theme } from "../../../src/theme";
 import type { Box, Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
-import { eventDelivery, FIXING_SPEC, imageName, nextChunk, outcomeOf, REPEAT_SPEC, SHOW_ANYWAY } from "./messages";
+import { eventDelivery, imageName, nextChunk, outcomeOf } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
 import { COPY_ACTION, DECK_ACTION, DEFAULT_PRESET, PRESENT_ACTION, interfaceTheme, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset, type Tools } from "./theme-selection";
 import { browserClipboard, writeClipboard } from "./clipboard";
@@ -82,28 +82,23 @@ const INTRO = `card
 let introShowing = false;
 
 /**
- * The spec behind a "being fixed" note, kept so "Show this version" can bring
- * it back. Smaller models send flawed or repeated interfaces more often, and
- * each call makes a new view in the chat, so a view folds itself away once
- * its result says a corrected or identical one is coming or already shown.
+ * Smaller models send flawed or repeated interfaces more often, and each call
+ * makes a new view in the chat, so a view hides itself completely (the host
+ * sizes the frame from its content, so it collapses to nothing) once its
+ * result says a corrected or identical one is coming or already shown.
  */
-let folded: string | null = null;
+let folded = false;
 let pendingOutcome: "fixing" | "repeat" | null = null;
 
 function fold(outcome: "fixing" | "repeat"): void {
   if (!sayshape) { pendingOutcome = outcome; return; }
-  folded = sayshape.spec;
+  folded = true;
   loadingData.clear();
   awaiting = false;
   syncLoading();
-  sayshape.setSpec(outcome === "fixing" ? FIXING_SPEC : REPEAT_SPEC, { resetState: true });
-}
-
-function unfold(): void {
-  if (!sayshape || folded === null) return;
-  sayshape.setSpec(folded, { resetState: true });
-  folded = null;
-  applyHostData();
+  // The wrapper holds both the toolbar and the canvas, so nothing inside can show it again.
+  const wrapEl = bar.parentElement;
+  if (wrapEl) wrapEl.hidden = true;
 }
 
 function syncLoading(): void {
@@ -399,7 +394,7 @@ async function deliver(name: string, value: Value | undefined, state: Record<str
  */
 async function saveImage(): Promise<void> {
   if (!sayshape) return;
-  if (introShowing || folded !== null) { sayshape.notify("There's no interface to save yet"); return; }
+  if (introShowing || folded) { sayshape.notify("There's no interface to save yet"); return; }
   if (showsDeck()) { await saveDeck("pdf"); return; }
   let blob = "";
   try {
@@ -421,7 +416,7 @@ async function saveImage(): Promise<void> {
 
 /** Whether the interface showing is a slide deck, which saves as a file of slides, not one image. */
 function showsDeck(): boolean {
-  return !!sayshape && !introShowing && folded === null && /^\s*deck\b/m.test(sayshape.spec);
+  return !!sayshape && !introShowing && !folded && /^\s*deck\b/m.test(sayshape.spec);
 }
 
 /** The width decks are drawn at for a file: a slide's own design width plus the view's padding, so nothing is scaled down. */
@@ -502,7 +497,7 @@ async function saveDeck(kind: keyof typeof DECK_FILES): Promise<void> {
  */
 async function copyText(): Promise<void> {
   if (!sayshape) return;
-  if (introShowing || folded !== null) { sayshape.notify("There's nothing to copy yet"); return; }
+  if (introShowing || folded) { sayshape.notify("There's nothing to copy yet"); return; }
   const text = sayshape.copyText();
   if (!text) { sayshape.notify("There's no text to copy"); return; }
   const ok = await writeClipboard(text, browserClipboard(document));
@@ -634,7 +629,6 @@ async function start(): Promise<void> {
   });
   sayshape.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
     if (!sayshape) return;
-    if (name === SHOW_ANYWAY) { unfold(); return; }
     // A code block's copy button (emit:copy:<code>) is the person's own: it goes to the clipboard, not the model.
     if (name === "copy" && typeof value === "string") { void copyCode(value); return; }
     void deliver(name, value, sayshape.state.snapshot());
