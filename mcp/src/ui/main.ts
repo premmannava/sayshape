@@ -21,6 +21,7 @@ import type { Box, Value } from "../../../src/types";
 import { tidySpec } from "../../../src/model/clean";
 import { eventDelivery, imageName, nextChunk, outcomeOf } from "./messages";
 import { firstFamily, type ReadVar } from "./host-theme";
+import { needsToolbarRow } from "./toolbar-room";
 import { COPY_ACTION, DECK_ACTION, DEFAULT_PRESET, PRESENT_ACTION, interfaceTheme, isPresetId, MOTION_ACTION, SAVE_ACTION, TOOLBAR_PADDING, toolbarSpec, toolbarWidth, themeForPreset, type Tools } from "./theme-selection";
 import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
@@ -259,9 +260,40 @@ function show(spec: string, final: boolean): void {
   // The toolbar starts without the deck tools, so a view that never shows a deck looks as it always did.
   if (deck && !toolbarHasDeck) buildToolbar(true);
   themePicker?.state.set("deck", deck);
-  // A slide fills the width up to its corner, so the tools get a row of their own above it instead of sitting over it.
-  bar.parentElement?.classList.toggle("deck", deck);
+  // A slide fills the width up to its corner, so a deck's tools always get a row of their own.
+  deckShowing = deck;
+  placeToolbar();
   fitScreen();
+}
+
+/** Whether a deck is showing (its tools always take a row of their own). */
+let deckShowing = false;
+/** What the last check looked at, so a repaint with nothing laid out again costs nothing. */
+let roomKey: { root: unknown; width: number; tools: number; deck: boolean } | null = null;
+let roomMeasure: CanvasRenderingContext2D | null | undefined;
+const measureText = (text: string, font: string): number => {
+  roomMeasure ??= document.createElement("canvas").getContext("2d");
+  if (!roomMeasure) return Infinity;
+  roomMeasure.font = font;
+  return roomMeasure.measureText(text).width;
+};
+
+/**
+ * Give the tools a row of their own above the interface when something is drawn in its top-right corner
+ * (tabs across the top, say), else let them sit over the corner. Moving the strip never changes the
+ * interface's width, so this cannot set off another layout.
+ */
+function placeToolbar(): void {
+  const wrap = bar.parentElement;
+  if (!wrap || !sayshape) return;
+  const root = sayshape.boxes;
+  const width = canvas.clientWidth;
+  const toolsWidth = toolbarWidth(tools);
+  // Without a modal, boxes is the same object until the next layout.
+  if (roomKey && roomKey.root === root && roomKey.width === width && roomKey.tools === toolsWidth && roomKey.deck === deckShowing) return;
+  roomKey = { root, width, tools: toolsWidth, deck: deckShowing };
+  const height = themeCanvas.clientHeight || 38;
+  wrap.classList.toggle("bar-row", deckShowing || needsToolbarRow(root, width, { w: toolsWidth, h: height }, measureText));
 }
 
 function applyHostData(): void {
@@ -627,6 +659,8 @@ async function start(): Promise<void> {
     themePicker?.state.set("rules", count);
     if (bar && !tools.picker && !tools.copy && !tools.save) bar.hidden = count === 0;
   });
+  // After each frame: the boxes only change when the interface is laid out again, so this mostly does nothing.
+  sayshape.on("render", placeToolbar);
   sayshape.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
     if (!sayshape) return;
     // A code block's copy button (emit:copy:<code>) is the person's own: it goes to the clipboard, not the model.
