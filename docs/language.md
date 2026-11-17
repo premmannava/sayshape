@@ -463,6 +463,22 @@ button "Plan it" on=emit:plan enter=scale
 - **Problems the parser reports**, each a warning that keeps the element: a role that isn't one of the three, a `stagger=` that isn't `true` or `false`, either prop on `each` or `if` (put it on the element around it), on an element its parent draws (a `menu-item`, a `table-column`, a chart layer), and `stagger=` on an element without children. A component's own prop named `enter` or `stagger` keeps its meaning.
 - The model guide explains these only with `GuideOptions.motion`.
 
+## Pictures
+
+An `image` can be more than a picture in a column. These are kept out of the default model guide (like motion); the parser accepts them either way, and a guide option (`pictures: true`, [model.md](model.md)) tells the model about them:
+
+```
+image "Lake at dawn" src="/lake.jpg" ratio=16:9 zoom=slow
+  text "Quiet mornings" style=title
+  text "Cabins by the water"
+  button "Book" on=emit:book
+```
+
+- **Elements under an image** are laid over it. The picture is at least as tall as its `ratio=` and grows to hold them; short content sits in the middle. Buttons and other controls over it work as anywhere. `caption=` isn't shown on such an image (a warning says so): write the words as a `text` line.
+- **Readable by construction.** The app, not the spec, darkens the photo and draws what is over it in light text, so it reads on any photo, light, dark or busy, at the same contrast as text anywhere else (4.5:1). Specs never choose an overlay, color or shade. In a forced-colors mode (Windows Contrast Themes) the photo is left out and the words sit on the person's own colors.
+- **`shape=rounded|square|circle`.** The outline (rounded is the default and follows the theme's corners; `circle` is fully rounded, so `ratio=1:1` gives a round avatar). `fit=cover` (default) crops the edges to fill the space and `fit=contain` shows the whole picture.
+- **`zoom=slow`.** The photo drifts about 10% closer over several seconds, once, when it comes into sight. It changes how the picture is painted, never where anything sits. With reduced motion or `animate: false` the picture stays still.
+
 ## Rules (experimental)
 
 Off unless the host turns on behavior ([the engine](engine.md#behavior-experimental-off-by-default)); without it, `every` is an unknown element. A rule changes state by itself on an interval, while its condition holds:

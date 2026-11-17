@@ -115,7 +115,7 @@ export function createLayoutContext(
   const within = (c: LayoutContext, node: SayShapeNode): LayoutContext => {
     const own = registry.get(node.type)?.theme;
     if (!own) return c;
-    const t = own(c.theme);
+    const t = own(c.theme, node);
     if (t === c.theme) return c;
     let d = themed.get(t);
     if (!d) {

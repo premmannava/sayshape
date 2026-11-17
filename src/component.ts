@@ -376,7 +376,15 @@ export interface ComponentDef {
    * is laid out and painted with, made from the screen's theme (a slide's
    * larger type and spacing). Return the same theme to change nothing.
    */
-  theme?(theme: Theme): Theme;
+  theme?(theme: Theme, node: SayShapeNode): Theme;
+  /**
+   * Props (and "children") this element accepts but the model guide and the
+   * docs the model reads leave out until a guide asks for them, the way
+   * MOTION_PROPS are: the parser takes them either way, and the default guide
+   * stays as it was (image's shape=, zoom= and the elements laid over it,
+   * GuideOptions.pictures).
+   */
+  quiet?: readonly string[];
   /**
    * Drawn by its parent, with no box of its own (a table-column, a detail row, a menu-item): the
    * parser warns that tip= on it isn't shown.
@@ -483,6 +491,17 @@ export const COMMON_PROPS: Record<string, PropDef> = {
 export const MOTION_PROPS: Record<string, PropDef> = {
   enter: { type: "enum", values: ENTER_ROLES, description: "How the element comes in the first time it's drawn in sight: fade, rise (fades in moving up a little) or scale (fades in growing from a little smaller). An element further down plays it when it's scrolled to. The app sets the timing; with reduced motion it's simply there." },
   stagger: { type: "boolean", default: false, description: "On an element with children: they come in one after another instead of all at once, each with its own enter= or else this element's (fade when neither)." },
+};
+
+/**
+ * What an image can be besides a picture (src/scrim.ts, media.ts), left out of
+ * the guide unless it asks for pictures (ComponentDef.quiet). Painting only:
+ * neither changes where anything is laid out.
+ */
+export const PICTURE_SHAPES = ["rounded", "square", "circle"] as const;
+export const PICTURE_PROPS: Record<string, PropDef> = {
+  shape: { type: "enum", values: PICTURE_SHAPES, default: "rounded", description: "The picture's outline: rounded (default), square, or circle (fully rounded; use ratio=1:1 for a round avatar)." },
+  zoom: { type: "enum", values: ["none", "slow"], default: "none", description: "slow: the picture drifts slowly closer, once, when it comes into sight. The app sets the timing; with reduced motion it stays still." },
 };
 
 /** A prop every element takes: COMMON_PROPS, then MOTION_PROPS. */

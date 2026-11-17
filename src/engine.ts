@@ -1053,7 +1053,7 @@ export class SayShape {
 
   private paintBox(box: Box, outerCtx: PaintContext, parentAlpha: number, cue?: StaggerCue): void {
     const def = this.registry.get(box.node.type);
-    const own = def?.theme?.(outerCtx.theme);
+    const own = def?.theme?.(outerCtx.theme, box.node);
     const ctx = own && own !== outerCtx.theme ? { ...outerCtx, theme: own } : outerCtx;
     // A leaf without its own draw-in fades in when its data arrives; containers leave it to their children.
     const leaf = !def?.paintLoading && !box.children.length;
@@ -2116,7 +2116,7 @@ export class SayShape {
     let found: Theme | null = null;
     const walk = (b: Box, t: Theme) => {
       if (found) return;
-      const own = this.registry.get(b.node.type)?.theme?.(t) ?? t;
+      const own = this.registry.get(b.node.type)?.theme?.(t, b.node) ?? t;
       if (b.node.id === node.id) { found = own; return; }
       for (const k of b.children) walk(k, own);
     };

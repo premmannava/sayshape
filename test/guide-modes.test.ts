@@ -148,6 +148,8 @@ describe("compact guide", () => {
       const line = elementLine(c.type);
       expect(line, c.type).toBeDefined();
       for (const [name, def] of Object.entries(c.props)) {
+        // Props a component keeps quiet are in the guide only when it asks for pictures (test/pictures.test.ts).
+        if (c.quiet?.includes(name)) continue;
         const expected = def.type === "enum" ? `${name}=${def.values!.join("|")}` : `${name}=`;
         expect(line, `${c.type}.${name}`).toContain(expected + (def.type === "enum" && def.required ? "!" : ""));
         if (def.required) expect(line, `${c.type}.${name} required`).toMatch(new RegExp(`${name}=\\S*!`));

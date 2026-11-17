@@ -186,6 +186,10 @@ const ui = new SayShape(canvas, { streamPlaceholders: true });
 guide: { look: true }                 // off by default: the guide is then exactly what it was
 ```
 
+### Pictures
+
+`pictures: true` adds a short PICTURES section to the guide (built from `PICTURE_PROPS` in `src/component.ts`) and shows `image`'s `shape=`, `zoom=` and its children in its entry: `shape=rounded|square|circle`, `zoom=slow`, and elements indented under an image to lay them over it ([Pictures](language.md#pictures)). Off (default), the guide is exactly what it was (`ComponentDef.quiet` leaves them out); the parser accepts them either way. The model never chooses colors or an overlay: the engine makes the words over a photo readable. `elementGuide` takes the same `pictures` option.
+
 ### Motion
 
 `motion: true` adds a short MOTION section to the guide (full or compact, built from `MOTION_PROPS` in `src/component.ts`): `enter=fade|rise|scale` on any element and `stagger=true` on a container ([Motion](language.md#motion)). Off (default), the guide is exactly what it was. The parser accepts the props whatever the guide says, and the engine plays them unless motion is off.
