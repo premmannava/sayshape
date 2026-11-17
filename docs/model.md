@@ -198,6 +198,8 @@ guide: { look: true }                 // off by default: the guide is then exact
 guide: { motion: true }               // off by default: the guide is then exactly what it was
 ```
 
+The MCP server never turns these three on in its quick start or guide, so each call's input stays the same size. A model can still ask for them: `sayshape_docs` with `topics: ["look"]`, `["motion"]` or `["pictures"]` returns the full section from the same generators (`lookGuide`, `motionGuide`, `picturesGuide`), and the quick start's topic list names them, in clients that draw with the server's own engine.
+
 ### Data answers with the report preset (opt-in)
 
 Most of what a model writes for a data answer is layout it doesn't need to choose: where the figures go, which cards hold which chart, a table's columns, headers and formats. The `report` preset lets it name the data and what to show, and the engine writes the layout:

@@ -43,6 +43,7 @@ const docsSidebar: DefaultTheme.SidebarItem[] = [
       { text: "Conditional visibility", link: "/docs/language/conditions" },
       { text: "Actions and navigation", link: "/docs/language/actions" },
       { text: "Slide decks", link: "/docs/language/slides" },
+      { text: "Look, motion and pictures", link: "/docs/language/look-and-motion" },
       { text: "Validation and diagnostics", link: "/docs/language/diagnostics" },
     ],
   },

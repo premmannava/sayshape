@@ -17,7 +17,7 @@ you: "Compare the three phone plans I pasted"
 | | |
 |---|---|
 | `show_interface` | Takes a spec (and an optional title), checks it with SayShape's own parser and returns any skipped lines with line numbers, along with the docs for the elements on those lines. The chat app shows the result in the view. Its description carries a short quick start (about 450 tokens): the syntax, every element's name, every expression function and how to write for a chat. |
-| `sayshape_docs` | Props and an example for just the elements the model names (a `table` brings its `table-column`), and topics on request: expressions, actions, lists, rules, examples, chat, database. |
+| `sayshape_docs` | Props and an example for just the elements the model names (a `table` brings its `table-column`), and topics on request: expressions, actions, lists, rules, examples, look, motion, pictures, chat, database. `look` (the look line), `motion` (`enter=` and `stagger=`) and `pictures` (content over an image, `shape=`, `zoom=`) come from the same generators as the guide's optional sections; the quick start only names them, so they cost nothing until a model asks. |
 | `ui://sayshape/interface.html` | The view: the SayShape engine, the Instrument Sans font and a small bridge script, all in one HTML file. It loads nothing from anywhere else. |
 
 In chat apps that stream tool input, the interface builds line by line while the model is still writing it. When the person presses a button with `on=emit:name`, the view sends a message into the conversation naming the action, its value and the interface's current values. The model can then reply or show an updated interface. That's the only way anything leaves an interface: specs can't run code, open links or make requests.
@@ -109,7 +109,7 @@ What doesn't work there:
 - **It needs internet access** to load the engine from the CDN; without it, or before the pinned version is on the CDN, the page names the engine version that didn't load.
 - **Interfaces that load datasets** (`--data`, `--mcp-result`) can't be shown: the page has no way to fetch rows, and the rows never go through the conversation. The model is told so and answers in text.
 - It uses SayShape's default look in light and dark; `--theme`, `--theme-picker` and the chat app's own colors and fonts apply only to the view. Brand colors (`--colors`, `--accent` and the `colors` argument) are the one thing from them the page does use.
-- The engine version is pinned and moves at releases, so the page can be one release behind the server: an element added in the newest release may not draw there yet. ([Why](https://github.com/premmannava/sayshape/blob/main/docs/releasing.md#the-engine-version-the-text-only-page-loads).)
+- The engine version is pinned and moves at releases, so the page can be one release behind the server: an element added in the newest release may not draw there yet. Its pinned engine has no look line, entrance motion or content over images, so these clients aren't offered the `look`, `motion` and `pictures` topics (a widget file, which carries this server's engine, is). ([Why](https://github.com/premmannava/sayshape/blob/main/docs/releasing.md#the-engine-version-the-text-only-page-loads).)
 - For chat apps whose sandbox blocks the CDN but can show a widget from a file, see [`--widget-dir`](#chat-apps-that-show-widgets-from-files).
 - In `--http` mode the server makes a new server for every request and never sees what the client announced, so it always answers as for a client that draws views.
 

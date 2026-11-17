@@ -26,6 +26,10 @@ The development playground uses the compact guide with a few extra notes, to lea
 
 A profile chooses which elements the model is told about: `forms`, `lists`, `shop`, `dashboard`, or a list of names. Elements bring what they need (`tab` brings `tabs`), and `column` and `text` are always included. A profile only changes the guide. The renderer can still show every registered element, and specs are checked against the renderer's elements unless you pass `enforceProfile: true` to `generateSpec`.
 
+## Optional sections
+
+`look: true`, `motion: true` and `pictures: true` add short sections on the look line, entrances and content over images ([Look, motion and pictures](../language/look-and-motion)). They're off by default, so the guide stays exactly the same size; the engine draws all three whatever the guide says.
+
 ## Size
 
 Computed from the current components when this site was built:

@@ -47,6 +47,8 @@ The canvas fills its parent's width and grows to fit its content.
 | `clock` | the real clock | Where time comes from (`now`, `setTimeout`, `clearTimeout`): scene motion, fade-ins and rules. `sayshape/testing` passes one a test advances |
 | `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it nothing animates (as with `animate: false`), and rules wait for a first press or key |
 
+**Changed with entrance motion:** reduced motion used to count only when `animate` was left out, and the `reducedMotion` option only held rules back. Now it wins over `animate: true`, and with it (or `animate: false`) nothing moves: fade-ins, gliding values, `enter=` entrances, an image's `zoom=slow` and scene motion are all drawn at rest. A host that passed `animate: true` to force motion for everyone no longer can; pass `reducedMotion: false` if you truly mean to ignore the person's setting.
+
 ## Methods
 
 | Method | Description |
@@ -169,6 +171,8 @@ const ui = new SayShape(canvas, {
 });
 ```
 
+An image can also hold elements laid over the photo, with `shape=` and `zoom=slow` ([Pictures](language.md#pictures)); the engine draws the overlay that keeps them readable, so there is nothing to set up.
+
 Images load with CORS (`crossOrigin="anonymous"`), so their server must send `Access-Control-Allow-Origin` (most image CDNs do). `COMMON_IMAGE_HOSTS` (from `src/images.ts`) lists the sites models know image addresses on, each one serving its own files with CORS headers: pass it as `imageHosts` where a model writes the specs (the engine's own default stays none, and so does `languageGuide`'s). The MCP server and the website's chat page use it; `--image-hosts` replaces it there and `--no-image-hosts` allows none. The playground uses it too, and its "Trail gear" and "Gear finder" samples use real photos from there. The space for each image is kept from its `ratio=` while it loads, so the screen doesn't jump.
 
 ## Keyboard
@@ -238,6 +242,8 @@ To find a bug, first decide which stage it's in:
 ## Theming
 
 Components never use literal colors or sizes. They read design tokens from the theme: `colors`, `space`, `radius`, `font`, `text` sizes and `control` height. SayShape ships `lightTheme` and `darkTheme`, and with `theme: "auto"` it follows the page's light or dark mode.
+
+A spec's look line (`look mood=bold type=editorial shape=soft density=airy`, [Look](language.md#look)) lays its choices over whatever theme you pass: it scales your spacing, corners, control height and heading sizes, picks a heading face from a fixed list of font stacks that fall back to system faces (or your own mono), and touches only the accent's gradient end and the shadow. It never brings colors of its own, and Windows Contrast Themes still win over it. `look: false` keeps your theme exactly as it is; `sayshape.look` holds the choices in use.
 
 With `theme: "auto"`, you can override colors from CSS with `--sayshape-*` variables on the canvas or any ancestor:
 
