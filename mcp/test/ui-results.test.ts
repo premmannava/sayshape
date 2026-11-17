@@ -13,7 +13,9 @@
  * (One exception, on purpose: the two tools files changed when slide decks
  * stopped being behind a flag, which adds deck to the quick start and the docs.
  * Another, on purpose: button's new icon=, size= and fit= props changed the docs
- * shown in repair results, so main/ui-results.json has those three lines added.)
+ * shown in repair results, so main/ui-results.json has those three lines added.
+ * And another: the look, motion and pictures topics joined sayshape_docs, which adds
+ * their names to the topic list in both tools files.)
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

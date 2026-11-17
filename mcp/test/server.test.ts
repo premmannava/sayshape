@@ -5,6 +5,8 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, NO_EMIT, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
 import { PRESSES_SAVED } from "../src/widget-file";
+import { lookGuide } from "../../src/look";
+import { motionGuide, picturesGuide } from "../../src/prompt";
 
 async function connect(now?: () => number) {
   const server = createServer({ uiHtml: () => "<!doctype html><title>view</title>", now });
@@ -70,6 +72,19 @@ describe("SayShape MCP server", () => {
     const docs = text(await client.callTool({ name: "sayshape_docs", arguments: { elements: ["piechart"], topics: ["css"] } }));
     expect(docs).toMatch(/No element called piechart\. The elements are:/);
     expect(docs).toMatch(/No topic called css\. Topics: expressions, actions, lists/);
+  });
+
+  it("gives the look, motion and pictures topics on demand, from the guide's own generators", () => {
+    expect(docsText([], ["look"])).toBe(lookGuide("full"));
+    expect(docsText([], ["motion"])).toBe(motionGuide("full"));
+    expect(docsText([], ["pictures"])).toBe(picturesGuide("full"));
+    // The quick start only names them: their text costs nothing until a model asks.
+    expect(quickStart()).toMatch(/Topics: [^\n]*look, motion, pictures/);
+    expect(quickStart()).not.toContain("LOOK (optional)");
+    // A widget file carries this server's engine and draws them; the CDN page's older engine doesn't.
+    expect(docsText([], ["look"], false, false, true, true)).toBe(lookGuide("full"));
+    expect(docsText([], ["look"], false, false, true, false)).toMatch(/^No topic called look\./);
+    expect(quickStart(false, false, true)).not.toMatch(/\blook\b/);
   });
 
   it("returns the quick start when nothing is named", async () => {

@@ -41,7 +41,8 @@ import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { sceneComponents, reviewScenes } from "../../src/components/scene";
 import type { ComponentDef } from "../../src/component";
-import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PICKS_HEADING, PICKS_HEADING_SHORT } from "../../src/prompt";
+import { elementGuide, elementIndex, guideSections, languageGuide, motionGuide, picturesGuide, pickList, PICKS_HEADING, PICKS_HEADING_SHORT } from "../../src/prompt";
+import { lookGuide } from "../../src/look";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
@@ -97,6 +98,13 @@ function register(): void {
  * it does (fileMode: --widget-dir).
  */
 const behaviorFor = (textOnly: boolean, fileMode: boolean): boolean => behaviorOn && (!textOnly || fileMode);
+
+/**
+ * Whether a client draws with this server's own engine: the view and the widget file do; the CDN page for
+ * text-only clients loads an older pinned engine (fallback.ts PAGE_ENGINE_VERSION) that has no look line,
+ * entrance motion or content over images, so it isn't offered the topics for them.
+ */
+const ownEngine = (textOnly: boolean, fileMode: boolean): boolean => !textOnly || fileMode;
 
 /** What a text-only client is told in place of a page when the spec is a deck. */
 const PAGE_DECK_TEXT = "The deck is written correctly, but this app can't show slide decks yet, so there is no page to open. Tell the person it needs a chat app that draws SayShape views.";
@@ -192,6 +200,9 @@ function topics(withData: boolean, withMcp = false, textOnly = false, fileMode =
     lists: sectionText("full", "data"),
     rules: sectionText("full", "rules"),
     examples: sectionText("full", "example"),
+    // On demand only, from the same generators as the guide's optional sections: the quick start and the
+    // default guide never carry them, so a call costs no more input tokens unless a model asks.
+    ...(ownEngine(textOnly, fileMode) ? { look: lookGuide("full"), motion: motionGuide("full"), pictures: picturesGuide("full") } : {}),
     chat: CHAT_NOTES.split("\n").slice(1).map((line) => (line === CHAT_EMIT ? emitLine : line)).join("\n"),
     ...(withData ? { database: DATA_NOTES } : {}),
     ...(withMcp ? { datasets: MCP_NOTES } : {}),

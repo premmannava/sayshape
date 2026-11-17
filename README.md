@@ -56,7 +56,7 @@ card
 
 - **One element per line, indentation for nesting.** Every finished line can be drawn at once, and a half-finished answer is still a valid, smaller screen.
 - **State and values worked out from it.** `state` holds the data, `derive` keeps a value up to date, `bind=` connects a control to state, and `{…}` reads it. Pressing Month changes `view`; the total and the chart follow.
-- **No colors, fonts or pixel sizes.** The model picks roles such as `style=title`. The engine and your theme decide how they look, so every screen matches.
+- **No colors, fonts or pixel sizes.** The model picks roles such as `style=title`. The engine and your theme decide how they look, so every screen matches. A model can still give a screen its own character with roles: a [look line](docs/language.md#look) (`look mood=bold type=editorial`), [entrances](docs/language.md#motion) (`enter=rise`) and [words over a photo](docs/language.md#pictures), made readable by the engine.
 - **No code.** `{…}` can read state, do arithmetic and call a fixed list of functions. There is no route from a spec to JavaScript, so there is nothing to sandbox.
 
 ## Try it
