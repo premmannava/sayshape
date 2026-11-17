@@ -8,11 +8,13 @@ import { describe, expect, it } from "vitest";
 import type { ComponentDef } from "../src/component";
 import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
+import { pageComponents } from "../src/components/page";
 import { sceneComponents } from "../src/components/scene";
 import { slideComponents } from "../src/components/slides";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render } from "../src/testing";
+import { overImageTheme } from "../src/scrim";
 import { darkTheme, lightTheme, studioDarkTheme, studioLightTheme, type Theme } from "../src/theme";
 import { walkBoxes } from "../src/layout";
 import type { Box } from "../src/types";
@@ -20,7 +22,7 @@ import { exampleSpec as exampleOf } from "./examples";
 import { textOverflows } from "./overflow";
 
 // deck and slide are in coreComponents; the slides entry point lists the same two.
-const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneComponents];
+const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneComponents, ...pageComponents];
 
 /**
  * Experimental scenes are where the model paints: their colors are the spec's,
@@ -189,7 +191,8 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
   describe.each(THEMES.map((t) => [t.name, t] as const))("painted in %s", (_name, theme) => {
     it("uses only theme colors and the theme font", () => {
       const ui = render(exampleSpec(def), { components: ALL, theme });
-      const palette = new Set<string>(Object.values(theme.colors));
+      // Words over a photo or on an accent band are drawn in the theme made for them, the same colors rearranged.
+      const palette = new Set<string>([...Object.values(theme.colors), ...Object.values(overImageTheme(theme).colors)]);
       const ops = ui.drawOps;
       if (def.paint || def.paintOver) expect(ops.length, "painting the example should draw something").toBeGreaterThan(0);
       for (const op of ops) {
