@@ -25,6 +25,7 @@ import { letScope } from "./lets";
 import { drawByDepth, hasDepth, type DepthHooks } from "./depth";
 import { drawEmit } from "./emit";
 import { drawReflection, type ReflectBuffer } from "./reflect";
+import { blurShape, drawBlurred } from "./blur";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -152,6 +153,10 @@ export interface Frame {
   view?: { m: Matrix; w: number; h: number; period?: number };
   /** The line whose reflection is being drawn: drawn plainly, with nothing inside reflecting again. */
   reflecting?: SayShapeNode;
+  /** Offscreen buffers blurred groups have used this frame (blur.ts, at most MAX_BLUR_LAYERS). */
+  layers?: number;
+  /** The shape being drawn again inside its blur (blur.ts): drawn plainly this time. */
+  blurring?: SayShapeNode;
   /**
    * Set to record pressable shapes (on=) as they're drawn: the regions in the
    * order they start, the ones open around the line being drawn, and which
@@ -286,6 +291,7 @@ function finishShape(node: SayShapeNode, scope: Scope, bounds: Bounds, f: Frame,
 
 /** Apply opacity and a rotation around (cx, cy), then draw, then undo them. */
 function withLook(node: SayShapeNode, scope: Scope, f: Frame, cx: number, cy: number, draw: () => void): void {
+  if (node.props.blur !== undefined && blurShape(node, scope, f, numOf, drawShape)) return;
   const g = f.g;
   g.save();
   if (node.props.opacity !== undefined) g.globalAlpha *= Math.min(1, Math.max(0, numOf(node, "opacity", scope, 1)));
@@ -608,7 +614,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
           if (args) rec.locate = (name) => (args(name) !== scope(name) ? null : outer(name));
         }
       }
-      drawAll(kids, inner, f);
+      if (!drawBlurred(node, scope, kids, inner, f, drawAll, numOf)) drawAll(kids, inner, f);
       if (node.type === "use") { f.useDepth--; if (rec && outer) { rec.copy.pop(); rec.locate = outer; } }
       g2.restore();
       f.m = was;

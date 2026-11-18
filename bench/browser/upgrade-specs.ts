@@ -22,6 +22,32 @@ export const UPGRADE_SPECS: Record<string, string> = {
   snowstormShapes: `scene "Snowstorm" w=600 h=340 duration=10 bg="#16324F"
   each items={range(150)} as=i
     circle x={(i*37 + t*(30 + 20*random(i))) % 620 - 10} y={(i*53 + t*(40 + 30*random(i+7))) % 360 - 10} r={1.5 + 3*random(i+3)} fill="#FFFFFF" opacity={0.5 + 0.5*random(i+11)}`,
+  fog: `scene "Fog drifting over a lake" w=600 h=340 duration=12 bg="#1E2D44"
+  gradient id=lake from="#2F4858" to="#14213D" angle=90
+  polygon points="0,210 120,120 230,190 340,100 470,180 600,130 600,220 0,220" fill="#16243A"
+  rect x=0 y=210 w=600 h=130 fill="url(lake)"
+  group x={-80 + 15*t} y=0 blur=24 opacity=0.85
+    ellipse x=160 y=190 rx=150 ry=30 fill="#FFFFFF 45%"
+    ellipse x=380 y=212 rx=190 ry=36 fill="#FFFFFF 35%"
+    ellipse x=600 y=180 rx=150 ry=28 fill="#FFFFFF 40%"
+  label "Morning fog" x=24 y=36 size=22 weight=bold fill="#FFFFFF"`,
+  smoke: `scene "Smoke rising from a chimney" w=600 h=340 duration=4 bg=surface
+  rect x=0 y=300 w=600 h=40 fill="#7A8B6F"
+  polygon points="200,200 320,130 440,200" fill="#8C3B2E"
+  rect x=215 y=200 w=210 h=100 fill="#C9A27E"
+  rect x=360 y=110 w=34 h=70 fill="#5A3E36"
+  group blur=6
+    each items={range(8)} as=i
+      let u={((t/4) + i/8) % 1}
+      circle x={377 + 26*sin(u*6 + i)} y={110 - 100*u} r={10 + 26*u} fill="#6B7280" opacity={0.7*(1 - u)}`,
+  snowstormBlur: `scene "Snowstorm" w=600 h=340 duration=10 bg="#16324F"
+  each items={range(10)} as=i
+    circle x={(i*67 + t*12) % 620 - 10} y={(i*41 + t*18) % 360 - 10} r=2 fill="#FFFFFF" opacity=0.5 blur=2
+  each items={range(140)} as=i
+    circle x={(i*37 + t*(30 + 20*random(i))) % 620 - 10} y={(i*53 + t*(40 + 30*random(i+7))) % 360 - 10} r={1.5 + 3*random(i+3)} fill="#FFFFFF" opacity={0.5 + 0.5*random(i+11)}
+  group blur=4
+    each items={range(12)} as=i
+      circle x={(i*97 + t*60) % 680 - 40} y={(i*61 + t*90) % 420 - 40} r={10 + 8*random(i+5)} fill="#FFFFFF" opacity=0.8`,
   solarSystem: `state speed=5 hov=""
 scene "The inner planets orbiting the Sun" w=600 h=340 duration=600 rate={speed} light=300,170 bg="#0B1026"
   circle x=300 y=170 r=28 fill="#FFD166" glow=true
