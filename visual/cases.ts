@@ -8,10 +8,15 @@
 import { coreComponents } from "../src/components";
 import { samples } from "../playground/samples";
 import { exampleSpec } from "../test/examples";
+import { exampleSpecs } from "../examples/specs";
 
 export interface VisualCase {
   name: string;
   spec: string;
+  /** Needs the experimental scene elements registered. */
+  scene?: boolean;
+  /** Needs the experimental device frame registered. */
+  device?: boolean;
 }
 
 export const cases: VisualCase[] = [
@@ -107,6 +112,8 @@ chart "Daily signups" kind=bar items=days x=d y=c
 chart "Share of bookings" kind=donut items=teams x=t y=q3 format=money
 `,
   },
+  // The example specs (examples/specs): system font, fills, glass, sized and clipped scenes.
+  ...Object.entries(exampleSpecs).map(([k, e]) => ({ name: `example-${k}`, spec: e.spec, ...(e.scene ? { scene: true } : {}), ...(e.device ? { device: true } : {}) })),
 ];
 
 export const THEMES = ["light", "dark"] as const;

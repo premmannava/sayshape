@@ -13,6 +13,7 @@ import { SayShape } from "../src/engine";
 import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { sceneComponents } from "../src/components/scene";
+import { deviceComponents } from "../src/components/device";
 import { darkTheme, lightTheme, studioDarkTheme, studioLightTheme } from "../src/theme";
 import { sceneSamples } from "../playground/scene-samples";
 import { fixtureImageLoader } from "./fixture-image";
@@ -40,7 +41,7 @@ async function main(): Promise<void> {
 
   const canvas = document.getElementById("canvas") as HTMLCanvasElement;
   const sayshape = new SayShape(canvas, {
-    components: [...coreComponents, ...mapComponents, ...(scene ? sceneComponents : [])],
+    components: [...coreComponents, ...mapComponents, ...(scene || ("scene" in visual && visual.scene) ? sceneComponents : []), ...("device" in visual && visual.device ? deviceComponents : [])],
     theme,
     width,
     // Screenshots need stills; ?motion=1 animates (and still follows prefers-reduced-motion).
