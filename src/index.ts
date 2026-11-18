@@ -8,6 +8,7 @@ export { layoutTree, boxAt, walkBoxes, isVisible } from "./layout";
 export { Inspector, type DrawCall } from "./inspector";
 export { expandPresets, humanize, REPORT_EXAMPLE, FIGURE_OPS, CHART_KINDS, type Expansion, type PresetData } from "./presets/report";
 export { languageGuide, guideSections, describeGuide, REPORT_FALLBACK, componentExampleSpec, pickList, PICKS_HEADING, WORKED_EXAMPLES, COMPACT_EXAMPLE_ORDER, type GuideOptions, type GuideMode, type GuideSection, type GuideInfo, type WorkedExampleName, type AppAction } from "./prompt";
+export { assembleGuide, languageMap, fullGuide, availableCapabilities, capabilityElements, sceneElements, problemsText, CAPABILITIES, FULL_GUIDE_TOPIC, USE_PREFIX, DEFAULT_ASK, type AssembledGuide, type CapabilityDef, type TopicProblem, type MapOptions } from "./capabilities";
 export { resolveProfile, PROFILES, ALWAYS_EXPOSED, type ComponentProfile, type ResolvedProfile } from "./profiles";
 export { COMMON_IMAGE_HOSTS } from "./images";
 export { lightTheme, darkTheme, studioLightTheme, studioDarkTheme, extendTheme, themeFromCSS, forcedColorsTheme, type Theme } from "./theme";

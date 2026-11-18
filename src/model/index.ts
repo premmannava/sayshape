@@ -13,3 +13,4 @@ export { SpecFilter, sayShapeLineTest, tidySpec, type FilterOutput } from "./cle
 export { refineEditMessages, parseEdits, applyEdits, numberSpec, wholeSpecFrom, type LineEdit } from "./edits";
 export { generateSections, parsePlan, planText, plannerInstructions, sectionInstructions, DEFAULT_MAX_SECTIONS, MAX_SECTIONS_LIMIT, type Plan, type SectionsOptions, type SectionsResult, type SectionsCost, type SectionCall, type CallRole } from "./sections";
 export { generateReport, asksForFullGuide, type ReportOptions, type ReportResult } from "./report";
+export { generateAdaptive, readUseLine, type AdaptiveOptions, type AdaptiveResult, type AdaptiveRoute } from "./adaptive";

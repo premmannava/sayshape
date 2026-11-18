@@ -194,7 +194,8 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
   const firstGuide = guideInfo(guideOpts ? guideOpts.mode ?? "full" : "custom");
   const checkWith = o.enforceProfile ? profile.registry : o.registry;
   const behavior = !!guideOpts?.behavior;
-  const presets = !!o.presets || guideOpts?.mode === "report";
+  // A capability guide offers reports only when the guide's presets is on, so its specs are read with them too.
+  const presets = !!o.presets || guideOpts?.mode === "report" || (!!guideOpts?.capabilities && !!guideOpts.presets);
   const isSayShapeLine = sayShapeLineTest((name) => o.registry.has(name), { behavior, presets });
   const timings: GenerateResult["timings"] = { totalMs: 0 };
 
