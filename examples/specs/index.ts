@@ -106,7 +106,7 @@ card variant=glass gap=12
       text "Midnight City" weight=semibold
       text "M83 · Hurry Up, We're Dreaming" tone=muted
     badge "Lossless" tone=accent
-  slider bind=at min=0 max=243
+  slider "Playback position" bind=at min=0 max=243
   row wrap=false
     text "1:14" style=caption tone=muted
     text "4:03" style=caption tone=muted align=right
