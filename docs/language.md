@@ -377,6 +377,20 @@ Everything beyond showing rows is opt-in through state, so it can be read, shown
 - **Keyboard.** Pressable headers and rows are each a Tab stop and work with Enter and Space. A table with no `sort=` or `bind=` adds no Tab stops.
 - Problems a model can fix (items that aren't a list, missing or repeated keys, cells their column can't show, too many rows or columns, too little room) are reported once through `onWarning`. While a spec streams in, a table whose columns haven't arrived shows "No columns yet".
 
+## Forms
+
+An `input` says what's wrong under it once it's been typed in and left: `required=`, `kind=email` or `kind=number` text that isn't one, or its own `error=` (shown while it isn't empty). A `check` takes `required=` (it must be ticked) and `error=` (its message, default Required) and says so once it's been toggled. A message goes as soon as the value is written from elsewhere, such as a form cleared after sending.
+
+`button validate=true` checks the whole form first: every shown field in the button's card (or, with no card around it, the open dialog or the screen) shows its message, keyboard focus moves to the first wrong one and a screen reader hears what's wrong, and `on=` runs only when nothing is. Fields inside `each` count; fields hidden by `if=`, on other screens or `disabled=` don't.
+
+```
+state email="" terms=false
+card
+  input "Email" bind=email kind=email required=true
+  check "I accept the terms" bind=terms required=true error="Accept the terms to continue"
+  button "Create account" validate=true on=emit:signup
+```
+
 ## Screens
 
 A spec can hold several screens. Only one shows at a time: the first, until a button moves to another with `go:name`. `back` returns to the previous one, and the visible screen's name is in `{screen}`.

@@ -49,6 +49,7 @@ export const button: ComponentDef = {
     icon: iconBefore("label"),
     size: { type: "enum", values: BUTTON_SIZES, default: "md", description: "md or sm (smaller)." },
     fit: { type: "boolean", default: false, description: "Natural width, even on a phone." },
+    validate: { type: "boolean", default: false, description: "First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is." },
   },
   check: (props) => iconProblems(props.icon, "icon"),
   example: `button "Book now" on=emit:book
@@ -162,6 +163,11 @@ button "Back" variant=secondary on=dec:step`,
     g.restore();
     if (!disabled) ctx.addHit(box);
   },
+  press(ctx) {
+    const node = ctx.target.node;
+    if (ctx.props(node).bool("validate") && ctx.validate && !ctx.validate()) return;
+    if (node.props.on) ctx.run(node.props.on);
+  },
 };
 
 const DETAIL_SIZE = 13, DETAIL_LH = 18;
@@ -184,6 +190,19 @@ function paintDetail(ctx: PaintContext, d: { detail: string[] }, x: number, y: n
   d.detail.forEach((line, i) => g.fillText(line, x, y + 2 + DETAIL_LH * i + DETAIL_LH / 2));
 }
 
+/** What's wrong with a checkbox: unticked while required=, or its own error=. */
+function checkProblem(p: PropReader): string {
+  const error = p.str("error", "").trim();
+  if (p.has("required") && p.cond("required")) return p.bound() ? "" : error || "Required";
+  return error;
+}
+
+/** A checkbox's value, as its message stamp reads it: a write from elsewhere hides the message, as in input. */
+const checkStamp = (p: PropReader) => valueStamp(p.bound() ? "true" : "false");
+
+/** A checkbox's label, detail and message lines, and the y (from its top) where the message starts. */
+interface CheckData { lines: string[]; lh: number; detail: string[]; problem: string; problemLines: string[]; problemY: number }
+
 export const check: ComponentDef = {
   type: "check",
   category: "input",
@@ -192,18 +211,35 @@ export const check: ComponentDef = {
   props: {
     bind: { type: "state", required: true, description: "The state name this checkbox reads and writes." },
     detail: detailProp("label"),
+    required: { type: "condition", description: "When true it must be ticked, or it says error= (default Required) once toggled." },
+    error: { type: "string", description: "Its message: for a required box left unticked, else shown while not empty." },
   },
   example: `state agreed=false
 check "I agree to the terms" bind=agreed`,
   semantics(box, ctx) {
     const p = ctx.props(box.node);
-    return { role: "checkbox", name: p.text(), checked: !!p.bound(), description: p.str("detail") || undefined };
+    const problem = (box.data as unknown as CheckData | undefined)?.problem;
+    const detail = p.str("detail") || undefined;
+    return {
+      role: "checkbox",
+      name: p.text(),
+      checked: !!p.bound(),
+      required: (p.has("required") && p.cond("required")) || undefined,
+      description: problem ? (detail ? `${problem}. ${detail}` : problem) : detail,
+      ...(problem ? { invalid: true } : {}),
+    };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const l = { ...labelLines(ctx, p.text(), box.w - 30, 3), ...detailLines(ctx, p.str("detail"), box.w - 30) };
-    box.data = l;
-    box.h = Math.max(26, l.lines.length * l.lh + 6 + l.detailH);
+    const problemY = Math.max(26, l.lines.length * l.lh + 6 + l.detailH);
+    // Its message shows once it's been toggled (or a validate=true button checked it), while its value is still the one it was left with.
+    const v = ctx.view?.(box.node);
+    const problem = v?.touched && v.stamp === checkStamp(p) ? checkProblem(p) : "";
+    const problemLines = problem ? wrapText(problem, Math.max(0, box.w - 30), themeFont(ctx.theme, 500, ctx.theme.text.caption), ctx.measure) : [];
+    const data: CheckData = { ...l, problem, problemLines, problemY };
+    box.data = data as unknown as Box["data"];
+    box.h = problemY + problemLines.length * errorLineHeight(ctx.theme);
   },
   minWidth: (node, ctx) => 30 + Math.min(100, textWidth(ctx, ctx.props(node).text(), 400, ctx.theme.text.body)),
   paint(box, ctx) {
@@ -212,8 +248,8 @@ check "I agree to the terms" bind=agreed`,
     const c = theme.colors;
     const on = !!p.bound();
     const hot = ctx.isHovered(box.node);
+    const l = box.data as unknown as CheckData;
     const selected = ctx.tween(box.node, "check:marked", on ? 1 : 0, MOTION.selection);
-    const hover = ctx.tween(box.node, "check:hover", hot ? 1 : 0, MOTION.hover);
     ctx.roundRect(box.x + 0.5, box.y + 4.5, 18, 18, Math.min(5, theme.radius.sm));
     g.fillStyle = c.surface;
     g.fill();
@@ -236,22 +272,42 @@ check "I agree to the terms" bind=agreed`,
     ctx.roundRect(box.x + 0.5, box.y + 4.5, 18, 18, Math.min(5, theme.radius.sm));
     g.save();
     g.globalAlpha *= 1 - selected;
-    g.strokeStyle = hot ? c.accent : c.control;
-    g.lineWidth = 1.25;
+    // A box with a problem is outlined in the bad color, like a field.
+    g.strokeStyle = l.problem ? c.bad : hot ? c.accent : c.control;
+    g.lineWidth = l.problem ? 1.5 : 1.25;
     g.stroke();
     g.restore();
     g.font = ctx.font(400, theme.text.body);
     g.textAlign = "left";
     g.textBaseline = "middle";
     g.fillStyle = c.ink;
-    const l = box.data as { lines: string[]; lh: number; detail: string[] };
     l.lines.forEach((line, i) => g.fillText(line, box.x + 30, box.y + 14 + i * l.lh));
     paintDetail(ctx, l, box.x + 30, box.y + 14 + (l.lines.length - 1) * l.lh + l.lh / 2);
+    if (l.problemLines.length) {
+      g.font = ctx.font(500, theme.text.caption);
+      g.fillStyle = c.bad;
+      g.textBaseline = "top";
+      const lh = errorLineHeight(theme);
+      l.problemLines.forEach((line, i) => g.fillText(line, box.x + 30, box.y + l.problemY - 2 + i * lh));
+    }
     ctx.addHit(box);
   },
   press(ctx) {
-    const key = ctx.props(ctx.target.node).raw("bind");
-    if (key) ctx.set(key, !ctx.props(ctx.target.node).bound());
+    const node = ctx.target.node;
+    const p = ctx.props(node);
+    const key = p.raw("bind");
+    if (!key) return;
+    const next = !p.bound();
+    ctx.set(key, next);
+    // Toggled once, it says what's wrong (a required box left unticked) while that's still its value.
+    const v = ctx.view(node);
+    v.touched = 1;
+    v.stamp = valueStamp(next ? "true" : "false");
+  },
+  validate(p, v) {
+    v.touched = 1;
+    v.stamp = checkStamp(p);
+    return checkProblem(p);
   },
 };
 
@@ -1039,4 +1095,10 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     };
   },
   cursor: () => "text",
+  validate(p, v) {
+    if (p.cond("disabled")) return "";
+    v.touched = 1;
+    v.stamp = valueStamp(fieldValue(p));
+    return fieldProblem(p, !!v.unparsed);
+  },
 };

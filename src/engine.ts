@@ -1468,7 +1468,56 @@ export class SayShape {
         this.invalidate("paint");
         this.focusDom();
       },
+      validate: () => this.validateAround(target.node),
     };
+  }
+
+  /**
+   * A button with validate=true: every shown field around it (in its nearest card, else the open
+   * dialog or the screen) shows what's wrong with it now, as if it had been used and left. The
+   * first wrong one takes keyboard focus and is announced. Fields that aren't laid out (if= false,
+   * other screens) aren't checked. True when nothing is wrong.
+   */
+  private validateAround(node: SayShapeNode): boolean {
+    this.endEdit();
+    const chainTo = (tree: Box | null): Box[] | null => {
+      if (!tree) return null;
+      if (tree.node.id === node.id) return [tree];
+      for (const k of tree.children) {
+        const below = chainTo(k);
+        if (below) return [tree, ...below];
+      }
+      return null;
+    };
+    const chain = chainTo(this.modal) ?? chainTo(this.rootBox);
+    if (!chain) return true;
+    const form = chain.slice(0, -1).reverse().find((b) => b.node.type === "card") ?? chain[0]!;
+    const wrong: { node: SayShapeNode; problem: string }[] = [];
+    walkBoxes(form, (b) => {
+      const def = this.registry.get(b.node.type);
+      if (!def?.validate) return;
+      const problem = def.validate(new PropReader(b.node, scopeOf(b.node, this.state.scope)), this.viewOf(b.node));
+      if (problem) wrong.push({ node: b.node, problem });
+    });
+    this.invalidate("layout");
+    const first = wrong[0];
+    if (!first) return true;
+    // Lay out now, so the messages take their room before focus moves to the first field.
+    this.renderNow();
+    const box = this.boxOf(first.node);
+    const hit = this.hits.find((h) => h.focusable && h.box.node.id === first.node.id);
+    if (box) {
+      const target: HitTarget = hit ? { node: first.node, box: hit.box, detail: hit.detail } : { node: first.node, box };
+      this.keyboardMode = true;
+      if (this.registry.get(first.node.type)?.editor) this.beginEdit(target);
+      else { this.focus = target; this.focusDom(); }
+    }
+    const p = new PropReader(first.node, scopeOf(first.node, this.state.scope));
+    const name = p.text() || p.str("label") || p.str("placeholder");
+    const more = wrong.length > 1 ? `${wrong.length} fields need attention. ` : "";
+    this.a11y.announce(`${more}${name ? `${name}: ` : ""}${first.problem}`);
+    this.invalidate("paint");
+    return false;
   }
 
   // ---------------------------------------------------------------- popups
