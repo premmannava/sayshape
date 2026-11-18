@@ -12,6 +12,7 @@ import type { Theme } from "../../theme";
 import type { SayShapeNode, Value } from "../../types";
 import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
+import { STYLED, capOf, drawCommands, joinOf, roundPolyline, traceRounded } from "./line-style";
 import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type SceneRegion } from "./interact";
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
@@ -237,8 +238,9 @@ function finishShape(node: SayShapeNode, scope: Scope, bounds: Bounds, f: Frame,
   if (stroke) {
     g.strokeStyle = stroke;
     g.lineWidth = Math.max(0, numOf(node, "width", scope, 1));
-    g.lineCap = "round";
-    g.lineJoin = "round";
+    const styled = STYLED.has(node.type);
+    g.lineCap = styled && node.props.cap !== undefined ? capOf(strOf(node, "cap", scope)) : "round";
+    g.lineJoin = styled && node.props.join !== undefined ? joinOf(strOf(node, "join", scope)) : "round";
     const dash = strOf(node, "dash", scope);
     g.setLineDash(dash ? (dash.match(/\d+(\.\d+)?/g) ?? []).map(Number).filter((x) => x >= 0).slice(0, 8) : []);
     g.stroke();
@@ -434,14 +436,15 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
     }
     case "path": {
       const d = strOf(node, "d", scope) ?? "";
+      const round = node.props.round === undefined ? 0 : n("round");
       f.shapes++;
       withLook(node, scope, f, 0, 0, () => {
         g.beginPath();
-        const b = tracePath(d, g) ?? { x: 0, y: 0, w: 0, h: 0 };
+        const b = (round > 0 ? traceRounded(d, g, round) : tracePath(d, g)) ?? { x: 0, y: 0, w: 0, h: 0 };
         // A path with only an outline isn't filled, as in SVG paths drawn as lines.
         finishShape(node, scope, b, f, node.props.stroke === undefined ? "#000000" : null);
         if (f.press?.open.length) {
-          const rings = flattenPath(d);
+          const rings = flattenPath(d, round);
           const fill = node.props.fill === undefined ? (node.props.stroke === undefined ? "#000000" : undefined) : strOf(node, "fill", scope);
           if (fill !== undefined && fill.trim() !== "" && fill.trim() !== "none") addGeom(f, { kind: "poly", m: f.m, rings });
           else for (const pts of rings) addGeom(f, { kind: "polyline", m: f.m, pts, width: Math.max(0, n("width", 1)) });
@@ -457,9 +460,13 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       f.shapes++;
       withLook(node, scope, f, b.x + b.w / 2, b.y + b.h / 2, () => {
         g.beginPath();
-        g.moveTo(pts[0]![0], pts[0]![1]);
-        for (const [px, py] of pts.slice(1)) g.lineTo(px, py);
-        g.closePath();
+        const round = node.props.round === undefined ? 0 : n("round");
+        if (round > 0) drawCommands(roundPolyline(pts, true, round), g);
+        else {
+          g.moveTo(pts[0]![0], pts[0]![1]);
+          for (const [px, py] of pts.slice(1)) g.lineTo(px, py);
+          g.closePath();
+        }
         finishShape(node, scope, b, f, "#000000");
         addGeom(f, { kind: "poly", m: f.m, rings: [pts] });
       });
