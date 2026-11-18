@@ -43,6 +43,7 @@ import { sceneComponents, reviewScenes } from "../../src/components/scene";
 import type { ComponentDef } from "../../src/component";
 import { elementGuide, elementIndex, guideSections, languageGuide, motionGuide, picturesGuide, pickList, PICKS_HEADING, PICKS_HEADING_SHORT } from "../../src/prompt";
 import { lookGuide } from "../../src/look";
+import { reviewLayout } from "../../src/review";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
@@ -324,7 +325,7 @@ export interface SpecCheck {
   warnings: Diagnostic[];
   /**
    * Problems a person can see in a scene's drawing (a label cut off, a line
-   * hidden under a box). The interface still shows, so these never count as
+   * hidden under a box) or in the layout (a card inside a card, src/review.ts). The interface still shows, so these never count as
    * problems to fix before it appears; the model is asked to tidy them.
    */
   drawing: Diagnostic[];
@@ -338,7 +339,8 @@ export function checkSpec(spec: string, hostNames: readonly string[] = [], textO
   return {
     errors: diagnostics.filter((d) => d.severity === "error"),
     warnings: diagnostics.filter((d) => d.severity !== "error"),
-    drawing: scenesOn ? reviewScenes(parsed, behavior ? { behavior } : {}) : [],
+    // Layout rules (a card inside a card) go with the drawing problems: the interface still shows.
+    drawing: [...reviewLayout(parsed.root), ...(scenesOn ? reviewScenes(parsed, behavior ? { behavior } : {}) : [])].sort((x, y) => x.line - y.line),
   };
 }
 

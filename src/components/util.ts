@@ -100,10 +100,8 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
       x += widths[j]! + gap;
     });
     packButtons(placed, widths, box.x + pad, innerW, gap, ctx);
-    // Cards form visual panels: match their bottom edges instead of centering
-    // a shorter card. Explicit top/bottom alignment still takes precedence.
-    if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
-      for (const kb of placed) kb.h = tallest;
+    if (cardLine(placed, tallest, align, fit)) {
+      // Cards are placed (stretched, or kept at their own height and top-aligned) by cardLine.
     } else if (align !== "top" && !(align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "stat"))) {
       // (Skipped for a row of only KPIs: their labels and values stay on shared
       // lines when one has a sparkline or a wrapped change, so it's top-aligned.)
@@ -136,7 +134,22 @@ function alignLine(placed: Box[], tallest: number, align: (typeof ROW_ALIGN)[num
 }
 
 export const ROW_JUSTIFY = ["start", "end", "between"] as const;
-export interface RowFit { fit: boolean; justify?: (typeof ROW_JUSTIFY)[number] }
+/** stretch: cards in a line share its height. aligned: align= was written, so a line of cards follows it. */
+export interface RowFit { fit: boolean; justify?: (typeof ROW_JUSTIFY)[number]; stretch?: boolean; aligned?: boolean }
+
+/**
+ * A line of a row that holds only cards: with stretch, every card takes the
+ * line's height; otherwise each keeps its own, top-aligned unless align= was
+ * written. (Until stretch existed, cards always shared a height, which left
+ * a short card mostly empty beside a tall one.) Returns false for any other
+ * line, which the row aligns itself.
+ */
+function cardLine(placed: Box[], tallest: number, align: (typeof ROW_ALIGN)[number], fit?: RowFit): boolean {
+  if (placed.length < 2 || !placed.every((k) => k.node.type === "card")) return false;
+  if (fit?.stretch) for (const kb of placed) kb.h = tallest;
+  // align= written (center or bottom): the row shifts them as it does any other line.
+  return !!fit?.stretch || !fit?.aligned || align === "top";
+}
 
 /**
  * A row whose children keep their natural width (fit=true, or any justify).
@@ -188,8 +201,8 @@ function fitRow(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (
       tallest = Math.max(tallest, kb.h);
       x += w + gap + between;
     });
-    if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
-      for (const kb of placed) kb.h = tallest;
+    if (cardLine(placed, tallest, align, fit)) {
+      // Cards are placed by cardLine.
     } else if (align !== "top") {
       tallest = alignLine(placed, tallest, align, ctx);
     }

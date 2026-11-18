@@ -26,7 +26,7 @@ export const column: ComponentDef = {
   semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    stack(box, ctx, p.num("pad", 0), p.num("gap", 8));
+    stack(box, ctx, p.num("pad", 0), p.num("gap", ctx.theme.gaps?.column ?? 8));
   },
 };
 
@@ -75,10 +75,13 @@ export const overlap: ComponentDef = {
   },
 };
 
+/** row's and grid's stretch prop. */
+const STRETCH = { type: "boolean", default: false, description: "Cards side by side share the tallest one's height, for panels that should line up." } as const;
+
 export const row: ComponentDef = {
   type: "row",
   category: "layout",
-  description: "Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.",
+  description: "Places children side by side, splitting the width equally. On narrow screens they wrap; cards keep their own height, top-aligned.",
   props: {
     gap: gapProp(10),
     pad: padProp(0),
@@ -86,6 +89,7 @@ export const row: ComponentDef = {
     wrap: { type: "boolean", default: true, description: "Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line." },
     fit: { type: "boolean", default: false, description: "Keep children at their natural width." },
     justify: { type: "enum", values: ROW_JUSTIFY, description: "Where children sit: start, end, or between (spread). Implies fit." },
+    stretch: STRETCH,
   },
   children: "any",
   example: `row gap=10
@@ -94,14 +98,16 @@ export const row: ComponentDef = {
   semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    rowLayout(box, ctx, p.num("pad", 0), p.num("gap", 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true), {
+    rowLayout(box, ctx, p.num("pad", 0), p.num("gap", ctx.theme.gaps?.row ?? 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true), {
       fit: p.bool("fit", false),
       justify: ROW_JUSTIFY.find((v) => v === p.str("justify")),
+      stretch: p.bool("stretch", false),
+      aligned: p.has("align"),
     });
   },
   minWidth(node, ctx) {
     const p = ctx.props(node);
-    return rowMinWidth(node, ctx, p.num("pad", 0), p.num("gap", 10), p.bool("wrap", true));
+    return rowMinWidth(node, ctx, p.num("pad", 0), p.num("gap", ctx.theme.gaps?.row ?? 10), p.bool("wrap", true));
   },
 };
 
@@ -344,11 +350,12 @@ export const spacer: ComponentDef = {
 export const grid: ComponentDef = {
   type: "grid",
   category: "layout",
-  description: "Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.",
+  description: "Places children in responsive equal columns. Cards keep their own height, top-aligned.",
   props: {
     min: { type: "number", default: 200, description: "Narrowest a column may be, in pixels (default 200)." },
     cols: { type: "number", description: "Most columns; fewer when min doesn't fit." },
     gap: gapProp(14),
+    stretch: STRETCH,
   },
   children: "any",
   example: `grid min=140 gap=10
@@ -358,7 +365,8 @@ export const grid: ComponentDef = {
   semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    const gap = Math.max(0, p.num("gap", 14));
+    const gap = Math.max(0, p.num("gap", ctx.theme.gaps?.grid ?? 14));
+    const stretch = p.bool("stretch", false);
     const kids = ctx.visibleChildren(box.node);
     // A column is never narrower than its widest child needs, whatever min= says.
     const min = Math.max(1, p.num("min", 200), ...kids.map((k) => Math.min(box.w, ctx.minWidth(k))));
@@ -381,9 +389,10 @@ export const grid: ComponentDef = {
         placed.push(kb);
         tallest = Math.max(tallest, kb.h);
       });
-      // A sparkline or donut legend in one card must not leave ragged bottoms
-      // on its neighbouring panels. Children stay top-aligned within each card.
-      if (placed.length > 1 && placed.every((k) => k.node.type === "card")) {
+      // stretch=true: a sparkline or donut legend in one card leaves no ragged bottoms on its
+      // neighbouring panels. Children stay top-aligned within each card. Off by default, since a
+      // short card stretched beside a tall one is mostly empty space.
+      if (stretch && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
         for (const k of placed) k.h = tallest;
       }
       y += tallest;
@@ -442,6 +451,8 @@ export const list: ComponentDef = {
 };
 
 const ITEM_PAD_X = 16, ITEM_PAD_Y = 12;
+/** Between the title and the detail when they share a line (theme.listInline). */
+const ITEM_INLINE_GAP = 10;
 const ITEM_ICON = 20, ITEM_ICON_GAP = 12;
 /** Where a list's row starts, and how far in its separator begins. */
 interface ListRow { y: number; inset: number }
@@ -479,11 +490,14 @@ export const listItem: ComponentDef = {
     const chevronW = p.has("on") ? 20 : 0;
     const iconW = isIconName(p.str("icon")) ? ITEM_ICON + ITEM_ICON_GAP : 0;
     const textW = Math.max(40, box.w - ITEM_PAD_X * 2 - trailingW - chevronW - iconW);
-    const title = wrapText(p.text(), textW, titleFont, ctx.measure);
-    const detail = p.has("detail") ? wrapText(p.str("detail"), textW, detailFont, ctx.measure) : [];
     const titleLH = Math.round(t.text.body * 1.35), detailLH = 18;
-    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW };
-    let y = box.y + ITEM_PAD_Y + title.length * titleLH + (detail.length ? 2 + detail.length * detailLH : 0);
+    // The chat density: title, detail and trailing value on one line when they fit, else as below.
+    const titleW = t.listInline && p.has("detail") ? ctx.measure.width(p.text(), titleFont) : 0;
+    const inline = titleW > 0 && titleW + ITEM_INLINE_GAP + ctx.measure.width(p.str("detail"), detailFont) <= textW;
+    const title = inline ? [p.text()] : wrapText(p.text(), textW, titleFont, ctx.measure);
+    const detail = inline ? [p.str("detail")] : p.has("detail") ? wrapText(p.str("detail"), textW, detailFont, ctx.measure) : [];
+    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW, ...(inline ? { detailX: titleW + ITEM_INLINE_GAP } : {}) };
+    let y = box.y + ITEM_PAD_Y + title.length * titleLH + (detail.length && !inline ? 2 + detail.length * detailLH : 0);
     // Elements inside go under the text, lined up with it.
     const left = ITEM_PAD_X + iconW;
     for (const k of ctx.visibleChildren(box.node)) {
@@ -497,7 +511,7 @@ export const listItem: ComponentDef = {
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number };
+    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number; detailX?: number };
     const p = ctx.props(box.node);
     const pressable = p.has("on");
     if (pressable) {
@@ -519,7 +533,12 @@ export const listItem: ComponentDef = {
     g.font = d.titleFont;
     g.fillStyle = c.ink;
     for (const l of d.title) { g.fillText(l, tx, y + d.titleLH / 2); y += d.titleLH; }
-    if (d.detail.length) {
+    if (d.detailX !== undefined) {
+      // On the title's line, after it.
+      g.font = d.detailFont;
+      g.fillStyle = c.muted;
+      g.fillText(d.detail[0] ?? "", tx + d.detailX, box.y + ITEM_PAD_Y + d.titleLH / 2);
+    } else if (d.detail.length) {
       y += 2;
       g.font = d.detailFont;
       g.fillStyle = c.muted;

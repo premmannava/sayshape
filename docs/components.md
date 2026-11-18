@@ -33,7 +33,7 @@ column gap=6
 
 ### `row`
 
-Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.
+Places children side by side, splitting the width equally. On narrow screens they wrap; cards keep their own height, top-aligned.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -43,6 +43,7 @@ Places children side by side, splitting the width equally. On narrow screens the
 | `wrap` | boolean | Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line. |
 | `fit` | boolean | Keep children at their natural width. |
 | `justify` | `start` / `end` / `between` | Where children sit: start, end, or between (spread). Implies fit. |
+| `stretch` | boolean | Cards side by side share the tallest one's height, for panels that should line up. |
 
 Children: any elements.
 
@@ -73,13 +74,14 @@ overlap at=top-right
 
 ### `grid`
 
-Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
+Places children in responsive equal columns. Cards keep their own height, top-aligned.
 
 | Prop | Type | Description |
 |---|---|---|
 | `min` | number | Narrowest a column may be, in pixels (default 200). |
 | `cols` | number | Most columns; fewer when min doesn't fit. |
 | `gap` | number | Space between children in pixels (default 14). |
+| `stretch` | boolean | Cards side by side share the tallest one's height, for panels that should line up. |
 
 Children: any elements.
 
