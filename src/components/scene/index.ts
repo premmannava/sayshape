@@ -31,6 +31,7 @@ import type { Box, Rect } from "../../types";
 import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
 import { numOf, paintScene, strOf, type Frame } from "./draw";
+import { REFLECT_PROPS, type ReflectBuffer } from "./reflect";
 import { lightPoint } from "./light";
 import { apply } from "./interact";
 import { locateOf } from "../../each";
@@ -57,6 +58,13 @@ const color = (description: string): PropDef => ({ type: "string", description }
 /** z= (depth.ts): said in full once, on group; shapes and use take it unlisted. */
 const Z: PropDef = num("Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.", 0);
 const Z_SHAPE: PropDef = { ...num("Like group's z."), unlisted: true };
+
+/** reflect= (reflect.ts): said once, on group; use takes it unlisted. Off with sceneComponentsWith({ reflect: false }). */
+const REFLECT: Record<string, PropDef> = {
+  reflect: num("Mirrors it below this y, like water; ripple= waves it, fade= dims it (0 to 1)."),
+  ripple: { ...num("Moving waves in the reflection, 0 to 1.", 0), unlisted: true },
+  fade: { ...num("How fast the reflection fades, 0 to 1.", 0.5), unlisted: true },
+};
 
 /** Props every shape takes. */
 const PAINT: Record<string, PropDef> = {
@@ -227,7 +235,8 @@ function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeat
   {
     const p = ctx.props(box.node);
     const w = Math.max(1, p.num("w", 600)), h = Math.max(1, p.num("h", 340));
-    const t = sceneTime(box, ctx, p.num("duration", 0), p.bool("loop", true), p.num("rate", 1));
+    const duration = p.num("duration", 0), loop = p.bool("loop", true);
+    const t = sceneTime(box, ctx, duration, loop, p.num("rate", 1));
     const g = ctx.g;
     const sx = box.w / w, sy = box.h / h;
     const f: Frame = {
@@ -243,6 +252,9 @@ function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeat
     const light = lightPoint(box.node.props.light === undefined ? undefined : strOf(box.node, "light", base));
     if (light) f.light = apply(f.m, light[0], light[1]);
     if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
+    f.view = { m: f.m, w, h, period: loop && duration > 0 ? duration : 0 };
+    const offscreen = offscreenMaker();
+    if (offscreen) f.offscreen = offscreen;
     g.save();
     g.beginPath();
     ctx.roundRect(box.x, box.y, box.w, box.h, ctx.theme.radius.md);
@@ -256,6 +268,13 @@ function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeat
     paintFeedback(box, ctx, shown);
     g.restore();
   }
+}
+
+/** Offscreen canvases for reflect=: OffscreenCanvas where there is one, else a detached canvas element; none in Node. */
+function offscreenMaker(): ((w: number, h: number) => ReflectBuffer) | undefined {
+  if (typeof OffscreenCanvas === "function") return (w, h) => new OffscreenCanvas(w, h);
+  if (typeof document === "undefined") return undefined;
+  return (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h });
 }
 
 function sceneSemantics(box: Box, ctx: SemanticsContext) {
@@ -447,7 +466,7 @@ const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), z: Z, ...PRESS, ...HOVER, ...DRAG },
+  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), z: Z, ...REFLECT, ...PRESS, ...HOVER, ...DRAG },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
@@ -486,6 +505,7 @@ const use: ComponentDef = {
     x: num("Across."), y: num("Down."), rotate: num("Degrees."), scale: num("Size.", 1), opacity: num("0 to 1.", 1),
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
     z: Z_SHAPE,
+    ...unlisted(REFLECT),
     ...PRESS,
     ...HOVER_SHAPE,
     ...DRAG_SHAPE,
@@ -535,7 +555,7 @@ export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, li
 /** What each feature adds: elements, and props on other elements. Off, they're left out. */
 const FEATURE_PARTS: Record<keyof SceneFeatures, { elements: readonly string[]; props: readonly string[] }> = {
   particles: { elements: ["emit"], props: [] },
-  reflect: { elements: [], props: ["reflect", "ripple", "fade"] },
+  reflect: { elements: [], props: REFLECT_PROPS },
 };
 
 /**

@@ -10,7 +10,7 @@
 import { bench, describe } from "vitest";
 import { coreComponents } from "../src/components";
 import { sceneComponents } from "../src/components/scene";
-import { render } from "../src/testing";
+import { createRecordingContext, render } from "../src/testing";
 import { FACTORY_MONITOR } from "../playground/scene-samples";
 
 const components = [...coreComponents, ...sceneComponents];
@@ -74,4 +74,40 @@ describe("hit testing", () => {
     k = (k + 37) % 1000;
     ui.sayshape.targetAt(box.x + (k / 1000) * box.w, box.y + ((k * 7) % 1000 / 1000) * box.h);
   });
+});
+
+/**
+ * A skyline reflected in a river (reflect=, reflect.ts), with OffscreenCanvas
+ * stubbed by the recording canvas: the cached buffer with a moving ripple,
+ * contents that read t (drawn into the buffer every frame), and no reflection.
+ */
+const SKYLINE = `scene "Harbor at night" w=600 h=340 duration=8 bg="#0B1026"
+  circle x=480 y=70 r=22 fill="#FFF3B0" glow=true
+  rect x=0 y=220 w=600 h=120 fill="#13204A"
+  group reflect=220 ripple=0.35 fade=0.7
+    each items={range(30)} as=i
+      rect x={i*20} y={220 - 40 - 110*random(i)} w=18 h={40 + 110*random(i)} fill="#1C2550"
+    each items={range(30)} as=i
+      rect x={i*20 + 6} y={220 - 20 - 90*random(i + 40)} w=5 h=6 fill="#FFD166" opacity={0.5 + 0.5*random(i + 80)}
+  label "Harbor at night" x=24 y=36 size=22 weight=bold fill="#FFFFFF"`;
+
+describe("scene reflect", () => {
+  class Offscreen {
+    private rec = createRecordingContext();
+    constructor(public width: number, public height: number) {}
+    getContext() { return this.rec.context; }
+  }
+  const g = globalThis as { OffscreenCanvas?: unknown };
+  g.OffscreenCanvas ??= Offscreen;
+  const frame = (spec: string) => {
+    const ui = render(spec, { components, width: 1000, animate: true, clock: true });
+    return () => { ui.clock.advance(16); };
+  };
+  const cached = frame(SKYLINE);
+  const moving = frame(SKYLINE.replace("w=18 h=", "w={18 + 2*sin(t)} h="));
+  const none = frame(SKYLINE.replace(" reflect=220 ripple=0.35 fade=0.7", ""));
+
+  bench("skyline reflect, cached buffer + ripple", cached);
+  bench("skyline reflect, contents read t", moving);
+  bench("skyline, no reflect", none);
 });

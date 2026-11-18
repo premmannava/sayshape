@@ -23,6 +23,7 @@ import { highlightOf } from "./light";
 import { shakeOffset, shakeSeed } from "./shake";
 import { letScope } from "./lets";
 import { drawByDepth, hasDepth, type DepthHooks } from "./depth";
+import { drawReflection, type ReflectBuffer } from "./reflect";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -138,6 +139,12 @@ export interface Frame {
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
   m: Matrix;
+  /** A new offscreen canvas, for reflect= (reflect.ts); unset where there's none (Node, the drawing check), and nothing reflects. */
+  offscreen?: (w: number, h: number) => ReflectBuffer;
+  /** The scene's own matrix and size (what a viewer sees), and its loop's length in seconds (0 when it doesn't loop). */
+  view?: { m: Matrix; w: number; h: number; period?: number };
+  /** The line whose reflection is being drawn: drawn plainly, with nothing inside reflecting again. */
+  reflecting?: SayShapeNode;
   /**
    * Set to record pressable shapes (on=) as they're drawn: the regions in the
    * order they start, the ones open around the line being drawn, and which
@@ -555,6 +562,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
     }
     case "group":
     case "use": {
+      if (node.props.reflect !== undefined && f.reflecting !== node && f.features?.reflect !== false && f.offscreen) drawReflection(node, scope, f, drawAll, numOf);
       let kids = node.children, inner = scope;
       if (node.type === "use") {
         const d = node.text === undefined ? undefined : f.defs.get(node.text);
