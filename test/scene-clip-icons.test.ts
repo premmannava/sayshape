@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { coreComponents } from "../src/components";
-import { sceneComponents, reviewScenes } from "../src/components/scene";
+import { sceneComponents, reviewScene, reviewScenes, type MeasureText } from "../src/components/scene";
 import { darkTheme, lightTheme } from "../src/theme";
 import { render, type Rendered } from "../src/testing";
 import type { Box } from "../src/types";
@@ -226,4 +226,130 @@ describe("icons in a scene", () => {
     const ok = parse(`state kind="sun"\nscene "S" w=300 h=200\n  icon name={kind} x=100 y=100 size=40`, reg);
     expect(reviewScenes(ok)).toEqual([]);
   });
+});
+
+describe("after= places a shape after a label's words", () => {
+  it("parses id= on labels and after= on every shape, group and use", () => {
+    const lines = [
+      `rect after=city x=8 y=0 w=10 h=10`, `circle after=city x=8 y=0 r=5`, `ellipse after=city x=8 y=0 rx=5 ry=3`,
+      `line after=city x1=0 y1=0 x2=10 y2=0 stroke=ink`, `path after=city d="M0 0 L10 10"`, `polygon after=city points="0,0 10,0 5,8"`,
+      `label "AZ" after=city x=8 y=50`, `icon name=arrow-right after=city x=8 y=50`, `group after=city x=8 y=0`, `use "dot" after=city x=8 y=50`,
+    ];
+    const spec = [`scene "S" w=300 h=200`, `  define "dot"`, `    circle x=0 y=0 r=4`, `  label "Phoenix" id=city x=10 y=50`, ...lines.map((l) => `  ${l}`)].join("\n");
+    expect(problems(spec)).toEqual([]);
+    expect(problems(`scene "S" w=300 h=200\n  label "Phoenix" id="the city" x=10 y=50`)[0]).toMatch(/^warning: id should be a plain name/);
+    expect(problems(`scene "S" w=300 h=200\n  circle after="two words" x=8 y=0 r=5`)[0]).toMatch(/^warning: after should be a plain name/);
+    expect(problems(`scene "S" w=300 h=200\n  gradient id=g after=city`)[0]).toMatch(/"gradient" has no prop "after"/);
+  });
+
+  it("streams: every prefix with after= parses", () => {
+    streams(`scene "S" w=300 h=200\n  label "Phoenix" id=city x=10 y=50 size=24\n  icon name=arrow-right after=city x=8 y=50 size=24\n  label "AZ" after=city x=40 y=50`);
+  });
+
+  /** Where a pressable label's words end and a pressable icon after it starts, in canvas pixels, and the scene's scale. */
+  function placed(label: string, icon: string, theme = lightTheme) {
+    const spec = `state n=0\nscene "S" w=400 h=200\n${label}\n  icon name=arrow-right after=city x=8 y=100 size=24 on=inc:n tip="Go"`;
+    const ui = render(spec, { components: ALL, width: 400, theme });
+    expect(ui.diagnostics).toEqual([]);
+    const { box } = sceneAt(ui, 400, 200);
+    const [words, arrow] = sceneHits(ui);
+    ui.destroy();
+    return { end: words!.box.x + words!.box.w, start: arrow!.box.x, k: box.w / 400 };
+  }
+
+  for (const theme of THEMES) {
+    it(`an arrow with after=city x=8 starts 8 past the end of "Phoenix" at any size, weight or text (${theme === darkTheme ? "dark" : "light"})`, () => {
+      for (const label of [
+        `  label "Phoenix" id=city x=20 y=100 size=16 fill=ink on=inc:n`,
+        `  label "Phoenix" id=city x=20 y=100 size=40 fill=ink on=inc:n`,
+        `  label "Phoenix" id=city x=20 y=100 size=40 weight=bold fill=ink on=inc:n`,
+        `  label "Phoenix, Arizona" id=city x=20 y=100 size=16 weight=light fill=ink on=inc:n`,
+        `  label "Phoenix" id=city x=200 y=100 size=24 align=center fill=ink on=inc:n`,
+        `  label "Phoenix" id=city x=300 y=100 size=24 align=right fill=ink on=inc:n`,
+        // In a group scaled up: the end is found on screen, and the gap is in the arrow's own coordinates.
+        `  group x=10 y=0 scale=1.5\n    label "Phoenix" id=city x=0 y=66 size=20 fill=ink on=inc:n`,
+      ]) {
+        const { end, start, k } = placed(label, "", theme);
+        expect(start - end, label).toBeCloseTo(8 * k, 5);
+      }
+    });
+  }
+
+  it("bigger or bolder words push the arrow further along", () => {
+    const small = placed(`  label "Phoenix" id=city x=20 y=100 size=16 fill=ink on=inc:n`, "");
+    const big = placed(`  label "Phoenix" id=city x=20 y=100 size=40 weight=bold fill=ink on=inc:n`, "");
+    expect(big.start).toBeGreaterThan(small.start + 20);
+  });
+
+  it("each copy of a label: the last one drawn before counts", () => {
+    const spec = `state n=0\nscene "S" w=400 h=200\n  each items={['A', 'Phoenix']} as=c\n    label "{c}" id=city x=20 y=100 size=20 fill=ink\n  label "Phoenix" x=20 y=150 size=20 fill=ink on=inc:n\n  icon name=arrow-right after=city x=8 y=100 size=24 on=inc:n`;
+    const ui = render(spec, { components: ALL, width: 400 });
+    const [words, arrow] = sceneHits(ui);
+    const k = sceneAt(ui, 400, 200).box.w / 400;
+    expect(arrow!.box.x - (words!.box.x + words!.box.w)).toBeCloseTo(8 * k, 5);
+    ui.destroy();
+  });
+
+  it("with no label drawn before it, it's drawn at its plain x and the drawing check says so", () => {
+    const spec = `state n=0\nscene "S" w=400 h=200\n  icon name=arrow-right after=city x=8 y=100 size=24 on=inc:n\n  label "Phoenix" id=city x=20 y=100 size=20 fill=ink`;
+    const ui = render(spec, { components: ALL, width: 400 });
+    const { at } = sceneAt(ui, 400, 200);
+    expect(sceneHits(ui)[0]!.box.x).toBeCloseTo(at(8, 0)[0], 5);
+    ui.destroy();
+    expect(reviewScenes(parse(spec, reg)).map((d) => `${d.line}: ${d.message}`)).toContain(
+      `3: Drawing: after=city names no label drawn before this line. Give a label above it id=city, or set x= on its own`,
+    );
+  });
+
+  it("review places it with whatever measures the words", () => {
+    const spec = `scene "S" w=300 h=100\n  label "Phoenix" id=city x=60 y=50 size=20 fill=ink\n  label "AZ, USA" after=city x=6 y=50 size=20 fill=ink`;
+    const scene = parse(spec, reg).root.children[0]!;
+    const narrow: MeasureText = (text, size) => text.length * size * 0.4;
+    const wide: MeasureText = (text, size) => text.length * size * 1.1;
+    const scope = () => undefined;
+    // Narrow words: "AZ, USA" ends well inside the picture, never on top of Phoenix.
+    expect(reviewScene(scene, scope, { measure: narrow })).toEqual([]);
+    // Wide words push it past the right edge, and it still doesn't sit on Phoenix.
+    const wideProblems = reviewScene(scene, scope, { measure: wide }).map((d) => d.message);
+    expect(wideProblems).toEqual([`Drawing: the label "AZ, USA" is cut off by the right edge of the picture. Move it in or make it smaller`]);
+  });
+});
+
+describe("acceptance: a phone screen", () => {
+  const PHONE = [
+    `state liked=false`,
+    `scene "A phone's home screen" w=393 h=852 maxw=295`,
+    `  rect x=0 y=0 w=393 h=852 rx=56 fill="#111111"`,
+    `  group x=12 y=12 w=369 h=828 rx=46 clip=true`,
+    `    rect x=0 y=0 w=369 h=828 fill="#1B2440"`,
+    `    circle x=330 y=40 r=220 fill="#7C5CFF" opacity=0.6 glow=true`,
+    `    circle x=20 y=780 r=260 fill="#FF6B8B" opacity=0.5 glow=true`,
+    `    label "Phoenix" id=city x=32 y=110 size=34 weight=bold fill="#FFFFFF"`,
+    `    icon name=arrow-right after=city x=8 y=110 size=28 fill="#FFFFFF"`,
+    `    label "72°" x=32 y=170 size=56 weight=light fill="#FFFFFF"`,
+    `    each items={range(4)} as=i`,
+    `      rect x={32 + i*80} y=300 w=64 h=64 rx=16 fill="#FFFFFF" opacity=0.9`,
+    `      icon name={pick(['sun', 'mail', 'image', 'heart'], i)} x={48 + i*80} y=332 size=32 fill="#1B2440" on=toggle:liked tip={pick(['Weather', 'Mail', 'Photos', 'Likes'], i)}`,
+  ].join("\n");
+
+  it("parses and streams cleanly, and the drawing check finds nothing wrong", () => {
+    const r = parse(PHONE, reg);
+    expect(r.diagnostics).toEqual([]);
+    streams(PHONE);
+    expect(reviewScenes(r)).toEqual([]);
+  });
+
+  for (const theme of THEMES) {
+    it(`clips the wallpaper, presses the app icons and names them (${theme === darkTheme ? "dark" : "light"})`, () => {
+      const ui = render(PHONE, { components: ALL, width: 400, theme });
+      const hits = sceneHits(ui);
+      expect(hits).toHaveLength(4);
+      ui.tab();
+      ui.key("Enter");
+      expect(ui.state.liked).toBe(true);
+      const tree = JSON.stringify(ui.accessibility({ full: true }));
+      for (const name of ["Weather", "Mail", "Photos", "Likes"]) expect(tree).toContain(`"role":"button","name":"${name}"`);
+      ui.destroy();
+    });
+  }
 });

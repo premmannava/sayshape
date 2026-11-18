@@ -12,7 +12,7 @@ import type { Theme } from "../../theme";
 import type { SayShapeNode, Value } from "../../types";
 import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
-import { flattenPath, rotate, scale, translate, type ClipRect, type Geom, type Matrix, type SceneRegion } from "./interact";
+import { apply, flattenPath, invert, rotate, scale, translate, type ClipRect, type Geom, type Matrix, type SceneRegion } from "./interact";
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
@@ -116,6 +116,8 @@ export interface Frame {
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
   m: Matrix;
+  /** Where the words of each label with an id= end, in canvas pixels, for after= on later lines (the last copy drawn wins). */
+  ends: Map<string, [number, number]>;
   /** The clip=true groups around the line being drawn, outermost first: only what's inside all of them shows. */
   clips?: readonly ClipRect[];
   /**
@@ -387,9 +389,29 @@ function drawEach(node: SayShapeNode, scope: Scope, f: Frame): void {
 }
 
 function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
+  // after=: start where a label drawn before it ends, so x= is the gap from its words, whatever their font.
+  const from = node.props.after === undefined ? null : afterOf(node, node.props.after.trim(), f);
+  const was = f.m;
+  if (from) { f.g.save(); f.g.translate(from, 0); f.m = translate(f.m, from, 0); }
   const region = openRegion(node, scope, f);
   drawShape(node, scope, f);
   closeRegion(region, f);
+  if (from) { f.g.restore(); f.m = was; }
+}
+
+/**
+ * How far across, in the line's own coordinates, the words of the label it
+ * names end. Null (drawn at its plain x) when no label with that id has been
+ * drawn yet: it comes later, or is still on its way.
+ */
+function afterOf(node: SayShapeNode, id: string, f: Frame): number | null {
+  const end = f.ends.get(id);
+  const inv = end && invert(f.m);
+  if (!end || !inv) {
+    f.notes?.push({ line: node.line, message: `after=${id} names no label drawn before this line. Give a label above it id=${id}, or set x= on its own` });
+    return null;
+  }
+  return apply(inv, end[0], end[1])[0];
 }
 
 function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
@@ -492,6 +514,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
         const stroke = paintOf(node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), b, f, scope);
         if (stroke) { g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.strokeText(text, x, y); }
         addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
+        if (node.props.id !== undefined) f.ends.set(node.props.id.trim(), apply(f.m, left + w, y));
         if (f.press) for (const r of f.press.open) r.words.push(text);
       });
       return;

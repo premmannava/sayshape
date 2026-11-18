@@ -63,6 +63,13 @@ const PAINT: Record<string, PropDef> = {
   shadow: { type: "enum", values: ["sm", "md", "lg"], description: "A soft shadow under it, so it sits above what's behind." },
   glow: { type: "boolean", description: "A soft light around it in its own color: a sun, a lamp, a live dot.", default: false },
 };
+/** Placing a line right after a label's words, whatever font draws them. Said in full once, on group. */
+const AFTER_GROUP: Record<string, PropDef> = {
+  after: { type: "name", description: "Starts at the end of the words of the label with this id, drawn before it: x= is then the gap from there." },
+};
+const AFTER: Record<string, PropDef> = {
+  after: { type: "name", description: "Starts after a label's words, like group's after=." },
+};
 /** For filled shapes only. */
 const SHINE: Record<string, PropDef> = {
   shine: { type: "boolean", description: "Lit from the upper left, so a circle looks like a ball.", default: false },
@@ -179,7 +186,7 @@ const scene: ComponentDef = {
     const g = ctx.g;
     const sx = box.w / w, sy = box.h / h;
     const f: Frame = {
-      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
+      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(),
       m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
     };
     if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
@@ -335,7 +342,7 @@ const rect: ComponentDef = {
   type: "rect",
   category: "content",
   description: "A rectangle in a scene, from its top-left corner.",
-  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}`,
 };
 
@@ -344,7 +351,7 @@ const circle: ComponentDef = {
   type: "circle",
   category: "content",
   description: "A circle in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"`,
 };
 
@@ -353,7 +360,7 @@ const ellipse: ComponentDef = {
   type: "ellipse",
   category: "content",
   description: "An oval in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"`,
 };
 
@@ -362,7 +369,7 @@ const line: ComponentDef = {
   type: "line",
   category: "content",
   description: "A straight line in a scene. Give it a stroke and width.",
-  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...PRESS_SHAPE },
+  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...PRESS_SHAPE, ...AFTER },
   example: `line x1=20 y1=200 x2=580 y2=200 stroke="#FFFFFF" width=4 dash="16 12"`,
 };
 
@@ -371,7 +378,7 @@ const path: ComponentDef = {
   type: "path",
   category: "content",
   description: "Any outline, in SVG path commands (M move, L line, H, V, C and S curves, Q and T curves, A arc, Z close). For curved shapes: ears, hills, a car body, a wave.",
-  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
+  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE, ...AFTER },
   example: `path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"`,
 };
 
@@ -380,7 +387,7 @@ const polygon: ComponentDef = {
   type: "polygon",
   category: "content",
   description: "A closed shape through points, for triangles, stars, mountains and roofs.",
-  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
+  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE, ...AFTER },
   example: `polygon points="300,40 380,180 220,180" fill="#E9C46A"`,
 };
 
@@ -396,9 +403,11 @@ const label: ComponentDef = {
     size: num("Text size in scene pixels.", 16),
     weight: { type: "enum", values: ["light", "regular", "bold"], description: "light (large calm figures: 72°, a clock), regular or bold.", default: "regular" },
     align: { type: "enum", values: ["left", "center", "right"], description: "Which end of the words sits at x.", default: "left" },
+    id: { type: "name", description: "Its name, for after= on a later shape." },
     ...PAINT,
     ...PRESS_SHAPE,
     ...DRAG_SHAPE,
+    ...AFTER,
   },
   example: `label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"`,
 };
@@ -420,9 +429,12 @@ const glyph: ComponentDef = {
     glow: PAINT.glow!,
     label: { type: "string", description: "What screen readers call it when it's pressable. Default: its tip, else the icon's name." },
     on: PRESS_SHAPE.on!, selected: PRESS_SHAPE.selected!, tip: PRESS_SHAPE.tip!,
+    ...AFTER,
   },
   check: (props) => iconProblems(props.name, "name"),
-  example: `icon name=sun x=40 y=60 size=48 fill=warn glow=true`,
+  example: `icon name=sun x=40 y=60 size=48 fill=warn glow=true
+label "Phoenix" id=city x=40 y=130 size=24 fill=ink
+icon name=arrow-right after=city x=8 y=130 size=24 fill=accent`,
 };
 
 const group: ComponentDef = {
@@ -433,7 +445,7 @@ const group: ComponentDef = {
     x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1),
     clip: { type: "boolean", description: "Shapes inside are cut to the group's w×h box, rounded by rx: glows inside a phone screen, a map in a card.", default: false },
     w: num("Width of the clip=true box, from the group's x."), h: num("Height of the clip=true box, from the group's y."), rx: num("Corner rounding of the clip=true box."),
-    ...PRESS, ...DRAG,
+    ...PRESS, ...DRAG, ...AFTER_GROUP,
   },
   children: SHAPES,
   parents: IN_SCENE,
@@ -482,6 +494,7 @@ const use: ComponentDef = {
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
     ...PRESS,
     ...DRAG_SHAPE,
+    ...AFTER,
   },
   example: `use "cactus" x=120 y=300 scale=1.2 args={{h: 70}}`,
 };

@@ -922,6 +922,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}
@@ -943,6 +944,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"
@@ -965,6 +967,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"
@@ -986,6 +989,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       line x1=20 y1=200 x2=580 y2=200 stroke="#FFFFFF" width=4 dash="16 12"
@@ -1005,6 +1009,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"
@@ -1024,6 +1029,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       polygon points="300,40 380,180 220,180" fill="#E9C46A"
@@ -1035,6 +1041,7 @@ ELEMENTS
     size=<number>  Text size in scene pixels.
     weight=<light|regular|bold>  light (large calm figures: 72°, a clock), regular or bold.
     align=<left|center|right>  Which end of the words sits at x.
+    id=<name>  Its name, for after= on a later shape.
     fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
@@ -1047,6 +1054,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"
@@ -1065,9 +1073,12 @@ ELEMENTS
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       icon name=sun x=40 y=60 size=48 fill=warn glow=true
+      label "Phoenix" id=city x=40 y=130 size=24 fill=ink
+      icon name=arrow-right after=city x=8 y=130 size=24 fill=accent
 
   group  — Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.
     x=<number>  Moves everything across.
@@ -1083,6 +1094,7 @@ ELEMENTS
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
+    after=<name>  Starts at the end of the words of the label with this id, drawn before it: x= is then the gap from there.
     children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient
     only inside: scene, group, define
     example:
@@ -1114,6 +1126,7 @@ ELEMENTS
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       use "cactus" x=120 y=300 scale=1.2 args={{h: 70}}
