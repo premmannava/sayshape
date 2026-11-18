@@ -107,6 +107,8 @@ export type ChartGeometry = {
   values?: boolean;
   /** highlight= on bar, hbar and stacked: the slots kept in full color while the others are muted. */
   highlight?: number[];
+  /** curve=smooth on line and area (and their chart-line layers): a monotone curve instead of straight segments. */
+  smooth?: boolean;
   /** Bar and line: what the chart-line, chart-rule and chart-note lines under it add. */
   layers?: ChartLayers;
   kind: Kind;
@@ -174,6 +176,12 @@ export function niceStep(raw: number): number {
   return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
 }
 
+/**
+ * On bar scales, the share of a step that must be left above the tallest bar
+ * (and below the deepest): about the height of the value label over it.
+ */
+export const BAR_HEADROOM = 0.4;
+
 /** Clean float noise (0.1 + 0.2) from a tick without toFixed, which fails past 100 digits. */
 function cleanTick(v: number, step: number): number {
   if (Math.abs(v) < step * 1e-9) return 0;
@@ -197,7 +205,14 @@ export function chartScale(values: readonly number[], kind: Kind, target: number
   }
   // Halves, so a range like -1e308..1e308 doesn't overflow to Infinity.
   const step = niceStep((hi / 2 - lo / 2) / Math.max(1, target) * 2);
-  const first = Math.floor(lo / step + 1e-9), last = Math.ceil(hi / step - 1e-9);
+  let first = Math.floor(lo / step + 1e-9), last = Math.ceil(hi / step - 1e-9);
+  // Bars: room for the value written over the tallest (and under the deepest)
+  // bar. Without it a bar that reaches the top tick gets its label inside while
+  // the others' sit above; one more step when the end is that close.
+  if (kind === "bar") {
+    if (hi > 0 && last * step - hi < step * BAR_HEADROOM) last++;
+    if (lo < 0 && lo - first * step < step * BAR_HEADROOM) first--;
+  }
   const ticks: number[] = [];
   // Count steps with k, not first + k: past 2^53, adding 1 to first changes nothing.
   const count = last - first;
@@ -696,6 +711,48 @@ export function smoothLineControls(points: readonly { x: number; y: number }[]):
 
 /** Below this many pixels between points, a line is drawn straight from point to point. */
 export const DENSE_POINT_GAP = 14;
+
+/**
+ * The wash under a line or area, from its color at the far edge to the surface at
+ * the baseline, 0 when it's on the scale. When values go below 0 the wash is
+ * mirrored, strongest at the bottom, so the space between 0 and a negative value
+ * reads as an amount below 0, never as mass rising from the bottom of the plot.
+ */
+export function baselineGradient(
+  g: CanvasRenderingContext2D, d: Pick<ChartGeometry, "plot" | "zeroY" | "min">, oy: number, top: string, base: string,
+): CanvasGradient {
+  const y0 = oy + d.plot.y, y1 = oy + d.plot.y + d.plot.h;
+  const zero = d.zeroY === null ? y1 : oy + d.zeroY;
+  if (d.zeroY === null || d.min >= 0) {
+    const gradient = g.createLinearGradient(0, y0, 0, zero);
+    gradient.addColorStop(0, top);
+    gradient.addColorStop(1, base);
+    return gradient;
+  }
+  const gradient = g.createLinearGradient(0, y0, 0, y1);
+  const at = Math.min(1, Math.max(0, (zero - y0) / (y1 - y0)));
+  gradient.addColorStop(0, top);
+  gradient.addColorStop(at, base);
+  gradient.addColorStop(1, top);
+  return gradient;
+}
+
+/**
+ * A series' line through its points: straight segments unless smooth, since
+ * a curve between discrete samples (yearly returns, weekly weights) draws
+ * values that were never measured. curve=smooth asks for the monotone curve.
+ */
+export function traceLine(
+  g: CanvasRenderingContext2D,
+  run: readonly { x: number; y: number }[],
+  ox: number, oy: number,
+  smooth = false,
+): void {
+  if (smooth) { traceSmoothLine(g, run, ox, oy); return; }
+  if (!run.length) return;
+  g.moveTo(ox + run[0]!.x, oy + run[0]!.y);
+  for (const pt of run.slice(1)) g.lineTo(ox + pt.x, oy + pt.y);
+}
 
 export function traceSmoothLine(
   g: CanvasRenderingContext2D,

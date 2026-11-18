@@ -491,6 +491,7 @@ ${comps.map((c) => componentBlock(c, examples && ctx.valid(componentExampleSpec(
   ];
   if (has("screen")) rules.push("- For several screens, write the starting screen first: it shows as soon as it arrives.");
   rules.push("- Screen readers read your labels aloud: give every control a label and every chart a title, or a text just above it.");
+  rules.push(...userFacingRules(has, "full"));
   if (has("image")) rules.push(imageRules(opts.imageHosts ?? []));
   add("rules", `RULES\n${rules.join("\n")}`);
   if (opts.notes?.trim()) add("notes", `ABOUT THIS APP\n${opts.notes.trim()}`);
@@ -577,6 +578,7 @@ ${comps.map((c) => `- ${compactLine(c)}${showExample(c) ? `\n    example:\n${ind
     ...(has("grid") || has("stat") ? [`- Screens may be narrow.${has("grid") ? " Side-by-side figures: grid min=140, not row." : ""}${has("stat") ? " Short stat values: compact() for large numbers." : ""}`] : []),
     ...(has("screen") ? ["- For several screens, write the starting screen first."] : []),
     "- Label every control and title every chart (or put a text just above it): screen readers read them.",
+    ...userFacingRules(has, "compact"),
   ];
   add("rules", `RULES\n${rules.join("\n")}`);
   for (const n of workedExamples(ctx)) add(`example-${n}`, `EXAMPLE (${n})\n${WORKED_EXAMPLES[n]}`);
@@ -593,6 +595,41 @@ export interface GuideSection {
   /** A stable name, for measuring: intro, format, expressions, actions, data, elements, rules… */
   name: string;
   text: string;
+}
+
+/**
+ * Rules for what the person reads and does, the slips models make most once
+ * the spec is valid: notes about how the answer was made, a heading repeated
+ * as the chart's title, raw numbers, the wrong control for a fixed choice,
+ * pre-filled "add" forms, and restyle requests written into the interface.
+ */
+function userFacingRules(has: (type: string) => boolean, mode: "full" | "compact"): string[] {
+  const titled = has("chart") || has("table");
+  const choice = has("segmented") || has("select");
+  const controls = [
+    ...(choice ? [`fixed choices (Left, Right, Both) are ${[has("segmented") ? "segmented" : "", has("select") ? "select" : ""].filter(Boolean).join(" or ")}, not buttons or checks`] : []),
+    ...(has("input") ? ["a form that adds something starts empty, with placeholder= hints, not filled-in values"] : []),
+    ...(has("check") && has("each") ? ["ticking things off across days is a grid (a row per habit, a check per day), not one long list of checks"] : []),
+  ];
+  if (mode === "compact") {
+    return [
+      `- Every word is for the person: never how you made or checked it ("computed in Python", "widget state", tool names, "edge case:").${titled ? " Don't repeat a heading as the chart's or table's title under it." : ""}`,
+      "- Numbers as people write them: number()/money() separators, no cents on large amounts, compact() for 1.41B (not 1411M), plural(n, 'cup') for 1 cup.",
+      ...(controls.length ? [`- ${[
+        ...(choice ? [`Fixed choices (Left/Right/Both): ${[has("segmented") ? "segmented" : "", has("select") ? "select" : ""].filter(Boolean).join(" or ")}`] : []),
+        ...(has("input") ? ["add forms start empty, with placeholder="] : []),
+        ...(has("check") && has("each") ? ["habits × days: a grid of checks, not a long list"] : []),
+      ].join("; ")}.`] : []),
+      "- Restyle requests (dark mode, bigger text) aren't for the interface: the theme follows the app. Never write them into it.",
+    ];
+  }
+  return [
+    "- Every word on screen is for the person using it: never write how you made or checked the answer (\"computed in Python\", \"widget state\", tool or function names, \"edge case:\" or test notes).",
+    ...(titled ? ["- A heading and the chart or table right under it share one title: don't repeat the heading as its title."] : []),
+    "- Write numbers as people do: thousands separators (number(37000), money()), whole dollars for large amounts (\"${number(round(total))}\" or compact(total, 'USD')), 1.41B rather than 1411M (compact()), and plural(n, 'cup') so one reads 1 cup.",
+    ...(controls.length ? [`- ${controls.join("; ").replace(/^./, (c) => c.toUpperCase())}.`] : []),
+    "- A request to restyle (dark mode, bigger text) isn't for the interface: its theme and sizes follow the app. Keep the interface as it was and never write the request into it.",
+  ];
 }
 
 /** The guide in sections, in order. languageGuide() joins them with blank lines. */

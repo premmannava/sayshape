@@ -18,7 +18,7 @@ import { easeOut } from "../../ghost";
 import { mixColors, seriesColors } from "../../theme";
 import {
   chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels, plotHeight,
-  preciseText, slotLabels, labelRows, fieldTitle, tickLabels, traceSmoothLine, type ChartGeometry, type ChartSlot, type Rect,
+  preciseText, slotLabels, labelRows, fieldTitle, tickLabels, traceLine, baselineGradient, type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
@@ -147,9 +147,7 @@ export const area: ChartKindDef = {
     // Back to front: the first series behind the others, each fill lighter so the ones behind show through.
     drawn.forEach((runs, k) => {
       const color = colorOf(k);
-      const gradient = g.createLinearGradient(0, oy + d.plot.y, 0, floor);
-      gradient.addColorStop(0, mixColors(color, c.raised, many ? 0.55 : 0.5) ?? color);
-      gradient.addColorStop(1, c.raised);
+      const gradient = baselineGradient(g, d, oy, mixColors(color, c.raised, many ? 0.55 : 0.5) ?? color, c.raised);
       for (const run of runs) {
         if (!run.length) continue;
         g.beginPath();
@@ -157,7 +155,7 @@ export const area: ChartKindDef = {
           // A single point between gaps: a thin column, so it still shows.
           g.rect(ox + run[0]!.x - 1.5, oy + run[0]!.y, 3, floor - (oy + run[0]!.y));
         } else {
-          traceSmoothLine(g, run, ox, oy);
+          traceLine(g, run, ox, oy, d.smooth);
           g.lineTo(ox + run[run.length - 1]!.x, floor);
           g.lineTo(ox + run[0]!.x, floor);
           g.closePath();
@@ -175,7 +173,7 @@ export const area: ChartKindDef = {
       for (const run of runs) {
         if (run.length < 2) continue;
         g.beginPath();
-        traceSmoothLine(g, run, ox, oy);
+        traceLine(g, run, ox, oy, d.smooth);
         g.strokeStyle = colorOf(k);
         g.lineWidth = 2.25;
         g.stroke();

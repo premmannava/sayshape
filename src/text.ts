@@ -57,6 +57,35 @@ export function wrapText(text: string, maxWidth: number, font: string, m: TextMe
   return out;
 }
 
+/** Headings wrapped onto more lines than this are wrapped as usual: balancing them would cost more than it shows. */
+export const MAX_BALANCED_LINES = 4;
+
+/**
+ * Wrap text like wrapText, but onto lines of even length: the narrowest width
+ * that still takes as few lines, so a heading never leaves one word alone on
+ * its last line ("…128 g" / "protein"). Each paragraph is balanced on its own.
+ * Measures with m only, so it works in layout.
+ */
+export function balanceText(text: string, maxWidth: number, font: string, m: TextMeasurer): string[] {
+  const out: string[] = [];
+  for (const paragraph of text.split("\n")) {
+    const greedy = wrapText(paragraph, maxWidth, font, m);
+    if (greedy.length < 2 || greedy.length > MAX_BALANCED_LINES) { out.push(...greedy); continue; }
+    // No narrower than the longest word, or words would break that didn't.
+    const words = paragraph.split(/\s+/).filter(Boolean);
+    let lo = Math.min(maxWidth, Math.max(...words.map((w) => m.width(w, font)))), hi = maxWidth;
+    if (wrapText(paragraph, lo, font, m).length === greedy.length) hi = lo;
+    // Halve the gap between a width that takes more lines and one that doesn't, to half a pixel.
+    while (hi - lo > 0.5) {
+      const mid = (lo + hi) / 2;
+      if (wrapText(paragraph, mid, font, m).length === greedy.length) hi = mid;
+      else lo = mid;
+    }
+    out.push(...wrapText(paragraph, hi, font, m));
+  }
+  return out;
+}
+
 /** Cut text to fit a width, ending with an ellipsis. Measures with m, so it works in layout. */
 export function ellipsize(text: string, maxWidth: number, font: string, m: TextMeasurer): string {
   if (m.width(text, font) <= maxWidth) return text;

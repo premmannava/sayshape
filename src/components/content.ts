@@ -3,10 +3,10 @@ import type { TextMeasurer } from "../text";
 import type { Theme } from "../theme";
 import type { Box, Rect, SayShapeNode, Value } from "../types";
 import { isList, isRecord } from "../data";
-import { ellipsize, fitLines, wrapText } from "../text";
+import { balanceText, ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
 import { easeOut, paintGhost } from "../ghost";
-import { traceSmoothLine } from "./chart";
+import { traceLine } from "./chart";
 import { detailProp, fillTint, iconBefore, iconProblems, iconProp, paintPill, partBox, PILL_TONES, PILL_VARIANTS, pillWidth, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, WEIGHTS } from "./util";
 import { drawIcon, ICON_NAMES, isIconName, type IconName } from "../icons";
 import { looksRich, parseRich, plainOf, wrapRich, type RichLine, type RichStyle, type Run } from "../rich";
@@ -75,7 +75,10 @@ text "**Free** cancellation until *2 days* before; see [the terms](https://north
       return;
     }
     if (looksRich(p.template())) ctx.warn?.(`text on line ${box.node.line} has formatting marks (**bold**, \`code\` or [a](link)) that show as written. Add rich=true to format them`);
-    const lines = wrapText(p.text(), width, f, ctx.measure);
+    // Headings wrap onto lines of even length, so a word is never left alone on the last.
+    const style = p.oneOf("style", TEXT_STYLES, "body");
+    const heading = style === "display" || style === "title";
+    const lines = (heading ? balanceText : wrapText)(p.text(), width, f, ctx.measure);
     box.data = { lines, font: f, lineHeight: m.lineHeight, icon };
     box.h = lines.length * m.lineHeight;
   },
@@ -724,7 +727,7 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     const end = points[points.length - 1]!;
     // A flat line: no wash under it and no glow, only a small dot at the latest value.
     g.beginPath();
-    traceSmoothLine(g, points, box.x, box.y);
+    traceLine(g, points, box.x, box.y);
     g.strokeStyle = color;
     g.lineWidth = 2.15;
     g.stroke();

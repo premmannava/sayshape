@@ -16,7 +16,7 @@
 import type { ComponentDef, LayoutContext, PropReader } from "../component";
 import type { SayShapeNode } from "../types";
 import type { ChartGeometry, ChartLayers, Format, PaintCtx, SeriesData } from "./chart-kit";
-import { numberAt, traceSmoothLine, valueText } from "./chart-kit";
+import { numberAt, traceLine, valueText } from "./chart-kit";
 import { isList } from "../data";
 import type { Value } from "../types";
 import { TONES, toneColor, toneProp, type Tone } from "./util";
@@ -258,7 +258,7 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
     for (const run of ln.runs) {
       if (run.length >= 2) {
         g.beginPath();
-        traceSmoothLine(g, run, ox, oy);
+        traceLine(g, run, ox, oy, d.smooth);
         g.strokeStyle = color;
         g.lineWidth = 2.25;
         g.stroke();

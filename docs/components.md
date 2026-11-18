@@ -448,7 +448,7 @@ A chart of a list of records: bar or line for one or more numbers per item, such
 
 | Prop | Type | Description |
 |---|---|---|
-| `"text"` | text | A title above the chart. |
+| `"text"` | text | A title above the chart; leave it out when the heading just above says the same. |
 | `kind` | `bar` / `hbar` / `line` / `area` / `stacked` / `pie` / `donut` / `funnel` / `waterfall` / `bullet` / `heatmap` / `scatter` / `treemap` / `sankey` | bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows; heatmap draws a grid with a row per value of rows= and a column per value of x=, each cell shaded by its y number (darker is more), for patterns such as orders by weekday and hour; scatter puts a dot per item at its x and y numbers, both on number scales, with label= naming each dot, size= sizing it by a number and group= coloring it by category (at most 6), and labels= naming the axes, e.g. labels="Risk,Return"; treemap splits a rectangle into one per item, its area its share of the total, biggest top left in the strongest color, with names where they fit, for when there are too many parts for a pie (up to 60; the smallest are drawn together as one). sankey draws bands between columns of places, each as thick as its amount, from one flow per item: from= and to= name the places and y= the amount; columns are worked out from the flows, and flows that go round in a circle show a message (at most 40 places and 120 flows). pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey take one y field; pie, donut, funnel, bullet, treemap and sankey take no negative values. |
 | `items` | expression, required | The list of records to chart, e.g. items=sales or items={filter(sales, 'open')}. |
 | `x` | name, required | The field holding each item's label (each slice's name in a pie), e.g. x=month. For scatter, the field with each item's x number. Not used by sankey. |
@@ -465,6 +465,7 @@ A chart of a list of records: bar or line for one or more numbers per item, such
 | `total` | string | Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income". |
 | `values` | boolean | bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits. |
 | `highlight` | string | bar, hbar, stacked: one item's x value, e.g. highlight="Mar"; its bar keeps full color, the others fade. |
+| `curve` | `straight` / `smooth` | line and area: straight lines between points, true to the data; smooth curves them, for continuous readings only. |
 | `format` | `number` / `money` / `percent` | How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number. |
 
 Children: `chart-line`, `chart-rule`, `chart-band`, `chart-note`.
@@ -841,7 +842,7 @@ A text field people type into, such as a name, an email, a search, a new item, o
 |---|---|---|
 | `"text"` | text | The label above the field. Leave it out only when the screen makes the purpose obvious. |
 | `bind` | state, required | The state name or path it reads and writes, like task or t.title. |
-| `placeholder` | string | A hint shown while the field is empty, like e.g. Sunscreen. |
+| `placeholder` | string | A hint shown while the field is empty, e.g. Sunscreen. |
 | `kind` | `text` / `email` / `number` / `password` / `search` | text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one. |
 | `lines` | number | Rows of text, 1 to 12: more than 1 is a box for a note or a message, where Enter starts a new line (on= then runs only from a button). |
 | `required` | condition | When true, an empty field says Required once it's been left. |

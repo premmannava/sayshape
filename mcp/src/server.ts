@@ -158,8 +158,9 @@ const CHAT_EMIT =
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
 const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
 Keep it to one focused screen: a title, any filters just under it, then the content. Use cards for panels, never a card inside a card or one card around everything. Prefer grid for side-by-side numbers; avoid more than three columns.
-Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption.
+Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption ("Estimates").
 ${CHAT_EMIT}
+Every word in the interface is for the person: never how you made or checked it (tool names, "computed in Python", test notes).
 Output only the spec in show_interface's spec argument, with no Markdown fences.`;
 
 /** How to show a database's rows, added to the guide when the server has one. */
@@ -504,7 +505,8 @@ export function createServer(opts: ServerOptions): McpServer {
         "The person installed SayShape so that visual answers appear as interactive SayShape interfaces inside the chat. " +
         "Whenever they ask for a chart, graph, table, dashboard, scorecard, stat card, form, calculator, tracker, checklist or any other visual or interactive answer, " +
         "use show_interface rather than writing HTML, React, SVG or chart code, or making an artifact. Its description has a quick start; " +
-        "choose elements from its PICK BY WHAT YOU'RE SHOWING list, then call sayshape_docs only for the elements you're about to use." +
+        "choose elements from its PICK BY WHAT YOU'RE SHOWING list, then call sayshape_docs only for the elements you're about to use. " +
+        "Asked to restyle an interface (dark mode, bigger text)? Its theme and sizes follow the chat app: say so in a sentence instead of changing it, and never write the request into the interface." +
         (data
           ? " A database is connected: answer questions about it with describe_data and query_data, then show the result with show_interface, " +
             "passing the dataset in its data argument instead of typing the numbers."

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { darkTheme, forcedColorsTheme, lightTheme, studioDarkTheme, studioLightTheme, type Theme } from "../../src";
-import { parseColor } from "../../src/theme";
+import { parseColor, seriesColors, sliceColors } from "../../src/theme";
 import { applyLook, LOOK_OPTIONS, LOOK_PROPS, type Look } from "../../src/look";
 import { render } from "../../src/testing";
 
@@ -46,6 +46,35 @@ describe.each(THEMES)("%s theme contrast (WCAG 2.1 AA)", (_name, theme) => {
   });
   it("the accent's gradient end stands out at 3:1 on surface and raised", () => {
     for (const bg of ["surface", "raised"] as const) expect(contrast(c.accent2, c[bg]), bg).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/** Distance in OKLab, times 100: about 2 is just noticeable, 15 reads as another color at a glance. */
+function apart(a: string, b: string): number {
+  const lin = (v: number) => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const lab = (c: string) => {
+    const [r, g, b] = parseColor(c)!.slice(0, 3).map(lin) as [number, number, number];
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  };
+  const [x, y] = [lab(a), lab(b)];
+  return 100 * Math.hypot(x[0]! - y[0]!, x[1]! - y[1]!, x[2]! - y[2]!);
+}
+
+/** Neighbouring series must read apart at a glance, never as shades of one blue. */
+const ADJACENT_APART = 15;
+
+describe.each(THEMES)("%s theme: neighbouring chart series", (_name, theme) => {
+  // Bars and legends put series k beside k+1; a pie also closes the ring, so its last slice touches its first.
+  it(`series side by side are at least ${ADJACENT_APART} apart`, () => {
+    const s = seriesColors(theme);
+    for (let k = 0; k + 1 < s.length; k++) expect(apart(s[k]!, s[k + 1]!), `series${k + 1} and series${k + 2}`).toBeGreaterThanOrEqual(ADJACENT_APART);
+  });
+  it(`pie and donut slices side by side, round the ring, are at least ${ADJACENT_APART} apart`, () => {
+    const s = sliceColors(theme);
+    for (let k = 0; k < s.length; k++) expect(apart(s[k]!, s[(k + 1) % s.length]!), `slice ${k + 1} and ${(k + 1) % s.length + 1}`).toBeGreaterThanOrEqual(ADJACENT_APART);
   });
 });
 

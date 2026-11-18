@@ -42,7 +42,7 @@ describe("chart props", () => {
     expect(g).toContain(`kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap|scatter|treemap|sankey>`);
     expect(g).toContain(`y=revenue,last_year`);
     expect(g).toMatch(/shown as gaps, not zero/);
-    expect(languageGuide(registry, { mode: "compact" })).toMatch(/^- chart \["text"\] kind=bar\|hbar\|line\|area\|stacked\|pie\|donut\|funnel\|waterfall\|bullet\|heatmap\|scatter\|treemap\|sankey items=expr! x=name! y=name,name! labels=text label=name size=name group=name from=name to=name rows=name target=name good=up\|down total=text values=true\|false highlight=text format=number\|money\|percent/m);
+    expect(languageGuide(registry, { mode: "compact" })).toMatch(/^- chart \["text"\] kind=bar\|hbar\|line\|area\|stacked\|pie\|donut\|funnel\|waterfall\|bullet\|heatmap\|scatter\|treemap\|sankey items=expr! x=name! y=name,name! labels=text label=name size=name group=name from=name to=name rows=name target=name good=up\|down total=text values=true\|false highlight=text curve=straight\|smooth format=number\|money\|percent/m);
   });
 });
 
@@ -154,7 +154,8 @@ describe("chart scale", () => {
   it("keeps the precision that tells close ticks apart", () => {
     expect(labelsFor([10000, 10001, 10002], "line").labels).toEqual(["10,000.0", "10,000.5", "10,001.0", "10,001.5", "10,002.0"]);
     expect(labelsFor([1e-101, 3e-101], "line").labels).toEqual(["1E-101", "1.5E-101", "2E-101", "2.5E-101", "3E-101"]);
-    expect(labelsFor([1e-101, 3e-101], "bar").labels).toEqual(["0", "1E-101", "2E-101", "3E-101"]);
+    // A bar scale leaves a step of headroom over a bar that reaches its top tick.
+    expect(labelsFor([1e-101, 3e-101], "bar").labels).toEqual(["0", "1E-101", "2E-101", "3E-101", "4E-101"]);
   });
 });
 
@@ -466,18 +467,22 @@ describe("the Charts playground sample", () => {
 });
 
 describe("bar value labels", () => {
-  it("keeps a label inside its bar, shortening it when the full value is wider than the bar", () => {
+  it("writes every value above its bar, the tallest too: the scale leaves room over it", () => {
     const ui = render(`state sales=[{m: "Jan", r: 12000}, {m: "Feb", r: 18000}, {m: "Mar", r: 15000}, {m: "Apr", r: 21000}, {m: "May", r: 17500}, {m: "Jun", r: 24000}]
 card
   chart "Revenue by month" kind=bar items=sales x=m y=r format=money
 `, { width: 600 });
-    const jun = (ui.find("chart").box!.data as ChartGeometry).slots[5]!.bar!;
-    const label = ui.drawOps.find((o) => o.op === "fillText" && /^\$24/.test(String(o.args[0])))!;
-    expect(label.args[0]).toBe("$24K");
-    const half = monoWidth("$24K", label.font!) / 2;
+    const d = ui.find("chart").box!.data as ChartGeometry;
     const box = ui.find("chart").box!;
-    expect(Number(label.args[1]) - half).toBeGreaterThanOrEqual(box.x + jun.x);
-    expect(Number(label.args[1]) + half).toBeLessThanOrEqual(box.x + jun.x + jun.w);
+    // Without headroom 24,000 sat on the top tick, and its label went inside the bar.
+    const step = Math.abs(d.ticks[1]!.value - d.ticks[0]!.value);
+    expect(d.max - 24000).toBeGreaterThanOrEqual(0.4 * step);
+    for (const [i, text] of ["$12,000", "$18,000", "$15,000", "$21,000", "$17,500", "$24,000"].entries()) {
+      const bar = d.slots[i]!.bar!;
+      const label = ui.drawOps.find((o) => o.op === "fillText" && o.args[0] === text);
+      expect(label, text).toBeDefined();
+      expect(Number(label!.args[2]), `${text} above its bar`).toBeLessThan(box.y + bar.y);
+    }
     ui.destroy();
   });
 });

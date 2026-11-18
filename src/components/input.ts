@@ -410,6 +410,12 @@ function stepperState(p: PropReader) {
   return { min, max, step, value };
 }
 
+/** Whether label text reads the state a control is bound to, as {name} or inside an expression. */
+export function labelShows(template: string, bound: string): boolean {
+  const name = bound.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return [...template.matchAll(/\{([^}]*)\}/g)].some((m) => new RegExp(`(^|[^\\w.'"])${name}(?![\\w])`).test(m[1]!));
+}
+
 export const stepper: ComponentDef = {
   type: "stepper",
   category: "input",
@@ -442,6 +448,11 @@ stepper "Quantity" bind=qty min=1 max=10`,
   layout(box, ctx) {
     const control = ctx.theme.control.height;
     const label = ctx.props(box.node).text();
+    // "{guests} guests" beside a stepper bound to guests reads "2 guests [− 2 +]": the number twice.
+    const bound = ctx.props(box.node).raw("bind");
+    if (bound && labelShows(ctx.props(box.node).template(), bound)) {
+      ctx.warn?.(`stepper on line ${box.node.line}: its label shows {${bound}}, which the stepper already shows between its buttons, so the number reads twice. Name what it counts instead, like stepper "Guests" bind=${bound}`);
+    }
     const beside = box.w - STEPPER_W - 12;
     // Too narrow for the label beside the buttons: put it above them instead of squeezing it.
     const stacked = !!label && beside < 56;
@@ -885,7 +896,7 @@ export const input: ComponentDef = {
   text: { description: "The label above the field. Leave it out only when the screen makes the purpose obvious." },
   props: {
     bind: { type: "state", required: true, description: "The state name or path it reads and writes, like task or t.title." },
-    placeholder: { type: "string", description: "A hint shown while the field is empty, like e.g. Sunscreen." },
+    placeholder: { type: "string", description: "A hint shown while the field is empty, e.g. Sunscreen." },
     kind: { type: "enum", values: INPUT_KINDS, default: "text", description: "text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one." },
     lines: { type: "number", default: 1, description: `Rows of text, 1 to ${MAX_INPUT_LINES}: more than 1 is a box for a note or a message, where Enter starts a new line (on= then runs only from a button).` },
     required: { type: "condition", description: "When true, an empty field says Required once it's been left." },

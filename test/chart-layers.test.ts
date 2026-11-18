@@ -51,9 +51,13 @@ describe("chart layers", () => {
   });
 
   it("keeps a level's name off a line that passes where it would sit", () => {
+    // Where the name sits against its own level, since a line layer can move the scale's top.
     const at = (layers: string) => {
-      const op = render(chart("bar", layers), { width: 600 }).drawOps.find((o) => o.op === "fillText" && String(o.args[0]).startsWith("Target"))!;
-      return { x: Number(op.args[1]), y: Number(op.args[2]) };
+      const ui = render(chart("bar", layers), { width: 600 });
+      const op = ui.drawOps.find((o) => o.op === "fillText" && String(o.args[0]).startsWith("Target"))!;
+      const box = ui.find("chart").box!;
+      const rule = (box.data as ChartGeometry).layers!.rules[0]!;
+      return { x: Number(op.args[1]), y: Number(op.args[2]) - (box.y + rule.y) };
     };
     // Forecast ends at 47,000, just above a target of 45,000: right where the name goes.
     const alone = at(`  chart-rule "Target" y=45000\n`);
