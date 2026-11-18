@@ -66,7 +66,7 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - compare-row ["text"] field=name! format=text|number|money best=low|high [only in compare] — One row of a comparison: an attribute and the field each option's value comes from.
 - details ["text"] subtitle=text [holds detail] — One record as label and value rows, for a single customer, order, policy or ticket: its fields one per line, with an optional status badge.
 - detail "text" value=text! tone=default|muted|accent|good|warn|bad [only in details] — One row of details: a field's name and its value.
-- button "text" on=action variant=primary|secondary|danger disabled=cond icon=text size=md|sm fit=true|false validate=true|false — A pressable button that runs actions.
+- button ["text"] on=action variant=primary|secondary|danger disabled=cond icon=text size=md|sm fit=true|false validate=true|false label=text — A pressable button that runs actions.
 - link "text" on=action! icon=text — Pressable text for a secondary action, lighter than a button.
 - check "text" bind=path! detail=text required=cond error=text — A checkbox that toggles a true/false state value.
 - switch "text" bind=path! on=action detail=text — An on/off switch with a label, for settings that take effect right away.

@@ -30,6 +30,18 @@ function buttonIconW(p: PropReader, theme: Theme): number {
   return isIconName(p.str("icon")) ? buttonSize(p, theme).icon + BUTTON_ICON_GAP : 0;
 }
 
+/** The least side of an icon-only button on a phone: a comfortable tap target (WCAG 2.5.5, and Apple's and Google's guidance). */
+export const ICON_TAP = 44;
+
+/** A button with an icon and no text: a square, named by label=. */
+const iconOnly = (p: PropReader) => !p.text() && isIconName(p.str("icon"));
+
+/** An icon-only button's side: its height, and on a phone never less than ICON_TAP. */
+function iconSide(p: PropReader, ctx: LayoutContext): number {
+  const h = buttonSize(p, ctx.theme).h;
+  return ctx.screenWidth() <= BUTTON_FULL_UNDER ? Math.max(h, ICON_TAP) : h;
+}
+
 /** A button's own width: its label with room either side. */
 function buttonWidth(node: SayShapeNode, ctx: LayoutContext): number {
   const p = ctx.props(node), s = buttonSize(p, ctx.theme);
@@ -41,7 +53,7 @@ export const button: ComponentDef = {
   type: "button",
   category: "input",
   description: "A pressable button that runs actions. Use emit: to tell the app what the user chose.",
-  text: { description: "The button label.", required: true },
+  text: { description: "The button label. Leave it out for an icon-only button, with icon= and label=." },
   props: {
     on: { type: "action", description: "What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ;" },
     variant: { type: "enum", values: VARIANTS, default: "primary", description: "primary (filled), secondary (outlined) or danger." },
@@ -50,16 +62,35 @@ export const button: ComponentDef = {
     size: { type: "enum", values: BUTTON_SIZES, default: "md", description: "md or sm (smaller)." },
     fit: { type: "boolean", default: false, description: "Natural width, even on a phone." },
     validate: { type: "boolean", default: false, description: "First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is." },
+    label: { type: "string", description: "What screen readers say, and an icon-only button's tip, e.g. label=\"Remove {e.name}\"." },
   },
-  check: (props) => iconProblems(props.icon, "icon"),
+  check(props, text) {
+    const out = iconProblems(props.icon, "icon");
+    if (text === undefined && props.icon === undefined) out.push(`"button" needs quoted text, like button "Save", or icon= and label= for an icon-only button`);
+    else if (text === undefined && !props.label?.trim()) out.push(`An icon-only button needs label=, which screen readers say and its tip shows, like button icon=${props.icon} label="Remove"`);
+    // Speech users press a button by saying what it shows (WCAG 2.5.3), so a label= beside text includes the text.
+    else if (text !== undefined && props.label !== undefined && !/[{]/.test(text + props.label) && !props.label.toLowerCase().includes(text.trim().toLowerCase())) {
+      out.push(`label="${props.label}" doesn't include the button's text "${text}", so people who say what they see can't press it. Start it with the text, like label="${text} …"`);
+    }
+    return out;
+  },
   example: `button "Book now" on=emit:book
-button "Back" variant=secondary on=dec:step`,
+button "Back" variant=secondary on=dec:step
+button icon=trash label="Remove" variant=secondary on=emit:remove`,
   semantics(box, ctx) {
     const p = ctx.props(box.node);
-    return { role: "button", name: p.text(), disabled: p.cond("disabled") || undefined };
+    return { role: "button", name: p.str("label").trim() || p.text(), disabled: p.cond("disabled") || undefined };
   },
+  ownTip: (p) => (iconOnly(p) && !p.cond("disabled") ? p.str("label").trim() : ""),
   layout(box, ctx) {
     const p = ctx.props(box.node);
+    if (iconOnly(p)) {
+      // Square, at its own size even on a phone (a full-width slab with one icon reads as a bar).
+      const side = iconSide(p, ctx);
+      box.w = Math.min(box.w, side);
+      box.h = side;
+      return;
+    }
     box.h = buttonSize(p, ctx.theme).h;
     // On a phone a button takes the full width, which is easy to tap. Anywhere wider it takes the
     // width of its label, like buttons in apps and on the web, instead of a long slab. It's the
@@ -69,6 +100,7 @@ button "Back" variant=secondary on=dec:step`,
   },
   minWidth(node, ctx) {
     const p = ctx.props(node);
+    if (iconOnly(p)) return iconSide(p, ctx);
     const w = textWidth(ctx, p.text(), 600, buttonSize(p, ctx.theme).text) + buttonIconW(p, ctx.theme) + 24;
     return Math.max(64, Math.min(160, w));
   },
@@ -149,7 +181,9 @@ button "Back" variant=secondary on=dec:step`,
     g.textBaseline = "middle";
     g.fillStyle = disabled ? c.muted : secondary ? c.ink : c.onAccent;
     const iconW = buttonIconW(p, theme);
-    if (iconW) {
+    if (iconOnly(p)) {
+      drawIcon(g, p.str("icon") as IconName, box.x + (box.w - size.icon) / 2, box.y + (box.h - size.icon) / 2, size.icon, g.fillStyle as string);
+    } else if (iconW) {
       // The icon and the label are centred together.
       const label = fitText(g, p.text(), box.w - 16 - iconW);
       const left = box.x + (box.w - (iconW + g.measureText(label).width)) / 2;
@@ -240,6 +274,7 @@ check "I agree to the terms" bind=agreed`,
     const data: CheckData = { ...l, problem, problemLines, problemY };
     box.data = data as unknown as Box["data"];
     box.h = problemY + problemLines.length * errorLineHeight(ctx.theme);
+    if (problemLines.length) box.band = problemY;
   },
   minWidth: (node, ctx) => 30 + Math.min(100, textWidth(ctx, ctx.props(node).text(), 400, ctx.theme.text.body)),
   paint(box, ctx) {
@@ -915,6 +950,8 @@ export function fieldProblem(p: PropReader, unparsed: boolean): string {
 }
 
 export const FIELD_PAD = 12;
+/** The narrowest a kind=number field gets in a row: room for about six digits. */
+const NUMBER_MIN = 80;
 /** An icon at the start of a field: its size, and the room it takes before the text. */
 const FIELD_ICON = 18, FIELD_ICON_ROOM = FIELD_ICON + 8;
 const fieldLead = (p: PropReader) => (isIconName(p.str("icon")) ? FIELD_ICON_ROOM : 0);
@@ -949,7 +986,7 @@ export const input: ComponentDef = {
   type: "input",
   category: "input",
   description: "A text field people type into, such as a name, an email, a search, a new item, or with lines= a note or a message. Each keystroke writes its bind= state, and required= and kind=email or number say what's wrong once it's been left.",
-  text: { description: "The label above the field. Leave it out only when the screen makes the purpose obvious." },
+  text: { description: "The label above the field. Leave it out only when the screen makes the purpose obvious, or in a row of fields with placeholder=, its name then." },
   props: {
     bind: { type: "state", required: true, description: "The state name or path it reads and writes, like task or t.title." },
     placeholder: { type: "string", description: "A hint shown while the field is empty, e.g. Sunscreen." },
@@ -974,7 +1011,8 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     out.push(...iconProblems(props.icon, "icon"));
     return out;
   },
-  minWidth: () => 120,
+  // A number is short (an amount, a quantity), so a number field gives up room first in a row of fields.
+  minWidth: (node, ctx) => (ctx.props(node).oneOf("kind", INPUT_KINDS, "text") === "number" ? NUMBER_MIN : 120),
   semantics(box, ctx) {
     const p = ctx.props(box.node);
     const kind = p.str("kind", "text");
@@ -1002,6 +1040,8 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     const data: FieldData = { problem, lines };
     box.data = data as unknown as Box["data"];
     box.h = field.y - box.y + field.h + (lines.length ? ERROR_GAP + lines.length * errorLineHeight(ctx.theme) : 0);
+    // In a row, a button beside it stays level with the field when the message shows.
+    if (lines.length) box.band = field.y - box.y + field.h;
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);

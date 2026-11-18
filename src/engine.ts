@@ -1150,7 +1150,7 @@ export class SayShape {
     // An element with a tip gets a region for it under its children's and its own parts, so the
     // pointer shows the tip anywhere on it. When it isn't pressable on its own, the region is a
     // Tab stop too, so the keyboard and a tap reach it. (A scene draws its shapes' tips itself.)
-    if (box.node.props.tip !== undefined && !loading && !def?.provides && this.tipOf(box.node)) {
+    if ((box.node.props.tip !== undefined || def?.ownTip) && !loading && !def?.provides && this.tipOf(box.node)) {
       // Parts there only for a child's tip ("tip:…") don't count: the element's own tip still needs its stop.
       const own = this.hits.slice(before).some((h) => h.box.node.id === box.node.id && !isTipPart(h.detail));
       const placed = xf ? applyTransform(box, xf) : box;
@@ -2030,10 +2030,12 @@ export class SayShape {
     return accessibleKey(t.node, t.detail === TIP ? undefined : t.detail);
   }
 
-  /** An element's tip= text, filled in from state, or "" without one. */
+  /** An element's tip= text, filled in from state, or its own (an icon-only button's label=), or "" without one. */
   private tipOf(node: SayShapeNode): string {
-    if (node.props.tip === undefined) return "";
-    return new PropReader(node, scopeOf(node, this.state.scope)).str("tip", "").trim();
+    const own = this.registry.get(node.type)?.ownTip;
+    if (node.props.tip === undefined && !own) return "";
+    const p = new PropReader(node, scopeOf(node, this.state.scope));
+    return node.props.tip !== undefined ? p.str("tip", "").trim() : own!(p);
   }
 
   /** Whose tip shows now: what's pinned by a tap, focused from the keyboard, or under the pointer (or its tip). */

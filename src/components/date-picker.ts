@@ -383,7 +383,7 @@ date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
       : !r && v.kind === "date" ? displayDate(v.date)
       : shownAs.kind === "invalid" ? (r ? "Invalid dates" : "Invalid date")
       : p.str("placeholder", r ? "Choose dates" : "Choose a date");
-    const name = p.text() || ctx.textBefore() || (r ? "Dates" : "Date");
+    const name = p.text() || ctx.textBefore() || p.str("placeholder") || (r ? "Dates" : "Date");
     const cal = ctx.popup ? shown(ctx.popup as PopupState) : null;
     const parts: PartSemantics[] = [{
       detail: undefined,

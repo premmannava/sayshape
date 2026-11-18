@@ -679,7 +679,7 @@ A pressable button that runs actions. Use emit: to tell the app what the user ch
 
 | Prop | Type | Description |
 |---|---|---|
-| `"text"` | text, required | The button label. |
+| `"text"` | text | The button label. Leave it out for an icon-only button, with icon= and label=. |
 | `on` | action | What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ; |
 | `variant` | `primary` / `secondary` / `danger` | primary (filled), secondary (outlined) or danger. |
 | `disabled` | condition | Expression; when true the button is greyed out and can't be pressed. |
@@ -687,10 +687,12 @@ A pressable button that runs actions. Use emit: to tell the app what the user ch
 | `size` | `md` / `sm` | md or sm (smaller). |
 | `fit` | boolean | Natural width, even on a phone. |
 | `validate` | boolean | First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is. |
+| `label` | string | What screen readers say, and an icon-only button's tip, e.g. label="Remove {e.name}". |
 
 ```
 button "Book now" on=emit:book
 button "Back" variant=secondary on=dec:step
+button icon=trash label="Remove" variant=secondary on=emit:remove
 ```
 
 ### `link`
@@ -843,7 +845,7 @@ A text field people type into, such as a name, an email, a search, a new item, o
 
 | Prop | Type | Description |
 |---|---|---|
-| `"text"` | text | The label above the field. Leave it out only when the screen makes the purpose obvious. |
+| `"text"` | text | The label above the field. Leave it out only when the screen makes the purpose obvious, or in a row of fields with placeholder=, its name then. |
 | `bind` | state, required | The state name or path it reads and writes, like task or t.title. |
 | `placeholder` | string | A hint shown while the field is empty, e.g. Sunscreen. |
 | `kind` | `text` / `email` / `number` / `password` / `search` | text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one. |
