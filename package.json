@@ -102,6 +102,7 @@
     "colors-eval": "vite-node scripts/colors-eval.ts --",
     "guide:size": "vite-node scripts/guide-size.ts",
     "adaptive:size": "vite-node scripts/adaptive-size.ts",
+    "adaptive:smoke": "vite-node scripts/adaptive-smoke.ts --",
     "site:docs": "vite-node scripts/gen-site-docs.ts",
     "site:dev": "npm run site:docs && npm --prefix site run dev",
     "site:build": "npm run site:docs && npm --prefix site run build",
