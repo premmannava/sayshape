@@ -164,6 +164,16 @@ export interface PaintContext {
   behavior?: boolean;
   /** Fade-in opacity for a node that just appeared (0..1). */
   appear(node: SayShapeNode): number;
+  /**
+   * Draw what's already painted behind this box, blurred by `blur` CSS px and
+   * clipped to `path` (traced in the current space): a glass surface. Returns
+   * false, drawing nothing, where blur isn't available (no canvas filter, a
+   * recording canvas); draw a stronger tint instead then. Kept between frames
+   * while nothing behind can have changed. Missing in contexts with no engine.
+   */
+  backdrop?(box: Box, path: () => void, blur: number): boolean;
+  /** The person prefers less transparency (prefers-reduced-transparency, or the engine's option): glass is drawn solid. */
+  reducedTransparency?: boolean;
   /** Ask for another frame (for animation). */
   requestFrame(): void;
   /**
@@ -338,10 +348,12 @@ export interface ComponentDef {
    * math), or, with anyNames, names it fills in itself when it draws (the
    * params a drawing is used with), so the parser doesn't warn that nothing
    * defines them. Only lines inside the element see these; the element
-   * evaluates those lines itself, with the same functions.
+   * evaluates those lines itself, with the same functions. renames swaps an
+   * element written inside it for another, silently: a scene reads icon as
+   * its own glyph, since the main icon element is laid out, not drawn.
    */
   provides?: {
-    names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions;
+    names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions; renames?: Readonly<Record<string, string>>;
     /** The element's own props that it evaluates with these too (a scene's shake= reads t and ease). */
     ownProps?: readonly string[];
   };

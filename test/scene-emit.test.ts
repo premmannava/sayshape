@@ -46,7 +46,7 @@ function trace(spec: string, t: number, opts: { press?: boolean; motion?: boolea
   const num = (k: string, d: number) => (scene.props[k] === undefined ? d : Number(scene.props[k]));
   const f: Frame = {
     g, font: () => "10px sans-serif", colors: lightTheme.colors, defs: new Map(), gradients: new Map(),
-    shapes: 0, steps: 0, useDepth: 0, time: t, m: IDENTITY, motion: opts.motion ?? true,
+    shapes: 0, steps: 0, useDepth: 0, ends: new Map(), time: t, m: IDENTITY, motion: opts.motion ?? true,
     clock: { duration: num("duration", 0), loop: scene.props.loop !== "false" },
     ...(opts.press === false ? {} : { press: { regions: [], open: [], copy: [], locate: () => null } }),
   };
@@ -310,7 +310,7 @@ describe("emit: the particles switch", () => {
     const node = sceneOf(parsed.root)!;
     const calls: string[] = [];
     const g = new Proxy({}, { get: (_t, k: string) => (k === "globalAlpha" ? 1 : (...a: unknown[]) => { calls.push(`${k}${a.length}`); }), set: () => true }) as unknown as CanvasRenderingContext2D;
-    const f: Frame = { g, font: () => "", colors: lightTheme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: 0.5, m: IDENTITY, features: { particles: false, reflect: true } };
+    const f: Frame = { g, font: () => "", colors: lightTheme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(), time: 0.5, m: IDENTITY, features: { particles: false, reflect: true } };
     paintScene(f, node.children, (n) => (n === "t" ? f.time : undefined), 600, 340, undefined);
     expect(calls.filter((c) => c.startsWith("arc"))).toEqual([]);
   });

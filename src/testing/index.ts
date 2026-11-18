@@ -64,6 +64,8 @@ export interface RenderOptions {
   animate?: boolean;
   /** As if the person prefers reduced motion: nothing animates (even with animate: true), and rules wait for a first press or key. Default false. */
   reducedMotion?: boolean;
+  /** Draw as for a person who prefers less transparency: glass cards solid. Default false. */
+  reducedTransparency?: boolean;
   /** The engine's bareRootCard option: a card that is the only top-level element draws no frame. Default false. */
   bareRootCard?: boolean;
   /** The engine's look option: false ignores a spec's look line with a warning. Default true, as in the engine. */
@@ -257,6 +259,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     ...(opts.presets ? { presets: true } : {}),
     ...(manual ? { clock: manual } : {}),
     reducedMotion: !!opts.reducedMotion,
+    ...(opts.reducedTransparency ? { reducedTransparency: true } : {}),
     ...(opts.bareRootCard ? { bareRootCard: true } : {}),
     ...(opts.look === false ? { look: false } : {}),
     ...(opts.context ? { context: opts.context } : {}),

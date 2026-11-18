@@ -35,6 +35,8 @@ export default defineConfig(({ mode }) => {
           scene: resolve(__dirname, "src/components/scene/index.ts"),
           // Experimental and opt-in too: deck and slide, a trial for slide decks.
           slides: resolve(__dirname, "src/components/slides/index.ts"),
+          // Experimental and opt-in: hosts that don't import it don't have device frames.
+          device: resolve(__dirname, "src/components/device/index.ts"),
           testing: resolve(__dirname, "src/testing/index.ts"),
           model: resolve(__dirname, "src/model/index.ts"),
           // Framework wrappers: each its own entry, with the framework left to the host

@@ -8,6 +8,7 @@
  * Each stage only re-runs when its inputs change: editing the spec re-parses,
  * changing state re-lays out, hovering only repaints.
  */
+import { GlassCache } from "./glass";
 import { parseActions, runActions } from "./actions";
 import { MAX_RULE_LIST, realClock, RULE_OPS, RuleRunner, type Clock, type RuleDef } from "./behavior";
 import { RULE_FUNCTIONS } from "./math";
@@ -179,6 +180,11 @@ export interface SayShapeOptions {
    */
   reducedMotion?: boolean;
   /**
+   * Whether the person prefers less transparency. Default: the system setting
+   * (prefers-reduced-transparency). With it, glass cards are drawn solid.
+   */
+  reducedTransparency?: boolean;
+  /**
    * Draw a card that is the spec's only top-level element without its border,
    * shadow and padding, for hosts that already frame the view (chat apps).
    * Nested cards keep their frame. Default false.
@@ -266,6 +272,13 @@ export class SayShape {
   private toast: { text: string; shownAt: number; ms: number } | null = null;
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
   private dirty = { parse: true, layout: true, paint: true };
+  /** Glass cards' blurred backdrops (src/glass.ts), kept while nothing behind them changes. */
+  private glass = new GlassCache();
+  /** Moves on whenever a frame is asked for from outside painting: a kept backdrop from an older one is stale. */
+  private backdropGen = 0;
+  /** Whether paint is running, and whether something painted so far this frame asked for another (an animation). */
+  private painting = false;
+  private animatedSoFar = false;
   private frame = 0;
   /** Set by destroy(): late callbacks (fonts loading, images settling) must not draw again. */
   private destroyed = false;
@@ -576,6 +589,9 @@ export class SayShape {
 
   /** Mark a stage (and everything after it) dirty and schedule a frame. */
   invalidate(stage: "parse" | "layout" | "paint" = "paint"): void {
+    // A frame asked for while painting is an animation; one asked for from outside may change anything behind a glass card.
+    if (this.painting) this.animatedSoFar = true;
+    else this.backdropGen++;
     if (stage === "parse") this.dirty.parse = this.dirty.layout = this.dirty.paint = true;
     else if (stage === "layout") this.dirty.layout = this.dirty.paint = true;
     else this.dirty.paint = true;
@@ -791,7 +807,9 @@ export class SayShape {
     this.sightArea = null;
     this.text?.collector.begin();
     const ctx = this.paintContext(g);
-    this.paintBox(this.rootBox, ctx, 1);
+    this.painting = true;
+    this.animatedSoFar = false;
+    try { this.paintBox(this.rootBox, ctx, 1); } finally { this.painting = false; }
     this.modalFrom = -1;
     if (this.modal) {
       // What's behind an open dialog isn't reachable, so its words aren't in the layer either.
@@ -802,7 +820,8 @@ export class SayShape {
       // Nothing behind can be pressed, hovered or reached with Tab while it's open.
       this.hits.length = 0;
       this.modalFrom = 0;
-      this.paintBox(this.modal, ctx, 1);
+      this.painting = true;
+      try { this.paintBox(this.modal, ctx, 1); } finally { this.painting = false; }
     }
     this.trapFocus();
     this.resolveFocus();
@@ -1101,6 +1120,8 @@ export class SayShape {
         return { top: Math.max(area.top, clip ? clip.y : -Infinity), bottom: Math.min(area.bottom, clip ? clip.y + clip.h : Infinity) };
       },
       requestFrame: () => this.invalidate("paint"),
+      backdrop: (box, path, blur) => this.glass.draw(g, box.node.id, box, blur, path, this.backdropGen, !this.animatedSoFar),
+      ...(this.reducedTransparency() ? { reducedTransparency: true } : {}),
       tween: (node, key, target, duration = 220) =>
         this.transitions.value(node, key, target, t, duration, animate, () => this.invalidate("paint")),
       isLoading: (n) => lv.isLoading(n, scopeOf(n, scope)),
@@ -1248,6 +1269,13 @@ export class SayShape {
     const seenW = Math.min(r.x + r.w, right) - Math.max(r.x, left);
     // Half a pixel of slack: an element wholly in sight works out a hair short in floating point.
     return seenW > 0 && seenH > 0 && seenH >= Math.min(r.h, SIGHT_PX) - 0.5;
+  }
+
+  /** The system's prefers-reduced-transparency query, read once when the engine starts watching the page. */
+  private transparencyQuery: MediaQueryList | null = null;
+
+  private reducedTransparency(): boolean {
+    return this.opts.reducedTransparency ?? this.transparencyQuery?.matches ?? false;
   }
 
   /** Motion is on: the animate option isn't false and the person doesn't prefer reduced motion. */
@@ -2815,6 +2843,12 @@ export class SayShape {
     const onForced = () => { this.theme = this.resolveTheme(); this.invalidate("layout"); };
     forced.addEventListener("change", onForced);
     this.cleanup.push(() => forced.removeEventListener("change", onForced));
+    // Asking for less transparency (or no longer) redraws glass cards solid (or blurred) at once.
+    const clear = matchMedia("(prefers-reduced-transparency: reduce)");
+    this.transparencyQuery = clear;
+    const onClear = () => this.invalidate("paint");
+    clear.addEventListener("change", onClear);
+    this.cleanup.push(() => clear.removeEventListener("change", onClear));
     const mo = new MutationObserver(onScheme);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class", "style"] });
     this.cleanup.push(() => { mq.removeEventListener("change", onScheme); mo.disconnect(); });
@@ -2890,6 +2924,7 @@ export class SayShape {
     this.text?.host.destroy();
     this.text = null;
     this.a11y.destroy();
+    this.glass.clear();
     this.events.clear();
   }
 

@@ -109,7 +109,7 @@ function callsOf(spec: string, times: readonly number[]): unknown[][] {
       },
       set(target, key: string, value) { log.push(["set", key, typeof value === "object" ? "(gradient)" : value]); target[key] = value; return true; },
     }) as unknown as CanvasRenderingContext2D;
-    const f: Frame = { g, font: (w, s) => `${w} ${s}px sans`, colors: lightTheme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time, m: [1, 0, 0, 1, 0, 0] };
+    const f: Frame = { g, font: (w, s) => `${w} ${s}px sans`, colors: lightTheme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(), time, m: [1, 0, 0, 1, 0, 0] };
     const scope: Scope = (n) => (n === "t" ? f.time : n === "PI" ? Math.PI : values.get(n));
     paintScene(f, scene.children, scope, 600, 400, undefined);
     return log;

@@ -253,12 +253,14 @@ export function rowMinWidth(node: SayShapeNode, ctx: LayoutContext, pad: number,
 export const TEXT_STYLES = ["display", "title", "lead", "body", "caption"] as const;
 export type TextStyle = (typeof TEXT_STYLES)[number];
 export const WEIGHTS = ["regular", "semibold", "bold"] as const;
+/** text's weights: WEIGHTS and light, for large figures (a temperature, a price). */
+export const TEXT_WEIGHTS = ["light", ...WEIGHTS] as const;
 
-export function textMetrics(theme: Theme, style: TextStyle, weight?: (typeof WEIGHTS)[number]) {
+export function textMetrics(theme: Theme, style: TextStyle, weight?: (typeof TEXT_WEIGHTS)[number]) {
   const size = theme.text[style];
   // Headings are semibold by default: firm without shouting. They sit tighter than reading text.
   const w = weight ?? (style === "display" || style === "title" ? "semibold" : "regular");
-  const numeric = { regular: 400, semibold: 600, bold: 700 }[w];
+  const numeric = { light: 300, regular: 400, semibold: 600, bold: 700 }[w];
   const leading = style === "display" ? 1.2 : style === "title" ? 1.3 : style === "lead" ? 1.4 : 1.45;
   // Headings take the theme's display face when a look gives them one.
   const family = style === "display" || style === "title" ? displayFamily(theme) : theme.font.family;

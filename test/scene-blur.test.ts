@@ -154,7 +154,7 @@ describe("blur: shapes", () => {
   circle x=100 y=100 r=30 fill="#FF0000" blur=8
   group blur=10
     rect x=10 y=10 w=40 h=40 fill="#00FF00"`, new Registry(ON)).root;
-    const f: Frame = { g: plain, font: (w, s) => `${w} ${s}px sans-serif`, colors: lightTheme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: 0, m: [1, 0, 0, 1, 0, 0], offscreen: (w, h) => new FakeOffscreen(w, h) as unknown as OffscreenCanvas, view: { m: [1, 0, 0, 1, 0, 0], w: 600, h: 340 } };
+    const f: Frame = { g: plain, font: (w, s) => `${w} ${s}px sans-serif`, colors: lightTheme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(), time: 0, m: [1, 0, 0, 1, 0, 0], offscreen: (w, h) => new FakeOffscreen(w, h) as unknown as OffscreenCanvas, view: { m: [1, 0, 0, 1, 0, 0], w: 600, h: 340 } };
     expect(() => paintScene(f, root.children[0]!.children, () => undefined, 600, 340, undefined)).not.toThrow();
     const ops = rec.take();
     expect(ops.filter((o) => o.op === "fill")).toHaveLength(2);

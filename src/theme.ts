@@ -3,6 +3,8 @@
  * everything from the theme, which is what keeps model-generated screens
  * on-brand.
  */
+import type { FillName } from "./fills";
+
 export interface Theme {
   name: string;
   colors: {
@@ -111,6 +113,19 @@ export interface Theme {
    * of their own (a stat's figure) draw that much larger there.
    */
   zoom?: number;
+  /**
+   * Set by a look line's mood= (src/look.ts), never by a host: how strongly
+   * elements use the accent. bold: a hero card's wash is stronger, so its
+   * gradient shows. Missing: the host's own.
+   */
+  mood?: "quiet" | "bold";
+  /**
+   * For hosts: the two ends of a named fill (card fill=sky), light or dark as
+   * this theme is. Missing: worked out from the theme's own colors
+   * (src/fills.ts). Words on it are always chosen to read at AA, so a host
+   * gives only the gradient.
+   */
+  fills?: Partial<Record<FillName, { from: string; to: string }>>;
 }
 
 const base = {

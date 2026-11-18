@@ -154,7 +154,7 @@ describe("cap and join", () => {
     }) as unknown as CanvasRenderingContext2D;
     const f: Frame = {
       g, font: () => "16px sans-serif", colors: lightTheme.colors, defs: new Map(), gradients: new Map(),
-      shapes: 0, steps: 0, useDepth: 0, time: 0, m: [1, 0, 0, 1, 0, 0],
+      shapes: 0, steps: 0, useDepth: 0, ends: new Map(), time: 0, m: [1, 0, 0, 1, 0, 0],
     };
     paintScene(f, scene.children, () => undefined, 100, 100, undefined);
     return seen;

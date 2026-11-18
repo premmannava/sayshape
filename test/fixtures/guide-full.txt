@@ -160,9 +160,10 @@ ELEMENTS
   card  — A surface that groups related content, stacked vertically. Give it on= to make the whole card pressable.
     gap=<number>  Space between children in pixels (default 14).
     pad=<number>  Inner padding in pixels (default 22).
-    variant=<raised|hero|tinted|outline>  raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only).
+    variant=<raised|hero|tinted|outline|glass>  raised (default), hero (an accent wash for the one card that leads the screen; a clear gradient in a bold look), tinted (a quiet accent fill for a side group), outline (a border only) or glass (frosted: what's behind shows through, blurred, as in a dock over a picture).
     on=<action>  Actions to run when the card is pressed, e.g. emit:changed. Separate several with ;
     tone=<accent|good|warn|bad|muted>  Color role of a left edge stripe.
+    fill=<sky|sunset|dusk|night|accent>  A gradient from the theme that sets a mood, by name, never a color: card fill=sky for today's weather. Words inside switch to colors that read on it.
     children: any elements
     example:
       card variant=hero
@@ -273,7 +274,7 @@ ELEMENTS
   text "<text>"  — A paragraph or heading that wraps to the available width. Use {expressions} to show state.
     "<text>" (required)  The words to show. May include {expressions}.
     style=<display|title|lead|body|caption>  display, title, lead, body or caption.
-    weight=<regular|semibold|bold>  regular, semibold or bold. Titles default to semibold.
+    weight=<light|regular|semibold|bold>  light, regular, semibold or bold. Titles default to semibold; light suits a large figure in style=display (72°, $1,240).
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     align=<left|center|right>  left, center or right.
     strike=<boolean>  Draw a line through the text, e.g. for an old price.
@@ -331,7 +332,7 @@ ELEMENTS
       callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true action="See breakdown" on=emit:open_breakdown
 
   icon  — A small symbol on its own, like a status mark or a weather sign. To start a line of text or a list row with one, use icon= on text or list-item instead.
-    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book.
+    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book, music, video, mic, volume, volume-off, alarm, timer, laptop, tablet, watch, camera, headphones, battery, wifi, tv, sunrise, sunset, cloud-sun, fog, umbrella, store, gift, ticket, basket, menu, grid, list, more, chevron-up, chevron-down, chevron-left, chevron-right, compass, navigation, route, bookmark, send, archive, clipboard, note, user-plus, id-badge, activity, gauge, flame, plant, leaf, tree, planet, bowl, coffee, pizza, bed, sofa, lamp, bike, bus, train. A few common other names (cup, stopwatch, plant-2) work too.
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     size=<sm|md|lg>  sm, md or lg.
     label=<string>  What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration.
@@ -351,6 +352,7 @@ ELEMENTS
     icon=<string>  Icon name before the label.
     detail=<string>  A muted line under the figure.
     short=<boolean>  Shorten 1,250,000 to 1.25M; false keeps it as given.
+    weight=<light|regular|semibold>  How heavy the figure is: semibold (default), regular, or light for a large, calm number like a temperature, a price or a clock.
     example:
       state price=24 qty=2
       stat label="Total" value="${price*qty}"

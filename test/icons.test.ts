@@ -1,7 +1,7 @@
 /** SayShape's own icons, the icon element, and icon= on text and list-item. */
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
-import { ICON_NAMES, ICONS, drawIcon, isIconName, nearestIcon } from "../src/icons";
+import { ICON_ALIASES, ICON_NAMES, ICONS, drawIcon, isIconName, nearestIcon, resolveIcon } from "../src/icons";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { createRecordingContext } from "../src/testing/canvas";
@@ -83,6 +83,93 @@ describe("the newer icons", () => {
     expect(warnings(`icon name=gear\n`)[0]).toMatch(/Did you mean name=settings\?/);
     expect(nearestIcon("delete")).toBe("trash");
     expect(nearestIcon("pencil")).toBe("edit");
+  });
+});
+
+// Icons for phone and app mockups and everyday interfaces, drawn for SayShape.
+const APP_ICONS = [
+  "music", "video", "mic", "volume", "volume-off", "alarm", "timer", "laptop", "tablet", "watch", "camera", "headphones", "battery",
+  "wifi", "tv", "sunrise", "sunset", "cloud-sun", "fog", "umbrella", "store", "gift", "ticket", "basket", "menu", "grid", "list",
+  "more", "chevron-up", "chevron-down", "chevron-left", "chevron-right", "compass", "navigation", "route", "bookmark", "send",
+  "archive", "clipboard", "note", "user-plus", "id-badge", "activity", "gauge", "flame", "plant", "leaf", "tree", "planet", "bowl",
+  "coffee", "pizza", "bed", "sofa", "lamp", "bike", "bus", "train",
+] as const;
+
+/** How far a shape reaches on the grid: arcs by their actual sweep, paths by their points. */
+function reach(shape: string): number[] {
+  const n = (shape.match(/-?\d*\.?\d+/g) ?? []).map(Number);
+  if (shape.startsWith("O")) return [n[0]! - n[2]!, n[0]! + n[2]!, n[1]! - n[2]!, n[1]! + n[2]!];
+  if (shape.startsWith("A")) {
+    const [cx, cy, r, from, to] = n as [number, number, number, number, number];
+    const out: number[] = [];
+    for (let d = from; d <= to; d += 1) out.push(cx + r * Math.cos((d * Math.PI) / 180), cy + r * Math.sin((d * Math.PI) / 180));
+    return out;
+  }
+  if (shape.startsWith("R")) return [n[0]!, n[0]! + n[2]!, n[1]!, n[1]! + n[3]!];
+  return n;
+}
+
+describe("the app and everyday icons", () => {
+  it("has each one, drawn in the given color, at least a stroke's width inside the grid", () => {
+    for (const name of APP_ICONS) {
+      expect(isIconName(name), name).toBe(true);
+      const { context, take } = createRecordingContext();
+      drawIcon(context, name, 0, 0, 28, darkTheme.colors.ink);
+      const ops = take();
+      expect(ops.some((o) => o.op === "stroke" || o.op === "fill"), name).toBe(true);
+      for (const op of ops) expect(op.fillStyle || op.strokeStyle, name).toBe(darkTheme.colors.ink);
+      for (const shape of ICONS[name]) for (const e of reach(shape)) expect(e >= 1 && e <= 23, `${name}: ${shape}`).toBe(true);
+    }
+  });
+
+  it("works through the element with no warning, and is named in its guide text", () => {
+    const description = String(registry.get("icon")!.props.name!.description);
+    for (const name of APP_ICONS) {
+      expect(warnings(`icon name=${name}\n`), name).toEqual([]);
+      expect(description).toContain(` ${name},`.replace(",", name === APP_ICONS.at(-1) ? "." : ","));
+    }
+    const ui = render(`icon name=planet size=lg\nicon name=bowl size=lg\nicon name=plant size=lg\n`);
+    expect(ui.drawOps.filter((o) => o.op === "stroke").length).toBeGreaterThan(6);
+    ui.destroy();
+    expect(nearestIcon("hamburger")).toBe("menu");
+    expect(nearestIcon("microphone")).toBe("mic");
+  });
+});
+
+describe("other names for an icon", () => {
+  const opsOf = (name: string) => {
+    const { context, take } = createRecordingContext();
+    drawIcon(context, name as never, 0, 0, 24, lightTheme.colors.ink);
+    return take();
+  };
+
+  it("draws an alias exactly as the icon it stands for", () => {
+    for (const [alias, own] of Object.entries(ICON_ALIASES)) {
+      expect(isIconName(alias), alias).toBe(true);
+      expect(Object.hasOwn(ICONS, own), alias).toBe(true);
+      expect(Object.hasOwn(ICONS, alias), `${alias} is an icon's own name`).toBe(false);
+      expect(resolveIcon(alias as keyof typeof ICON_ALIASES)).toBe(own);
+      expect(opsOf(alias), alias).toEqual(opsOf(own));
+    }
+    expect(resolveIcon("plant")).toBe("plant");
+  });
+
+  it("accepts an alias with no warning, on the element and on icon=, but lists only the icons' own names", () => {
+    expect(warnings(`icon name=plant-2\nicon name=cup\ntext "Hi" icon=stopwatch\n`)).toEqual([]);
+    const a = render(`icon name=plant-2 size=lg\n`), b = render(`icon name=plant size=lg\n`);
+    expect(a.drawOps).toEqual(b.drawOps);
+    a.destroy();
+    b.destroy();
+    for (const alias of Object.keys(ICON_ALIASES)) expect(ICON_NAMES as readonly string[]).not.toContain(alias);
+    const description = String(registry.get("icon")!.props.name!.description);
+    expect(description).not.toContain("plant-2,");
+    expect(description).toMatch(/other names .*work too/);
+  });
+
+  it("still warns about a name that's neither, with the nearest icon", () => {
+    expect(warnings(`icon name=plant-3\n`)[0]).toMatch(/name="plant-3" isn't an icon\. Did you mean name=plant\?/);
+    expect(warnings(`icon name=hamburger\n`)[0]).toMatch(/Did you mean name=menu\?/);
+    expect(isIconName("toString")).toBe(false);
   });
 });
 

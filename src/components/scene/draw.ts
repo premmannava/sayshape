@@ -13,7 +13,7 @@ import type { SayShapeNode, Value } from "../../types";
 import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
 import { STYLED, capOf, drawCommands, joinOf, roundPolyline, traceRounded } from "./line-style";
-import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type SceneRegion } from "./interact";
+import { apply, flattenPath, invert, rotate, scale, translate, type ClipRect, type Geom, type Matrix, type SceneRegion } from "./interact";
 import { hoverActions } from "./hover";
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
@@ -27,6 +27,14 @@ import { drawEmit } from "./emit";
 import { drawReflection, type ReflectBuffer } from "./reflect";
 import { drawTrail, type TrailHooks, type TrailState } from "./trail";
 import { blurShape, drawBlurred } from "./blur";
+import { drawIcon, isIconName } from "../../icons";
+import { fillGradient, type FillName } from "../../fills";
+
+/**
+ * The named fills a scene shape takes, matching card fill=. accent stays the
+ * solid theme color here (fill=accent always meant that in a scene).
+ */
+export const SCENE_FILLS: readonly FillName[] = ["sky", "sunset", "dusk", "night"];
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -128,11 +136,15 @@ export interface Frame {
   font: (weight: number, size: number) => string;
   /** The theme's colors, for fill=accent and the other theme color names. */
   colors: Theme["colors"];
+  /** The whole theme, for the named fills (fill=sky, the same gradients as card fill=). */
+  theme?: Theme;
   defs: Map<string, SayShapeNode>;
   gradients: Map<string, SayShapeNode>;
   shapes: number;
   steps: number;
   useDepth: number;
+  /** Set to hear about lines that drew nothing for a reason the parser couldn't see (an icon name from a formula). */
+  notes?: Array<{ line: number; message: string }>;
   /** The scene's time this frame, in seconds: what t reads. Drawing at another moment sets it and puts it back. */
   time: number;
   /** Scene seconds played since it started, unwrapped by loops (equal to time for a still). */
@@ -161,6 +173,10 @@ export interface Frame {
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
   m: Matrix;
+  /** Where the words of each label with an id= end, in canvas pixels, for after= on later lines (the last copy drawn wins). */
+  ends: Map<string, [number, number]>;
+  /** The clip=true groups around the line being drawn, outermost first: only what's inside all of them shows. */
+  clips?: readonly ClipRect[];
   /** A new offscreen canvas, for reflect= (reflect.ts); unset where there's none (Node, the drawing check), and nothing reflects. */
   offscreen?: (w: number, h: number) => ReflectBuffer;
   /** The scene's own matrix and size (what a viewer sees), and its loop's length in seconds (0 when it doesn't loop). */
@@ -219,6 +235,8 @@ function paintOf(raw: string | undefined, bounds: Bounds, f: Frame, scope: Scope
     grad.addColorStop(1, b);
     return grad;
   }
+  // A named fill; where there's none to draw (a forced-colors mode), the shape still shows, solid.
+  if (f.theme && (SCENE_FILLS as readonly string[]).includes(v)) return fillGradient(f.g, f.theme, v as FillName, bounds) ?? colorOf("raised", f);
   return colorOf(v, f);
 }
 
@@ -323,11 +341,8 @@ function withLook(node: SayShapeNode, scope: Scope, f: Frame, cx: number, cy: nu
   g.restore();
 }
 
-/** A label's weight= as a font weight: regular is 500, as it always was. */
-const LABEL_WEIGHTS: Record<string, number> = { light: 300, regular: 500, bold: 800, heavy: 900 };
-
 /** Lines that can be pressed: shapes, groups and uses with on=. */
-const PRESSABLE = new Set(["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use"]);
+const PRESSABLE = new Set(["rect", "circle", "ellipse", "line", "path", "polygon", "label", "glyph", "group", "use"]);
 /** Lines with one x and y, which drag=true can move (behavior on). */
 const DRAGGABLE = new Set(["rect", "circle", "ellipse", "label", "group", "use"]);
 
@@ -356,7 +371,10 @@ function openRegion(node: SayShapeNode, scope: Scope, f: Frame): SceneRegion | n
   const parent = rec.open[rec.open.length - 1];
   if (parent) r.parent = parent;
   const tip = node.props.tip === undefined ? undefined : strOf(node, "tip", scope);
-  const name = node.props.name === undefined ? undefined : strOf(node, "name", scope);
+  // A glyph's name= is which icon it is; what it's called is its label, else its tip, else that icon's name in words.
+  const name = node.type === "glyph"
+    ? (node.props.label === undefined ? undefined : strOf(node, "label", scope)) || tip || strOf(node, "name", scope)?.replace(/-/g, " ")
+    : node.props.name === undefined ? undefined : strOf(node, "name", scope);
   if (tip) r.tip = tip;
   if (name) r.name = name;
   if (sel !== undefined) r.selected = !!sel && sel !== "false";
@@ -376,7 +394,8 @@ function closeRegion(r: SceneRegion | null, f: Frame): void {
  */
 function addGeom(f: Frame, geom: Geom): void {
   if (!f.press?.open.length || f.g.globalAlpha < 0.05 * (f.press.alpha ?? 1)) return;
-  for (const r of f.press.open) r.geoms.push(geom);
+  const cut: Geom = f.clips?.length ? { ...geom, clips: f.clips } : geom;
+  for (const r of f.press.open) r.geoms.push(cut);
 }
 
 function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -472,11 +491,31 @@ function drawEach(node: SayShapeNode, scope: Scope, f: Frame, leaf: Leaf): void 
 }
 
 function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
+  // after=: start where a label drawn before it ends, so x= is the gap from its words, whatever their font.
+  const from = node.props.after === undefined ? null : afterOf(node, node.props.after.trim(), f);
+  const was = f.m;
+  if (from) { f.g.save(); f.g.translate(from, 0); f.m = translate(f.m, from, 0); }
   // trail= (trail.ts): fading copies at earlier times first, so the line draws on top of them.
   if (node.props.trail !== undefined && f.trails && !f.trails.inCopy) drawTrail(node, scope, f, TRAIL);
   const region = openRegion(node, scope, f);
   drawShape(node, scope, f);
   closeRegion(region, f);
+  if (from) { f.g.restore(); f.m = was; }
+}
+
+/**
+ * How far across, in the line's own coordinates, the words of the label it
+ * names end. Null (drawn at its plain x) when no label with that id has been
+ * drawn yet: it comes later, or is still on its way.
+ */
+function afterOf(node: SayShapeNode, id: string, f: Frame): number | null {
+  const end = f.ends.get(id);
+  const inv = end && invert(f.m);
+  if (!end || !inv) {
+    f.notes?.push({ line: node.line, message: `after=${id} names no label drawn before this line. Give a label above it id=${id}, or set x= on its own` });
+    return null;
+  }
+  return apply(inv, end[0], end[1])[0];
 }
 
 function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
@@ -569,7 +608,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       f.shapes++;
       withLook(node, scope, f, x, y, () => {
         const italic = strOf(node, "style", scope) === "italic";
-        g.font = (italic ? "italic " : "") + f.font(LABEL_WEIGHTS[strOf(node, "weight", scope) ?? ""] ?? 500, size);
+        g.font = (italic ? "italic " : "") + f.font(labelWeight(strOf(node, "weight", scope)), size);
         const align = strOf(node, "align", scope);
         g.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
         g.textBaseline = "middle";
@@ -595,7 +634,28 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
         }
         if (deep && !fill && !stroke) depthOff(g);
         addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
+        if (node.props.id !== undefined) f.ends.set(node.props.id.trim(), apply(f.m, left + w, y));
         if (f.press) for (const r of f.press.open) r.words.push(text);
+      });
+      return;
+    }
+    case "glyph": {
+      const icon = strOf(node, "name", scope) ?? "";
+      if (!isIconName(icon)) {
+        // A written name that isn't an icon is the parser's to report; one a formula works out to is only known now.
+        if (node.props.name?.includes("{")) f.notes?.push({ line: node.line, message: `this icon's name works out to "${icon}", which isn't an icon. Use one of icon's names` });
+        return;
+      }
+      const x = n("x"), y = n("y"), size = Math.min(400, Math.max(1, n("size", 24)));
+      f.shapes++;
+      withLook(node, scope, f, x + size / 2, y, () => {
+        const color = solidOf(node.props.fill === undefined ? "ink" : strOf(node, "fill", scope), f, scope);
+        if (color) {
+          const deep = depthOn(node, scope, f, color);
+          drawIcon(g, icon, x, y - size / 2, size, color);
+          if (deep) depthOff(g);
+        }
+        addGeom(f, { kind: "rect", m: f.m, x, y: y - size / 2, w: size, h: size });
       });
       return;
     }
@@ -631,6 +691,16 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       const s = n("scale", 1);
       if (s !== 1) { g2.scale(s, s); f.m = scale(f.m, s, s); }
       if (node.props.opacity !== undefined) g2.globalAlpha *= Math.min(1, Math.max(0, n("opacity", 1)));
+      // clip=true: what's inside is cut to the group's own rounded w×h box (glows inside a phone screen).
+      const clips = f.clips;
+      if (node.type === "group" && node.props.clip !== undefined && node.props.w !== undefined && node.props.h !== undefined) {
+        const on = read(node, "clip", scope);
+        if (on === true || on === "true") {
+          const cw = Math.max(0, n("w")), ch = Math.max(0, n("h")), cr = Math.max(0, n("rx"));
+          g2.beginPath(); roundRect(g2, 0, 0, cw, ch, cr); g2.clip();
+          f.clips = [...(clips ?? []), { m: f.m, x: 0, y: 0, w: cw, h: ch, r: cr }];
+        }
+      }
       const rec = f.press, outer = rec?.locate;
       if (node.type === "use") {
         f.useDepth++;
@@ -645,6 +715,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       if (node.type === "use") { f.useDepth--; if (rec && outer) { rec.copy.pop(); rec.locate = outer; } }
       g2.restore();
       f.m = was;
+      f.clips = clips;
       return;
     }
   }
@@ -663,4 +734,9 @@ export function paintScene(f: Frame, nodes: readonly SayShapeNode[], scope: Scop
     f.m = translate(f.m, dx, dy);
   }
   drawAll(nodes, scope, f);
+}
+
+/** A label's canvas weight: bold 800, light 300, anything else regular (500, a little firmer than body text on a picture). */
+export function labelWeight(weight: string | undefined): number {
+  return weight === "bold" ? 800 : weight === "heavy" ? 900 : weight === "light" ? 300 : 500;
 }

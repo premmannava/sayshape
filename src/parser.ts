@@ -624,6 +624,21 @@ function providedTo(stack: readonly SayShapeNode[], registry: Registry): { names
   return functions ? { names, anyNames, functions } : { names, anyNames };
 }
 
+/**
+ * What an element is called inside the elements open around a line
+ * (ComponentDef.provides.renames), the nearest first: icon in a scene is the
+ * scene's glyph. Only renames to a registered element count.
+ */
+function renamedIn(stack: readonly SayShapeNode[], indent: number, type: string, registry: Registry): string {
+  for (let i = stack.length - 1; i > 0; i--) {
+    const n = stack[i]!;
+    if (n.indent >= indent) continue;
+    const to = registry.get(n.type)?.provides?.renames;
+    if (to && Object.hasOwn(to, type) && registry.get(to[type]!)) return to[type]!;
+  }
+  return type;
+}
+
 export function parse(src: string, registry: Registry, opts: ParseOptions = {}): ParseResult {
   if (!opts.presets || !HAS_PRESET.test(src)) return parseSpec(src, registry, opts);
   if (opts.partial) {
@@ -843,6 +858,11 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       return;
     }
     openState = null;
+    // An element that means something else inside an enclosing one (icon in a scene draws a glyph) becomes it, silently.
+    const asWritten = tok.type;
+    if (tok.type) tok.type = renamedIn(stack, indent, tok.type, registry);
+    // Messages name the element as it was written (icon in a scene, not glyph).
+    const shownType = asWritten && asWritten !== tok.type ? `${asWritten}" in a "${stack[stack.length - 1]?.type ?? "scene"}` : tok.type;
     // "on choose_a" blocks are a common guess at handling a press inside the spec. Say how it works
     // instead, once, without the knock-on messages about the rest of the line.
     if (tok.type === "on" && !defOf("on", registry)) {
@@ -955,7 +975,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       const pdef = def.props[name] ?? universalProp(name);
       if (!pdef) {
         const known = [...Object.keys(def.props), ...Object.keys(COMMON_PROPS)];
-        diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" has no prop "${name}". Known props: ${known.join(", ")}` });
+        diagnostics.push({ line: lineNo, severity: "warning", message: `"${shownType}" has no prop "${name}". Known props: ${known.join(", ")}` });
         continue;
       }
       // A prop the element draws with itself (a scene's shake=) reads what it provides inside.
@@ -969,7 +989,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     }
     for (const [name, pdef] of Object.entries(def.props)) {
       const exempt = pdef.unlessProp && pdef.unlessProp.values.includes(tok.props[pdef.unlessProp.name] ?? "");
-      if (pdef.required && !exempt && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs ${name}=` });
+      if (pdef.required && !exempt && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${shownType}" needs ${name}=` });
     }
     if (def.check) {
       // A component's own check must never stop parsing (rule 2).

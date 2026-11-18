@@ -14,6 +14,7 @@
  * - a scene whose formulas use t but whose duration is 0, so it never moves,
  * - a label too close in color to what's under it, in light or dark mode,
  * - pressable shapes on top of each other, or outside the picture,
+ * - a label partly cut off by a clip=true group (what a clip hides entirely isn't judged).
  * - a station or small circle a few pixels off the line it seems meant to sit
  *   on, where other markers sit right on that line (so the line looks like it misses it).
  *
@@ -23,6 +24,7 @@
  * These are warnings for the model to tidy up, not errors: the scene still
  * shows. Headless, like layout: no canvas or DOM, so it runs on a server.
  */
+import { shownWidth } from "./size";
 import { MAX_DRAGGABLE } from "./drag";
 import { MAX_SCENE_PARTICLES } from "./emit";
 import type { Diagnostic, SayShapeNode, Value } from "../../types";
@@ -64,6 +66,8 @@ interface Mark {
   color?: string;
   /** A label's text size in scene pixels, after groups' scaling. */
   size?: number;
+  /** The line of the clip=true group that cuts part of it off. */
+  cutBy?: number;
   /** For a line or a path drawn as an outline only: its centre lines, curves flattened. */
   lines?: Subpath[];
   /** That outline's width in scene pixels, after groups' scaling. */
@@ -98,7 +102,8 @@ const boundsOf = (pts: ReadonlyArray<[number, number]>): Rect | null => {
 
 /** A stand-in 2D context that records where things land instead of painting them. */
 function measuringContext(marks: Mark[], current: () => SayShapeNode | null, measure: MeasureText, openNow: () => readonly SceneRegion[] = () => []): CanvasRenderingContext2D {
-  type State = { m: Matrix; alpha: number; font: string; align: string };
+  /** clip: what a clip=true group lets show, and that group's line. */
+  type State = { m: Matrix; alpha: number; font: string; align: string; clip?: { r: Rect; line: number } };
   let fillNow: unknown = "";
   let st: State = { m: [1, 0, 0, 1, 0, 0], alpha: 1, font: "16px sans-serif", align: "left" };
   const stack: State[] = [];
@@ -111,6 +116,12 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
       const x = rx * Math.cos(a), y = ry * Math.sin(a);
       path.push(apply(st.m, cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)));
     }
+  };
+  /** What of these bounds shows inside the clip=true groups around it: null when none of it does. */
+  const shown = (b: Rect): { b: Rect; cut: boolean } | null => {
+    if (!st.clip) return { b, cut: false };
+    const c = cut(b, st.clip.r);
+    return c ? { b: c, cut: area(c) < area(b) - 1 } : null;
   };
   // The same path again, as the canvas would draw its outline (curves and arcs over their real sweep), kept apart from the rough bounds above.
   let subs: Subpath[] = [];
@@ -147,9 +158,12 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
   };
   const mark = (filled: boolean): Mark | undefined => {
     const node = current();
-    const b = boundsOf(path);
+    const whole = boundsOf(path);
     // Particles (emit) move and scatter by design: no rule judges them.
-    if (!node || !b || node.type === "emit") return;
+    if (!node || !whole || node.type === "emit") return;
+    const seen = shown(whole);
+    if (!seen) return;
+    const b = seen.b;
     const ends = node.type === "line" && segment.length >= 2 ? [segment[0]!, segment[segment.length - 1]!] as [[number, number], [number, number]] : undefined;
     const color = filled && typeof fillNow === "string" ? fillNow : undefined;
     const open = openNow();
@@ -168,16 +182,24 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
     set fillStyle(v: unknown) { fillNow = v; },
     textBaseline: "middle", strokeStyle: "", lineWidth: 1, lineCap: "round", lineJoin: "round",
     save() { stack.push({ ...st, m: [...st.m] as Matrix }); },
+    clip() {
+      const b = boundsOf(path);
+      const r = b && st.clip ? cut(b, st.clip.r) : b;
+      st.clip = { r: r ?? { x: 0, y: 0, w: 0, h: 0 }, line: current()?.line ?? 0 };
+    },
     restore() { st = stack.pop() ?? st; },
     translate(x: number, y: number) { st.m = mul(st.m, [1, 0, 0, 1, x, y]); },
     rotate(a: number) { st.m = mul(st.m, [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0]); },
     scale(x: number, y: number) { st.m = mul(st.m, [x, 0, 0, y, 0, 0]); },
+    // glow= and shadow= read it to size their blur.
+    getTransform() { const [a, b, c, d, e, f] = st.m; return { a, b, c, d, e, f }; },
     beginPath() { path = []; segment = []; subs = []; sub = null; count = 0; filledNow = false; },
     moveTo(x: number, y: number) { add(x, y); begin(apply(st.m, x, y)); },
     lineTo(x: number, y: number) { add(x, y); to(apply(st.m, x, y)); },
     quadraticCurveTo(a: number, b: number, x: number, y: number) { add(a, b); add(x, y); curve([apply(st.m, a, b), apply(st.m, x, y)]); },
     bezierCurveTo(a: number, b: number, c: number, d: number, x: number, y: number) { add(a, b); add(c, d); add(x, y); curve([apply(st.m, a, b), apply(st.m, c, d), apply(st.m, x, y)]); },
     arc(x: number, y: number, r: number, start = 0, end = 2 * Math.PI, ccw = false) { round(x, y, r, r); sweep(x, y, r, r, 0, start, end, ccw); },
+    arcTo(a: number, b: number, x: number, y: number) { add(a, b); add(x, y); to(apply(st.m, a, b)); to(apply(st.m, x, y)); },
     ellipse(x: number, y: number, rx: number, ry: number, rot: number, start = 0, end = 2 * Math.PI, ccw = false) { round(x, y, rx, ry, rot); sweep(x, y, rx, ry, rot, start, end, ccw); },
     closePath() {
       const first = sub?.pts[0];
@@ -186,7 +208,6 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
       sub.closed = true;
       begin(first);
     },
-    clip() {},
     setLineDash() {},
     fill() { mark(true); filledNow = true; },
     stroke() {
@@ -206,9 +227,11 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
       const size = sizeOf(st.font), w = measure(text, size, boldOf(st.font));
       const left = st.align === "center" ? x - w / 2 : st.align === "right" ? x - w : x;
       const corners: Array<[number, number]> = [[left, y - size / 2], [left + w, y - size / 2], [left, y + size / 2], [left + w, y + size / 2]];
-      const b = boundsOf(corners.map(([cx, cy]) => apply(st.m, cx, cy)))!;
+      const seen = shown(boundsOf(corners.map(([cx, cy]) => apply(st.m, cx, cy)))!);
+      if (!seen) return;
+      const b = seen.b;
       const stretch = Math.sqrt(Math.abs(st.m[0] * st.m[3] - st.m[1] * st.m[2]));
-      marks.push({ node, order: marks.length, kind: "label", bounds: b, filled: true, alpha: st.alpha, text, size: size * stretch, ...(typeof fillNow === "string" ? { color: fillNow } : {}) });
+      marks.push({ node, order: marks.length, kind: "label", bounds: b, filled: true, alpha: st.alpha, text, size: size * stretch, ...(seen.cut && st.clip ? { cutBy: st.clip.line } : {}), ...(typeof fillNow === "string" ? { color: fillNow } : {}) });
     },
     strokeText() {},
     createLinearGradient: () => ({ addColorStop() {} }),
@@ -220,6 +243,12 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
 const sizeOf = (font: string) => Number(/(\d+(?:\.\d+)?)px/.exec(font)?.[1] ?? 16);
 const boldOf = (font: string) => /\b(700|800|900|bold)\b/.test(font);
 const area = (r: Rect) => Math.max(0, r.w) * Math.max(0, r.h);
+/** The part of a that's inside b, or null when they don't meet. */
+const cut = (a: Rect, b: Rect): Rect | null => {
+  const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
+  const w = Math.min(a.x + a.w, b.x + b.w) - x, h = Math.min(a.y + a.h, b.y + b.h) - y;
+  return w > 0 && h > 0 ? { x, y, w, h } : null;
+};
 const overlap = (a: Rect, b: Rect) => area({ x: Math.max(a.x, b.x), y: Math.max(a.y, b.y), w: Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), h: Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) });
 const inside = (p: [number, number], r: Rect, pad: number) => p[0] > r.x - pad && p[0] < r.x + r.w + pad && p[1] > r.y - pad && p[1] < r.y + r.h + pad;
 const quote = (s: string) => (s.length > 32 ? `"${s.slice(0, 30)}…"` : `"${s}"`);
@@ -228,6 +257,8 @@ const quote = (s: string) => (s.length > 32 ? `"${s.slice(0, 30)}…"` : `"${s}"
 export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: Theme; measure?: MeasureText; behavior?: boolean } = {}): Diagnostic[] {
   try {
     const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
+    // How wide it shows on a phone: maxw= and scale= can make it narrower than the phone.
+    const phoneW = shownWidth(PHONE_WIDTH, w, scene.props.maxw === undefined ? undefined : numOf(scene, "maxw", scope, 0), scene.props.scale === undefined ? undefined : numOf(scene, "scale", scope, 1));
     const theme = opts.theme ?? lightTheme;
     const drawn = drawAtRest(scene, scope, theme, opts.measure, !!opts.behavior);
     const out: Diagnostic[] = [];
@@ -235,7 +266,14 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
     if (!(numOf(scene, "duration", scope, 0) > 0) && readsClock(scene)) {
       out.push({ line: scene.line, severity: "warning", message: "Drawing: this scene's formulas use t, but its duration is 0, so it never moves. Set duration= to the seconds the motion takes (loop=true, the default, repeats it)" });
     }
-    out.push(...findProblems(drawn.marks, drawn.regions, w, h));
+    // Lines that drew nothing for a reason only drawing finds (an icon name a formula works out to), once each.
+    const noted = new Set<string>();
+    for (const n of drawn.notes) {
+      if (noted.has(`${n.line}:${n.message}`)) continue;
+      noted.add(`${n.line}:${n.message}`);
+      out.push({ line: n.line, severity: "warning", message: `Drawing: ${n.message}` });
+    }
+        out.push(...findProblems(drawn.marks, drawn.regions, w, h, phoneW));
     if (drawn.particlesOver !== undefined) out.push({ line: drawn.particlesOver, severity: "warning", message: `Drawing: a scene draws at most ${MAX_SCENE_PARTICLES} particles in all and its emit lines ask for ${drawn.particlesAsked}, so this one and those after it draw fewer. Lower their count=` });
     if (drawn.dragOver !== undefined) out.push({ line: drawn.dragOver, severity: "warning", message: `Drawing: a scene can have at most ${MAX_DRAGGABLE} draggable shapes, so this one and those after it can't be dragged. Drag fewer, or use a slider` });
     out.push(...swipeTraps(drawn.regions, w, h));
@@ -262,7 +300,7 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
       out.push({ line: c.line, severity: "warning", message: `Drawing: ${who} hard to read${mode}: the color is too close to what's under ${count === 1 ? "it" : "them"} (contrast ${c.ratio.toFixed(1)}:1, needs ${MIN_CONTRAST}:1). Pick a lighter or darker fill, or a theme color like ink or onAccent` });
     }
     // Last, and always kept: it's about the whole picture, and it never crowds out a problem that's only in one place.
-    const phone = phoneText(drawn.marks, w);
+    const phone = phoneText(drawn.marks, w, phoneW);
     if (phone) return [...out.slice(0, MAX_DRAWING_PROBLEMS - 1), phone];
     return out.slice(0, MAX_DRAWING_PROBLEMS);
   } catch {
@@ -271,16 +309,16 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
 }
 
 /** The scene drawn as it rests (its last moment), as marks and pressable regions in scene coordinates. */
-function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; dragOver?: number; particlesOver?: number; particlesAsked?: number } {
+function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; notes: Array<{ line: number; message: string }>; dragOver?: number; particlesOver?: number; particlesAsked?: number } {
   const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
   const duration = Math.max(0, numOf(scene, "duration", scope, 0));
   const marks: Mark[] = [];
   let current: SayShapeNode | null = null;
   const g = measuringContext(marks, () => current, measure ?? estimate, () => f.press?.open ?? []);
   const f: Frame = {
-    g, font: (wt, size) => `${wt} ${size}px sans-serif`, colors: theme.colors,
-    defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: duration,
-    onNode: (n) => { current = n; },
+    g, font: (wt, size) => `${wt} ${size}px sans-serif`, colors: theme.colors, theme,
+    defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(), time: duration,
+    onNode: (n) => { current = n; }, notes: [],
     m: IDENTITY, press: { regions: [], open: [], copy: [], locate: stateLocate },
     clock: { duration, loop: strOf(scene, "loop", scope) !== "false" },
   };
@@ -291,10 +329,10 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
   const bg = scene.props.bg === undefined ? undefined : strOf(scene, "bg", at);
   const under = (bg && colorOf(bg, { colors: theme.colors })) || theme.colors.raised;
   const over = f.press!.drag?.over;
-  return { marks, regions: f.press!.regions, under, ...(over !== undefined ? { dragOver: over } : {}), ...(f.particlesOver !== undefined ? { particlesOver: f.particlesOver, particlesAsked: f.particlesAsked ?? 0 } : {}) };
+  return { marks, regions: f.press!.regions, under, notes: f.notes ?? [], ...(over !== undefined ? { dragOver: over } : {}), ...(f.particlesOver !== undefined ? { particlesOver: f.particlesOver, particlesAsked: f.particlesAsked ?? 0 } : {}) };
 }
 
-function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w: number, h: number): Diagnostic[] {
+function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w: number, h: number, phoneW = PHONE_WIDTH): Diagnostic[] {
   const out: Diagnostic[] = [];
   const said = new Set<string>();
   const warn = (line: number, message: string) => {
@@ -308,6 +346,7 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
   const boxes = marks.filter((m) => m.filled && m.alpha >= 0.6 && (m.kind === "rect" || m.kind === "polygon") && area(m.bounds) < 0.6 * w * h);
 
   for (const l of labels) {
+    if (l.cutBy !== undefined) warn(l.node.line, `the label ${quote(l.text!)} is cut off by the clipped group on line ${l.cutBy}. Move it inside or make the group bigger`);
     const b = l.bounds;
     const shown = overlap(b, { x: 0, y: 0, w, h });
     if (shown > 0 && shown < area(b) - 1) {
@@ -346,7 +385,7 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
     }
   }
   // On a phone the whole picture shrinks to PHONE_WIDTH, and things to press shrink with it.
-  const k = PHONE_WIDTH / w;
+  const k = phoneW / w;
   // Shapes only hovered (on-hover=, no on=) aren't tapped, so they're not held to tap sizes.
   const pressable = regions.filter((r) => r.on || r.drag).map((r) => ({ r, b: regionBounds(r) })).filter((x): x is { r: SceneRegion; b: Rect } => !!x.b);
   for (const { r, b } of pressable) {
@@ -521,8 +560,8 @@ function nearestOn(t: Track, x: number, y: number, reach: number): Nearest | nul
  * other problem. It asks for bigger words, not a smaller w, because a small
  * w makes the whole scene huge on a wide screen.
  */
-function phoneText(marks: readonly Mark[], w: number): Diagnostic | null {
-  const k = PHONE_WIDTH / w;
+function phoneText(marks: readonly Mark[], w: number, phoneW = PHONE_WIDTH): Diagnostic | null {
+  const k = phoneW / w;
   const small = marks
     .filter((m) => m.kind === "label" && m.alpha >= 0.15 && m.text?.trim())
     .map((l) => ({ l, px: (l.size ?? l.bounds.h) * k }))

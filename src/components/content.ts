@@ -7,12 +7,15 @@ import { balanceText, ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
 import { easeOut, paintGhost } from "../ghost";
 import { traceLine } from "./chart";
-import { detailProp, fillTint, iconBefore, iconProblems, iconProp, paintPill, partBox, PILL_TONES, PILL_VARIANTS, pillWidth, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, WEIGHTS } from "./util";
+import { detailProp, fillTint, iconBefore, iconProblems, iconProp, paintPill, partBox, PILL_TONES, PILL_VARIANTS, pillWidth, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, TEXT_WEIGHTS } from "./util";
 import { drawIcon, ICON_NAMES, isIconName, type IconName } from "../icons";
 import { looksRich, parseRich, plainOf, wrapRich, type RichLine, type RichStyle, type Run } from "../rich";
 import type { PartSemantics } from "../a11y/semantics";
 
 const ALIGN = ["left", "center", "right"] as const;
+
+/** stat weight= options for the figure. */
+const STAT_WEIGHTS = ["light", "regular", "semibold"] as const;
 
 export const text: ComponentDef = {
   type: "text",
@@ -21,7 +24,7 @@ export const text: ComponentDef = {
   text: { description: "The words to show. May include {expressions}.", required: true },
   props: {
     style: { type: "enum", values: TEXT_STYLES, default: "body", description: "display, title, lead, body or caption." },
-    weight: { type: "enum", values: WEIGHTS, description: "regular, semibold or bold. Titles default to semibold." },
+    weight: { type: "enum", values: TEXT_WEIGHTS, description: "light, regular, semibold or bold. Titles default to semibold; light suits a large figure in style=display (72°, $1,240)." },
     tone: toneProp,
     align: { type: "enum", values: ALIGN, default: "left", description: "left, center or right." },
     strike: { type: "boolean", default: false, description: "Draw a line through the text, e.g. for an old price." },
@@ -58,7 +61,7 @@ text "**Free** cancellation until *2 days* before; see [the terms](https://north
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", WEIGHTS, "regular") : undefined);
+    const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", TEXT_WEIGHTS, "regular") : undefined);
     const f = `${m.weight} ${m.size}px ${m.family}`;
     const icon = textIcon(p.str("icon"), m.size);
     const width = Math.max(0, box.w - (icon ? icon.indent : 0));
@@ -85,7 +88,7 @@ text "**Free** cancellation until *2 days* before; see [the terms](https://north
   minWidth(node, ctx) {
     // Text wraps, so it needs only its longest word (up to a point: long words break).
     const p = ctx.props(node);
-    const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", WEIGHTS, "regular") : undefined);
+    const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", TEXT_WEIGHTS, "regular") : undefined);
     // Rich text needs its longest word as shown, without markers or link addresses.
     const shown = p.bool("rich") ? parseRich(p.template(), (t) => p.fill(t)).map((r) => r.text).join("") : p.text();
     const words = shown.split(/\s+/).filter(Boolean);
@@ -260,6 +263,7 @@ export const stat: ComponentDef = {
     icon: iconBefore("label"),
     detail: detailProp("figure"),
     short: { type: "boolean", default: true, description: "Shorten 1,250,000 to 1.25M; false keeps it as given." },
+    weight: { type: "enum", values: STAT_WEIGHTS, default: "semibold", description: "How heavy the figure is: semibold (default), regular, or light for a large, calm number like a temperature, a price or a clock." },
   },
   picks: [
     { for: "a headline number with its change and recent trend", write: "stat change=\"+12%\" spark=weekly" },
@@ -289,7 +293,7 @@ stat label="Total" value="\${price*qty}"`,
     const p = ctx.props(node);
     const label = p.str("label");
     const labelW = textWidth(ctx, label, 400, STAT_LABEL) + (isIconName(p.str("icon")) ? STAT_ICON + STAT_ICON_GAP : 0);
-    const valueW = textWidth(ctx, statValue(p), STAT_WEIGHT, statSizes(ctx.theme).at(-1)!);
+    const valueW = textWidth(ctx, statValue(p), statWeight(p), statSizes(ctx.theme).at(-1)!);
     return Math.max(40, Math.min(110, Math.max(labelW, valueW)));
   },
   paint(box, ctx) {
@@ -330,7 +334,7 @@ stat label="Total" value="\${price*qty}"`,
     const base = g.globalAlpha;
     g.globalAlpha = base * easeOut(reveal * 1.6);
     const rise = (1 - easeOut(reveal * 1.6)) * 6;
-    g.font = ctx.font(STAT_WEIGHT, d.size);
+    g.font = ctx.font(d.weight, d.size);
     g.fillStyle = toneColor(ctx.theme, p.oneOf("tone", TONES, "default"));
     // A change beside a centred value: centre the pair, so the value starts left of the middle.
     const inline = extra?.change?.inline ?? false;
@@ -457,12 +461,16 @@ const STAT_WEIGHT = 600;
 /** The label is a quiet sentence-case caption above the figure. */
 const STAT_LABEL = 13, STAT_LABEL_LH = 17;
 
-interface StatLayout { label: string[]; value: string[]; size: number; valueLH: number; valueTop: number; height: number; labelIndent: number; detail: string[]; detailTop: number }
+interface StatLayout { label: string[]; value: string[]; size: number; weight: number; valueLH: number; valueTop: number; height: number; labelIndent: number; detail: string[]; detailTop: number }
 
 /** A stat's icon before its label, and its detail line under the figure. */
 const STAT_ICON = 14, STAT_ICON_GAP = 6, STAT_DETAIL_LH = 17, STAT_DETAIL_GAP = 5, STAT_DETAIL_SIZE = 12;
-interface StatExtra { icon: string; detail: string }
-const statExtra = (p: PropReader): StatExtra => ({ icon: p.str("icon"), detail: p.str("detail") });
+interface StatExtra { icon: string; detail: string; weight?: number }
+const statExtra = (p: PropReader): StatExtra => ({ icon: p.str("icon"), detail: p.str("detail"), weight: statWeight(p) });
+/** The figure's weight: semibold unless weight= asks for a lighter one (a big temperature, a price, a clock). */
+function statWeight(p: PropReader): number {
+  return { light: 300, regular: 400, semibold: STAT_WEIGHT }[p.oneOf("weight", STAT_WEIGHTS, "semibold")];
+}
 
 /** The shortest a figure may be before it's written short: a million. */
 const STAT_SHORT_FROM = 1_000_000;
@@ -485,6 +493,7 @@ function statValue(p: PropReader): string {
  */
 export function statLayout(label: string, value: string, width: number, theme: Theme, m: TextMeasurer, like?: StatHint, extra?: StatExtra): StatLayout {
   const w = Math.max(20, width);
+  const weight = extra?.weight ?? STAT_WEIGHT;
   const labelIndent = extra && isIconName(extra.icon) ? STAT_ICON + STAT_ICON_GAP : 0;
   const labelLines = label ? fitLines(label, Math.max(20, w - labelIndent), themeFont(theme, 400, STAT_LABEL), m, 2) : [];
   const all = statSizes(theme);
@@ -493,14 +502,14 @@ export function statLayout(label: string, value: string, width: number, theme: T
   let size = sizes[sizes.length - 1]!;
   let lines: string[] | null = null;
   for (const s of sizes) {
-    if (m.width(value, themeFont(theme, STAT_WEIGHT, s)) <= w) { size = s; lines = [value]; break; }
+    if (m.width(value, themeFont(theme, weight, s)) <= w) { size = s; lines = [value]; break; }
   }
-  lines ??= fitLines(value, w, themeFont(theme, STAT_WEIGHT, size), m, 3);
+  lines ??= fitLines(value, w, themeFont(theme, weight, size), m, 3);
   const valueLH = Math.round(size * 1.3);
   const valueTop = 12 + Math.max(0, Math.max(labelLines.length, like?.labelLines ?? 0) - 1) * STAT_LABEL_LH;
   const detail = extra?.detail ? fitLines(extra.detail, w, themeFont(theme, 400, STAT_DETAIL_SIZE), m, 2) : [];
   const detailTop = valueTop + lines.length * valueLH + STAT_DETAIL_GAP;
-  return { label: labelLines, value: lines, size, valueLH, valueTop, labelIndent, detail, detailTop, height: valueTop + lines.length * valueLH + (detail.length ? STAT_DETAIL_GAP + detail.length * STAT_DETAIL_LH : 0) + 6 };
+  return { label: labelLines, value: lines, size, weight, valueLH, valueTop, labelIndent, detail, detailTop, height: valueTop + lines.length * valueLH + (detail.length ? STAT_DETAIL_GAP + detail.length * STAT_DETAIL_LH : 0) + 6 };
 }
 
 /** Space between a value and a change beside it. */
@@ -623,7 +632,7 @@ function statExtras(box: Box, d: StatLayout, ctx: LayoutContext): StatExtras & {
     const rounded = roundChange(raw);
     const full = rounded ? (arrow ? `${arrow} ${rounded}` : rounded) : "";
     // While loading, the size the placeholders take.
-    const valueW = loading ? Math.min(w, Math.max(56, d.size * 3.2)) : m.width(d.value[0] ?? "", themeFont(t, STAT_WEIGHT, d.size));
+    const valueW = loading ? Math.min(w, Math.max(56, d.size * 3.2)) : m.width(d.value[0] ?? "", themeFont(t, d.weight, d.size));
     // The change sits in a tinted pill, so it reads as one figure beside the value.
     const natural = loading ? 48 : m.width(full, font) + STAT_PILL_X * 2;
     const inline = d.value.length === 1 && w >= STAT_INLINE_MIN && valueW + STAT_CHANGE_GAP + natural <= w;
@@ -890,7 +899,7 @@ export const icon: ComponentDef = {
   category: "content",
   description: "A small symbol on its own, like a status mark or a weather sign. To start a line of text or a list row with one, use icon= on text or list-item instead.",
   props: {
-    name: { type: "string", required: true, description: `Which icon: ${ICON_NAMES.join(", ")}.` },
+    name: { type: "string", required: true, description: `Which icon: ${ICON_NAMES.join(", ")}. A few common other names (cup, stopwatch, plant-2) work too.` },
     tone: toneProp,
     size: { type: "enum", values: ICON_SIZE_NAMES, default: "md", description: "sm, md or lg." },
     label: { type: "string", description: "What the icon means, read by screen readers, when nothing beside it says so, e.g. label=\"Sunny\". Leave it out for decoration." },
