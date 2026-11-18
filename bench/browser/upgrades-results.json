@@ -1,0 +1,29 @@
+[
+ {
+  "spec": "solarSystem",
+  "device": "desktop",
+  "theme": "light",
+  "fps": 59.9,
+  "p95FrameMs": 16.8,
+  "medianPaintMs": 0.9,
+  "p95PaintMs": 1.8
+ },
+ {
+  "spec": "solarSystem",
+  "device": "desktop",
+  "theme": "dark",
+  "fps": 59.9,
+  "p95FrameMs": 16.7,
+  "medianPaintMs": 0.8,
+  "p95PaintMs": 1.1
+ },
+ {
+  "spec": "solarSystem",
+  "device": "phone",
+  "theme": "light",
+  "fps": 59.9,
+  "p95FrameMs": 16.8,
+  "medianPaintMs": 3.8,
+  "p95PaintMs": 7.5
+ }
+]

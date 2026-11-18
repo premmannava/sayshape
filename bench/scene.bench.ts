@@ -1,6 +1,7 @@
 /**
  * Scene benchmarks: one frame of the factory monitor, the same scene with
- * nothing pressable, 150 shapes with and without z, and finding what's under the pointer.
+ * nothing pressable, 150 shapes with and without z, finding what's under the pointer,
+ * and particles (emit).
  *
  *   npm run bench -- bench/scene.bench.ts
  *
@@ -12,6 +13,7 @@ import { coreComponents } from "../src/components";
 import { sceneComponents } from "../src/components/scene";
 import { render } from "../src/testing";
 import { FACTORY_MONITOR } from "../playground/scene-samples";
+import { computeParticles, STRIDE, type EmitParams } from "../src/components/scene/emit";
 
 const components = [...coreComponents, ...sceneComponents];
 /** The same picture with nothing pressable: what scenes cost before interaction. */
@@ -73,5 +75,36 @@ describe("hit testing", () => {
   bench("what's under the pointer, 200 pressable circles", () => {
     k = (k + 37) % 1000;
     ui.sayshape.targetAt(box.x + (k / 1000) * box.w, box.y + ((k * 7) % 1000 / 1000) * box.h);
+  });
+});
+
+/** The snowstorm-sized scene: ~150 animated shapes, then with particles on top (S13). */
+const SNOWSTORM = `scene "A snowstorm" w=600 h=340 duration=12 bg="#0B1D3A"
+  let wind={40*sin(t*PI/3) + 15*sin(t*PI*2/3)}
+  each items={range(150)} as=i
+    circle x={(i*37 + t*(20 + i % 7)*3) % 640 - 20} y={(i*53 + t*(30 + i % 5)*6) % 380 - 20} r={1 + i % 3} fill="#FFFFFF" opacity={0.4 + 0.1*(i % 5)}`;
+const SNOW_PARTICLES = `${SNOWSTORM}
+  emit count=450 x=-80 y=-10 w=760 angle=90 spread=20 speed=40 gravity=60 drag=1 wind={wind} life=7 size=4 fill="#FFFFFF, #DDE7F5"`;
+const CONFETTI_600 = `scene "Confetti" w=600 h=340 duration=2.5
+  emit count=300 from=0.5 x=0 y=300 angle=-60 spread=30 speed=700 gravity=500 drag=1.5 life=3.5 size=9 shape=rect flutter=1 fill="accent, warn, good, bad, #FFD166"
+  emit count=300 from=0.5 x=600 y=300 angle=-120 spread=30 speed=700 gravity=500 drag=1.5 life=3.5 size=9 shape=rect flutter=1 fill="accent, warn, good, bad, #FFD166"`;
+const FIREWORK_300 = `scene "Firework" w=600 h=340 duration=2 bg="#0B1D3A"
+  emit count=300 from=0.9 x=300 y=120 spread=360 speed=260 gravity=120 drag=2 life=1.6 size=6 shape=line fill="warn, #FFD166, bad"`;
+
+describe("particles", () => {
+  const frame = (spec: string) => {
+    const ui = render(spec, { components, width: 1000 });
+    return () => { ui.sayshape.invalidate("paint"); ui.sayshape.renderNow(); };
+  };
+  bench("snowstorm, 150 shapes only", frame(SNOWSTORM));
+  bench("snowstorm + 450 particles, gusting let wind", frame(SNOW_PARTICLES));
+  bench("600 confetti, flutter", frame(CONFETTI_600));
+  bench("300 firework streaks", frame(FIREWORK_300));
+  const p: EmitParams = { count: 600, from: null, x: -80, y: -10, w: 760, h: 0, angle: 90, spread: 20, speed: 40, gravity: 60, drag: 1, wind: 20, life: 7, size: 4, seed: 1, flutter: 1, colors: 2, shape: "rect" };
+  const out = new Float64Array(600 * STRIDE);
+  let t = 0;
+  bench("computeParticles alone, 600 fluttering", () => {
+    t = (t + 1 / 60) % 12;
+    computeParticles(p, t, { duration: 12, loop: true }, out);
   });
 });

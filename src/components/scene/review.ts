@@ -24,6 +24,7 @@
  * shows. Headless, like layout: no canvas or DOM, so it runs on a server.
  */
 import { MAX_DRAGGABLE } from "./drag";
+import { MAX_SCENE_PARTICLES } from "./emit";
 import type { Diagnostic, SayShapeNode, Value } from "../../types";
 import type { Scope } from "../../expr";
 import type { ParseResult } from "../../parser";
@@ -147,7 +148,8 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
   const mark = (filled: boolean): Mark | undefined => {
     const node = current();
     const b = boundsOf(path);
-    if (!node || !b) return;
+    // Particles (emit) move and scatter by design: no rule judges them.
+    if (!node || !b || node.type === "emit") return;
     const ends = node.type === "line" && segment.length >= 2 ? [segment[0]!, segment[segment.length - 1]!] as [[number, number], [number, number]] : undefined;
     const color = filled && typeof fillNow === "string" ? fillNow : undefined;
     const open = openNow();
@@ -234,6 +236,7 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
       out.push({ line: scene.line, severity: "warning", message: "Drawing: this scene's formulas use t, but its duration is 0, so it never moves. Set duration= to the seconds the motion takes (loop=true, the default, repeats it)" });
     }
     out.push(...findProblems(drawn.marks, drawn.regions, w, h));
+    if (drawn.particlesOver !== undefined) out.push({ line: drawn.particlesOver, severity: "warning", message: `Drawing: a scene draws at most ${MAX_SCENE_PARTICLES} particles in all and its emit lines ask for ${drawn.particlesAsked}, so this one and those after it draw fewer. Lower their count=` });
     if (drawn.dragOver !== undefined) out.push({ line: drawn.dragOver, severity: "warning", message: `Drawing: a scene can have at most ${MAX_DRAGGABLE} draggable shapes, so this one and those after it can't be dragged. Drag fewer, or use a slider` });
     out.push(...swipeTraps(drawn.regions, w, h));
     // Contrast in both modes when no theme was asked for: theme colors change between them.
@@ -268,7 +271,7 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
 }
 
 /** The scene drawn as it rests (its last moment), as marks and pressable regions in scene coordinates. */
-function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; dragOver?: number } {
+function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; dragOver?: number; particlesOver?: number; particlesAsked?: number } {
   const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
   const duration = Math.max(0, numOf(scene, "duration", scope, 0));
   const marks: Mark[] = [];
@@ -279,6 +282,7 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
     defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: duration,
     onNode: (n) => { current = n; },
     m: IDENTITY, press: { regions: [], open: [], copy: [], locate: stateLocate },
+    clock: { duration, loop: strOf(scene, "loop", scope) !== "false" },
   };
   const at: Scope = (name) => (name === "t" ? f.time : name === "PI" ? Math.PI : scope(name));
   if (behavior) f.press!.drag = { scene: IDENTITY, w, h, count: 0 };
@@ -287,7 +291,7 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
   const bg = scene.props.bg === undefined ? undefined : strOf(scene, "bg", at);
   const under = (bg && colorOf(bg, { colors: theme.colors })) || theme.colors.raised;
   const over = f.press!.drag?.over;
-  return { marks, regions: f.press!.regions, under, ...(over !== undefined ? { dragOver: over } : {}) };
+  return { marks, regions: f.press!.regions, under, ...(over !== undefined ? { dragOver: over } : {}), ...(f.particlesOver !== undefined ? { particlesOver: f.particlesOver, particlesAsked: f.particlesAsked ?? 0 } : {}) };
 }
 
 function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w: number, h: number): Diagnostic[] {
@@ -538,6 +542,8 @@ function readsClock(scene: SayShapeNode): boolean {
   let clock = false, shadowed = false;
   const walk = (n: SayShapeNode) => {
     if (n.props.as === "t" || n.props.index === "t") shadowed = true;
+    // Particles move with the clock without saying t.
+    if (n.type === "emit") clock = true;
     for (const v of [...Object.values(n.props), n.text ?? ""]) {
       for (const m of v.matchAll(/\{([^}]*)\}/g)) if (/(^|[^\w.'"])t\b(?!\s*:)/.test(m[1]!)) clock = true;
     }
