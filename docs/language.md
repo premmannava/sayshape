@@ -122,6 +122,16 @@ Interactive elements run actions from their `on=` prop.
 
 The key of `inc`, `dec`, `toggle` and `set` can be a path into data, like `toggle:t.done` ([Lists](#lists)). A quoted value is text: `set:msg:'Hi there'`.
 
+`remove:t` inside an `each` over a filtered or sorted list removes the item from the list in state it came from, since `filter`, `sort`, `search`, `take` and `slice` keep the items themselves:
+
+```sayshape
+state tasks=[{text: "Pay rent", done: true}, {text: "Call Sam", done: false}]
+each items={sort(filter(tasks, 'done'), 'text')} as=t
+  button "Delete {t.text}" on=remove:t
+```
+
+Items made by `extend`, `map`, `rank` or `group` are new, in no list in state, so `remove:t` on one does nothing and warns: remove from the source list instead.
+
 Run several in order with `;`:
 
 ```
@@ -130,6 +140,8 @@ button "Place order" on="set:placed:true;emit:order:{qty}"
 ```
 
 `emit` is how a generated screen talks back to your app, for example to send the user's choice to the model for the next step.
+
+Passwords stay in the interface. Hosts share state with `SayShape.shareableState()`, where whatever an `input kind=password` holds reads `"[hidden]"`, and an emitted record or list has it hidden too. A spec sends a password only by naming it as the whole value (`emit:login:{pw}`); that is deliberate and discouraged.
 
 `notify` shows a message at the bottom of the visible area, drawn by the engine in the theme's colors, and fires a `notify` event so your app can also announce it. Quote the message when it has spaces or `;`:
 
@@ -174,7 +186,7 @@ List functions, for computing instead of typing numbers:
 | `sum(list)`, `sum(list, 'price')`, `sum(list, 'price', 'qty')` | Total of the items, of a field, or of two fields multiplied per item (cart totals). Only numbers count: a missing field, `null`, `true`/`false` or text (even `"12"`) makes the total — rather than being read as a number; an empty list totals 0. `avg`, `min` and `max` of a field work the same way |
 | `avg(list, 'field')` | Average |
 | `join(list)`, `join(list, 'name', ' / ')` | Text listing the items or a field |
-| `includes(list, value)` | Whether a value is in the list |
+| `includes(list, value)`, `includes(text, part)` | Whether a value is in the list, or text holds other text, matching case: `contains()` is the one that ignores it |
 | `min(list)`, `max(list)`, `min(list, 'price')`, `max(list, 'price')` | Smallest and largest, of the items or of a field |
 | `count(list, 'cat', 'Gas')` | Items whose field equals a value, or any value in a list: `count(list, 'region', shown)` |
 | `filter(list, 'done')`, `filter(list, 'cat', 'Gas')`, `filter(list, 'region', shown)`, `filter(list, 'date', period)`, `filter(list, 'price', {to: budget})` | The items whose field is true, equals a value, is any value in a list (a multi-select's; an empty list keeps none), or is within a `{from, to}` range (a date range's, or numbers; both ends included, an empty end open), as a list |
@@ -185,6 +197,8 @@ List functions, for computing instead of typing numbers:
 | `slice(list, 10, 20)`, `slice(name, 0, 1)` | Items (or characters) from a start up to, not including, an end, counting from 0: one page of a `pagination` is `slice(rows, (page - 1) * 10, page * 10)` |
 | `pluck(list, 'revenue')` | One field of every item, as a list (`null` where it's missing), e.g. for a stat's `spark=` |
 | `extend(list, 'q', {total: q.price * q.qty})` | The list with new fields worked out for every item, kept next to the item's own (a field with the same name replaces it, where it was). `q` names the current item, only inside the braces; everything else there means state or a derived value as usual, so `{expected: q.premium + claims * min(q.deductible, claimSize)}` follows `claims` when it changes. The item name must be a plain word in quotes that no state or derived name uses (reported by the parser), and the third argument must be a record written out in braces. The new fields can't read each other: chain a second `extend` for that. An item that isn't a record is an error naming it, as is an expression that fails for one (`extend(): item 4: No field "price"`). The result is new records, so `bind=` into them can't write back, like `group()` |
+| `range(5)`, `range(1, years + 1)` | Whole numbers from a start (0 if left out) up to, not including, the end, like `slice()`: `[0, 1, 2, 3, 4]`, then 1 to `years`. An end before the start gives an empty list; anything but numbers is an error. In a scene, `range()` keeps its own rule (at most 500 items, never an error) |
+| `map(list, 'y', {year: y, total: save * y})`, `map(range(4), 'n', n * n)` | One value per item, worked out by the last argument with the item named as in `extend()` (a plain word in quotes, only inside that argument; nesting is fine). The value can be a record, a number, text or a list. Not a list gives nothing (—), and a failing item is named (`map(): item 2: …`). The result is new values, so like `extend()` it can be shown, charted, totalled and filtered, but not written back to |
 | `rank(list, 'score', 'desc')` | The list in its own order with a `rank` field on each item: 1 for the best, items that tie share a rank (1, 1, 3), and items whose field isn't a number get `null`. `'asc'` (the default, as in `sort()`) makes the smallest 1. Use `sort()` to put the list in order |
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
 | `group(list, 'region')`, `group(list, 'region', 'revenue')`, `group(list, 'region', 'revenue', 'avg')` | Totals per category: one record per region, in the order each first appears, with `count` (how many items) and, given a field, its total under the field's own name: `[{region: "West", count: 12, revenue: 48200}, …]`. A fourth argument works out `'avg'`, `'min'` or `'max'` instead. Totals follow `sum()`'s rules. Values group as they are (`"US"` and `"USA"` are two groups), and items without the field share a `null` group. The groups are new, read-only records |
@@ -201,6 +215,16 @@ table "Quotes" items=ranked
   table-column field=rank
 ```
 
+A list from a formula, like a loan's yearly balance, is a `map()` over a `range()`:
+
+```sayshape
+state loan=200000 rate=5 years=10
+derive plan={map(range(1, years + 1), 'y', {year: y, balance: round(loan * pow(1 + rate / 100, y))})}
+chart "Balance" kind=line items=plan x=year y=balance format=money
+```
+
+`range()` and `map()` make at most 2,000 items per list, and 10,000 in one expression however they nest; past that the value can't be worked out, and is reported like any failing `derive`.
+
 They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. There are no methods or template strings: `rows.slice(0, 5)` is written `slice(rows, 0, 5)`, and text with values in it goes in quotes without braces around it (`value="${total}K"`, not `value={"${total}K"}`, which is reported because its braces would show as they are), and a function given more arguments than it takes is reported rather than silently ignoring the extras. Use them for counts and totals, and for the lists people work with: items of a filtered, sorted or searched list keep their place in state, so `bind=t.done` inside `each items=shown` (with `derive shown={filter(tasks, 'owner', owner)}`) ticks the task in `tasks`, and totals worked out from `tasks` follow. To hide items without a derived list, put `if=` on the `each` or on the repeated element. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
 
 Formatting, for text people read:
@@ -212,6 +236,21 @@ Formatting, for text people read:
 | `compact(12345678)`, `compact(n, 'USD')` | `12.3M`, `$12.3M`: big figures in small spaces, like a `stat`. Keeps 3 significant digits or 1 decimal, whichever says more: `compact(1240000)` is `1.24M` |
 | `plural(n, 'item')`, `plural(n, 'child', 'children')` | `1 item`, `3 items`, `2 children` |
 | `lower(text)`, `upper(text)`, `trim(text)` | Text in lower or upper case, or without spaces at the ends |
+
+Text checks, true or false, for `error=`, `required=`, `disabled=` and `if=`. They take a check by name, never a pattern, and null or empty text is always false:
+
+| Function | Result |
+|---|---|
+| `has(pw, 'digit')`, `'upper'`, `'lower'`, `'symbol'`, `'space'` | Whether the text has at least one such character, in any script (`É`, `Ω` and `ß` are letters; `٣` is a digit) |
+| `is(v, 'email')`, `'url'`, `'phone'`, `'zip'`, `'number'`, `'date'` | Whether the whole text, spaces around it aside, is one: an email by `input kind=email`'s rule, an `http` or `https` address, 7 to 15 digits with spaces, dashes, dots, brackets and a leading `+`, a US ZIP code (`85004` or `85004-1234`), a number by `input kind=number`'s rule, a real `YYYY-MM-DD` date. A check that doesn't exist is reported, naming the ones that do |
+| `contains(text, part)`, `starts(text, part)`, `ends(text, part)` | Whether the text holds, starts with or ends with the part, ignoring case; `'case'` as a third argument matches case. An empty part is in any text |
+
+```sayshape
+state pw="" sent=0
+derive strong={len(pw) >= 8 && has(pw, 'upper') && has(pw, 'digit')}
+input "Password" bind=pw kind=password error="{strong ? '' : 'At least 8 characters, a capital and a digit'}"
+button "Sign up" disabled={!strong} on=inc:sent
+```
 
 Numbers and money are formatted in US English for now.
 
@@ -362,6 +401,37 @@ Everything beyond showing rows is opt-in through state, so it can be read, shown
 - **Space.** Columns get their natural width, and spare room goes to text columns. When space is short, number columns shrink first to fit their values (headers wrap between words instead of being cut), then text columns are narrowed, but never below a minimum or their longest word, so words aren't split, and numbers are never cut. On a phone, cells take less padding where that's what lets the columns fit. Numbers are right-aligned, header included. A table taller than the screen keeps its header in view as it scrolls. A text cell that no longer fits on one line wraps in full, and its row grows to the tallest cell; only text longer than eight lines is folded to them (ending with an ellipsis) with a **Show all** toggle under it, which shows the rest (a button to screen readers, which always read the whole cell). Sortable headers (with `sort=`) always show a faint arrow, so it is clear they can be pressed without hovering. If the columns still don't fit, the table scrolls sideways: every column keeps a readable width, the first column stays pinned at the left, and a scrollbar shows under the rows. It scrolls with a sideways swipe or Shift and the wheel, by dragging the rows or the scrollbar, and with the arrow keys, Home and End once the scrollbar has focus. More than 200 rows (or 64 columns) shows a message saying so instead of a cut-down table. Show a page of a long list with `take()` or `pagination`.
 - **Keyboard.** Pressable headers and rows are each a Tab stop and work with Enter and Space. A table with no `sort=` or `bind=` adds no Tab stops.
 - Problems a model can fix (items that aren't a list, missing or repeated keys, cells their column can't show, too many rows or columns, too little room) are reported once through `onWarning`. While a spec streams in, a table whose columns haven't arrived shows "No columns yet".
+
+## Forms
+
+An `input` says what's wrong under it once it's been typed in and left: `required=`, `kind=email` or `kind=number` text that isn't one, or its own `error=` (shown while it isn't empty). A `check` takes `required=` (it must be ticked) and `error=` (its message, default Required) and says so once it's been toggled. A message goes as soon as the value is written from elsewhere, such as a form cleared after sending.
+
+`button validate=true` checks the whole form first: every shown field in the button's card (or, with no card around it, the open dialog or the screen) shows its message, keyboard focus moves to the first wrong one and a screen reader hears what's wrong, and `on=` runs only when nothing is. Fields inside `each` count; fields hidden by `if=`, on other screens or `disabled=` don't.
+
+```
+state email="" terms=false
+card
+  input "Email" bind=email kind=email required=true
+  check "I accept the terms" bind=terms required=true error="Accept the terms to continue"
+  button "Create account" validate=true on=emit:signup
+```
+
+A compact form puts its fields in one `row`, without labels: each field's `placeholder=` is then its name to screen readers, a message still shows under it, and a button beside it stays level with the field. The row wraps on a narrow screen. An icon-only button (`icon=` and `label=`, no text) is square, at least 44 px on a phone, and `label=` is what screen readers say and its tip; the parser warns when it's missing. On a button with text, `label=` is only what screen readers say, and should start with the text, as in `button "Remove" label="Remove {e.name}"`.
+
+```
+state desc="" amount=null category="Food" day="" categories=["Food", "Travel", "Home"] expenses=[]
+row
+  input bind=desc placeholder="Description" required=true
+  input bind=amount kind=number placeholder="Amount" required=true
+  select items=categories bind=category placeholder="Category"
+  date-picker bind=day placeholder="Date"
+  button "Add" validate=true on="add:expenses:{name: desc, amount: amount, category: category, day: day};set:desc:''"
+each items=expenses as=e
+  row
+    text "{e.name}"
+    text "{money(e.amount)}" tone=muted
+    button icon=trash label="Remove {e.name}" variant=secondary on=remove:e
+```
 
 ## Screens
 

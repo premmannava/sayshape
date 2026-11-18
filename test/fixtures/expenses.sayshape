@@ -1,0 +1,14 @@
+state desc="" amount=null category="Food" day="" categories=["Food", "Travel", "Home", "Other"] expenses=[{name: "Coffee beans", amount: 18.5, category: "Food", day: "2026-11-16"}, {name: "Train to Flagstaff", amount: 42, category: "Travel", day: "2026-11-17"}]
+text "Expenses" style=title
+row
+  input bind=desc placeholder="Description" required=true
+  input bind=amount kind=number placeholder="Amount" required=true
+  select items=categories bind=category placeholder="Category"
+  date-picker bind=day placeholder="Date"
+  button "Add" validate=true on="add:expenses:{name: desc, amount: amount, category: category, day: day};set:desc:'';set:amount:null"
+each items=expenses as=e
+  row
+    text "{e.name}"
+    text "{money(e.amount)}" tone=muted
+    button icon=trash label="Remove {e.name}" variant=secondary on=remove:e
+text "Total {money(sum(expenses, 'amount'))}" style=lead

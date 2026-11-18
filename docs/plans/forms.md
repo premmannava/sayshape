@@ -50,6 +50,12 @@ The field is outlined in the theme's `bad` color, with the message wrapped under
 
 ## Left out
 
-- A form element that checks every field at once on submit, and an expression to ask whether a field is valid. A model holds a button back with `disabled={…}` today.
+- An expression to ask whether a field is valid, and `required=` on `switch`, `radio`, `select` and `date-picker` (a select always shows a choice or its placeholder, and a radio group has no one element to hold the message; they can join when a form needs them).
+
+## Checking on submit
+
+`button validate=true` (`test/validate.test.ts`) checks the fields around it before `on=` runs, instead of the always-visible summary a model had to fake with `disabled=`. Around it means its nearest `card`, else the open dialog, else the screen: a card is what a model already writes around one form, and two forms on one screen are two cards. The engine walks the laid-out boxes there, so fields hidden by `if=`, on other screens or in closed parts don't block, and copies inside `each` each count. Each field with `ComponentDef.validate` (input and check) marks itself `touched` with its current stamp, exactly as if it had been used and left, so the messages are the same ones and go the same way. A disabled input doesn't count. When something is wrong, the first wrong field takes keyboard focus (an input opens its editor, whose `aria-invalid` and description a screen reader reads) and the engine announces it, with how many fields need attention when there are more.
+
+`check` takes `required=` and `error=` too: unticked while required, it says `error=` or Required; without `required=`, `error=` shows while it isn't empty. It shows once the box has been toggled.
 - Patterns, length rules and number ranges beyond `error=` and `max=`.
 - A field growing as it fills.

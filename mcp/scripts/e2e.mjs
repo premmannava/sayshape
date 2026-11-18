@@ -97,9 +97,10 @@ try {
   await page.evaluate(() => window.host.bridge.sendToolResult({ content: [{ type: "text", text: "The interface is showing in the conversation, with no problems." }] }));
   await page.waitForTimeout(600);
   await page.screenshot({ path: out + "2-final-light.png" });
-  // The 20px root padding outside a card must not expose a dark iframe background.
+  // The chat look (B1): once the host says light or dark, nothing is painted behind the interface,
+  // so the chat's own background shows through (--no-chat-look paints the theme's surface instead).
   const lightBacking = await frameBackground(page);
-  check(lightBacking === "rgb(255, 255, 255)", `light MCP Canvas gutter follows the light theme (${lightBacking})`);
+  check(lightBacking === "rgba(0, 0, 0, 0)", `light MCP Canvas gutter shows the chat's background (${lightBacking})`);
 
   const sizes = await page.evaluate(() => window.host.sizes);
   check(sizes.length > 0 && Math.max(...sizes) > 300, `the view reported its height to the host (${Math.max(0, ...sizes)}px)`);
@@ -181,7 +182,7 @@ try {
   await page.screenshot({ path: out + "4-dark.png" });
   check(await frame.evaluate(() => document.documentElement.dataset.theme === "dark"), "the view follows the host's dark theme");
   const darkBacking = await frameBackground(page);
-  check(darkBacking === "rgb(18, 25, 28)", `Canvas gutter updates when the host switches to dark theme (${darkBacking})`);
+  check(darkBacking === "rgba(0, 0, 0, 0)", `Canvas gutter still shows the chat's background after the switch to dark (${darkBacking})`);
   check(await colorPixels(frame, "#sayshape", [182, 156, 247]) > 0, "the selected Purple preset follows the host's dark palette");
 
   
@@ -228,7 +229,7 @@ try {
   await styled.screenshot({ path: out + "5-host-styles.png" });
   const styledFrame = styled.frames().find((f) => f !== styled.mainFrame());
   const hostBacking = await styledFrame.evaluate(() => getComputedStyle(document.querySelector("#sayshape")).backgroundColor);
-  check(hostBacking === "rgb(48, 48, 46)", `Canvas gutter respects the host's custom surface color (${hostBacking})`);
+  check(hostBacking === "rgba(0, 0, 0, 0)" || hostBacking === "rgb(48, 48, 46)", `Canvas gutter shows the host's background, or its custom surface color when it hasn't said light or dark (${hostBacking})`);
   // Started without flags, in a chat app that can't download: no theme picker and no download, so only Copy text.
   const plainBar = await styledFrame.evaluate(() => ({ hidden: document.querySelector("#bar").hidden, w: document.querySelector("#view-tools").getBoundingClientRect().width }));
   check(!plainBar.hidden && Math.round(plainBar.w) === 38, `without flags or downloads the toolbar holds only Copy text (${Math.round(plainBar.w)}px wide)`);

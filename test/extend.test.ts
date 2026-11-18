@@ -108,9 +108,11 @@ describe("extend()", () => {
     expect(err("extend(quotes, 'x', x => x.a)")).toMatch(/no arrow functions.*extend\(list, 'x'/);
   });
 
-  it("suggests extend() to models that write map", () => {
-    expect(err("map(quotes, 'x')")).toMatch(/Use extend\(list, 'q', \{field: q\.price \* 2\}\) for a computed field/);
+  it("suggests extend() to models that write mutate or assign", () => {
     expect(err("mutate(quotes)")).toMatch(/Use extend\(/);
+    expect(err("assign(quotes)")).toMatch(/Use extend\(/);
+    // map() exists now (test/map-range.test.ts): written without a name for the item, it says how to call it.
+    expect(err("map(quotes, 'x')")).toMatch(/map\(\) needs what to make of each item/);
   });
 
   it("handles thousands of items", () => {

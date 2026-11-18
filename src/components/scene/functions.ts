@@ -7,8 +7,8 @@
  * objects. random() is repeatable for a seed, so a frame is the same every
  * time it's drawn, and so is a saved picture.
  */
-import { isList, makeList, toNumber } from "../../data";
-import { expressionFunctions, type ExpressionFunctions } from "../../expr";
+import { isList, toNumber } from "../../data";
+import { counting, expressionFunctions, type ExpressionFunctions } from "../../expr";
 import { PURE_MATH } from "../../math";
 import type { Value } from "../../types";
 
@@ -33,10 +33,15 @@ export const SCENE_FUNCTIONS: ExpressionFunctions = expressionFunctions({
     const x = Math.sin(n(seed) * 12.9898 + 78.233) * 43758.5453;
     return Number.isFinite(x) ? x - Math.floor(x) : 0;
   },
-  /** range(n): [0, 1, …, n - 1], at most MAX_RANGE items. */
-  range: (count) => {
-    const c = Math.max(0, Math.min(MAX_RANGE, Math.floor(n(count)) || 0));
-    return makeList(Array.from({ length: c }, (_, i) => i));
+  /**
+   * range(n): [0, 1, …, n - 1], and range(from, to) up to, not including, to, like the built-in
+   * range(), but cut to MAX_RANGE items rather than an error, and empty for what isn't a number,
+   * so a drawing never stops over it. The one built-in a scene replaces (REPLACEABLE in expr.ts).
+   */
+  range: (a, b) => {
+    const from = b === undefined ? 0 : Math.floor(n(a)) || 0;
+    const to = Math.floor(n(b === undefined ? a : b)) || 0;
+    return counting(from, Math.min(MAX_RANGE, to - from));
   },
   /** pick(list, i): item i, wrapping around, so pick(colors, i) cycles through them. */
   pick: (list, i) => {
