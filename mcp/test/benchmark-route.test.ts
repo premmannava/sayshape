@@ -25,7 +25,7 @@ describe("the benchmark's MCP route", () => {
     expect([a.turns, a.docsCalls, a.showCalls]).toEqual([3, 1, 1]);
     expect(a.usage).toEqual({ promptTokens: 3000, completionTokens: 150, cachedTokens: 2400 });
     expect(seen[0]!.tools.map((t) => t.function.name).sort()).toEqual(["sayshape_docs", "show_interface"]);
-    expect(seen[0]!.tools.find((t) => t.function.name === "show_interface")!.function.description).toMatch(/QUICK START/);
+    expect(seen[0]!.tools.find((t) => t.function.name === "show_interface")!.function.description).toMatch(/HOW SAYSHAPE FITS TOGETHER/);
     expect(String(seen[0]!.messages[0]!.content)).toMatch(/show_interface/);
     // The docs the server returned, and its check of the spec, went back to the model.
     const toolText = seen[2]!.messages.filter((m) => m.role === "tool").map((m) => String(m.content));

@@ -6,7 +6,8 @@
 import { describe, expect, it } from "vitest";
 import { assembleGuide, languageMap } from "../src/capabilities";
 import { coreComponents } from "../src/components";
-import { generateAdaptive, readUseLine } from "../src/model";
+import { generateAdaptive, generateSections, generateSpec, readUseLine, type RefineContext } from "../src/model";
+import { languageGuide } from "../src/prompt";
 import { WORKED_EXAMPLES } from "../src/prompt";
 import { Registry } from "../src/registry";
 import { fakeModel } from "./fake-model";
@@ -80,5 +81,56 @@ describe("generateAdaptive", () => {
     await generateAdaptive({ config, registry, request: "x", capabilities: ["forms"], guide: { notes: "Prices in euros", actions: [{ name: "buy", description: "Buy it" }] }, fetch: model.fetch });
     expect(system(model, 0)).toContain("ABOUT THIS APP\nPrices in euros");
     expect(system(model, 0)).toContain("emit:buy");
+  });
+});
+
+describe("generateSpec with no guide: adaptive guides are the default", () => {
+  it("answers a report from the map in one call", async () => {
+    const model = fakeModel([{ content: [REPORT] }]);
+    const r = await generateSpec({ config, registry, request: "monthly sales", presets: true, fetch: model.fetch });
+    expect(model.requests).toHaveLength(1);
+    expect(system(model, 0)).toBe(languageMap(registry, { presets: true }));
+    expect(r.spec).toBe(REPORT);
+    expect((r as { route?: unknown }).route).toMatchObject({ kind: "map", chosenBy: "model", calls: 1 });
+  });
+
+  it("asks again with the guide the model names, and never streams its USE line as spec text", async () => {
+    const model = fakeModel([{ content: ["USE: forms"] }, { content: [WORKED_EXAMPLES.signup + "\n"] }]);
+    const streamed: string[] = [];
+    const r = await generateSpec({ config, registry, request: "a sign-up form", fetch: model.fetch, onText: (t) => streamed.push(t) });
+    expect(model.requests).toHaveLength(2);
+    expect(system(model, 1)).toBe(assembleGuide(registry, ["forms"]).text);
+    expect(streamed.join("")).not.toMatch(/USE:/);
+    expect(r.repair).toBeUndefined();
+    expect(r.diagnostics).toEqual([]);
+  });
+
+  it("keeps a guide the app gives, as text or options (a profile, capabilities): one call with that guide", async () => {
+    for (const [guide, expected] of [
+      ["Custom guide", "Custom guide"],
+      [{}, languageGuide(registry, {})],
+      [{ mode: "compact" as const }, languageGuide(registry, { mode: "compact" })],
+      [{ capabilities: ["forms"] }, languageGuide(registry, { capabilities: ["forms"] })],
+    ] as const) {
+      const model = fakeModel([{ content: ['text "Hi"\n'] }]);
+      await generateSpec({ config, registry, request: "x", guide, fetch: model.fetch });
+      expect(model.requests).toHaveLength(1);
+      expect(system(model, 0)).toBe(expected);
+    }
+  });
+
+  it("a follow-up with refine context keeps it, after the map", async () => {
+    const ctx: RefineContext = { task: "a budget card", spec: 'card\n  text "Budget"\n' };
+    const model = fakeModel([{ content: ['card\n  text "Plan"\n'] }]);
+    const r = await generateSpec({ config, registry, request: "rename the title", refine: ctx, fetch: model.fetch });
+    expect(system(model, 0)).toBe(languageMap(registry, {}));
+    expect(JSON.stringify(model.requests[0]!.body.messages)).toContain("Budget");
+    expect(r.spec).toContain("Plan");
+  });
+
+  it("generateSections' single-call fallback keeps the full guide it always used", async () => {
+    const model = fakeModel([{ content: ['card\n  text "Plan"\n'] }]);
+    await generateSections({ config, registry, request: "rename it", history: [{ role: "user", content: "a card" }, { role: "assistant", content: 'card\n  text "A"' }], fetch: model.fetch });
+    expect(system(model, 0)).toBe(languageGuide(registry, {}));
   });
 });

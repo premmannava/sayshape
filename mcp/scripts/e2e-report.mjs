@@ -1,11 +1,11 @@
-// End-to-end check of reports with --adaptive-guides, in a real browser, on every path that offers them:
-// the built server is started with the flag, a report is sent as a model would on its first turn, and
+// End-to-end check of reports, in a real browser, on every path that offers them: the built server is
+// started with no flag (adaptive guides are the default), a report is sent as a model would on its first turn, and
 //   - the view (dist/ui.html, as the server serves it, inside the MCP Apps host bridge) draws it: a chart,
 //     the total and the filter are on the screen reader mirror, and pressing the filter changes the total;
 //   - a widget file (--widget-dir, this server's own packed engine) draws it too;
 //   - the CDN page path is never offered reports (its pinned engine predates them), so the server refuses
 //     the spec there instead of making a page that can't draw it.
-// The same spec without the flag is refused, so the check shows the flag is what makes it work.
+// --adaptive-guides is still accepted, for existing launch commands, and changes nothing.
 //
 //   npm run build && node scripts/e2e-report.mjs
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -43,21 +43,22 @@ async function connect(args, caps) {
 const textOf = (r) => r.content?.[0]?.text ?? "";
 
 // The server, as a chat app that draws views: the report is accepted on the first turn, and the view it serves draws reports.
-const view = await connect(["--adaptive-guides"], UI);
-const description = (await view.listTools()).tools.find((t) => t.name === "show_interface")?.description ?? "";
-check(description.includes("A REPORT, ready to write"), "with --adaptive-guides the report syntax is in show_interface's description");
+const view = await connect([], UI);
+const tools = (await view.listTools()).tools;
+const description = tools.find((t) => t.name === "show_interface")?.description ?? "";
+check(description.includes("A REPORT, ready to write"), "with no flag the report syntax is in show_interface's description");
 const accepted = await view.callTool({ name: "show_interface", arguments: { spec: REPORT, title: "Revenue" } });
 check(/^The interface is showing in the conversation, with no problems/.test(textOf(accepted)), "the report is accepted with no docs call");
 const html = (await view.readResource({ uri: "ui://sayshape/interface.html" })).contents[0].text;
 check(/<meta name="sayshape-view" content="[^"]*presets=1/.test(html), "the view the server serves is told to draw reports");
 await view.close();
 
-const plain = await connect([], UI);
-check(/Unknown element "report"/.test(textOf(await plain.callTool({ name: "show_interface", arguments: { spec: REPORT } }))), "without the flag the same report is refused");
-await plain.close();
+const flagged = await connect(["--adaptive-guides"], UI);
+check(JSON.stringify((await flagged.listTools()).tools) === JSON.stringify(tools), "--adaptive-guides still starts the server, with the same tools as no flag");
+await flagged.close();
 
 // A text-only client on the CDN page: never offered reports, and a report is a problem to fix rather than a page.
-const page = await connect(["--adaptive-guides"], undefined);
+const page = await connect([], undefined);
 const pageDescription = (await page.listTools()).tools.find((t) => t.name === "show_interface")?.description ?? "";
 check(!pageDescription.includes("A REPORT") && !/^- report:/m.test(pageDescription), "a client on the CDN page isn't offered reports");
 const pageResult = textOf(await page.callTool({ name: "show_interface", arguments: { spec: REPORT } }));
@@ -65,7 +66,7 @@ check(/Unknown element "report"/.test(pageResult) && !/jsdelivr/.test(pageResult
 await page.close();
 
 // A widget file: this server's own engine, with presets on.
-const files = await connect(["--adaptive-guides", "--widget-dir", widgets], undefined);
+const files = await connect(["--widget-dir", widgets], undefined);
 const fileText = textOf(await files.callTool({ name: "show_interface", arguments: { spec: REPORT, title: "Revenue" } }));
 const widgetPath = /^(\/\S+\.html)$/m.exec(fileText)?.[1] ?? "";
 check(!!widgetPath, "a widget-file client gets a file for the report");

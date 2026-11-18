@@ -1,9 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { UI_CLIENT } from "./clients";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, NO_EMIT, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
+import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, NO_EMIT, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setAdaptiveGuides, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
+
+// A few tests read the quick start and per-element docs, which setAdaptiveGuides(false) still gives.
+afterEach(() => setAdaptiveGuides(true));
 import { PRESSES_SAVED } from "../src/widget-file";
 import { lookGuide } from "../../src/look";
 import { motionGuide, picturesGuide } from "../../src/prompt";
@@ -49,6 +52,7 @@ describe("SayShape MCP server", () => {
   });
 
   it("carries a short quick start in show_interface: the syntax, every element's name and which to pick for what", async () => {
+    setAdaptiveGuides(false);
     const client = await connect();
     const show = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
     expect(show.description).toContain(quickStart());
@@ -77,6 +81,7 @@ describe("SayShape MCP server", () => {
   });
 
   it("says so when an element or topic doesn't exist, and lists the real ones", async () => {
+    setAdaptiveGuides(false);
     const client = await connect();
     const docs = text(await client.callTool({ name: "sayshape_docs", arguments: { elements: ["piechart"], topics: ["css"] } }));
     expect(docs).toMatch(/No element called piechart\. The elements are:/);
@@ -84,6 +89,7 @@ describe("SayShape MCP server", () => {
   });
 
   it("gives the look, motion and pictures topics on demand, from the guide's own generators", () => {
+    setAdaptiveGuides(false);
     expect(docsText([], ["look"])).toBe(lookGuide("full"));
     expect(docsText([], ["motion"])).toBe(motionGuide("full"));
     expect(docsText([], ["pictures"])).toBe(picturesGuide("full"));
@@ -97,6 +103,7 @@ describe("SayShape MCP server", () => {
   });
 
   it("returns the quick start when nothing is named", async () => {
+    setAdaptiveGuides(false);
     const client = await connect();
     expect(text(await client.callTool({ name: "sayshape_docs", arguments: {} }))).toBe(quickStart());
   });
@@ -194,8 +201,8 @@ map bind=selected
     const { contents } = await client.readResource({ uri: UI_URI });
     expect(contents[0]).toMatchObject({ uri: UI_URI, mimeType: RESOURCE_MIME_TYPE });
     expect((contents[0] as { text: string }).text).toMatch(/<!doctype html>/);
-    // The view's settings travel with it; without flags, no picker, and Save image and Copy text on.
-    expect((contents[0] as { text: string }).text).toContain('<meta name="sayshape-view" content="picker=0&theme=teal&save=1&copy=1">');
+    // The view's settings travel with it; without flags, no picker, Save image and Copy text on, and reports drawn.
+    expect((contents[0] as { text: string }).text).toContain('<meta name="sayshape-view" content="picker=0&theme=teal&save=1&copy=1&presets=1">');
     // It asks for clipboard writes, for Copy text; nothing else.
     expect(contents[0]?._meta).toMatchObject({ ui: { permissions: { clipboardWrite: {} } } });
     expect(Object.keys((contents[0]?._meta as { ui: { permissions: object } }).ui.permissions)).toEqual(["clipboardWrite"]);
@@ -209,7 +216,7 @@ map bind=selected
     const [a, b] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(a), client.connect(b)]);
     const { contents } = await client.readResource({ uri: UI_URI });
-    expect((contents[0] as { text: string }).text).toContain('content="picker=1&theme=neutral&save=0&copy=0"');
+    expect((contents[0] as { text: string }).text).toContain('content="picker=1&theme=neutral&save=0&copy=0&presets=1"');
   });
 
   it("passes the view its brand colors: one as accent=, a list as colors=", async () => {
@@ -219,7 +226,7 @@ map bind=selected
       const [a, b] = InMemoryTransport.createLinkedPair();
       await Promise.all([server.connect(a), client.connect(b)]);
       const { contents } = await client.readResource({ uri: UI_URI });
-      expect((contents[0] as { text: string }).text).toContain(`content="picker=0&theme=teal&${tag}&save=1&copy=1"`);
+      expect((contents[0] as { text: string }).text).toContain(`content="picker=0&theme=teal&${tag}&save=1&copy=1&presets=1"`);
     }
   });
 
@@ -240,12 +247,12 @@ map bind=selected
     it("tells the model which hosts work, only once they're set", () => {
       try {
         expect(guideText()).not.toMatch(/Images only load from these hosts/);
-        expect(docsText(["image"], [])).not.toMatch(/^IMAGES/m);
+        expect(docsText(["image"], [])).not.toMatch(/Images only load from these hosts/);
         setImageHosts(HOSTS);
         expect(guideText()).toMatch(/Images only load from these hosts: images\.unsplash\.com, \*\.img\.example\.com\./);
-        expect(docsText(["image"], [])).toMatch(/^IMAGES\n- Images only load from these hosts: images\.unsplash\.com/m);
+        expect(docsText(["image"], [])).toMatch(/^- Images only load from these hosts: images\.unsplash\.com/m);
         // Docs for other elements stay as they were.
-        expect(docsText(["chart"], [])).not.toMatch(/^IMAGES/m);
+        expect(docsText(["chart"], [])).not.toMatch(/Images only load from these hosts/);
       } finally {
         setImageHosts([]);
       }

@@ -25,7 +25,7 @@
  *   --logo <https url>  a logo in the corner of every slide of a deck; its host is added to --image-hosts
  *   --slides            accepted and ignored: slide decks are always on
  *   --behavior          turn on experimental behavior: rules that tick, and dragging in scenes (off by default)
- *   --adaptive-guides   the view draws report blocks (the engine's presets); the server offers them (setAdaptiveGuides)
+ *   (reports)           the server turns on presets for the view whenever it offers reports (setAdaptiveGuides, on by default)
  *   --image-hosts <list>  the only hosts images may load from, comma-separated: cdn.example.com,*.images.example.com
  *                         (left out: the sites models know image addresses on, COMMON_IMAGE_HOSTS)
  *   --no-image-hosts      no images from anywhere
@@ -71,7 +71,7 @@ export interface ViewOptions {
   scene?: boolean;
   /** Experimental behavior: rules and scene dragging (the server must agree: setBehavior). Absent means off. */
   behavior?: boolean;
-  /** Report blocks are expanded and drawn (the engine's presets; --adaptive-guides, the server must agree). Absent means off. */
+  /** Report blocks are expanded and drawn (the engine's presets; set by the server, which offers reports by default). Absent means off. */
   presets?: boolean;
   /** A logo drawn in the corner of every slide (an https address; its host is in imageHosts). Absent means none. */
   logo?: string;
@@ -124,7 +124,6 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   if (args.includes("--no-model-colors")) out.modelColors = false;
   if (args.includes("--scene")) out.scene = true;
   if (args.includes("--behavior")) out.behavior = true;
-  if (args.includes("--adaptive-guides")) out.presets = true;
   // --slides is still accepted so existing setups keep starting, but decks no longer need it.
   const at = args.indexOf("--theme");
   if (at >= 0) {

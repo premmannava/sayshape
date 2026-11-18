@@ -70,7 +70,7 @@ let registry = new Registry(components);
 let scenesOn = false;
 let behaviorOn = false;
 let layoutFirstOn = false;
-let adaptiveOn = false;
+let adaptiveOn = true;
 let imageHosts: readonly string[] = [];
 /**
  * The guide's sections, worked out once per mode. They depend only on the
@@ -111,12 +111,12 @@ const behaviorFor = (textOnly: boolean, fileMode: boolean): boolean => behaviorO
 const ownEngine = (textOnly: boolean, fileMode: boolean): boolean => !textOnly || fileMode;
 
 /**
- * --adaptive-guides (opt-in, src/capabilities.ts): show_interface's description carries the map of the
+ * Adaptive guides (src/capabilities.ts), on by default: show_interface's description carries the map of the
  * language (and the report syntax, where reports are drawn) in place of the quick start, and sayshape_docs
  * returns one guide for every capability and element asked for together. The view and widget files draw
  * reports (the engine's presets); the CDN page's pinned engine has no reports, so it's never offered them.
- * Off by default: the tools, their descriptions and results are exactly what they were. Call before
- * createServer; main.ts does.
+ * The command line always leaves it on (--adaptive-guides is still accepted); false, for tests and the
+ * size comparison, gives the quick start and the per-element docs as they were. Call before createServer.
  */
 export function setAdaptiveGuides(on: boolean): void {
   adaptiveOn = on;
@@ -613,7 +613,21 @@ export function createServer(opts: ServerOptions): McpServer {
     },
   );
 
-  server.registerTool(
+  // The topics a client may ask for: what its own way of showing interfaces can draw (a text-only client's
+  // CDN page has no reports or behavior), so it's never offered a name the docs would then refuse.
+  const docsShape = (textOnly: boolean) => {
+    const fileMode = fileModeFor(textOnly), saved = pressesSavedFor(textOnly);
+    return adaptiveOn
+      ? {
+          elements: z.array(z.string().max(40)).max(12).optional().describe("Element names, e.g. [\"slider\", \"table\"]."),
+          topics: z.array(z.string().max(40)).max(12).optional().describe(`Capabilities: ${[...availableCapabilities(registry, adaptiveOptions(textOnly, fileMode)).map((c) => c.name), FULL_GUIDE_TOPIC].join(", ")}. Also: ${Object.keys(extraTopics(!!data, !!mcpResults, textOnly, fileMode, saved)).join(", ")}.`),
+        }
+      : {
+          elements: z.array(z.string().max(40)).max(12).optional().describe("Element names, e.g. [\"chart\", \"table\", \"stepper\"]."),
+          topics: z.array(z.string().max(40)).max(6).optional().describe(`Topics: ${Object.keys(topics(!!data, !!mcpResults, textOnly, fileMode, saved)).join(", ")}.`),
+        };
+  };
+  const docsTool = server.registerTool(
     "sayshape_docs",
     {
       title: "SayShape docs",
@@ -622,15 +636,7 @@ export function createServer(opts: ServerOptions): McpServer {
           "and a short example. Ask once, for everything the screen needs, e.g. topics: [\"forms\", \"calculations\"], elements: [\"slider\"]. With nothing named, returns the map."
         : "Returns the props and an example for the SayShape elements you name, and any topics you ask for. " +
           "Ask only for what you're about to use, e.g. elements: [\"chart\", \"table\"]. With nothing named, returns the quick start.",
-      inputSchema: adaptiveOn
-        ? {
-            elements: z.array(z.string().max(40)).max(12).optional().describe("Element names, e.g. [\"slider\", \"table\"]."),
-            topics: z.array(z.string().max(40)).max(12).optional().describe(`Capabilities: ${[...availableCapabilities(registry, adaptiveOptions(false, false)).map((c) => c.name), FULL_GUIDE_TOPIC].join(", ")}. Also: ${Object.keys(extraTopics(!!data, !!mcpResults)).join(", ")}.`),
-          }
-        : {
-            elements: z.array(z.string().max(40)).max(12).optional().describe("Element names, e.g. [\"chart\", \"table\", \"stepper\"]."),
-            topics: z.array(z.string().max(40)).max(6).optional().describe(`Topics: ${Object.keys(topics(!!data, !!mcpResults)).join(", ")}.`),
-          },
+      inputSchema: docsShape(false),
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async ({ elements, topics: names }) => {
@@ -789,7 +795,10 @@ export function createServer(opts: ServerOptions): McpServer {
   const connected = server.server.oninitialized;
   server.server.oninitialized = () => {
     connected?.();
-    if (cannotDrawViews(server)) showTool.description = showDescription(true);
+    if (cannotDrawViews(server)) {
+      showTool.description = showDescription(true);
+      docsTool.inputSchema = z.object(docsShape(true));
+    }
   };
 
   if (data) {

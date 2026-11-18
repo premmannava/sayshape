@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { UI_CLIENT } from "./clients";
-import { createServer, docsText, guideText, quickStart, setLayoutFirst } from "../src/server";
+import { createServer, docsText, guideText, quickStart, setAdaptiveGuides, setLayoutFirst } from "../src/server";
 
 const OLD = /^- State first, unindented, every value on one line:.*\n/m;
 const NEW = /^- Elements first \(they draw as you write\), then unindented state at the end.*\n/m;
@@ -30,7 +30,7 @@ async function connect() {
 
 const text = (r: Record<string, unknown>) => ((r.content as Array<{ type: string; text?: string }>)[0]?.text ?? "");
 
-afterEach(() => setLayoutFirst(false));
+afterEach(() => { setLayoutFirst(false); setAdaptiveGuides(true); });
 
 describe("--layout-first", () => {
   it("is off by default: the quick start says state first, and turning it on and off again restores everything", () => {
@@ -44,6 +44,7 @@ describe("--layout-first", () => {
   });
 
   it("changes the quick start and the full guide by one line, and nothing else", () => {
+    setAdaptiveGuides(false);
     const quick = quickStart();
     const guide = guideText();
     setLayoutFirst(true);
@@ -60,9 +61,12 @@ describe("--layout-first", () => {
     setLayoutFirst(true);
     const client = await connect();
     const tool = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
-    expect(tool.description).toMatch(NEW);
+    // The map up front says nothing about order; the guide sayshape_docs builds has the layout-first line.
     expect(tool.description).not.toMatch(OLD);
-    expect(text(await client.callTool({ name: "sayshape_docs", arguments: {} }))).toMatch(NEW);
+    expect(tool.description).not.toMatch(NEW);
+    const docs = text(await client.callTool({ name: "sayshape_docs", arguments: { topics: ["lists"], elements: ["chart"] } }));
+    expect(docs).toMatch(NEW);
+    expect(docs).not.toMatch(OLD);
   });
 
   it("accepts a layout-first spec with no problems, and answers as for any other", async () => {

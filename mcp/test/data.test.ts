@@ -161,6 +161,6 @@ describe("the data tools", () => {
     const withData = textOf(await (await connect()).callTool({ name: "sayshape_docs", arguments: { topics: ["database"] } }));
     const without = textOf(await (await connect(false)).callTool({ name: "sayshape_docs", arguments: { topics: ["database"] } }));
     expect(withData).toMatch(/DATA FROM THE DATABASE/);
-    expect(without).toMatch(/No topic called database/);
+    expect(without).toMatch(/There's no capability or element called "database"/);
   });
 });

@@ -1,23 +1,25 @@
 /**
- * --adaptive-guides: show_interface's description carries the map of the
- * language (with the report syntax, where reports are drawn) in place of the
- * quick start, and sayshape_docs answers every capability and element asked
- * for in one guide. Off by default, everything the server says is what it was.
+ * Adaptive guides, on by default (--adaptive-guides is still accepted and does
+ * nothing): show_interface's description carries the map of the language (with
+ * the report syntax, where reports are drawn) in place of the quick start, and
+ * sayshape_docs answers every capability and element asked for in one guide.
+ * setAdaptiveGuides(false) still gives what the server said before.
  *
  * Sizes here are characters of what tools/list advertises (descriptions and
  * input schemas together); token counts come from `npm run adaptive:size` in
  * the repository root, which counts the same text with a tokenizer.
  */
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { UI_CLIENT } from "./clients";
-import { adaptiveStart, checkSpec, createServer, docsText, quickStart, setAdaptiveGuides, setBehavior, setScenes } from "../src/server";
+import { adaptiveStart, checkSpec, createServer, docsText, NO_EMIT, quickStart, setAdaptiveGuides, setBehavior, setScenes } from "../src/server";
+import { PRESSES_SAVED } from "../src/widget-file";
 import { PAGE_ENGINE_VERSION } from "../src/fallback";
-import { decodeViewOptions, encodeViewOptions, parseViewArgs } from "../src/ui/view-options";
+import { decodeViewOptions } from "../src/ui/view-options";
 import type { PackedEngine } from "../src/widget-engine";
 
 const REPORT = `report "Sales" data=sales filter=region
@@ -44,28 +46,72 @@ const call = async (c: Client, name: string, args: Record<string, unknown>) => (
 const surface = async (c: Client) => JSON.stringify((await c.listTools()).tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })));
 const toolText = async (c: Client, name: string) => (await c.listTools()).tools.find((t) => t.name === name)!.description ?? "";
 
-afterEach(() => { setAdaptiveGuides(false); setScenes(false); setBehavior(false); });
+afterEach(() => { setAdaptiveGuides(true); setScenes(false); setBehavior(false); });
 
-describe("off by default", () => {
-  it("leaves the tools, the quick start and the docs exactly as they were, and turning it on and off restores them", async () => {
-    const before = { surface: await surface(await connect()), quick: quickStart(), docs: docsText(["chart"], ["rules", "lists"]), empty: docsText([], []) };
-    setAdaptiveGuides(true);
-    expect(await surface(await connect())).not.toBe(before.surface);
+/** What sayshape_docs says it can be asked for, as tools/list advertises it. */
+const docsTopics = async (c: Client) => JSON.stringify((await c.listTools()).tools.find((t) => t.name === "sayshape_docs")!.inputSchema);
+const EMIT = `state email=""\nbutton "Send" on=emit:signup:{email}\n`;
+
+describe("on by default", () => {
+  it("gives the map with no flag, and false still restores the quick start and docs as they were", async () => {
+    const d = await toolText(await connect(), "show_interface");
+    expect(d).toContain("HOW SAYSHAPE FITS TOGETHER");
+    expect(d).not.toContain("QUICK START");
     setAdaptiveGuides(false);
-    expect({ surface: await surface(await connect()), quick: quickStart(), docs: docsText(["chart"], ["rules", "lists"]), empty: docsText([], []) }).toEqual(before);
+    expect(await toolText(await connect(), "show_interface")).toContain("QUICK START");
+    expect(docsText([], [])).toBe(quickStart());
   });
 
-  it("the flag turns on both the server's guides and the view's reports", () => {
-    const view = parseViewArgs(["--adaptive-guides"]);
-    expect(view.presets).toBe(true);
-    expect(decodeViewOptions(encodeViewOptions(view)).presets).toBe(true);
-    expect(parseViewArgs([]).presets).toBeUndefined();
-    expect(encodeViewOptions(parseViewArgs([]))).not.toContain("presets");
+  it("serves the view with reports on, with no flag", async () => {
+    const html = ((await (await connect()).readResource({ uri: "ui://sayshape/interface.html" })).contents[0] as { text: string }).text;
+    expect(decodeViewOptions(/<meta name="sayshape-view" content="([^"]*)">/.exec(html)?.[1]).presets).toBe(true);
+  });
+});
+
+describe("each client is offered what it can draw and send back", () => {
+  beforeEach(() => { setScenes(true); setBehavior(true); });
+  let dir = "";
+  beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), "sayshape-clients-")); });
+  afterAll(async () => { await rm(dir, { recursive: true, force: true }); });
+
+  it("a client that draws views: reports, behavior, and emit: that reaches the model", async () => {
+    const c = await connect();
+    const d = await toolText(c, "show_interface");
+    expect(d).toContain("A REPORT, ready to write");
+    expect(d).toMatch(/^- behavior:/m);
+    expect(d).toContain("on=emit:pick:{x.name} sends a choice to you");
+    expect(await docsTopics(c)).toMatch(/Capabilities: report, [^"]*scenes, behavior,/);
+    expect((await call(c, "show_interface", { spec: EMIT })).structuredContent).toMatchObject({ errors: 0, toFix: 0 });
+  });
+
+  it("a text-only client on the CDN page: no reports or behavior anywhere, and told emit: can't reach the model", async () => {
+    const c = await connect(TEXT_ONLY);
+    const d = await toolText(c, "show_interface");
+    expect(d).not.toContain("A REPORT");
+    expect(d).not.toMatch(/^- (report|behavior):/m);
+    expect(d).toContain(NO_EMIT);
+    const topics = await docsTopics(c);
+    expect(topics).toMatch(/Capabilities: lists, /);
+    expect(topics).not.toMatch(/\breport\b|\bbehavior\b|\blook\b|\bmotion\b|\bpictures\b/);
+    expect((await call(c, "show_interface", { spec: EMIT })).content[0]!.text).toMatch(/emit: can't reach you from this chat app/);
+  });
+
+  it("a widget-file client: reports and behavior (its own engine); emit: is refused unless a host adapter saves presses", async () => {
+    const c = await connect(TEXT_ONLY, { widgetDir: dir, widgetEngine: async () => STAND_IN });
+    const d = await toolText(c, "show_interface");
+    expect(d).toContain("A REPORT, ready to write");
+    expect(d).toMatch(/^- behavior:/m);
+    expect(d).toContain(NO_EMIT);
+    expect(await docsTopics(c)).toMatch(/Capabilities: report, [^"]*behavior,/);
+    const saved = await connect(TEXT_ONLY, { widgetDir: dir, widgetEngine: async () => STAND_IN, widgetHost: { name: "muse" } });
+    expect(await toolText(saved, "show_interface")).toContain(PRESSES_SAVED);
+    expect((await call(saved, "show_interface", { spec: EMIT })).content[0]!.text).not.toMatch(/emit: can't reach you/);
   });
 });
 
 describe("the advertised tool surface", () => {
   it("is smaller in all, not just moved from one tool to another", async () => {
+    setAdaptiveGuides(false);
     const old = await surface(await connect());
     setAdaptiveGuides(true);
     const now = await surface(await connect());
@@ -73,7 +119,6 @@ describe("the advertised tool surface", () => {
   });
 
   it("puts the map and the report syntax in show_interface, where the view draws reports", async () => {
-    setAdaptiveGuides(true);
     const d = await toolText(await connect(), "show_interface");
     expect(d).toContain("HOW SAYSHAPE FITS TOGETHER");
     expect(d).toContain("A REPORT, ready to write");
@@ -84,7 +129,6 @@ describe("the advertised tool surface", () => {
   });
 
   it("never offers reports to a client on the CDN page, whose pinned engine can't draw them", async () => {
-    setAdaptiveGuides(true);
     expect(PAGE_ENGINE_VERSION).toBe("0.1.1");
     const d = await toolText(await connect(TEXT_ONLY), "show_interface");
     expect(d).toContain("HOW SAYSHAPE FITS TOGETHER");
@@ -96,7 +140,6 @@ describe("the advertised tool surface", () => {
   });
 
   it("offers scenes and behavior only when they're on", () => {
-    setAdaptiveGuides(true);
     expect(adaptiveStart()).not.toMatch(/^- (scenes|behavior):/m);
     setScenes(true);
     setBehavior(true);
@@ -107,7 +150,6 @@ describe("the advertised tool surface", () => {
 
 describe("a report on the first turn", () => {
   it("is accepted with no docs call, on the view", async () => {
-    setAdaptiveGuides(true);
     const c = await connect();
     const r = await call(c, "show_interface", { spec: REPORT });
     expect(r.content[0]!.text).toMatch(/^The interface is showing in the conversation, with no problems/);
@@ -115,7 +157,6 @@ describe("a report on the first turn", () => {
   });
 
   it("is drawn by the view and by widget files: both engines get presets", async () => {
-    setAdaptiveGuides(true);
     const res = await (await connect()).readResource({ uri: "ui://sayshape/interface.html" });
     const html = (res.contents[0] as { text: string }).text;
     expect(decodeViewOptions(/<meta name="sayshape-view" content="([^"]*)">/.exec(html)?.[1]).presets).toBe(true);
@@ -132,14 +173,12 @@ describe("a report on the first turn", () => {
   });
 
   it("is a problem to fix on the CDN page, not a page that can't draw it", async () => {
-    setAdaptiveGuides(true);
     const r = await call(await connect(TEXT_ONLY), "show_interface", { spec: REPORT });
     expect(r.content[0]!.text).toMatch(/Unknown element "report"/);
     expect(r.content[0]!.text).not.toContain("jsdelivr");
   });
 
   it("a chart line that can't be drawn is named, and the result is never a complete interface", async () => {
-    setAdaptiveGuides(true);
     const r = await call(await connect(), "show_interface", { spec: REPORT.replace("bar month amount", "bar month visitors") });
     const text = r.content[0]!.text;
     expect(text).toMatch(/^1 problem leaves part of this interface wrong or missing/);
@@ -152,7 +191,6 @@ describe("a report on the first turn", () => {
 
 describe("sayshape_docs: one call for a screen that needs several things", () => {
   it("returns one guide for every capability and element named", async () => {
-    setAdaptiveGuides(true);
     const r = await call(await connect(), "sayshape_docs", { topics: ["forms", "calculations"], elements: ["table"] });
     const text = r.content[0]!.text;
     for (const part of ["FORMAT", "EXPRESSIONS", "- input [\"text\"] bind=path!", "- stepper", "DETAILS\n  table", "EXAMPLE (calculator)", "EXAMPLE (signup)"]) expect(text).toContain(part);
@@ -161,7 +199,6 @@ describe("sayshape_docs: one call for a screen that needs several things", () =>
   });
 
   it("says what isn't available or known, with what to ask for instead, without sending the whole guide", async () => {
-    setAdaptiveGuides(true);
     const c = await connect();
     const off = (await call(c, "sayshape_docs", { topics: ["scenes", "forms"] })).content[0]!.text;
     expect(off).toContain(`NOT INCLUDED\n- "scenes" isn't available here: this app doesn't draw scenes. Ask for data or content instead.`);
@@ -173,7 +210,6 @@ describe("sayshape_docs: one call for a screen that needs several things", () =>
   });
 
   it("still has the full guide when asked, and the other topics", async () => {
-    setAdaptiveGuides(true);
     const c = await connect();
     const full = (await call(c, "sayshape_docs", { topics: ["full"] })).content[0]!.text;
     expect(full).toContain("ELEMENTS AT A GLANCE");
@@ -184,13 +220,12 @@ describe("sayshape_docs: one call for a screen that needs several things", () =>
   });
 
   it("brings scenes, behavior and the button a Pause needs in one call when they're on", async () => {
-    setAdaptiveGuides(true);
     setScenes(true);
     setBehavior(true);
     const text = (await call(await connect(), "sayshape_docs", { topics: ["scenes", "behavior"] })).content[0]!.text;
     expect(text).toContain("People can drag it");
     expect(text).toContain("every 1s if={running && left > 0}");
-    expect(text).toMatch(/^- button "text" on=action/m);
+    expect(text).toMatch(/^- button \["text"\] on=action/m);
     expect(text).toMatch(/^- circle .*drag=true\|false/m);
   });
 });

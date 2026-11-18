@@ -1,10 +1,10 @@
-# Adaptive guides (opt-in)
+# Adaptive guides (the default)
 
-The default guide tells a model about every element: about 20,000 tokens. Most answers use a few of them. Adaptive guides give the model a small map of the language first, and then a guide for just the building blocks a screen needs, asked for together in one step. A common report is written from the map alone.
+The full guide tells a model about every element: about 20,000 tokens. Most answers use a few of them. Adaptive guides give the model a small map of the language first, and then a guide for just the building blocks a screen needs, asked for together in one step. A common report is written from the map alone.
 
-People still ask in their own words. Nobody names a capability, a profile or a difficulty: the model that answers the request does the choosing, from the map. There is no classifier, router or extra service. With adaptive guides off (the default), every guide, tool and result is exactly what it was.
+People still ask in their own words. Nobody names a capability, a profile or a difficulty: the model that answers the request does the choosing, from the map. There is no classifier, router or extra service. They are the default in the MCP server and in `generateSpec` when no `guide` is given; an app that passes its own `guide` gets it, exactly as before.
 
-The code is in `src/capabilities.ts` (the map and the assembler), `src/model/adaptive.ts` (`generateAdaptive`) and `mcp/src/server.ts` (`--adaptive-guides`).
+The code is in `src/capabilities.ts` (the map and the assembler), `src/model/adaptive.ts` (`generateAdaptive`) and `mcp/src/server.ts` (`setAdaptiveGuides`, on by default).
 
 ## The pieces
 
@@ -22,9 +22,10 @@ The code is in `src/capabilities.ts` (the map and the assembler), `src/model/ada
 
 ## Old and new paths
 
-| | Today | Adaptive guides |
+| | Before | Now |
 |---|---|---|
-| SDK, default | Full guide (~20,750 tokens), one call | Unchanged |
+| SDK, `generateSpec` with no `guide` | Full guide (~20,750 tokens), one call | The map first: a report in one call, anything else in two (the first answer one line) |
+| SDK, `generateSpec` with a `guide` | That guide, one call | Unchanged |
 | SDK, the app knows what it builds | Full or compact guide, or a profile | `capabilities: [...]`: one call with their guide (~450 to ~4,000 tokens) |
 | SDK, open-ended request | `generateReport`: report guide first, then the compact guide if the answer is `FULL` (two calls for anything but a report) | `generateAdaptive`: the map first. A report is answered there (one call). Otherwise the model answers `USE: forms, calculations`, then writes with that guide (two calls, the first answer one line) |
 | MCP, first turn | Quick start in `show_interface` (syntax, element names, picks); a report isn't available | The map in `show_interface`, with the report syntax: a report needs no docs call |
@@ -52,19 +53,17 @@ An open-ended request: leave out `capabilities`. With `presets: true` (and the e
 
 The guide on its own, for apps that call their model themselves: `assembleGuide(registry, ["lists", "calculations", "forms"], options).text`, `languageMap(registry, options)`, or `languageGuide(registry, { capabilities: [...] })` (also what `generateSpec({ guide: { capabilities: [...] } })` sends). When a narrow guide isn't enough, `["full"]` or `fullGuide()` is the default guide, byte for byte.
 
+## In sayshape/model, by default
+
+`generateSpec` with no `guide` is `generateAdaptive` with no `capabilities`: the result also carries `route`. Pass a `guide` to keep the one-call path you had (`guide: {}` is the full guide, `{ mode: "compact" }`, a profile, or text of your own).
+
 ## In the MCP server
 
-```bash
-npx sayshape-mcp --adaptive-guides
-```
+Nothing to set: `npx sayshape-mcp` gives adaptive guides. `--adaptive-guides` is still accepted, so existing launch commands keep starting, and does nothing.
 
-```json
-{ "mcpServers": { "sayshape": { "command": "npx", "args": ["-y", "sayshape-mcp", "--adaptive-guides"] } } }
-```
+`show_interface`'s description carries the map in place of the quick start, and `sayshape_docs` takes capabilities in `topics` and element names in `elements`, in one call: `{ "topics": ["forms", "calculations"], "elements": ["slider"] }`. Names it can't use come back under NOT INCLUDED with what to ask for instead, and nothing usable returns the map, never the whole guide by accident; `"full"` still gives it. The other topics (`expressions`, `rules`, `examples`, `chat`, `database`, `datasets`) work as before.
 
-`show_interface`'s description then carries the map in place of the quick start, and `sayshape_docs` takes capabilities in `topics` and element names in `elements`, in one call: `{ "topics": ["forms", "calculations"], "elements": ["slider"] }`. Names it can't use come back under NOT INCLUDED with what to ask for instead, and nothing usable returns the map, never the whole guide by accident; `"full"` still gives it. The other topics (`expressions`, `rules`, `examples`, `chat`, `database`, `datasets`) work as before.
-
-Reports are read with presets and drawn by the view (the flag also sets the view's `presets`) and by `--widget-dir` files, both with this server's own engine. The CDN page for text-only clients loads a pinned older engine (`PAGE_ENGINE_VERSION`, 0.1.1) that can't expand reports, so those clients aren't offered reports and a report sent there is a problem to fix rather than a page that can't draw it. `mcp/scripts/e2e-report.mjs` checks all three in Chromium.
+Reports are read with presets and drawn by the view (the server sets the view's `presets`) and by `--widget-dir` files, both with this server's own engine. The CDN page for text-only clients loads a pinned older engine (`PAGE_ENGINE_VERSION`, 0.1.1) that can't expand reports, so those clients aren't offered reports or behavior (neither in the map nor in `sayshape_docs`'s list of topics) and a report sent there is a problem to fix rather than a page that can't draw it. `mcp/scripts/e2e-report.mjs` checks all three in Chromium.
 
 ## A chart line that draws nothing
 

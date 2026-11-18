@@ -347,7 +347,7 @@ button "{running ? 'Pause' : 'Play'}" on=toggle:running
     expect(g.text).toContain('a button "Pause" on=toggle:running');
     expect(g.text).toContain("People can drag it (or use arrow keys). x={a} y={b} name the state it moves");
     expect(g.text).toMatch(/^- circle x=number y=number r=number .*drag=true\|false/m);
-    expect(g.text).toContain("button \"text\" on=action");
+    expect(g.text).toContain("button [\"text\"] on=action");
     const exposed = new Registry(ALL.filter((c) => g.exposed.includes(c.type)));
     expect(parse(SPEC, exposed, { behavior: true }).diagnostics).toEqual([]);
   });

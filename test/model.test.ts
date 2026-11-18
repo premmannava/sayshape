@@ -274,7 +274,8 @@ describe("generateSpec", () => {
     await generateSpec({ config, registry, request: "make it shorter", history: first.messages.slice(1), fetch: m.fetch });
     const msgs = m.requests[1]!.body.messages.map((x) => [x.role, x.content.split("\n")[0]]);
     expect(msgs).toEqual([
-      ["system", expect.stringMatching(/^You write user interfaces/)],
+      // No guide given: adaptive guides, so the map is the system prompt and the history follows it.
+      ["system", expect.stringMatching(/^HOW SAYSHAPE FITS TOGETHER/)],
       ["user", "a card"],
       ["assistant", "card"],
       ["user", "make it shorter"],

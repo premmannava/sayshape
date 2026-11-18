@@ -10,7 +10,7 @@ import { runConversation, runEval, tallyOf, withVariant } from "../../eval/color
 import { stubMessage, type StubBehavior } from "../../eval/colors/stub";
 import { NOTE_VARIANTS } from "../../eval/colors/variants";
 import type { ChatFn } from "../../eval/colors/chat";
-import { colorsNote, COLORS_DESCRIPTION, quickStart } from "../src/server";
+import { colorsNote, COLORS_DESCRIPTION, adaptiveStart } from "../src/server";
 
 const scripted = (behavior: StubBehavior): ChatFn => async (messages) => ({ message: stubMessage(behavior, messages), usage: {}, ms: 0 });
 const COFFEE = PROMPT_SETS[0]!;
@@ -22,8 +22,8 @@ describe("the colors check against the real server", () => {
     try {
       expect(backend.tools.map((t) => t.name).sort()).toEqual(["sayshape_docs", "show_interface"]);
       const show = backend.tools.find((t) => t.name === "show_interface")!;
-      // The view client's description, not the text-only one: it ends with the quick start the server writes.
-      expect(show.description).toContain(quickStart(false, false, false));
+      // The view client's description, not the text-only one: it ends with the map the server writes.
+      expect(show.description).toContain(adaptiveStart(false, false, false));
       const colors = (show.inputSchema as { properties: { colors: { description: string; type: string } } }).properties.colors;
       expect(colors.description).toBe(COLORS_DESCRIPTION);
       expect(colors.type).toBe("array");

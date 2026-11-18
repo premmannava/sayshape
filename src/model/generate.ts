@@ -13,6 +13,7 @@ import { sayShapeLineTest, SpecFilter } from "./clean";
 import { applyEdits, newProblems, parseEdits, refineEditMessages, stripThinking, wholeSpecFrom } from "./edits";
 import { refineMessages, sumUsage, type ContextInfo, type ContextPolicy, type RefineContext, type UsageTotals } from "./context";
 import { streamChat, type ChatMessage, type ModelConfig, type Usage } from "./stream";
+import { generateAdaptive } from "./adaptive";
 
 export type Phase = "waiting" | "thinking" | "writing" | "repairing" | "done";
 
@@ -97,7 +98,11 @@ export interface GenerateOptions {
   registry: Registry;
   /** What the user asked for. */
   request: string;
-  /** The guide, or options to build it from the registry. */
+  /**
+   * The guide, or options to build it from the registry (including a profile or capabilities), sent
+   * as it is in one call. Left out, adaptive guides choose it (generateAdaptive): the model gets a
+   * short map first and answers a report there, or names what it needs and is asked again with it.
+   */
   guide?: string | GuideOptions;
   /**
    * Earlier turns, sent as they are, between the guide and the request. For
@@ -184,6 +189,8 @@ export function repairPrompt(diagnostics: Diagnostic[]): string {
 }
 
 export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> {
+  // No guide given: adaptive guides, the default. generateAdaptive passes a guide on every call it makes.
+  if (o.guide === undefined) { const { guide: _none, ...rest } = o; return generateAdaptive(rest); }
   if (o.history?.length && o.refine) throw new Error("generateSpec: pass history or refine, not both");
   const now = o.now ?? clock;
   const start = now();
