@@ -42,8 +42,26 @@ export function readLet(
   return { name, value: raw };
 }
 
-/** The lets a line can see: those above it in its block and in every block around it, nearest first by name. */
-export function visibleLets(stack: readonly SayShapeNode[]): Map<string, SayShapeNode> {
+/** The most let lines a spec may have: past it they're skipped, so checking which lets a line sees stays cheap. */
+export const MAX_LETS = 200;
+
+const NONE: ReadonlyMap<string, SayShapeNode> = new Map();
+
+/**
+ * The lets a line can see: those above it in its block and in every block around it, nearest first by name.
+ * letsOf holds each block's let lines as they're read, so a block of thousands of shapes isn't walked per line.
+ */
+export function visibleLets(stack: readonly SayShapeNode[], letsOf?: WeakMap<SayShapeNode, SayShapeNode[]>): ReadonlyMap<string, SayShapeNode> {
+  if (letsOf) {
+    let out: Map<string, SayShapeNode> | null = null;
+    for (const n of stack) {
+      const own = letsOf.get(n);
+      if (!own) continue;
+      out ??= new Map();
+      for (const c of own) if (c.props.name) out.set(c.props.name, c);
+    }
+    return out ?? NONE;
+  }
   const out = new Map<string, SayShapeNode>();
   // Every child of an open block is above the line being read; inner blocks come later and win.
   for (const n of stack) for (const c of n.children) if (c.type === "let" && c.props.name) out.set(c.props.name, c);

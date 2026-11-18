@@ -21,7 +21,7 @@ import { looksLikeData, parseData } from "./data";
 import { bareExpression, checkSyntax, identifiers, itemNames, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
 import { actionTargets } from "./actions";
 import { loopNames } from "./each";
-import { checkLets, readLet, visibleLets, type LetLine } from "./lets";
+import { checkLets, MAX_LETS, readLet, visibleLets, type LetLine } from "./lets";
 import { PATH } from "./paths";
 import { literal } from "./actions";
 import type { Registry } from "./registry";
@@ -691,6 +691,8 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
   const derivedLines: DerivedDef[] = [];
   // A scene's let lines, checked for loops and reach once every line is known.
   const letLines: LetLine[] = [];
+  /** Each block's let lines so far, so finding the lets a line sees never walks a block's other lines. */
+  const letsOf = new WeakMap<SayShapeNode, SayShapeNode[]>();
   // Names extend() gives its items, checked against state and derived names once those are known.
   const itemUses: Array<{ line: number; names: string[] }> = [];
   // Behavior (opt-in): rules, what controls write (so a rule can be stopped), and what dialogs bind.
@@ -852,7 +854,9 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     // let a={…} names a value inside a scene (when scenes are on); anywhere else it's still code.
     if (tok.type === "let" && registry.has("let")) {
       const inScene = stack.some((n) => n.type === "scene" && n.indent < indent);
-      const got = inScene ? readLet(tok, providedTo(stack, registry).functions) : { error: `${CODE_WORDS.let}. This line and anything under it were skipped` };
+      const got = !inScene ? { error: `${CODE_WORDS.let}. This line and anything under it were skipped` }
+        : letLines.length >= MAX_LETS ? { error: `A spec has at most ${MAX_LETS} let lines, so this one was skipped. Work values out in fewer lets, or write the formula where it's used` }
+        : readLet(tok, providedTo(stack, registry).functions);
       if ("error" in got) {
         diagnostics.push({ line: lineNo, severity: "error", message: got.error });
         skipDeeperThan = indent;
@@ -968,7 +972,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       diagnostics.push({ line: lineNo, severity: "warning", message: `An if block needs a condition, like if={count > 0}; the lines under it always show` });
     }
     // Lets above this line, in its block and the ones around it (a scene's let a={…}).
-    const lets = visibleLets(stack);
+    const lets = visibleLets(stack, letsOf);
     if (opts.behavior && def.props.drag?.needs && tok.props.drag !== undefined && tok.props.drag !== "false") {
       // Names that aren't state: the scene's own (t, PI), each's index and lets.
       const fixed = new Set<string>([...provided.names, ...lets.keys()]);
@@ -1027,6 +1031,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       indent,
     };
     parent.children.push(node);
+    if (tok.type === "let") { const own = letsOf.get(parent); if (own) own.push(node); else letsOf.set(parent, [node]); }
     last = node;
     // An else after this node needs the conditions so far: its own if=, or the chain it continues.
     if (elseLine) { if (pendingChain) chains.set(node, pendingChain); }
