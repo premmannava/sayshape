@@ -19,7 +19,8 @@ EXPRESSIONS
 - {…} reads state: {count}, {price*qty}, {done ? 'Yes' : 'No'}, {round(total, 2)}
 - Text can mix words and expressions: "Total: ${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! and a ? b : c
-- Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend
+- Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, range, has, is, contains, starts, ends, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend, map
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Words inside {…} are state names. Quote text: {done ? 'Packed' : 'To pack'}, tone={late ? 'bad' : 'good'}
 
 ACTIONS (on=…)
@@ -49,7 +50,7 @@ DATA AND LISTS
 - Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}
 - A filter with an All choice: derive shown={region == 'All' ? orders : filter(orders, 'region', region)}
 - Totals per category: derive byCat={sort(group(spend, 'category', 'amount'), 'amount', 'desc')} makes one record per category, its fields named after the ones you grouped by and added up: {category, count, amount}, where count is how many items it has and amount their total. Then items=byCat x=category y=amount. Use your own field names: grouping by 'team' and adding up 'hours' gives {team, count, hours}. group(list, 'category') only counts; a fourth argument works out 'avg', 'min' or 'max' instead of the total. Groups are read-only
-- A value worked out for every item: derive rows={extend(orders, 'o', {total: o.price * o.qty})} gives each order a total (o is the item, only inside the braces, and can't be a state name), then derive ranked={rank(rows, 'total', 'desc')} adds rank (1 is best, ties share it) in the list's order. New fields can't read each other: chain a second extend. Never write one numbered copy per row
+- A value worked out for every item: derive rows={extend(orders, 'o', {total: o.price * o.qty})} gives each order a total (o is the item, only inside the braces, and can't be a state name), then derive ranked={rank(rows, 'total', 'desc')} adds rank (1 is best, ties share it) in the list's order. New fields can't read each other: chain a second extend. A list from a formula: derive plan={map(range(1, years + 1), 'y', {year: y, total: save * y})} (range's end is left out; y only inside map's last argument). Never write one numbered copy per row
 - Data the app passes in can be large (thousands of rows). Never copy its rows into the spec: read it by name, and put totals, groups and filters over it in derive lines, so they're worked out once
 - To compare two fields of an item (an answer and its correct answer), set a field when choosing, then count it: radio "{o}" bind=q.pick value={o} on="set:q.ok:{o == q.answer}" and later count(qs, 'ok')
 - Format for people: money(2400) shows $2,400.00, number(37000) shows 37,000, compact(12345678) shows 12.3M and compact(n, 'USD') shows $12.3M (use it for big figures in stats), plural(n, 'item') shows 1 item or 3 items, lower(), upper(), trim()
@@ -59,7 +60,7 @@ DATA AND LISTS
 - For a list inside each item (an order's lines, a day's activities), put an each inside the each: each items=o.lines as=line
 - SayShape has no JSX, HTML or JavaScript. {…} only computes values; it never makes elements. Repeat with each.
 - To let people add an item they name, bind an input to a state value, add it, then clear it: input "New item" bind=task on="add:todos:{text: task, done: false};set:task:''"
-- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={includes(lower(t.name), lower(query))}; count matches with len(search(trails, 'name', query))
+- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={contains(t.name, query)}; count matches with len(search(trails, 'name', query))
 
 A to-do list:
   state task="" todos=[{text: "Pack water", done: true}, {text: "Charge headlamp", done: false}, {text: "Snacks", done: false}]
@@ -103,7 +104,7 @@ EVERY ELEMENT ACCEPTS
 
 ELEMENTS AT A GLANCE
 - layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll, deck, slide
-- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient
+- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, glyph, group, define, use, gradient, let, emit
 - data: stat, rating, chart, chart-line, chart-rule, chart-band, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
 - navigation: screen, tabs, tab, breadcrumb, pagination
@@ -119,13 +120,14 @@ ELEMENTS
         text "First"
         text "Second"
 
-  row  — Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.
+  row  — Places children side by side, splitting the width equally. On narrow screens they wrap; cards keep their own height, top-aligned.
     gap=<number>  Space between children in pixels (default 10).
     pad=<number>  Inner padding in pixels (default 0).
     align=<top|center|bottom>  Vertical alignment of children: top, center or bottom.
     wrap=<boolean>  Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line.
     fit=<boolean>  Keep children at their natural width.
     justify=<start|end|between>  Where children sit: start, end, or between (spread). Implies fit.
+    stretch=<boolean>  Cards side by side share the tallest one's height, for panels that should line up.
     children: any elements
     example:
       row gap=10
@@ -143,10 +145,11 @@ ELEMENTS
           text "Three pairs" tone=muted
         badge "Sale" tone=bad
 
-  grid  — Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
+  grid  — Places children in responsive equal columns. Cards keep their own height, top-aligned.
     min=<number>  Narrowest a column may be, in pixels (default 200).
     cols=<number>  Most columns; fewer when min doesn't fit.
     gap=<number>  Space between children in pixels (default 14).
+    stretch=<boolean>  Cards side by side share the tallest one's height, for panels that should line up.
     children: any elements
     example:
       grid min=140 gap=10
@@ -157,9 +160,10 @@ ELEMENTS
   card  — A surface that groups related content, stacked vertically. Give it on= to make the whole card pressable.
     gap=<number>  Space between children in pixels (default 14).
     pad=<number>  Inner padding in pixels (default 22).
-    variant=<raised|hero|tinted|outline>  raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only).
+    variant=<raised|hero|tinted|outline|glass>  raised (default), hero (an accent wash for the one card that leads the screen; a clear gradient in a bold look), tinted (a quiet accent fill for a side group), outline (a border only) or glass (frosted: what's behind shows through, blurred, as in a dock over a picture).
     on=<action>  Actions to run when the card is pressed, e.g. emit:changed. Separate several with ;
     tone=<accent|good|warn|bad|muted>  Color role of a left edge stripe.
+    fill=<sky|sunset|dusk|night|accent>  A gradient from the theme that sets a mood, by name, never a color: card fill=sky for today's weather. Words inside switch to colors that read on it.
     children: any elements
     example:
       card variant=hero
@@ -270,7 +274,7 @@ ELEMENTS
   text "<text>"  — A paragraph or heading that wraps to the available width. Use {expressions} to show state.
     "<text>" (required)  The words to show. May include {expressions}.
     style=<display|title|lead|body|caption>  display, title, lead, body or caption.
-    weight=<regular|semibold|bold>  regular, semibold or bold. Titles default to semibold.
+    weight=<light|regular|semibold|bold>  light, regular, semibold or bold. Titles default to semibold; light suits a large figure in style=display (72°, $1,240).
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     align=<left|center|right>  left, center or right.
     strike=<boolean>  Draw a line through the text, e.g. for an old price.
@@ -328,7 +332,7 @@ ELEMENTS
       callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true action="See breakdown" on=emit:open_breakdown
 
   icon  — A small symbol on its own, like a status mark or a weather sign. To start a line of text or a list row with one, use icon= on text or list-item instead.
-    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book.
+    name=<string, required>  Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book, music, video, mic, volume, volume-off, alarm, timer, laptop, tablet, watch, camera, headphones, battery, wifi, tv, sunrise, sunset, cloud-sun, fog, umbrella, store, gift, ticket, basket, menu, grid, list, more, chevron-up, chevron-down, chevron-left, chevron-right, compass, navigation, route, bookmark, send, archive, clipboard, note, user-plus, id-badge, activity, gauge, flame, plant, leaf, tree, planet, bowl, coffee, pizza, bed, sofa, lamp, bike, bus, train. A few common other names (cup, stopwatch, plant-2) work too.
     tone=<default|muted|accent|good|warn|bad>  Color role: default, muted, accent, good, warn or bad.
     size=<sm|md|lg>  sm, md or lg.
     label=<string>  What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration.
@@ -348,6 +352,7 @@ ELEMENTS
     icon=<string>  Icon name before the label.
     detail=<string>  A muted line under the figure.
     short=<boolean>  Shorten 1,250,000 to 1.25M; false keeps it as given.
+    weight=<light|regular|semibold>  How heavy the figure is: semibold (default), regular, or light for a large, calm number like a temperature, a price or a clock.
     example:
       state price=24 qty=2
       stat label="Total" value="${price*qty}"
@@ -500,16 +505,19 @@ ELEMENTS
       detail "Status" value="At risk" tone=bad
 
   button "<text>"  — A pressable button that runs actions. Use emit: to tell the app what the user chose.
-    "<text>" (required)  The button label.
+    "<text>"  The button label. Leave it out for an icon-only button, with icon= and label=.
     on=<action>  What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ;
     variant=<primary|secondary|danger>  primary (filled), secondary (outlined) or danger.
     disabled=<condition>  Expression; when true the button is greyed out and can't be pressed.
     icon=<string>  Icon name before the label.
     size=<md|sm>  md or sm (smaller).
     fit=<boolean>  Natural width, even on a phone.
+    validate=<boolean>  First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is.
+    label=<string>  What screen readers say, and an icon-only button's tip, e.g. label="Remove {e.name}".
     example:
-      button "Book now" on=emit:book
+      button "Book now" validate=true on=emit:book
       button "Back" variant=secondary on=dec:step
+      button icon=trash label="Remove" variant=secondary on=emit:remove
 
   link "<text>"  — Pressable text for a secondary action, lighter than a button.
     "<text>" (required)  The link text.
@@ -522,9 +530,11 @@ ELEMENTS
     "<text>" (required)  The label next to the box.
     bind=<state, required>  The state name this checkbox reads and writes.
     detail=<string>  A muted line under the label.
+    required=<condition>  When true it must be ticked, or it says error= (default Required) once toggled.
+    error=<string>  Its message: for a required box left unticked, else shown while not empty.
     example:
       state agreed=false
-      check "I agree to the terms" bind=agreed
+      check "I agree to the terms" bind=agreed required=true error="Accept the terms to continue"
 
   switch "<text>"  — An on/off switch with a label, for settings that take effect right away.
     "<text>" (required)  The label for the setting.
@@ -598,7 +608,7 @@ ELEMENTS
       slider "Up to ${maxPrice}" bind=maxPrice min=20 max=300 step=10
 
   input "<text>"  — A text field people type into, such as a name, an email, a search, a new item, or with lines= a note or a message. Each keystroke writes its bind= state, and required= and kind=email or number say what's wrong once it's been left.
-    "<text>"  The label above the field. Leave it out only when the screen makes the purpose obvious.
+    "<text>"  The label above the field. Leave it out only when the screen makes the purpose obvious, or in a row of fields with placeholder=, its name then.
     bind=<state, required>  The state name or path it reads and writes, like task or t.title.
     placeholder=<string>  A hint shown while the field is empty, e.g. Sunscreen.
     kind=<text|email|number|password|search>  text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one.
@@ -875,19 +885,24 @@ ELEMENTS
           list-item "Hire two in support"
           list-item "Open the Denver office"
 
-  scene "<text>"  — EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.
+  scene "<text>"  — EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon, label and icon, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.
     "<text>" (required)  What the picture shows, in a few words, for screen readers.
     w=<number>  Width of the drawing area, in scene pixels. Shapes use these coordinates; the scene is scaled to fit the screen.
     h=<number>  Height of the drawing area, in scene pixels.
     duration=<number>  Seconds the animation runs (t goes from 0 to this). 0 is a still picture.
     loop=<boolean>  Start again when it ends.
+    light=<string>  Where shine= is lit from: light=300,170.
+    shake=<number>  Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}.
+    rate=<number>  How fast t runs, smoothly: 2 is double, 0 pauses (rate={speed}).
     bg=<string>  Background color behind everything.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    maxw=<number>  The widest it's shown, in screen pixels, centered; it still shrinks on a narrower screen. A phone drawn at w=393: maxw=295.
+    scale=<number>  Show it at this share of its own w (0.1 to 1), centered, like maxw={w * scale}.
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient, let, emit
     example:
       scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
         # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
         # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
-        # range(n) for each, and pick(list, i). Reuse a drawing with define and use.
+        # range(n) for each, pick(list, i), floor, abs, % and a ? b : c. Reuse a drawing with define and use.
         # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
         # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
         # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
@@ -906,7 +921,7 @@ ELEMENTS
     w=<number>  Width.
     h=<number>  Height.
     rx=<number>  Corner rounding.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -914,11 +929,12 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}
@@ -927,7 +943,7 @@ ELEMENTS
     x=<number>  Center, across.
     y=<number>  Center, down.
     r=<number>  Radius.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -935,11 +951,12 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"
@@ -949,7 +966,7 @@ ELEMENTS
     y=<number>  Center, down.
     rx=<number>  Half the width.
     ry=<number>  Half the height.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -957,11 +974,12 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"
@@ -971,7 +989,7 @@ ELEMENTS
     y1=<number>  Start, down.
     x2=<number>  End, across.
     y2=<number>  End, down.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -983,13 +1001,14 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       line x1=20 y1=200 x2=580 y2=200 stroke="#FFFFFF" width=4 dash="16 12"
 
   path  — Any outline, in SVG path commands (M move, L line, H, V, C and S curves, Q and T curves, A arc, Z close). For curved shapes: ears, hills, a car body, a wave.
     d=<string>  The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -997,18 +1016,22 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    cap=<butt|round|square>  Line ends.
+    join=<miter|round|bevel>  Corners.
+    round=<number>  Rounds straight corners by this many pixels. cap, join and round work on line and polygon too.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"
 
   polygon  — A closed shape through points, for triangles, stars, mountains and roofs.
     points=<string>  x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -1016,11 +1039,12 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       polygon points="300,40 380,180 220,180" fill="#E9C46A"
@@ -1030,9 +1054,11 @@ ELEMENTS
     x=<number>  Where it's anchored, across.
     y=<number>  Its middle, down.
     size=<number>  Text size in scene pixels.
-    weight=<regular|bold>  regular or bold.
+    weight=<light|regular|bold|heavy>  light (large calm figures: 72°, a clock), regular, bold or heavy.
+    style=<normal|italic>  italic slants it.
     align=<left|center|right>  Which end of the words sits at x.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    id=<name>  Its name, for after= on a later shape.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -1044,9 +1070,31 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"
+
+  glyph  — An icon in a scene, written icon inside one (glyph works too): the app's own icons, at any size and color, drawn from its left edge and centered on y like a label. Give it on= to make it a button: an app on a phone, a control.
+    name=<string, required>  Which icon: the same names as icon's name=, like sun, heart or arrow-right. It may hold a {formula}.
+    x=<number>  Left edge.
+    y=<number>  Its middle, down.
+    size=<number>  Width and height in scene pixels.
+    fill=<string>  Its color, like a shape's fill: a theme color (accent, ink, onAccent…) or "#hex".
+    opacity=<number>  0 (invisible) to 1 (solid).
+    rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    label=<string>  What screen readers call it when it's pressable. Default: its tip, else the icon's name.
+    on=<action>  Makes it pressable, like group's on=.
+    selected=<condition>  Selection outline while true.
+    tip=<string>  Shown while hovered or focused.
+    after=<name>  Starts after a label's words, like group's after=.
+    only inside: scene, group, define
+    example:
+      icon name=sun x=40 y=60 size=48 fill=warn glow=true
+      label "Phoenix" id=city x=40 y=130 size=24 fill=ink
+      icon name=arrow-right after=city x=8 y=130 size=24 fill=accent
 
   group  — Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.
     x=<number>  Moves everything across.
@@ -1054,21 +1102,35 @@ ELEMENTS
     rotate=<number>  Turns everything, in degrees, around the group's x and y.
     scale=<number>  Grows or shrinks everything.
     opacity=<number>  Fades everything, 0 to 1.
+    clip=<boolean>  Shapes inside are cut to the group's w×h box, rounded by rx: glows inside a phone screen, a map in a card.
+    w=<number>  Width of the clip=true box, from the group's x.
+    h=<number>  Height of the clip=true box, from the group's y.
+    rx=<number>  Corner rounding of the clip=true box.
+    shake=<number>  Like scene's.
+    z=<number>  Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.
+    trail=<number>  Seconds of fading copies left behind as it moves: trail=0.4; trail-count= how many (12). Shapes too.
+    blur=<number>  Softens it, in px: blur=8 for fog or smoke. Shapes too.
+    reflect=<number>  Mirrors it below this y, like water: reflect=220; ripple= waves it, fade= dims it (0 to 1).
     on=<action>  Actions when it's pressed (click, tap, Enter), like a button's on=; makes it pressable and a Tab stop. Inside the scene's each they see the item: on=set:sel:{m.id}.
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    on-hover=<action>  On mouse over (never touch): on-hover=set:hov:{p.name}. Shapes too.
+    on-leave=<action>  When it moves off: on-leave="set:hov:''".
+    after=<name>  Starts at the end of the words of the label with this id, drawn before it: x= is then the gap from there.
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient, let, emit
     only inside: scene, group, define
     example:
       group x={600*((t/3) % 1)} y=200
         rect x=-40 y=-20 w=80 h=24 rx=6 fill="#E63946"
         circle x=-22 y=6 r=9 fill="#222222"
         circle x=22 y=6 r=9 fill="#222222"
+      group x=20 y=20 w=200 h=120 rx=24 clip=true
+        circle x=180 y=10 r=90 fill="accent 40%" glow=true
 
   define "<text>"  — A reusable drawing: name it, draw it under this line around 0,0, and draw it anywhere with use. It reads names its use passes in args.
     "<text>" (required)  The drawing's name, used by use.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient, let, emit
     only inside: scene
     example:
       define "cactus"
@@ -1087,6 +1149,7 @@ ELEMENTS
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       use "cactus" x=120 y=300 scale=1.2 args={{h: 70}}
@@ -1094,12 +1157,22 @@ ELEMENTS
   gradient  — A color blend to fill shapes with fill="url(id)": a sky, a glow, a shiny ball.
     id=<name, required>  Its name, for url(id).
     from=<string>  The first color: a theme color or "#hex", like fill.
-    to=<string>  The last color.
+    to=<string>  The last color ("#FFF3B0 0%" fades out).
     kind=<linear|radial>  linear (a straight blend) or radial (from the middle out).
     angle=<number>  Direction of a linear blend in degrees: 90 is top to bottom, 0 left to right.
     only inside: scene, group, define
     example:
       gradient id=glow kind=radial from="accent 25%" to=accent
+
+  let a={…}  — A named value, worked out each frame, for the lines below it in its block: x={cos(a)}.
+    only inside: scene, group, define
+    example:
+      let a={t*1.5}
+
+  emit  — Confetti, snow, sparks: count≤600 from=burst second (else endless) fill shape=rect|line x y w h angle spread speed gravity drag wind life size flutter.
+    only inside: scene, group, define
+    example:
+      emit count=60 from=1 spread=360 shape=line fill="accent, warn"
 
 PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)
 - a headline number with its change and recent trend: stat change="+12%" spark=weekly
@@ -1147,7 +1220,7 @@ RULES
 - Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.
 - Use cards to group related content, not around every title, element or section, and never a card inside a card. Keep page headings outside cards.
 - Dashboards: a title with its filters just under it, a few meaningful KPIs (3 or 4 stats), one main chart, then supporting detail (a smaller chart or a table). The design is built in: write plain elements, not extra props for looks.
-- Put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls.
+- Put peer KPI and chart cards in grid min=170 gap=12. Cards keep their own height; add stretch=true when a row's panels should line up. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls.
 - Keep screens focused: one task per screen, short labels, real-looking values.
 - Screens may be narrow (a phone, a chat). For side-by-side figures use grid min=140 rather than row. Keep stat values short: compact() for large numbers.
 - For several screens, write the starting screen first: it shows as soon as it arrives.

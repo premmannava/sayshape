@@ -27,6 +27,7 @@ import { browserClipboard, writeClipboard } from "./clipboard";
 import { toolButton } from "./tool-button";
 import { deflated, fromDataUrl, pdfOf, pptxOf, rgbOf, toBase64, type SlidePicture } from "./deck-file";
 import { readViewOptions } from "./view-options";
+import { viewBackground } from "./chat-look";
 import { announce, brandColorFor, chosenColors, colorsArrival, sameColors, toolColors } from "./host-brand";
 
 const FACES = ['400 15px "Instrument Sans"', '600 15px "Instrument Sans"', '700 15px "Instrument Sans"'];
@@ -174,13 +175,13 @@ async function applyTheme(ctx: McpUiHostContext | undefined): Promise<Theme> {
 }
 
 function paintTheme(theme: Theme): void {
-  // The engine clears its bitmap to transparency each frame and leaves 20px
-  // around the content. In an MCP iframe, that transparent gutter can expose
-  // a black host surface even beside a light card. Paint the canvas element's
-  // background using the resolved host-aware theme, without changing layout
-  // or making the entire iframe opaque.
-  canvas.style.backgroundColor = theme.colors.surface;
-  bar.style.backgroundColor = theme.colors.surface;
+  // The engine clears its bitmap to transparency each frame. With the chat look, and a chat app that said
+  // whether it's light or dark, the app's own background shows through (chat-look.ts). Otherwise the
+  // transparent gutter could expose a black host surface beside a light card, so the canvas element gets
+  // the resolved host-aware theme's surface, without changing layout or making the entire iframe opaque.
+  const background = viewBackground(theme, app.getHostContext()?.theme, viewOptions.chatLook !== false);
+  canvas.style.backgroundColor = background;
+  bar.style.backgroundColor = background;
   sayshape?.setTheme(faceTheme(theme));
   themePicker?.setTheme(theme);
 }
@@ -210,7 +211,8 @@ const modelColors = viewOptions.modelColors !== false;
 /** The theme interfaces are drawn in, with the logo the server was started with (--logo) for slides. */
 let face: Theme | null = null;
 function faceTheme(theme: Theme): Theme {
-  const t = interfaceTheme(theme);
+  // The chat look sizes things with the engine's chat density (context "chat"); --no-chat-look keeps CHAT_TOKENS.
+  const t = viewOptions.chatLook === false ? interfaceTheme(theme) : theme;
   face = viewOptions.logo ? { ...t, deck: { ...t.deck, logo: viewOptions.logo } } : t;
   return face;
 }
@@ -651,6 +653,8 @@ async function start(): Promise<void> {
     theme: faceTheme(theme),
     // The chat app already boxes the view: a card that is the whole interface draws no frame of its own.
     bareRootCard: true,
+    // Drawn as inside a chat (the chat density, a narrow gutter) unless --no-chat-look.
+    ...(viewOptions.chatLook === false ? {} : { context: "chat" as const }),
     // Only the hosts the server was started with (--image-hosts). The view has no origin of
     // its own to load from, and the server asks the chat app's sandbox to allow just these.
     imageHosts: viewOptions.imageHosts ?? [],
@@ -667,7 +671,8 @@ async function start(): Promise<void> {
     if (!sayshape) return;
     // A code block's copy button (emit:copy:<code>) is the person's own: it goes to the clipboard, not the model.
     if (name === "copy" && typeof value === "string") { void copyCode(value); return; }
-    void deliver(name, value, sayshape.state.snapshot());
+    // Never state.snapshot(): what password fields hold stays in the interface.
+    void deliver(name, value, sayshape.shareableState());
   });
   document.addEventListener("keydown", onCopyKey);
   syncLoading();

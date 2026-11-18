@@ -11,6 +11,10 @@
  * that does, for the colors the words can have.
  */
 import { darkTheme, isDark, mixColors, parseColor, type Theme } from "./theme";
+import { contrastRatio, luminance, lumOf } from "./contrast";
+
+// Kept here too: other modules and tests import them from the scrim.
+export { contrastRatio, luminance };
 
 /**
  * The contrast ratio the words keep over the worst pixel: WCAG AA (4.5) plus a
@@ -23,25 +27,6 @@ export const SCRIM_CONTRAST = 4.55;
 export const SCRIM_EDGE = 0.2;
 /** The text colors a scrim has to keep readable: the ones elements draw words in. */
 const TEXT_COLORS = ["ink", "muted", "accent", "good", "warn", "bad"] as const;
-
-const lin = (v: number) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
-
-/** WCAG relative luminance of a color given as 0..255 channels. */
-export function luminance(r: number, g: number, b: number): number {
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-}
-
-function lumOf(color: string): number | null {
-  const c = parseColor(color);
-  return c ? luminance(c[0], c[1], c[2]) : null;
-}
-
-/** WCAG contrast ratio of two opaque colors, or null when either isn't one. */
-export function contrastRatio(a: string, b: string): number | null {
-  const x = lumOf(a), y = lumOf(b);
-  if (x === null || y === null) return null;
-  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
-}
 
 /** The scrim color over a pixel of one gray level (0 or 255 are the extremes), as the canvas blends it: 8 bits a channel. */
 export function blendOver(scrim: string, alpha: number, level: number): [number, number, number] {

@@ -42,7 +42,7 @@ Changing the spec keeps the state (a counter stays where it was) unless `reset-s
 |---|---|---|
 | `spec` | `spec` | The spec text. |
 | `streaming` | `streaming` | Treat `spec` as text that is still growing. See below. |
-| `theme` | `theme` | `"auto"`, `"light"` or `"dark"` (`"light"` and `"dark"` are SayShape's built-in themes). The property also takes a `Theme` object. Changing it calls `setTheme`; the engine is not recreated. |
+| `theme` | `theme` | `"auto"`, `"light"` or `"dark"` (`"light"` and `"dark"` are SayShape's built-in themes). The property also takes a `Theme` object, or the host page's own tokens (see [Host tokens](#host-tokens)). Changing it calls `setTheme`; the engine is not recreated. |
 | `resetStateOnChange` | `reset-state-on-change` | Start from the spec's own state each time `spec` changes. |
 | `options` | none | Engine options (`animate`, `imageHosts`, `minHeight`, and so on). |
 | `components` | none | The components to register. Default: the core components. Pass `[...coreComponents, ...mapComponents]` for maps. |
@@ -51,6 +51,21 @@ Changing the spec keeps the state (a counter stays where it was) unless `reset-s
 `options` and `components` are read once, when the element connects. Set them before you add the element to the page. Changing them afterwards does nothing until the element is removed and added again (a remount).
 
 Boolean attributes are on when present; `streaming="false"` is off. Several property changes in the same task are applied together, in one update.
+
+## Host tokens
+
+To look like part of the page it sits in, give the `theme` property the page's own design tokens: `background`, `surface`, `text`, `textSecondary` (or `textMuted`), `border`, `accent`, `onAccent`, `radius` (px), `fontFamily`, `fontSize` (body text, px), `series` (chart colors) and `dark`. Each is optional. They become an ordinary theme (`themeFromTokens` in `sayshape`), so every element follows them: text that wouldn't reach WCAG AA on the background is darkened or lightened until it does, and with no `series` the chart colors are worked out from the accent, apart in hue and at 3:1 against the background. Values that aren't plain colors, numbers or font stacks are ignored. Set a new object when the page switches between light and dark.
+
+In Angular, bind it like any property (with `CUSTOM_ELEMENTS_SCHEMA` on the component):
+
+```html
+<say-shape [spec]="spec" [theme]="portalTokens"></say-shape>
+```
+
+```ts
+portalTokens = { background: "#f4f6f9", surface: "#ffffff", text: "#1b2533", textSecondary: "#5a6678",
+  border: "#d5dbe3", accent: "#00695c", radius: 4, fontFamily: "'Source Sans 3', Arial, sans-serif", fontSize: 15 };
+```
 
 ## Streaming
 

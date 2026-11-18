@@ -33,7 +33,7 @@ column gap=6
 
 ### `row`
 
-Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.
+Places children side by side, splitting the width equally. On narrow screens they wrap; cards keep their own height, top-aligned.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -43,6 +43,7 @@ Places children side by side, splitting the width equally. On narrow screens the
 | `wrap` | boolean | Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line. |
 | `fit` | boolean | Keep children at their natural width. |
 | `justify` | `start` / `end` / `between` | Where children sit: start, end, or between (spread). Implies fit. |
+| `stretch` | boolean | Cards side by side share the tallest one's height, for panels that should line up. |
 
 Children: any elements.
 
@@ -73,13 +74,14 @@ overlap at=top-right
 
 ### `grid`
 
-Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
+Places children in responsive equal columns. Cards keep their own height, top-aligned.
 
 | Prop | Type | Description |
 |---|---|---|
 | `min` | number | Narrowest a column may be, in pixels (default 200). |
 | `cols` | number | Most columns; fewer when min doesn't fit. |
 | `gap` | number | Space between children in pixels (default 14). |
+| `stretch` | boolean | Cards side by side share the tallest one's height, for panels that should line up. |
 
 Children: any elements.
 
@@ -98,9 +100,10 @@ A surface that groups related content, stacked vertically. Give it on= to make t
 |---|---|---|
 | `gap` | number | Space between children in pixels (default 14). |
 | `pad` | number | Inner padding in pixels (default 22). |
-| `variant` | `raised` / `hero` / `tinted` / `outline` | raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only). |
+| `variant` | `raised` / `hero` / `tinted` / `outline` / `glass` | raised (default), hero (an accent wash for the one card that leads the screen; a clear gradient in a bold look), tinted (a quiet accent fill for a side group), outline (a border only) or glass (frosted: what's behind shows through, blurred, as in a dock over a picture). |
 | `on` | action | Actions to run when the card is pressed, e.g. emit:changed. Separate several with ; |
 | `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Color role of a left edge stripe. |
+| `fill` | `sky` / `sunset` / `dusk` / `night` / `accent` | A gradient from the theme that sets a mood, by name, never a color: card fill=sky for today's weather. Words inside switch to colors that read on it. |
 
 Children: any elements.
 
@@ -287,7 +290,7 @@ A paragraph or heading that wraps to the available width. Use {expressions} to s
 |---|---|---|
 | `"text"` | text, required | The words to show. May include {expressions}. |
 | `style` | `display` / `title` / `lead` / `body` / `caption` | display, title, lead, body or caption. |
-| `weight` | `regular` / `semibold` / `bold` | regular, semibold or bold. Titles default to semibold. |
+| `weight` | `light` / `regular` / `semibold` / `bold` | light, regular, semibold or bold. Titles default to semibold; light suits a large figure in style=display (72°, $1,240). |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `align` | `left` / `center` / `right` | left, center or right. |
 | `strike` | boolean | Draw a line through the text, e.g. for an old price. |
@@ -391,7 +394,7 @@ A small symbol on its own, like a status mark or a weather sign. To start a line
 
 | Prop | Type | Description |
 |---|---|---|
-| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book. |
+| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book, music, video, mic, volume, volume-off, alarm, timer, laptop, tablet, watch, camera, headphones, battery, wifi, tv, sunrise, sunset, cloud-sun, fog, umbrella, store, gift, ticket, basket, menu, grid, list, more, chevron-up, chevron-down, chevron-left, chevron-right, compass, navigation, route, bookmark, send, archive, clipboard, note, user-plus, id-badge, activity, gauge, flame, plant, leaf, tree, planet, bowl, coffee, pizza, bed, sofa, lamp, bike, bus, train. A few common other names (cup, stopwatch, plant-2) work too. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `size` | `sm` / `md` / `lg` | sm, md or lg. |
 | `label` | string | What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration. |
@@ -418,6 +421,7 @@ A labelled number, for key figures like totals or counts. Add change= to show ho
 | `icon` | string | Icon name before the label. |
 | `detail` | string | A muted line under the figure. |
 | `short` | boolean | Shorten 1,250,000 to 1.25M; false keeps it as given. |
+| `weight` | `light` / `regular` / `semibold` | How heavy the figure is: semibold (default), regular, or light for a large, calm number like a temperature, a price or a clock. |
 
 ```
 state price=24 qty=2
@@ -679,17 +683,20 @@ A pressable button that runs actions. Use emit: to tell the app what the user ch
 
 | Prop | Type | Description |
 |---|---|---|
-| `"text"` | text, required | The button label. |
+| `"text"` | text | The button label. Leave it out for an icon-only button, with icon= and label=. |
 | `on` | action | What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ; |
 | `variant` | `primary` / `secondary` / `danger` | primary (filled), secondary (outlined) or danger. |
 | `disabled` | condition | Expression; when true the button is greyed out and can't be pressed. |
 | `icon` | string | Icon name before the label. |
 | `size` | `md` / `sm` | md or sm (smaller). |
 | `fit` | boolean | Natural width, even on a phone. |
+| `validate` | boolean | First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is. |
+| `label` | string | What screen readers say, and an icon-only button's tip, e.g. label="Remove {e.name}". |
 
 ```
-button "Book now" on=emit:book
+button "Book now" validate=true on=emit:book
 button "Back" variant=secondary on=dec:step
+button icon=trash label="Remove" variant=secondary on=emit:remove
 ```
 
 ### `link`
@@ -715,10 +722,12 @@ A checkbox that toggles a true/false state value.
 | `"text"` | text, required | The label next to the box. |
 | `bind` | state, required | The state name this checkbox reads and writes. |
 | `detail` | string | A muted line under the label. |
+| `required` | condition | When true it must be ticked, or it says error= (default Required) once toggled. |
+| `error` | string | Its message: for a required box left unticked, else shown while not empty. |
 
 ```
 state agreed=false
-check "I agree to the terms" bind=agreed
+check "I agree to the terms" bind=agreed required=true error="Accept the terms to continue"
 ```
 
 ### `switch`
@@ -840,7 +849,7 @@ A text field people type into, such as a name, an email, a search, a new item, o
 
 | Prop | Type | Description |
 |---|---|---|
-| `"text"` | text | The label above the field. Leave it out only when the screen makes the purpose obvious. |
+| `"text"` | text | The label above the field. Leave it out only when the screen makes the purpose obvious, or in a row of fields with placeholder=, its name then. |
 | `bind` | state, required | The state name or path it reads and writes, like task or t.title. |
 | `placeholder` | string | A hint shown while the field is empty, e.g. Sunscreen. |
 | `kind` | `text` / `email` / `number` / `password` / `search` | text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one. |

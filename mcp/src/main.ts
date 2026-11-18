@@ -15,6 +15,7 @@
  *   sayshape-mcp --no-save-image hide the Save image button
  *   sayshape-mcp --no-copy-text  hide the Copy text button
  *   sayshape-mcp --no-select-text  no invisible text layer: words can't be selected or found with Ctrl+F
+ *   sayshape-mcp --no-chat-look    the theme's background behind interfaces, as before
  *   sayshape-mcp --select-touch    let a long press on a touch screen select a word (off by default for now)
  *   sayshape-mcp --scene         experimental: let models paint pictures and animations (off by default)
  *   sayshape-mcp --logo https://cdn.example.com/logo.png   a logo in the corner of every slide of a deck
@@ -93,7 +94,7 @@ async function main(): Promise<void> {
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color | --colors list]",
-      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--no-select-text] [--select-touch] [--scene] [--behavior] [--layout-first] [--adaptive-guides] [--logo <https url>]",
+      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--no-select-text] [--no-chat-look] [--select-touch] [--scene] [--behavior] [--layout-first] [--adaptive-guides] [--logo <https url>]",
       "                    [--image-hosts host1,host2,... | --no-image-hosts] [--widget-dir folder [--widget-inline] [--widget-host name]]",
       "",
       "  --widget-dir <folder>  for chat apps that can't draw interfaces but can show a widget made from a file:",
@@ -126,6 +127,8 @@ async function main(): Promise<void> {
       "  --no-save-image  hide the Save image button (shown where the chat app can download files)",
       "  --no-copy-text   hide the Copy text button",
       "  --no-select-text  turn off the invisible text layer that lets people select, copy and find (Ctrl+F) the words",
+      "  --no-chat-look    paint the theme's background behind each interface and keep the earlier sizes, as before,",
+      "                    instead of the chat app's own background showing through and the tighter chat density",
       "  --select-touch    let a long press on a touch screen select a word, with the phone's own handles (off by default until checked on real phones)",
       "  --scene          experimental: scenes, pictures and animations the model paints (off by default)",
       "  --logo <url>     an https image drawn small in the corner of every slide of a deck (its host is allowed like --image-hosts)",

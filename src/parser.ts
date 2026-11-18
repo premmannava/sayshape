@@ -18,9 +18,10 @@ import { MAX_RULES, MAX_RULE_ACTIONS, MAX_RULE_INTERVAL, MIN_RULE_INTERVAL, RULE
 import { RULE_FUNCTIONS } from "./math";
 import { dragAxis, readPaths } from "./drag-axis";
 import { looksLikeData, parseData } from "./data";
-import { bareExpression, checkSyntax, identifiers, itemNames, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
+import { bareExpression, checkSyntax, identifiers, namedItems, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
 import { actionTargets } from "./actions";
 import { loopNames } from "./each";
+import { checkLets, MAX_LETS, readLet, visibleLets, type LetLine } from "./lets";
 import { PATH } from "./paths";
 import { literal } from "./actions";
 import type { Registry } from "./registry";
@@ -623,6 +624,21 @@ function providedTo(stack: readonly SayShapeNode[], registry: Registry): { names
   return functions ? { names, anyNames, functions } : { names, anyNames };
 }
 
+/**
+ * What an element is called inside the elements open around a line
+ * (ComponentDef.provides.renames), the nearest first: icon in a scene is the
+ * scene's glyph. Only renames to a registered element count.
+ */
+function renamedIn(stack: readonly SayShapeNode[], indent: number, type: string, registry: Registry): string {
+  for (let i = stack.length - 1; i > 0; i--) {
+    const n = stack[i]!;
+    if (n.indent >= indent) continue;
+    const to = registry.get(n.type)?.provides?.renames;
+    if (to && Object.hasOwn(to, type) && registry.get(to[type]!)) return to[type]!;
+  }
+  return type;
+}
+
 export function parse(src: string, registry: Registry, opts: ParseOptions = {}): ParseResult {
   if (!opts.presets || !HAS_PRESET.test(src)) return parseSpec(src, registry, opts);
   if (opts.partial) {
@@ -688,8 +704,12 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
   // Where bind= and actions write, to report writes to derived names.
   const writes: Array<{ name: string; line: number }> = [];
   const derivedLines: DerivedDef[] = [];
-  // Names extend() gives its items, checked against state and derived names once those are known.
-  const itemUses: Array<{ line: number; names: string[] }> = [];
+  // A scene's let lines, checked for loops and reach once every line is known.
+  const letLines: LetLine[] = [];
+  /** Each block's let lines so far, so finding the lets a line sees never walks a block's other lines. */
+  const letsOf = new WeakMap<SayShapeNode, SayShapeNode[]>();
+  // Names extend() and map() give their items, checked against state and derived names once those are known.
+  const itemUses: Array<{ line: number; names: Array<{ name: string; fn: string }> }> = [];
   // Behavior (opt-in): rules, what controls write (so a rule can be stopped), and what dialogs bind.
   const rules: RuleDef[] = [];
   const controls = new Set<string>();
@@ -838,6 +858,11 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       return;
     }
     openState = null;
+    // An element that means something else inside an enclosing one (icon in a scene draws a glyph) becomes it, silently.
+    const asWritten = tok.type;
+    if (tok.type) tok.type = renamedIn(stack, indent, tok.type, registry);
+    // Messages name the element as it was written (icon in a scene, not glyph).
+    const shownType = asWritten && asWritten !== tok.type ? `${asWritten}" in a "${stack[stack.length - 1]?.type ?? "scene"}` : tok.type;
     // "on choose_a" blocks are a common guess at handling a press inside the spec. Say how it works
     // instead, once, without the knock-on messages about the rest of the line.
     if (tok.type === "on" && !defOf("on", registry)) {
@@ -845,6 +870,20 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       onBlockLine ??= lineNo;
       skipDeeperThan = indent;
       return;
+    }
+    // let a={…} names a value inside a scene (when scenes are on); anywhere else it's still code.
+    if (tok.type === "let" && registry.has("let")) {
+      const inScene = stack.some((n) => n.type === "scene" && n.indent < indent);
+      const got = !inScene ? { error: `${CODE_WORDS.let}. This line and anything under it were skipped` }
+        : letLines.length >= MAX_LETS ? { error: `A spec has at most ${MAX_LETS} let lines, so this one was skipped. Work values out in fewer lets, or write the formula where it's used` }
+        : readLet(tok, providedTo(stack, registry).functions);
+      if ("error" in got) {
+        diagnostics.push({ line: lineNo, severity: "error", message: got.error });
+        skipDeeperThan = indent;
+        return;
+      }
+      tok.props = Object.assign(Object.create(null) as Record<string, string>, { name: got.name, value: got.value });
+      tok.quoted.clear();
     }
     // A line of code or prose: say what to write instead, without the tokenizer's complaints about it.
     const code = tok.type && !defOf(tok.type, registry) ? codeLineMessage(body) : undefined;
@@ -900,6 +939,15 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       skipDeeperThan = indent;
       return;
     }
+    if (def.unusable) {
+      let why: string | undefined;
+      try { why = def.unusable(tok.props, tok.text); } catch { why = undefined; }
+      if (why) {
+        diagnostics.push({ line: lineNo, severity: "error", message: `${why}. This line and anything under it were skipped` });
+        skipDeeperThan = indent;
+        return;
+      }
+    }
     if (def.text?.required && tok.text === undefined) {
       diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs quoted text, like ${tok.type} "Label"` });
     }
@@ -927,10 +975,12 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       const pdef = def.props[name] ?? universalProp(name);
       if (!pdef) {
         const known = [...Object.keys(def.props), ...Object.keys(COMMON_PROPS)];
-        diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" has no prop "${name}". Known props: ${known.join(", ")}` });
+        diagnostics.push({ line: lineNo, severity: "warning", message: `"${shownType}" has no prop "${name}". Known props: ${known.join(", ")}` });
         continue;
       }
-      checkProp(name, rawValue, pdef, lineNo, diagnostics, fns);
+      // A prop the element draws with itself (a scene's shake=) reads what it provides inside.
+      const ownFns = def.provides?.ownProps?.includes(name) ? def.provides.functions ?? fns : fns;
+      checkProp(name, rawValue, pdef, lineNo, diagnostics, ownFns);
     }
     for (const message of motionProblems(tok.type, tok.props, def)) diagnostics.push({ line: lineNo, severity: "warning", message });
     if ("tip" in tok.props && def.drawnByParent && !def.props.tip) {
@@ -939,40 +989,48 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     }
     for (const [name, pdef] of Object.entries(def.props)) {
       const exempt = pdef.unlessProp && pdef.unlessProp.values.includes(tok.props[pdef.unlessProp.name] ?? "");
-      if (pdef.required && !exempt && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs ${name}=` });
+      if (pdef.required && !exempt && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${shownType}" needs ${name}=` });
     }
     if (def.check) {
       // A component's own check must never stop parsing (rule 2).
       let found: string[] = [];
-      try { found = def.check(tok.props); } catch { found = []; }
+      try { found = def.check(tok.props, tok.text); } catch { found = []; }
       for (const message of found) diagnostics.push({ line: lineNo, severity: "warning", message });
     }
     if (tok.type === "if" && tok.props.if === undefined) {
       diagnostics.push({ line: lineNo, severity: "warning", message: `An if block needs a condition, like if={count > 0}; the lines under it always show` });
     }
+    // Lets above this line, in its block and the ones around it (a scene's let a={…}).
+    const lets = visibleLets(stack, letsOf);
     if (opts.behavior && def.props.drag?.needs && tok.props.drag !== undefined && tok.props.drag !== "false") {
-      // Names that aren't state: the scene's own (t, PI) and each's index.
-      const fixed = new Set<string>(provided.names);
+      // Names that aren't state: the scene's own (t, PI), each's index and lets.
+      const fixed = new Set<string>([...provided.names, ...lets.keys()]);
       for (const n of stack) if (n.type === "each" && n.props.index) fixed.add(n.props.index);
       for (const message of dragProblems(tok.props, fixed)) diagnostics.push({ line: lineNo, severity: "warning", message });
+      for (const axis of ["x", "y"] as const) {
+        const root = dragAxis(tok.props[axis])?.path.split(".")[0];
+        if (root && lets.has(root)) diagnostics.push({ line: lineNo, severity: "warning", message: `${axis}= names the let ${root} (line ${lets.get(root)!.line}), which a drag can't move: it moves state. Drag a state value instead, like ${axis}={p${axis}} with state p${axis}=…` });
+      }
     }
     if (tok.type === "each" && tok.props.as !== undefined && tok.props.as === tok.props.index) {
       diagnostics.push({ line: lineNo, severity: "warning", message: `each uses "${tok.props.as}" for both as= and index=; give them different names` });
     }
 
     const inScope = new Set<string>(provided.names);
+    if (def.provides?.ownProps?.length) for (const n of def.provides.names ?? []) inScope.add(n);
     for (const n of stack) if (n.type === "each") for (const name of loopNames(n)) inScope.add(name);
+    for (const name of lets.keys()) inScope.add(name);
     // An each's own items= and key= are read outside and inside it respectively; only check items=.
     const exprs = tok.type === "each"
       ? (tok.props.items === undefined ? [] : [bareExpression(tok.props.items)])
       : expressionsOf(tok.text, tok.props, def.props, fns);
     const names = [...new Set(exprs.flatMap((e) => identifiers(e, fns)))].filter((n) => !inScope.has(n));
     if (names.length && !provided.anyNames) outsideUses.push({ line: lineNo, names });
-    const items = [...new Set(exprs.flatMap((e) => itemNames(e, fns)))];
-    for (const name of items) {
-      if (inScope.has(name)) diagnostics.push({ line: lineNo, severity: "warning", message: `extend() names its item "${name}", which is already a loop variable here. Give the item another name` });
+    const items = [...new Map(exprs.flatMap((e) => namedItems(e, fns)).map((n) => [n.name, n] as const)).values()];
+    for (const { name, fn } of items) {
+      if (inScope.has(name)) diagnostics.push({ line: lineNo, severity: "warning", message: `${fn}() names its item "${name}", which is already a loop variable here. Give the item another name` });
     }
-    if (items.length) itemUses.push({ line: lineNo, names: items.filter((n) => !inScope.has(n)) });
+    if (items.length) itemUses.push({ line: lineNo, names: items.filter((n) => !inScope.has(n.name)) });
     for (const [name, raw] of Object.entries(tok.props)) {
       const pdef = def.props[name] ?? universalProp(name);
       const wrote = (n: string) => { written.add(n); controls.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
@@ -1002,6 +1060,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       indent,
     };
     parent.children.push(node);
+    if (tok.type === "let") { const own = letsOf.get(parent); if (own) own.push(node); else letsOf.set(parent, [node]); }
     last = node;
     // An else after this node needs the conditions so far: its own if=, or the chain it continues.
     if (elseLine) { if (pendingChain) chains.set(node, pendingChain); }
@@ -1010,6 +1069,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     nodeCount++;
     firstElement ??= lineNo;
     if (tok.type === "each") eaches.push(node);
+    if (tok.type === "let") letLines.push({ node, parent, reads: exprs.flatMap((e) => identifiers(e, fns)), lets, scope: inScope });
     if (tok.type === "dialog" && tok.props.bind !== undefined) dialogs.add(tok.props.bind.split(".")[0]!);
     if (def.children) stack.push(node);
   });
@@ -1018,16 +1078,19 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
   // Derived names count as defined, even ones left out for a cycle (that's reported already).
   for (const d of derivedLines) if (d.reads.length) outsideUses.push({ line: d.line, names: d.reads });
   const defined = new Set([...state.map((s) => s.key), ...derivedLines.map((d) => d.name)]);
-  for (const d of derivedLines) itemUses.push({ line: d.line, names: itemNames(d.expr) });
+  for (const d of derivedLines) itemUses.push({ line: d.line, names: namedItems(d.expr) });
   for (const { line, names } of itemUses) {
-    for (const name of names) {
+    for (const { name, fn } of names) {
       if (defined.has(name) || ENGINE_STATE.includes(name)) {
-        diagnostics.push({ line, severity: "warning", message: `extend() names its item "${name}", but "${name}" is already ${derivedLines.some((d) => d.name === name) ? "derived" : "state"}, so it would mean two things. Give the item another name, like '${name}_'` });
+        diagnostics.push({ line, severity: "warning", message: `${fn}() names its item "${name}", but "${name}" is already ${derivedLines.some((d) => d.name === name) ? "derived" : "state"}, so it would mean two things. Give the item another name, like '${name}_'` });
       }
     }
   }
   // A state value that couldn't be read is reported on its own line; saying again on every line that uses it hides that.
-  checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics, !!(opts.partial && opts.deferUnknownNames));
+  const known = new Set([...defined, ...skippedState]);
+  const uses = checkLets(letLines, new Set([...known, ...written, ...ENGINE_STATE]), outsideUses, diagnostics);
+  nodeCount -= letLines.filter((l) => !l.parent.children.includes(l.node)).length;
+  checkNames(uses, eaches, known, written, diagnostics, !!(opts.partial && opts.deferUnknownNames));
   // Stable sort keeps each line's diagnostics in the order they were found.
   const kept = opts.behavior ? checkRules(rules, controls, dialogs, diagnostics) : undefined;
   diagnostics.sort((a, b) => a.line - b.line);

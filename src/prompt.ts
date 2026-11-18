@@ -158,7 +158,7 @@ function propLine(name: string, d: PropDef): string {
 }
 
 function componentBlock(c: ComponentDef, examples: boolean): string {
-  const head = c.text ? `${c.type} "<text>"` : c.type;
+  const head = c.usage ?? (c.text ? `${c.type} "<text>"` : c.type);
   const lines = [`  ${head}  — ${c.description}`];
   if (c.text) lines.push(`    "<text>"${c.text.required ? " (required)" : ""}  ${c.text.description}`);
   for (const [n, d] of Object.entries(c.props)) lines.push(propLine(n, d));
@@ -430,7 +430,7 @@ function dataSection(ctx: GuideContext): string {
     `- Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}`,
     `- A filter with an All choice: derive shown={region == 'All' ? orders : filter(orders, 'region', region)}`,
     `- Totals per category: derive byCat={sort(group(spend, 'category', 'amount'), 'amount', 'desc')} makes one record per category, its fields named after the ones you grouped by and added up: {category, count, amount}, where count is how many items it has and amount their total. Then items=byCat x=category y=amount. Use your own field names: grouping by 'team' and adding up 'hours' gives {team, count, hours}. group(list, 'category') only counts; a fourth argument works out 'avg', 'min' or 'max' instead of the total. Groups are read-only`,
-    `- A value worked out for every item: derive rows={extend(orders, 'o', {total: o.price * o.qty})} gives each order a total (o is the item, only inside the braces, and can't be a state name), then derive ranked={rank(rows, 'total', 'desc')} adds rank (1 is best, ties share it) in the list's order. New fields can't read each other: chain a second extend. Never write one numbered copy per row`,
+    `- A value worked out for every item: derive rows={extend(orders, 'o', {total: o.price * o.qty})} gives each order a total (o is the item, only inside the braces, and can't be a state name), then derive ranked={rank(rows, 'total', 'desc')} adds rank (1 is best, ties share it) in the list's order. New fields can't read each other: chain a second extend. A list from a formula: derive plan={map(range(1, years + 1), 'y', {year: y, total: save * y})} (range's end is left out; y only inside map's last argument). Never write one numbered copy per row`,
     `- Data the app passes in can be large (thousands of rows). Never copy its rows into the spec: read it by name, and put totals, groups and filters over it in derive lines, so they're worked out once`,
     ...(has("radio") ? [`- To compare two fields of an item (an answer and its correct answer), set a field when choosing, then count it: radio "{o}" bind=q.pick value={o} on="set:q.ok:{o == q.answer}" and later count(qs, 'ok')`] : []),
     `- Format for people: money(2400) shows $2,400.00, number(37000) shows 37,000, compact(12345678) shows 12.3M and compact(n, 'USD') shows $12.3M (use it for big figures in stats), plural(n, 'item') shows 1 item or 3 items, lower(), upper(), trim()`,
@@ -440,7 +440,7 @@ function dataSection(ctx: GuideContext): string {
     `- For a list inside each item (an order's lines, a day's activities), put an each inside the each: each items=o.lines as=line`,
     `- SayShape has no JSX, HTML or JavaScript. {…} only computes values; it never makes elements. Repeat with each.`,
     ...(has("input") ? [`- To let people add an item they name, bind an input to a state value, add it, then clear it: input "New item" bind=task on="add:todos:{text: task, done: false};set:task:''"`] : []),
-    ...(has("input") && has("list") ? [`- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={includes(lower(t.name), lower(query))}; count matches with len(search(trails, 'name', query))`] : []),
+    ...(has("input") && has("list") ? [`- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={contains(t.name, query)}; count matches with len(search(trails, 'name', query))`] : []),
   ];
   const examples = shown.map((n) => `${titles[n]}\n${indent(WORKED_EXAMPLES[n])}`);
   return [lines.join("\n"), ...examples].join("\n\n");
@@ -476,6 +476,7 @@ ${opts.layoutFirst ? LAYOUT_FIRST_FULL : `- Declare state first, at the top, uni
 - Text can mix words and expressions: "Total: \${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! and a ? b : c
 - Functions: ${EXPRESSION_FUNCTIONS.join(", ")}
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Words inside {…} are state names. Quote text: {done ? 'Packed' : 'To pack'}, tone={late ? 'bad' : 'good'}`);
   // Screen and list actions only where their elements are exposed.
   const ops = ACTION_OPS.filter((o) => (has("screen") || (o !== "go" && o !== "back")) && (has("each") || !LIST_OPS.has(o)));
@@ -507,7 +508,7 @@ ${comps.map((c) => componentBlock(c, examples && ctx.valid(componentExampleSpec(
     "- Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.",
     ...(has("card") ? ["- Use cards to group related content, not around every title, element or section, and never a card inside a card. Keep page headings outside cards."] : []),
     ...(has("stat") && has("chart") ? ["- Dashboards: a title with its filters just under it, a few meaningful KPIs (3 or 4 stats), one main chart, then supporting detail (a smaller chart or a table). The design is built in: write plain elements, not extra props for looks."] : []),
-    ...(has("card") && has("grid") ? ["- Put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls."] : []),
+    ...(has("card") && has("grid") ? ["- Put peer KPI and chart cards in grid min=170 gap=12. Cards keep their own height; add stretch=true when a row's panels should line up. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls."] : []),
     "- Keep screens focused: one task per screen, short labels, real-looking values.",
     ...(has("grid") || has("stat") ? [`- Screens may be narrow (a phone, a chat).${has("grid") ? " For side-by-side figures use grid min=140 rather than row." : ""}${has("stat") ? " Keep stat values short: compact() for large numbers." : ""}`] : []),
   ];
@@ -533,7 +534,7 @@ const COMPACT_TYPES: Record<PropDef["type"], string> = {
 
 /** One line for an element: its signature, where it may go, and what it's for. */
 function compactLine(c: ComponentDef): string {
-  const parts: string[] = [c.type];
+  const parts: string[] = [c.usage ?? c.type];
   // Optional text keeps its brackets: shown like required text, models wrote screen lines with a bare
   // word for their name (screen budget). The legend says the brackets are never written.
   if (c.text) parts.push(c.text.required ? `"text"` : `["text"]`);
@@ -565,7 +566,8 @@ ${opts.layoutFirst ? LAYOUT_FIRST_COMPACT : `- State first, unindented, every va
 - {…} reads state and loop variables: {count}, {price*qty}, {t.text}, {cart[0].price}, {todos.length}. Text mixes words and {…}: "Total: \${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! a ? b : c. Words inside {…} are names, so quote text: {done ? 'Yes' : 'No'}
 - Functions: ${EXPRESSION_FUNCTIONS.join(", ")}
-- On lists: count(l, 'done'), count(l, 'cat', 'Gas'), sum(l, 'price'), sum(l, 'price', 'qty') multiplies per item, avg/min/max(l, 'f'), group(l, 'f'[, 'n'[, 'avg']]) one record per value of f, named after your fields: group(spend, 'category', 'amount') gives {category, count, amount}, filter(l, 'f'[, value, list of values or {from, to}]), find(l, 'id', x), search(l, 'f', text), sort(l, 'f'[, 'desc']), take(l, n), slice(l, start, end) from 0 with the end left out, so one page is slice(l, (page - 1) * 5, page * 5), first(l)/last(l) (best: first(sort(l, 'f', 'desc')).name), pluck(l, 'f') one field of each, join(l, 'f'), includes(l, x). extend(l, 'q', {total: q.price * q.qty}) adds computed fields to every item (q only inside the braces), rank(l, 'f', 'desc') adds rank (1 best, ties share it). Compute totals; never type them
+- On lists: count(l, 'done'), count(l, 'cat', 'Gas'), sum(l, 'price'), sum(l, 'price', 'qty') multiplies per item, avg/min/max(l, 'f'), group(l, 'f'[, 'n'[, 'avg']]) one record per value of f, named after your fields: group(spend, 'category', 'amount') gives {category, count, amount}, filter(l, 'f'[, value, list of values or {from, to}]), find(l, 'id', x), search(l, 'f', text), sort(l, 'f'[, 'desc']), take(l, n), slice(l, start, end) from 0 with the end left out, so one page is slice(l, (page - 1) * 5, page * 5), first(l)/last(l) (best: first(sort(l, 'f', 'desc')).name), pluck(l, 'f') one field of each, join(l, 'f'), includes(l, x). extend(l, 'q', {total: q.price * q.qty}) adds computed fields to every item (q only inside the braces), rank(l, 'f', 'desc') adds rank (1 best, ties share it), map(l, 'q', expr) one value per item, range(n) or range(a, b) counts up to n or b, not including it. Compute totals; never type them
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Formatting: money(2400) = $2,400.00, number(37000) = 37,000, compact(12345678) = 12.3M, compact(n, 'USD') = $12.3M for big figures in stats, plural(n, 'item') = 1 item / 3 items`);
   const local = ["inc:key[:by]", "dec:key[:by] (never below 0)", "toggle:key", "set:key:value or set:key:{expr}", ...(has("each") ? ["add:list:value", "remove:t (current item) or remove:list:index", "clear:list"] : []), "notify:'text {expr}'", ...(has("screen") ? ["go:screen", "back"] : [])];
   add("actions", `ACTIONS on=…, several joined with ; and quoted when they have spaces: on="inc:n;notify:'Saved {n}'"
@@ -596,7 +598,7 @@ ${comps.map((c) => `- ${compactLine(c)}${showExample(c) ? `\n    example:\n${ind
     "- Use only these elements and props. No colors, sizes or fonts: choose roles with tone=, variant= and style=; for \"red\" or \"big\", use the closest role.",
     `- ${has("card") ? "Cards group related content, never a card inside a card; leave page titles outside cards. " : ""}One task per screen, short labels, realistic values.`,
     ...(has("stat") && has("chart") ? ["- Dashboards: title, filters under it, 3-4 KPIs, one main chart, then detail (smaller chart or table). Styling is built in."] : []),
-    ...(has("card") && has("grid") ? ["- grid min=170 gap=12 for peer KPI/chart cards (equal heights per row); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer."] : []),
+    ...(has("card") && has("grid") ? ["- grid min=170 gap=12 for peer KPI/chart cards (stretch=true for equal heights); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer."] : []),
     ...(has("grid") || has("stat") ? [`- Screens may be narrow.${has("grid") ? " Side-by-side figures: grid min=140, not row." : ""}${has("stat") ? " Short stat values: compact() for large numbers." : ""}`] : []),
     ...(has("screen") ? ["- For several screens, write the starting screen first."] : []),
     "- Label every control and title every chart (or put a text just above it): screen readers read them.",
@@ -685,6 +687,8 @@ export function describeGuide(registry: Registry, opts: GuideOptions = {}): Guid
 /** A component as a host with these features on sees it: props of features that are off left out. */
 function withProps(c: ComponentDef, behavior: boolean, pictures = false): ComponentDef {
   let props = propsFor(c.props, behavior);
+  // Props said once on another element aren't repeated here.
+  if (Object.values(props).some((d) => d.unlisted)) props = Object.fromEntries(Object.entries(props).filter(([, d]) => !d.unlisted));
   // Props (and children) a component keeps quiet are left out until a guide asks for them.
   const quiet = pictures ? [] : c.quiet ?? [];
   if (quiet.length) props = Object.fromEntries(Object.entries(props).filter(([n]) => !quiet.includes(n)));

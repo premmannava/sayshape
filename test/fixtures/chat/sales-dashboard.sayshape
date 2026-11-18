@@ -1,0 +1,26 @@
+state region="All"
+state months=[{month: "Jun", revenue: 182000, target: 170000}, {month: "Jul", revenue: 221000, target: 200000}, {month: "Aug", revenue: 205000, target: 220000}, {month: "Sep", revenue: 258000, target: 230000}, {month: "Oct", revenue: 280000, target: 260000}, {month: "Nov", revenue: 312000, target: 300000}]
+state reps=[{name: "Ana Ortiz", region: "West", deals: 18, revenue: 98400}, {name: "Ben Cole", region: "East", deals: 14, revenue: 76200}, {name: "Chen Wu", region: "West", deals: 12, revenue: 64900}, {name: "Dara Singh", region: "South", deals: 9, revenue: 51300}]
+text "Sales this quarter" style=title
+segmented bind=region options="All,West,East,South"
+grid min=140
+  stat label="Revenue" value="$850K" change="+18%" spark={[182, 221, 205, 258, 280, 312]}
+  stat label="Deals won" value="53" change="+6"
+  stat label="Win rate" value="31%" change="-2%"
+  stat label="Avg deal" value="$16K" change="+4%"
+card
+  text "Quarterly target" weight=semibold
+  row
+    meter value=850 max=1000 format=percent bands="70,90"
+    column gap=4
+      text "$850K of $1M"
+      text "Three weeks to go" tone=muted
+chart "Revenue against target" kind=line items=months x=month y=revenue,target labels="Revenue,Target" format=money
+list
+  each items={region == 'All' ? reps : filter(reps, 'region', region)} as=r
+    list-item "{r.name}" detail="{r.region} · {r.deals} deals" trailing="{money(r.revenue)}"
+table items=reps
+  table-column "Rep" field=name
+  table-column "Region" field=region
+  table-column "Deals" field=deals format=number
+  table-column "Revenue" field=revenue format=money

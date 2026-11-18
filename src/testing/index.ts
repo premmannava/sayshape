@@ -64,10 +64,14 @@ export interface RenderOptions {
   animate?: boolean;
   /** As if the person prefers reduced motion: nothing animates (even with animate: true), and rules wait for a first press or key. Default false. */
   reducedMotion?: boolean;
+  /** Draw as for a person who prefers less transparency: glass cards solid. Default false. */
+  reducedTransparency?: boolean;
   /** The engine's bareRootCard option: a card that is the only top-level element draws no frame. Default false. */
   bareRootCard?: boolean;
   /** The engine's look option: false ignores a spec's look line with a warning. Default true, as in the engine. */
   look?: boolean;
+  /** The engine's context option: "chat" draws as inside a chat app (the chat density, CHAT_PADDING). Default none. */
+  context?: "chat";
 }
 
 /** The test's clock: advance it to run rules' ticks and move scenes on, without waiting. */
@@ -116,6 +120,8 @@ export interface Rendered {
   canvas: FakeCanvas;
   /** Current state, as a plain object. */
   readonly state: Record<string, Value>;
+  /** State as a host may share it (SayShape.shareableState()): passwords hidden. */
+  readonly shareableState: Record<string, Value>;
   readonly diagnostics: Diagnostic[];
   /** Every `emit:` the screen has sent, oldest first. */
   readonly emitted: Emitted[];
@@ -163,8 +169,15 @@ export interface Rendered {
 
   /** Click the centre of an element through the real pointer path. Throws if it can't be pressed. */
   press(query: Query): void;
-  /** Click at a point, in CSS pixels from the canvas's top-left corner. */
-  click(x: number, y: number, o?: { shift?: boolean }): void;
+  /**
+   * Click at a point, in CSS pixels from the canvas's top-left corner. touch
+   * sends it as a finger's tap (pointerType "touch"), which never hovers.
+   */
+  click(x: number, y: number, o?: { shift?: boolean; touch?: boolean }): void;
+  /** Move the mouse to a point, in CSS pixels from the canvas's top-left corner, without pressing (hover, on-hover=). */
+  hover(x: number, y: number): void;
+  /** Move the mouse off the canvas (on-leave=, tips going away). */
+  leave(): void;
   /**
    * Drag across drawn text through the real pointer path, as a mouse would: from the start of the
    * first line whose text matches `from` to the end of the first line matching `to` (`from` again when
@@ -246,8 +259,10 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     ...(opts.presets ? { presets: true } : {}),
     ...(manual ? { clock: manual } : {}),
     reducedMotion: !!opts.reducedMotion,
+    ...(opts.reducedTransparency ? { reducedTransparency: true } : {}),
     ...(opts.bareRootCard ? { bareRootCard: true } : {}),
     ...(opts.look === false ? { look: false } : {}),
+    ...(opts.context ? { context: opts.context } : {}),
     loadImage: opts.loadImage,
     onWarning: (m) => warnings.push(m),
     viewport: opts.viewport ? () => opts.viewport! : undefined,
@@ -335,6 +350,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     sayshape,
     canvas,
     get state() { return sayshape.state.snapshot(); },
+    get shareableState() { return sayshape.shareableState(); },
     get diagnostics() { return sayshape.diagnostics; },
     get emitted() { return emitted; },
     get warnings() { return warnings; },
@@ -426,9 +442,20 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     },
 
     click(x, y, o = {}) {
+      const kind = o.touch ? { pointerType: "touch" } : {};
+      pointer("pointermove", x, y, kind);
+      pointer("pointerdown", x, y, { ...kind, ...(o.shift ? { shiftKey: true } : {}) });
+      pointer("pointerup", x, y, kind);
+      flush();
+    },
+
+    hover(x, y) {
       pointer("pointermove", x, y);
-      pointer("pointerdown", x, y, o.shift ? { shiftKey: true } : {});
-      pointer("pointerup", x, y);
+      flush();
+    },
+
+    leave() {
+      pointer("pointerleave", 0, 0);
       flush();
     },
 

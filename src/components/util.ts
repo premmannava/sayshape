@@ -100,25 +100,56 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
       x += widths[j]! + gap;
     });
     packButtons(placed, widths, box.x + pad, innerW, gap, ctx);
-    // Cards form visual panels: match their bottom edges instead of centering
-    // a shorter card. Explicit top/bottom alignment still takes precedence.
-    if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
-      for (const kb of placed) kb.h = tallest;
+    if (cardLine(placed, tallest, align, fit)) {
+      // Cards are placed (stretched, or kept at their own height and top-aligned) by cardLine.
     } else if (align !== "top" && !(align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "stat"))) {
       // (Skipped for a row of only KPIs: their labels and values stay on shared
       // lines when one has a sparkline or a wrapped change, so it's top-aligned.)
-      for (const kb of placed) {
-        const d = tallest - kb.h;
-        if (d > 0) ctx.shift(kb, 0, align === "center" ? d / 2 : d);
-      }
+      tallest = alignLine(placed, tallest, align, ctx);
     }
     y += tallest;
   });
   box.h = y - box.y + pad;
 }
 
+/**
+ * Move a line's children down to centre (or bottom-align) them, and return the line's height.
+ * Centred, a box with a band (Box.band: a field without its message) is centred by that band,
+ * so a message under a field doesn't push the button beside it down; the line grows to hold it.
+ */
+function alignLine(placed: Box[], tallest: number, align: (typeof ROW_ALIGN)[number], ctx: LayoutContext): number {
+  if (align !== "center") {
+    for (const kb of placed) if (tallest > kb.h) ctx.shift(kb, 0, tallest - kb.h);
+    return tallest;
+  }
+  const bandOf = (kb: Box) => Math.min(kb.h, kb.band ?? kb.h);
+  const widest = Math.max(0, ...placed.map(bandOf));
+  let bottom = tallest;
+  for (const kb of placed) {
+    const d = (widest - bandOf(kb)) / 2;
+    if (d > 0) ctx.shift(kb, 0, d);
+    bottom = Math.max(bottom, d + kb.h);
+  }
+  return bottom;
+}
+
 export const ROW_JUSTIFY = ["start", "end", "between"] as const;
-export interface RowFit { fit: boolean; justify?: (typeof ROW_JUSTIFY)[number] }
+/** stretch: cards in a line share its height. aligned: align= was written, so a line of cards follows it. */
+export interface RowFit { fit: boolean; justify?: (typeof ROW_JUSTIFY)[number]; stretch?: boolean; aligned?: boolean }
+
+/**
+ * A line of a row that holds only cards: with stretch, every card takes the
+ * line's height; otherwise each keeps its own, top-aligned unless align= was
+ * written. (Until stretch existed, cards always shared a height, which left
+ * a short card mostly empty beside a tall one.) Returns false for any other
+ * line, which the row aligns itself.
+ */
+function cardLine(placed: Box[], tallest: number, align: (typeof ROW_ALIGN)[number], fit?: RowFit): boolean {
+  if (placed.length < 2 || !placed.every((k) => k.node.type === "card")) return false;
+  if (fit?.stretch) for (const kb of placed) kb.h = tallest;
+  // align= written (center or bottom): the row shifts them as it does any other line.
+  return !!fit?.stretch || !fit?.aligned || align === "top";
+}
 
 /**
  * A row whose children keep their natural width (fit=true, or any justify).
@@ -170,13 +201,10 @@ function fitRow(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (
       tallest = Math.max(tallest, kb.h);
       x += w + gap + between;
     });
-    if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
-      for (const kb of placed) kb.h = tallest;
+    if (cardLine(placed, tallest, align, fit)) {
+      // Cards are placed by cardLine.
     } else if (align !== "top") {
-      for (const kb of placed) {
-        const d = tallest - kb.h;
-        if (d > 0) ctx.shift(kb, 0, align === "center" ? d / 2 : d);
-      }
+      tallest = alignLine(placed, tallest, align, ctx);
     }
     y += tallest;
   });
@@ -225,12 +253,14 @@ export function rowMinWidth(node: SayShapeNode, ctx: LayoutContext, pad: number,
 export const TEXT_STYLES = ["display", "title", "lead", "body", "caption"] as const;
 export type TextStyle = (typeof TEXT_STYLES)[number];
 export const WEIGHTS = ["regular", "semibold", "bold"] as const;
+/** text's weights: WEIGHTS and light, for large figures (a temperature, a price). */
+export const TEXT_WEIGHTS = ["light", ...WEIGHTS] as const;
 
-export function textMetrics(theme: Theme, style: TextStyle, weight?: (typeof WEIGHTS)[number]) {
+export function textMetrics(theme: Theme, style: TextStyle, weight?: (typeof TEXT_WEIGHTS)[number]) {
   const size = theme.text[style];
   // Headings are semibold by default: firm without shouting. They sit tighter than reading text.
   const w = weight ?? (style === "display" || style === "title" ? "semibold" : "regular");
-  const numeric = { regular: 400, semibold: 600, bold: 700 }[w];
+  const numeric = { light: 300, regular: 400, semibold: 600, bold: 700 }[w];
   const leading = style === "display" ? 1.2 : style === "title" ? 1.3 : style === "lead" ? 1.4 : 1.45;
   // Headings take the theme's display face when a look gives them one.
   const family = style === "display" || style === "title" ? displayFamily(theme) : theme.font.family;

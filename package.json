@@ -47,6 +47,10 @@
       "types": "./dist/types/components/slides/index.d.ts",
       "import": "./dist/slides.js"
     },
+    "./device": {
+      "types": "./dist/types/components/device/index.d.ts",
+      "import": "./dist/device.js"
+    },
     "./testing": {
       "types": "./dist/types/testing/index.d.ts",
       "import": "./dist/testing.js"
@@ -110,6 +114,8 @@
     "site:check": "node scripts/check-site.mjs",
     "scene-eval": "vite-node scripts/scene-eval.ts --",
     "bench:scene-browser": "node bench/browser/run.mjs",
+    "bench:scene-upgrades": "node bench/browser/upgrades.mjs",
+    "scene:regression": "vite-node scripts/scene-regression.ts",
     "bench:behavior-browser": "node bench/browser/behavior.mjs",
     "verify:pack": "node scripts/verify-pack.mjs",
     "token-bench": "vite-node scripts/token-bench.ts --"

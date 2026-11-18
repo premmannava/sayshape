@@ -30,14 +30,25 @@ import type { Scope } from "../../expr";
 import type { Box, Rect } from "../../types";
 import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
-import { paintScene, type Frame } from "./draw";
+import { MIN_SCENE_SCALE, shownWidth } from "./size";
+export { shownWidth, MIN_SCENE_SCALE } from "./size";
+import { MAX_SCENE_STEPS, numOf, paintScene, strOf, type Frame } from "./draw";
+import { REFLECT_PROPS, type ReflectBuffer } from "./reflect";
+import { MAX_TRAIL_DRAWS } from "./trail";
+import { lightPoint } from "./light";
+import { emitDef } from "./emit";
+import { apply } from "./interact";
 import { locateOf } from "../../each";
 import { dragShape, keyShape, rangeOf } from "./drag";
-import type { PartSemantics } from "../../a11y/semantics";
-import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
+import type { PartSemantics, SemanticsContext } from "../../a11y/semantics";
+import { HOVER, HOVER_SHAPE, hoverOnly, sceneCursor, sceneHover } from "./hover";
+import { iconProblems } from "../util";
+import { intersect, liveOf, outerGeoms, outline, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
 export { MAX_SCENE_SHAPES, MAX_SCENE_STEPS, MAX_USE_DEPTH, THEME_COLORS } from "./draw";
+export { MAX_SCENE_PARTICLES } from "./emit";
+export { MAX_TRAIL_DRAWS, MAX_TRAIL_COUNT, MAX_TRAIL_SECONDS } from "./trail";
 export { reviewScene, reviewScenes, MAX_DRAWING_PROBLEMS, PHONE_WIDTH, type MeasureText } from "./review";
 export { liveOf as sceneRegions, type SceneRegion } from "./interact";
 
@@ -45,15 +56,34 @@ export { liveOf as sceneRegions, type SceneRegion } from "./interact";
 const MAX_SCENE_HEIGHT = 2000;
 
 /** What a scene and its groups and drawings hold. */
-const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use", "define", "gradient"] as const;
+const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "glyph", "group", "use", "define", "gradient", "let", "emit"] as const;
 const IN_SCENE = ["scene", "group", "define"] as const;
 
 const num = (description: string, def?: number): PropDef => (def === undefined ? { type: "number", description } : { type: "number", description, default: def });
 const color = (description: string): PropDef => ({ type: "string", description });
 
+/** z= (depth.ts): said in full once, on group; shapes and use take it unlisted. */
+const Z: PropDef = num("Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.", 0);
+const Z_SHAPE: PropDef = { ...num("Like group's z."), unlisted: true };
+/** trail= (trail.ts): said once, on group, with trail-count in its words; unlisted everywhere else. */
+const TRAIL: PropDef = num("Seconds of fading copies left behind as it moves: trail=0.4; trail-count= how many (12). Shapes too.");
+const TRAIL_COUNT: PropDef = { ...num("How many trail copies, 1 to 24.", 12), unlisted: true };
+const TRAIL_SHAPE: Record<string, PropDef> = { trail: { ...num("Like group's trail."), unlisted: true }, "trail-count": TRAIL_COUNT };
+
+/** reflect= (reflect.ts): said once, on group; use takes it unlisted. Off with sceneComponentsWith({ reflect: false }). */
+const REFLECT: Record<string, PropDef> = {
+  reflect: num("Mirrors it below this y, like water: reflect=220; ripple= waves it, fade= dims it (0 to 1)."),
+  ripple: { ...num("Moving waves in the reflection, 0 to 1.", 0), unlisted: true },
+  fade: { ...num("How fast the reflection fades, 0 to 1.", 0.5), unlisted: true },
+};
+
+/** blur= (blur.ts): said once, on group; shapes and use take it unlisted. */
+const BLUR: PropDef = num("Softens it, in px: blur=8 for fog or smoke. Shapes too.");
+const BLUR_SHAPE: PropDef = { ...BLUR, unlisted: true };
+
 /** Props every shape takes. */
 const PAINT: Record<string, PropDef> = {
-  fill: color('Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.'),
+  fill: color('Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.'),
   stroke: color("Outline color, like fill (stroke=line for a quiet border). No outline unless set."),
   width: num("Outline width in scene pixels.", 1),
   opacity: num("0 (invisible) to 1 (solid).", 1),
@@ -61,10 +91,20 @@ const PAINT: Record<string, PropDef> = {
   dash: { type: "string", description: 'A dashed outline: dash and gap lengths, like dash="6 4".' },
   shadow: { type: "enum", values: ["sm", "md", "lg"], description: "A soft shadow under it, so it sits above what's behind." },
   glow: { type: "boolean", description: "A soft light around it in its own color: a sun, a lamp, a live dot.", default: false },
+  z: Z_SHAPE,
+  ...TRAIL_SHAPE,
+  blur: BLUR_SHAPE,
+};
+/** Placing a line right after a label's words, whatever font draws them. Said in full once, on group. */
+const AFTER_GROUP: Record<string, PropDef> = {
+  after: { type: "name", description: "Starts at the end of the words of the label with this id, drawn before it: x= is then the gap from there." },
+};
+const AFTER: Record<string, PropDef> = {
+  after: { type: "name", description: "Starts after a label's words, like group's after=." },
 };
 /** For filled shapes only. */
 const SHINE: Record<string, PropDef> = {
-  shine: { type: "boolean", description: "Lit from the upper left, so a circle looks like a ball.", default: false },
+  shine: { type: "boolean", description: "Lit like a ball, from upper left or scene light=.", default: false },
 };
 
 /** Props that make a group or use pressable, described in full once. */
@@ -87,22 +127,63 @@ const PRESS_SHAPE: Record<string, PropDef> = {
   selected: { type: "condition", description: "Selection outline while true." },
   tip: { type: "string", description: "Shown while hovered or focused." },
   name: { type: "string", description: "Screen-reader name." },
+  ...HOVER_SHAPE,
 };
+
+/** Line style (line-style.ts), described once, on path; line and polygon take it unlisted. */
+const CAP: PropDef = { type: "enum", values: ["butt", "round", "square"], description: "Line ends.", default: "round" };
+const JOIN: PropDef = { type: "enum", values: ["miter", "round", "bevel"], description: "Corners.", default: "round" };
+const ROUND: PropDef = num("Rounds straight corners by this many pixels. cap, join and round work on line and polygon too.");
+const LINE_STYLE: Record<string, PropDef> = { cap: CAP, join: JOIN };
+const unlisted = (props: Record<string, PropDef>): Record<string, PropDef> =>
+  Object.fromEntries(Object.entries(props).map(([k, d]) => [k, { ...d, unlisted: true }]));
 
 const leaf = { layout: (box: Box) => { box.h = 0; }, semantics: () => false as const, parents: IN_SCENE, noBox: true } satisfies Partial<ComponentDef>;
 
-/** The scene's time in seconds for this frame, asking for the next frame while it moves. */
-export function sceneTime(box: Box, ctx: PaintContext, duration: number, loop: boolean): number {
+/** The fastest a scene's clock runs, either way (rate=). */
+export const MAX_SCENE_RATE = 100;
+
+/**
+ * The scene's time in seconds for this frame, asking for the next frame while it moves.
+ *
+ * The clock integrates: each frame adds the real seconds since the last one times
+ * rate, so changing rate (a speed control bound to state) changes only how fast
+ * things move, never where they are. rate=0 pauses; a negative rate runs it backwards.
+ */
+export function sceneTime(box: Box, ctx: PaintContext, duration: number, loop: boolean, rate = 1): number {
   if (duration <= 0) return 0;
   // Without motion (the animate option, or reduced motion), a still: the end of the animation.
   if (!ctx.motion) return duration;
+  const r = Number.isFinite(rate) ? Math.max(-MAX_SCENE_RATE, Math.min(MAX_SCENE_RATE, rate)) : 1;
   const view = ctx.view(box.node);
-  if (view.start === undefined) view.start = ctx.now;
-  const elapsed = Math.max(0, (ctx.now - view.start) / 1000);
-  if (loop) { ctx.requestFrame(); return elapsed % duration; }
-  if (elapsed < duration) ctx.requestFrame();
-  return Math.min(elapsed, duration);
+  // Time runs from an anchor: the moment the rate last changed and the scene time then.
+  // A new rate re-anchors at the current moment, so it changes speed, never position.
+  if (typeof view.since !== "number") { view.since = ctx.now; view.base = 0; view.rate = r; }
+  const num = (k: string) => Number(view[k] ?? 0);
+  if (num("rate") !== r) {
+    let base = num("base") + Math.max(0, (ctx.now - num("since")) / 1000) * num("rate");
+    if (!loop) base = Math.max(0, Math.min(duration, base));
+    view.base = base; view.since = ctx.now; view.rate = r;
+  }
+  const played = num("base") + Math.max(0, (ctx.now - num("since")) / 1000) * r;
+  // Seconds played so far, unwrapped (trails use it to know what was on screen before a restart).
+  view.played = played;
+  let t = loop ? played % duration : Math.max(0, Math.min(duration, played));
+  if (t < 0) t += duration;
+  // A non-looping scene's trails (trail.ts) keep fading for their length after the end.
+  const tail = r > 0 && !loop ? Number(view.trailTail ?? 0) : 0;
+  if (r !== 0 && (loop || (r > 0 ? t < duration || played < duration + tail : t > 0))) ctx.requestFrame();
+  return t;
 }
+
+/**
+ * The scene features a host can switch off, each on by default: particles
+ * (the emit element) and reflections (reflect=, ripple= and fade= on group and
+ * use). Like scenes themselves, a feature is off by leaving it out of what's
+ * registered: sceneComponentsWith({ particles: false }).
+ */
+export interface SceneFeatures { particles?: boolean; reflect?: boolean }
+const ALL_FEATURES: Required<SceneFeatures> = { particles: true, reflect: true };
 
 // ---------- the elements ----------
 
@@ -111,7 +192,7 @@ const scene: ComponentDef = {
   category: "content",
   description:
     "EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). " +
-    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; " +
+    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon, label and icon, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; " +
     "give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.",
   text: { description: "What the picture shows, in a few words, for screen readers.", required: true },
   props: {
@@ -119,10 +200,16 @@ const scene: ComponentDef = {
     h: num("Height of the drawing area, in scene pixels.", 340),
     duration: num("Seconds the animation runs (t goes from 0 to this). 0 is a still picture.", 0),
     loop: { type: "boolean", description: "Start again when it ends.", default: true },
+    light: { type: "string", description: "Where shine= is lit from: light=300,170." },
+    shake: num("Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}."),
+    rate: num("How fast t runs, smoothly: 2 is double, 0 pauses (rate={speed}).", 1),
     bg: color("Background color behind everything."),
+    maxw: num("The widest it's shown, in screen pixels, centered; it still shrinks on a narrower screen. A phone drawn at w=393: maxw=295."),
+    scale: num("Show it at this share of its own w (0.1 to 1), centered, like maxw={w * scale}."),
   },
   children: SHAPES,
-  provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS },
+  // icon inside a scene is drawn at x and y like the other shapes: the scene's glyph.
+  provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS, renames: { icon: "glyph" }, ownProps: ["shake", "light"] },
   picks: [
     { for: "a picture or animation no other element can show", write: 'scene "A rabbit hopping across a meadow" w=600 h=340 duration=3' },
     { for: "a diagram people press parts of: a floor plan, a network, a production line", write: 'scene "Floor 3: four meeting rooms" w=600 h=360' },
@@ -130,7 +217,7 @@ const scene: ComponentDef = {
   example: `scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
   # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
   # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
-  # range(n) for each, and pick(list, i). Reuse a drawing with define and use.
+  # range(n) for each, pick(list, i), floor, abs, % and a ? b : c. Reuse a drawing with define and use.
   # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
   # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
   # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
@@ -142,36 +229,23 @@ const scene: ComponentDef = {
   each items={range(3)} as=i
     ellipse x={100 + i*200} y=300 rx=180 ry={70 + 20*i} fill={pick(['#2D6A4F', '#40916C', '#52B788'], i)}
   label "Good morning" x=300 y=60 size=28 weight=bold fill="#FFFFFF" align=center opacity={ease(t, 2, 3)}`,
+  check(props) {
+    // A literal scale= outside its range is drawn clamped; say so, as device does.
+    const n = props.scale === undefined ? NaN : Number(props.scale);
+    return Number.isFinite(n) && (n < MIN_SCENE_SCALE || n > 1) ? [`scale= goes from ${MIN_SCENE_SCALE} to 1, a share of the scene's own w, so scale=${props.scale} is drawn at ${Math.min(1, Math.max(MIN_SCENE_SCALE, n))}. Or use maxw= for a width in pixels`] : [];
+  },
   minWidth: () => 120,
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const w = Math.max(1, p.num("w", 600)), h = Math.max(1, p.num("h", 340));
+    // maxw= or scale= show it smaller than its space, centered in it, at its own proportions.
+    const shown = shownWidth(box.w, w, p.has("maxw") ? p.num("maxw", 0) : undefined, p.has("scale") ? p.num("scale", 1) : undefined);
+    box.x += (box.w - shown) / 2;
+    box.w = shown;
     box.h = Math.min(MAX_SCENE_HEIGHT, (box.w * h) / w);
   },
   paint(box, ctx) {
-    const p = ctx.props(box.node);
-    const w = Math.max(1, p.num("w", 600)), h = Math.max(1, p.num("h", 340));
-    const t = sceneTime(box, ctx, p.num("duration", 0), p.bool("loop", true));
-    const base: Scope = (name) => (name === "t" ? t : name === "PI" ? Math.PI : ctx.scope(name));
-    const g = ctx.g;
-    const sx = box.w / w, sy = box.h / h;
-    const f: Frame = {
-      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
-      m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
-    };
-    if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
-    g.save();
-    g.beginPath();
-    ctx.roundRect(box.x, box.y, box.w, box.h, ctx.theme.radius.md);
-    g.clip();
-    g.save();
-    g.translate(box.x, box.y);
-    g.scale(sx, sy);
-    paintScene(f, box.node.children, base, w, h, p.raw("bg") === undefined ? undefined : p.str("bg"));
-    g.restore();
-    const shown = pressable(box, ctx, f.press!.regions);
-    paintFeedback(box, ctx, shown);
-    g.restore();
+    paintSceneBox(box, ctx, ALL_FEATURES);
   },
   hitTest(region, x, y, detail) {
     const scene = liveOf(region.node);
@@ -188,12 +262,72 @@ const scene: ComponentDef = {
   key(ctx, key) {
     return keyShape(ctx, liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail)), key);
   },
-  semantics: (box, ctx) => {
+  // The mouse moving over on-hover= and on-leave= shapes (never touch).
+  hover: sceneHover,
+  cursor: sceneCursor,
+  semantics: (box, ctx) => sceneSemantics(box, ctx),
+};
+
+/** Draw one scene: its clock, its lines, then what's pressable in it. */
+function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeatures>): void {
+  {
+    const p = ctx.props(box.node);
+    const w = Math.max(1, p.num("w", 600)), h = Math.max(1, p.num("h", 340));
+    const duration = p.num("duration", 0), loop = p.bool("loop", true);
+    const t = sceneTime(box, ctx, duration, loop, p.num("rate", 1));
+    const g = ctx.g;
+    const sx = box.w / w, sy = box.h / h;
+    const f: Frame = {
+      g, font: ctx.font, colors: ctx.theme.colors, theme: ctx.theme, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(), time: t, features,
+      played: ctx.motion ? Number(ctx.view(box.node).played ?? t) : t,
+      m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
+    };
+    // t is read from the frame, not captured, so a drawing can be redrawn at an earlier moment (trails).
+    const base: Scope = (name) => (name === "t" ? f.time : name === "PI" ? Math.PI : ctx.scope(name));
+    f.motion = ctx.motion;
+    f.clock = { duration: p.num("duration", 0), loop: p.bool("loop", true) };
+    f.sceneId = box.node.id;
+    if (box.node.props.shake !== undefined) f.shake = numOf(box.node, "shake", base);
+    const light = lightPoint(box.node.props.light === undefined ? undefined : strOf(box.node, "light", base));
+    if (light) f.light = apply(f.m, light[0], light[1]);
+    if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
+    f.view = { m: f.m, w, h, period: loop && duration > 0 ? duration : 0 };
+    const offscreen = offscreenMaker();
+    if (offscreen) f.offscreen = offscreen;
+    // Trails only while it moves (never a still, reduced motion or the drawing check); last frame's demand thins them evenly.
+    const view = ctx.motion && duration > 0 ? ctx.view(box.node) : undefined;
+    if (view) f.trails = { left: MAX_TRAIL_DRAWS, steps: MAX_SCENE_STEPS, demand: 0, last: Number(view.trailDemand ?? 0), inCopy: false, duration, loop, tail: 0 };
+    g.save();
+    g.beginPath();
+    ctx.roundRect(box.x, box.y, box.w, box.h, ctx.theme.radius.md);
+    g.clip();
+    g.save();
+    g.translate(box.x, box.y);
+    g.scale(sx, sy);
+    paintScene(f, box.node.children, base, w, h, p.raw("bg") === undefined ? undefined : p.str("bg"));
+    if (view && f.trails) { view.trailDemand = f.trails.demand; view.trailTail = f.trails.tail; }
+    g.restore();
+    const shown = pressable(box, ctx, f.press!.regions);
+    paintFeedback(box, ctx, shown);
+    g.restore();
+  }
+}
+
+/** Offscreen canvases for reflect=: OffscreenCanvas where there is one, else a detached canvas element; none in Node. */
+function offscreenMaker(): ((w: number, h: number) => ReflectBuffer) | undefined {
+  if (typeof OffscreenCanvas === "function") return (w, h) => new OffscreenCanvas(w, h);
+  if (typeof document === "undefined") return undefined;
+  return (w, h) => Object.assign(document.createElement("canvas"), { width: w, height: h });
+}
+
+function sceneSemantics(box: Box, ctx: SemanticsContext) {
+  {
     const name = ctx.props(box.node).text() || "Picture";
     const scene = liveOf(box.node);
     const parts = ctx.regions.flatMap((h) => {
       const r = typeof h.detail === "string" ? scene?.regions.get(h.detail) : undefined;
-      if (!r) return [];
+      // A shape only hovered isn't something to press.
+      if (!r || hoverOnly(r)) return [];
       const label = regionName(r);
       if (r.drag) return [dragSemantics(r, label, h.detail)];
       return [{
@@ -203,9 +337,9 @@ const scene: ComponentDef = {
       }];
     });
     // A picture with things to press in it is a figure, so its parts can be reached; a plain one stays an image.
-    return parts.length ? { role: "figure", name, parts } : { role: "img", name };
-  },
-};
+    return parts.length ? { role: "figure" as const, name, parts } : { role: "img" as const, name };
+  }
+}
 
 // ---------- pressable shapes ----------
 
@@ -226,8 +360,8 @@ function pressable(box: Box, ctx: PaintContext, regions: readonly SceneRegion[])
     if (!at) continue;
     byKey.set(r.key, r);
     shown.push({ r, at });
-    // Only draggable shapes drag; pressable ones press as before.
-    ctx.addHit({ node: box.node, children: [], ...at }, { detail: r.key, drags: !!r.drag, ...(r.drag?.y ? { claimsSwipe: true } : {}) });
+    // Only draggable shapes drag; pressable ones press as before. One only hovered is pointed at, never a Tab stop.
+    ctx.addHit({ node: box.node, children: [], ...at }, { detail: r.key, drags: !!r.drag, ...(hoverOnly(r) ? { focusable: false } : {}), ...(r.drag?.y ? { claimsSwipe: true } : {}) });
   }
   setLive(box.node, { box: area, regions: byKey });
   return shown;
@@ -239,27 +373,41 @@ function paintFeedback(box: Box, ctx: PaintContext, shown: ReadonlyArray<{ r: Sc
   const g = ctx.g, c = ctx.theme.colors;
   let tipped: { r: SceneRegion; at: Rect } | null = null;
   for (const s of shown) {
-    const hovered = ctx.isHovered(box.node, s.r.key), focused = ctx.isFocused(box.node, s.r.key);
+    const pointed = ctx.isHovered(box.node, s.r.key), focused = ctx.isFocused(box.node, s.r.key);
+    // A shape only hovered (on-hover=, no on=) shows its tip but no outline: it isn't pressable.
+    const hovered = pointed && !hoverOnly(s.r);
+    if ((focused || pointed) && s.r.tip && (!tipped || focused)) tipped = s;
     if (!s.r.selected && !hovered && !focused) continue;
-    if ((focused || hovered) && s.r.tip && (!tipped || focused)) tipped = s;
     const strong = !!s.r.selected || focused;
     g.save();
     g.globalAlpha = strong ? 1 : 0.7;
-    for (const { pts, open } of outerGeoms(s.r).flatMap(strokes)) {
-      if (pts.length < 2) continue;
-      g.beginPath();
-      g.moveTo(pts[0]![0], pts[0]![1]);
-      for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
-      if (!open) g.closePath();
-      g.lineJoin = "round";
-      g.lineCap = "round";
-      // A light edge under the accent keeps the outline visible on any color the model chose.
-      g.strokeStyle = c.surface;
-      g.lineWidth = strong ? 6 : 5;
-      g.stroke();
-      g.strokeStyle = c.accent;
-      g.lineWidth = strong ? 3 : 2;
-      g.stroke();
+    for (const geom of outerGeoms(s.r)) {
+      g.save();
+      // An outline around a shape in a clip=true group is cut where the shape is.
+      for (const c of geom.clips ?? []) {
+        const edge = outline({ kind: "rect", ...c });
+        g.beginPath();
+        edge.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.closePath();
+        g.clip();
+      }
+      for (const { pts, open } of strokes(geom)) {
+        if (pts.length < 2) continue;
+        g.beginPath();
+        g.moveTo(pts[0]![0], pts[0]![1]);
+        for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
+        if (!open) g.closePath();
+        g.lineJoin = "round";
+        g.lineCap = "round";
+        // A light edge under the accent keeps the outline visible on any color the model chose.
+        g.strokeStyle = c.surface;
+        g.lineWidth = strong ? 6 : 5;
+        g.stroke();
+        g.strokeStyle = c.accent;
+        g.lineWidth = strong ? 3 : 2;
+        g.stroke();
+      }
+      g.restore();
     }
     g.restore();
   }
@@ -300,7 +448,7 @@ const rect: ComponentDef = {
   type: "rect",
   category: "content",
   description: "A rectangle in a scene, from its top-left corner.",
-  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}`,
 };
 
@@ -309,7 +457,7 @@ const circle: ComponentDef = {
   type: "circle",
   category: "content",
   description: "A circle in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"`,
 };
 
@@ -318,7 +466,7 @@ const ellipse: ComponentDef = {
   type: "ellipse",
   category: "content",
   description: "An oval in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"`,
 };
 
@@ -327,7 +475,7 @@ const line: ComponentDef = {
   type: "line",
   category: "content",
   description: "A straight line in a scene. Give it a stroke and width.",
-  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...PRESS_SHAPE },
+  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...unlisted(LINE_STYLE), ...PRESS_SHAPE, ...AFTER },
   example: `line x1=20 y1=200 x2=580 y2=200 stroke="#FFFFFF" width=4 dash="16 12"`,
 };
 
@@ -336,7 +484,7 @@ const path: ComponentDef = {
   type: "path",
   category: "content",
   description: "Any outline, in SVG path commands (M move, L line, H, V, C and S curves, Q and T curves, A arc, Z close). For curved shapes: ears, hills, a car body, a wave.",
-  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
+  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...LINE_STYLE, round: ROUND, ...SHINE, ...PRESS_SHAPE, ...AFTER },
   example: `path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"`,
 };
 
@@ -345,7 +493,7 @@ const polygon: ComponentDef = {
   type: "polygon",
   category: "content",
   description: "A closed shape through points, for triangles, stars, mountains and roofs.",
-  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
+  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...unlisted({ ...LINE_STYLE, round: ROUND }), ...SHINE, ...PRESS_SHAPE, ...AFTER },
   example: `polygon points="300,40 380,180 220,180" fill="#E9C46A"`,
 };
 
@@ -359,27 +507,68 @@ const label: ComponentDef = {
     x: num("Where it's anchored, across."),
     y: num("Its middle, down."),
     size: num("Text size in scene pixels.", 16),
-    weight: { type: "enum", values: ["regular", "bold"], description: "regular or bold.", default: "regular" },
+    weight: { type: "enum", values: ["light", "regular", "bold", "heavy"], description: "light (large calm figures: 72°, a clock), regular, bold or heavy.", default: "regular" },
+    style: { type: "enum", values: ["normal", "italic"], description: "italic slants it.", default: "normal" },
     align: { type: "enum", values: ["left", "center", "right"], description: "Which end of the words sits at x.", default: "left" },
+    id: { type: "name", description: "Its name, for after= on a later shape." },
     ...PAINT,
     ...PRESS_SHAPE,
     ...DRAG_SHAPE,
+    ...AFTER,
   },
   example: `label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"`,
+};
+
+const glyph: ComponentDef = {
+  ...leaf,
+  type: "glyph",
+  category: "content",
+  description: "An icon in a scene, written icon inside one (glyph works too): the app's own icons, at any size and color, drawn from its left edge and centered on y like a label. Give it on= to make it a button: an app on a phone, a control.",
+  props: {
+    name: { type: "string", required: true, description: "Which icon: the same names as icon's name=, like sun, heart or arrow-right. It may hold a {formula}." },
+    x: num("Left edge."),
+    y: num("Its middle, down."),
+    size: num("Width and height in scene pixels.", 24),
+    fill: { type: "string", default: "ink", description: 'Its color, like a shape\'s fill: a theme color (accent, ink, onAccent…) or "#hex".' },
+    opacity: PAINT.opacity!,
+    rotate: PAINT.rotate!,
+    shadow: PAINT.shadow!,
+    glow: PAINT.glow!,
+    label: { type: "string", description: "What screen readers call it when it's pressable. Default: its tip, else the icon's name." },
+    on: PRESS_SHAPE.on!, selected: PRESS_SHAPE.selected!, tip: PRESS_SHAPE.tip!,
+    ...AFTER,
+  },
+  check: (props) => iconProblems(props.name, "name"),
+  example: `icon name=sun x=40 y=60 size=48 fill=warn glow=true
+label "Phoenix" id=city x=40 y=130 size=24 fill=ink
+icon name=arrow-right after=city x=8 y=130 size=24 fill=accent`,
 };
 
 const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), ...PRESS, ...DRAG },
+  props: {
+    x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1),
+    clip: { type: "boolean", description: "Shapes inside are cut to the group's w×h box, rounded by rx: glows inside a phone screen, a map in a card.", default: false },
+    w: num("Width of the clip=true box, from the group's x."), h: num("Height of the clip=true box, from the group's y."), rx: num("Corner rounding of the clip=true box."),
+    shake: num("Like scene's."), z: Z, trail: TRAIL, "trail-count": TRAIL_COUNT, blur: BLUR, ...REFLECT, ...PRESS, ...HOVER, ...DRAG, ...AFTER_GROUP,
+  },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
   example: `group x={600*((t/3) % 1)} y=200
   rect x=-40 y=-20 w=80 h=24 rx=6 fill="#E63946"
   circle x=-22 y=6 r=9 fill="#222222"
-  circle x=22 y=6 r=9 fill="#222222"`,
+  circle x=22 y=6 r=9 fill="#222222"
+group x=20 y=20 w=200 h=120 rx=24 clip=true
+  circle x=180 y=10 r=90 fill="accent 40%" glow=true`,
+  check: (props) => {
+    const clipped = props.clip !== undefined && props.clip !== "false";
+    if (clipped && (props.w === undefined || props.h === undefined)) return ["clip=true needs w= and h=, the size of the box its shapes are cut to"];
+    if (!clipped && (props.w !== undefined || props.h !== undefined)) return ["w= and h= only size a group's clip=true box; add clip=true, or leave them out"];
+    return [];
+  },
   layout: (box) => { box.h = 0; },
   semantics: () => false,
 };
@@ -410,8 +599,14 @@ const use: ComponentDef = {
   props: {
     x: num("Across."), y: num("Down."), rotate: num("Degrees."), scale: num("Size.", 1), opacity: num("0 to 1.", 1),
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
+    z: Z_SHAPE,
+    blur: BLUR_SHAPE,
+    ...unlisted(REFLECT),
+    ...TRAIL_SHAPE,
     ...PRESS,
+    ...HOVER_SHAPE,
     ...DRAG_SHAPE,
+    ...AFTER,
   },
   example: `use "cactus" x=120 y=300 scale=1.2 args={{h: 70}}`,
 };
@@ -424,7 +619,7 @@ const gradient: ComponentDef = {
   props: {
     id: { type: "name", description: "Its name, for url(id).", required: true },
     from: color("The first color: a theme color or \"#hex\", like fill."),
-    to: color("The last color."),
+    to: color('The last color ("#FFF3B0 0%" fades out).'),
     kind: { type: "enum", values: ["linear", "radial"], description: "linear (a straight blend) or radial (from the middle out).", default: "linear" },
     angle: num("Direction of a linear blend in degrees: 90 is top to bottom, 0 left to right.", 90),
   },
@@ -432,11 +627,57 @@ const gradient: ComponentDef = {
 };
 
 /**
+ * let a={…}: a named value for the lines below it in its block (lets.ts). The
+ * parser turns the line into name= and value=, which the guide leaves out: usage says how it's written.
+ */
+const letLine: ComponentDef = {
+  ...leaf,
+  type: "let",
+  category: "content",
+  usage: "let a={…}",
+  description: "A named value, worked out each frame, for the lines below it in its block: x={cos(a)}.",
+  props: {
+    name: { type: "name", description: "The value's name.", required: true, unlisted: true },
+    value: { type: "expression", description: "Its formula.", required: true, unlisted: true },
+  },
+  example: `let a={t*1.5}`,
+};
+
+/**
  * The scene elements. Register them to turn scenes on:
  *   new SayShape(canvas, { components: [...coreComponents, ...sceneComponents] })
  * Leave them out and scenes are off: "scene" is then an unknown element.
  */
-export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient];
+export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, glyph, group, define, use, gradient, letLine, emitDef];
+
+/** What each feature adds: elements, and props on other elements. Off, they're left out. */
+const FEATURE_PARTS: Record<keyof SceneFeatures, { elements: readonly string[]; props: readonly string[] }> = {
+  particles: { elements: ["emit"], props: [] },
+  reflect: { elements: [], props: REFLECT_PROPS },
+};
+
+/**
+ * The scene elements with some features switched off (all on is sceneComponents).
+ * An off feature's elements are unknown (their lines are skipped) and its props
+ * are unknown props (ignored, with a warning), so the guide never mentions them.
+ */
+export function sceneComponentsWith(features: SceneFeatures): ComponentDef[] {
+  const on: Required<SceneFeatures> = { ...ALL_FEATURES, ...features };
+  const offElements = new Set<string>(), offProps = new Set<string>();
+  for (const key of Object.keys(FEATURE_PARTS) as Array<keyof SceneFeatures>) {
+    if (on[key]) continue;
+    FEATURE_PARTS[key].elements.forEach((e) => offElements.add(e));
+    FEATURE_PARTS[key].props.forEach((p) => offProps.add(p));
+  }
+  if (!offElements.size && !offProps.size) return sceneComponents;
+  return sceneComponents.filter((c) => !offElements.has(c.type)).map((c) => {
+    let def: ComponentDef = c;
+    if (Object.keys(c.props).some((p) => offProps.has(p))) def = { ...def, props: Object.fromEntries(Object.entries(c.props).filter(([p]) => !offProps.has(p))) };
+    if (Array.isArray(c.children) && c.children.some((k: string) => offElements.has(k))) def = { ...def, children: c.children.filter((k: string) => !offElements.has(k)) };
+    if (c.type === "scene") def = { ...def, paint: (box, ctx) => paintSceneBox(box, ctx, on) };
+    return def;
+  });
+}
 
 /**
  * A draggable shape to a screen reader: moving one way, a slider with its

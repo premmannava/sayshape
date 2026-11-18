@@ -45,6 +45,7 @@ import { elementGuide, elementIndex, guideSections, languageGuide, motionGuide, 
 import { lookGuide } from "../../src/look";
 import { assembleGuide, availableCapabilities, FULL_GUIDE_TOPIC, languageMap, problemsText } from "../../src/capabilities";
 import type { GuideOptions } from "../../src/prompt";
+import { reviewLayout } from "../../src/review";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
@@ -185,7 +186,7 @@ export function imageCsp(hosts: readonly string[]): { resourceDomains: string[] 
 
 /** What the chat notes say about emit: where the view sends it to the model as it happens (MCP Apps clients). */
 const CHAT_EMIT =
-  'When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.';
+  'When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value (a password field reads "[hidden]"; emit:login:{pw} would send it, so avoid that); reply to it, or call show_interface again with an updated spec.';
 
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
 const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
@@ -262,6 +263,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false, 
       ? `- ${pressesSaved ? PRESSES_SAVED : NO_EMIT}`
       : "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue'); within a budget: filter(rows, 'price', {to: budget})`,
+    "- Rows from a formula, not by hand: derive rows={map(range(1, n + 1), 'i', {n: i, total: i * price})} feeds a table or chart",
     ...(behaviorFor(textOnly, fileMode) ? [sectionText("compact", "behavior")] : []),
     `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
     // The same heading as the guides', in fewer words: this text goes out with every call.
@@ -415,7 +417,7 @@ export interface SpecCheck {
   warnings: Diagnostic[];
   /**
    * Problems a person can see in a scene's drawing (a label cut off, a line
-   * hidden under a box). The interface still shows, so these never count as
+   * hidden under a box) or in the layout (a card inside a card, src/review.ts). The interface still shows, so these never count as
    * problems to fix before it appears; the model is asked to tidy them.
    */
   drawing: Diagnostic[];
@@ -430,7 +432,8 @@ export function checkSpec(spec: string, hostNames: readonly string[] = [], textO
   return {
     errors: diagnostics.filter((d) => d.severity === "error"),
     warnings: diagnostics.filter((d) => d.severity !== "error"),
-    drawing: scenesOn ? reviewScenes(parsed, behavior ? { behavior } : {}) : [],
+    // Layout rules (a card inside a card) go with the drawing problems: the interface still shows.
+    drawing: [...reviewLayout(parsed.root), ...(scenesOn ? reviewScenes(parsed, behavior ? { behavior } : {}) : [])].sort((x, y) => x.line - y.line),
   };
 }
 
