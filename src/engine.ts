@@ -37,7 +37,7 @@ import { noAccessibility, type AccessibilityHost, type MirrorEvents, type Mirror
 import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
 import { plainText } from "./a11y/text";
-import { emittedValue, hideSecretsIn, secretValues } from "./secrets";
+import { emittedValue, hideInText, hideSecretsIn, MAX_REMEMBERED, secretValues } from "./secrets";
 import { TextCollector } from "./text-layer/collect";
 import { domTextLayer } from "./text-layer/dom";
 import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, TEXT_MAX_WAIT_MS, TOUCH_SELECT_DEFAULT, type TextLayerHost } from "./text-layer/host";
@@ -493,9 +493,22 @@ export class SayShape {
     return hideSecretsIn(this.state.snapshot(), this.secrets());
   }
 
-  /** The texts password fields hold right now. */
+  /** Every text a password field held when an action ran, so a copy made and the field cleared still hides. */
+  private remembered = new Set<string>();
+
+  /** Notes what password fields hold now (before an action runs: it may copy and clear them). */
+  private rememberSecrets(): void {
+    for (const v of secretValues(this.parsed?.root ?? null, this.state.scope)) {
+      this.remembered.delete(v);
+      this.remembered.add(v);
+    }
+    while (this.remembered.size > MAX_REMEMBERED) this.remembered.delete(this.remembered.values().next().value as string);
+  }
+
+  /** The texts password fields hold now, and every one they held when an action ran. */
   private secrets(): Set<string> {
-    return secretValues(this.parsed?.root ?? null, this.state.scope);
+    this.rememberSecrets();
+    return new Set(this.remembered);
   }
 
   /**
@@ -1917,6 +1930,7 @@ export class SayShape {
   private runActionString(src: string, node: SayShapeNode, own?: OwnCopy): void {
     const parsed = parseActions(src, own?.functions);
     if ("error" in parsed) return;
+    this.rememberSecrets();
     runActions(parsed.actions, {
       // Inside each, actions read the item's loop variables first; an element's own copies before that.
       scope: this.scopeFor(node, own),
@@ -1928,7 +1942,8 @@ export class SayShape {
       emit: (name, value) => this.events.emit("action", { name, value: emittedValue(value, this.secrets()), node }),
       go: (screen) => this.go(screen),
       back: () => this.back(),
-      notify: (text) => this.notify(text),
+      // A password named in a message is hidden there too: the message reaches the host and screen readers.
+      notify: (text) => this.notify(hideInText(text, this.secrets())),
     });
   }
 
@@ -2879,10 +2894,10 @@ function applyPose(g: CanvasRenderingContext2D, box: Box, pose: EnterPose): void
   }
 }
 
-/** How often, at most, the mirror follows regions that move without layout (an animated scene's shapes). */
 /** What to do instead of removing an item an expression made (remove:t inside each over extend() or map()). */
 const REMOVE_FROM_SOURCE = "Remove from the source list instead: loop over it (each items=tasks as=t, with if= to hide items) or over filter() or sort() of it, which keep items removable";
 
+/** How often, at most, the mirror follows regions that move without layout (an animated scene's shapes). */
 const REGION_REFRESH_MS = 250;
 
 /** How long a notify: message stays up, and how long it takes to fade in or out. */

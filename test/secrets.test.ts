@@ -86,4 +86,30 @@ screen login
     expect(ui.shareableState).toEqual({ a: "x", pw: "" });
     expect(hideSecrets("x", new Set())).toBe("x");
   });
+
+  it("keeps a password hidden after it's copied elsewhere and the field cleared", () => {
+    const ui = render(`state pw="" tries=[] saved="" copy=""\ninput "Password" bind=pw kind=password\nbutton "Try" on="add:tries:{pw};set:saved:{pw};set:copy:{pw + '!'};set:pw:''"\nbutton "Send" on=emit:send\n`, { width: 600 });
+    ui.type({ type: "input", text: "Password" }, "S3cret");
+    ui.press({ type: "button", text: "Try" });
+    ui.press({ type: "button", text: "Send" });
+    expect(ui.state.pw).toBe("");
+    const shared = ui.shareableState;
+    expect(JSON.stringify(shared)).not.toContain("S3cret");
+    expect(shared).toMatchObject({ tries: [HIDDEN], saved: HIDDEN, copy: HIDDEN + "!" });
+  });
+
+  it("hides a password named in a notify: message", () => {
+    const ui = render(`state pw=""\ninput "Password" bind=pw kind=password\nbutton "Save" on="notify:Saved {pw} for you"\n`, { width: 600 });
+    const told: string[] = [];
+    ui.sayshape.on("notify", ({ text }) => told.push(text));
+    ui.type({ type: "input", text: "Password" }, "S3cret");
+    ui.press({ type: "button", text: "Save" });
+    expect(told).toEqual([`Saved ${HIDDEN} for you`]);
+  });
+
+  it("hides a short password only where it's the whole value", () => {
+    expect(hideSecrets("abc", new Set(["abc"]))).toBe(HIDDEN);
+    expect(hideSecrets("abcdef", new Set(["abc"]))).toBe("abcdef");
+    expect(hideSecrets("my S3cret!", new Set(["S3cret"]))).toBe(`my ${HIDDEN}!`);
+  });
 });
