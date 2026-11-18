@@ -18,7 +18,7 @@ import { easeOut } from "../../ghost";
 import { mixColors, seriesColors } from "../../theme";
 import {
   chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels, plotHeight,
-  preciseText, slotLabels, labelRows, fieldTitle, tickLabels, traceLine, type ChartGeometry, type ChartSlot, type Rect,
+  preciseText, slotLabels, labelRows, fieldTitle, tickLabels, traceLine, baselineGradient, type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
@@ -147,9 +147,7 @@ export const area: ChartKindDef = {
     // Back to front: the first series behind the others, each fill lighter so the ones behind show through.
     drawn.forEach((runs, k) => {
       const color = colorOf(k);
-      const gradient = g.createLinearGradient(0, oy + d.plot.y, 0, floor);
-      gradient.addColorStop(0, mixColors(color, c.raised, many ? 0.55 : 0.5) ?? color);
-      gradient.addColorStop(1, c.raised);
+      const gradient = baselineGradient(g, d, oy, mixColors(color, c.raised, many ? 0.55 : 0.5) ?? color, c.raised);
       for (const run of runs) {
         if (!run.length) continue;
         g.beginPath();

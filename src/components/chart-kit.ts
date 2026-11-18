@@ -700,6 +700,31 @@ export function smoothLineControls(points: readonly { x: number; y: number }[]):
 export const DENSE_POINT_GAP = 14;
 
 /**
+ * The wash under a line or area, from its color at the far edge to the surface at
+ * the baseline, 0 when it's on the scale. When values go below 0 the wash is
+ * mirrored, strongest at the bottom, so the space between 0 and a negative value
+ * reads as an amount below 0, never as mass rising from the bottom of the plot.
+ */
+export function baselineGradient(
+  g: CanvasRenderingContext2D, d: Pick<ChartGeometry, "plot" | "zeroY" | "min">, oy: number, top: string, base: string,
+): CanvasGradient {
+  const y0 = oy + d.plot.y, y1 = oy + d.plot.y + d.plot.h;
+  const zero = d.zeroY === null ? y1 : oy + d.zeroY;
+  if (d.zeroY === null || d.min >= 0) {
+    const gradient = g.createLinearGradient(0, y0, 0, zero);
+    gradient.addColorStop(0, top);
+    gradient.addColorStop(1, base);
+    return gradient;
+  }
+  const gradient = g.createLinearGradient(0, y0, 0, y1);
+  const at = Math.min(1, Math.max(0, (zero - y0) / (y1 - y0)));
+  gradient.addColorStop(0, top);
+  gradient.addColorStop(at, base);
+  gradient.addColorStop(1, top);
+  return gradient;
+}
+
+/**
  * A series' line through its points: straight segments unless smooth, since
  * a curve between discrete samples (yearly returns, weekly weights) draws
  * values that were never measured. curve=smooth asks for the monotone curve.

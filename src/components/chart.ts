@@ -46,7 +46,7 @@ import { themeFont } from "./util";
 import { statSizes } from "./content";
 import { CHART_KINDS, paintSankeyHover, sankeyLinkAt, type SankeyGeometry } from "./chart-kinds";
 import {
-  mutedBar, onFill, barPath, chartData, smoothLineControls, traceLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, labelRows, fieldTitle, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
+  mutedBar, onFill, barPath, chartData, smoothLineControls, traceLine, baselineGradient, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, labelRows, fieldTitle, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
   legendValueTexts, plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
   formatter, type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
 } from "./chart-kit";
@@ -1146,9 +1146,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       if (drawnSeries.length === 1 && d.zeroY !== null) {
         const floor = oy + d.zeroY;
         drawnSeries.forEach((runs, k) => {
-          const gradient = g.createLinearGradient(0, oy + d.plot.y, 0, floor);
-          gradient.addColorStop(0, colorOf(k));
-          gradient.addColorStop(1, c.raised);
+          const gradient = baselineGradient(g, d, oy, colorOf(k), c.raised);
           for (const run of runs) {
             if (run.length < 2) continue;
             g.beginPath();
