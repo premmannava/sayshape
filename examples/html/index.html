@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SayShape: the &lt;say-shape&gt; element</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+    say-shape { margin: 1rem 0; }
+  </style>
+  <!--
+    No build step. This loads the element from jsDelivr. The URL works once a published
+    version of sayshape includes `sayshape/element` (the dist/element.js file). Until
+    then, build the repo (`npm run build`) and point this at ../../dist/element.js
+    from a local server.
+  -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/sayshape/dist/element.js"></script>
+</head>
+<body>
+  <h1>&lt;say-shape&gt;</h1>
+
+  <!-- The spec is the text of a child script. -->
+  <say-shape id="trip" theme="auto">
+    <script type="text/sayshape">
+      state days=2 hikers=3
+      card
+        text "Yosemite weekend" style=title
+        row
+          stat label="Days" value={days}
+          stat label="Water (L)" value={days * hikers * 3}
+        button "Add day" on=inc:days
+        button "Book it" on=emit:book:{days}
+    </script>
+  </say-shape>
+
+  <p id="log">Press "Book it" to see the event.</p>
+
+  <script type="module">
+    // Engine events arrive as bubbling CustomEvents, with the payload in `detail`.
+    document.addEventListener("sayshape-action", (e) => {
+      document.getElementById("log").textContent = `action ${e.detail.name}: ${e.detail.value}`;
+    });
+  </script>
+</body>
+</html>
