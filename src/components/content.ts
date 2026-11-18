@@ -3,7 +3,7 @@ import type { TextMeasurer } from "../text";
 import type { Theme } from "../theme";
 import type { Box, Rect, SayShapeNode, Value } from "../types";
 import { isList, isRecord } from "../data";
-import { ellipsize, fitLines, wrapText } from "../text";
+import { balanceText, ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
 import { easeOut, paintGhost } from "../ghost";
 import { traceLine } from "./chart";
@@ -75,7 +75,10 @@ text "**Free** cancellation until *2 days* before; see [the terms](https://north
       return;
     }
     if (looksRich(p.template())) ctx.warn?.(`text on line ${box.node.line} has formatting marks (**bold**, \`code\` or [a](link)) that show as written. Add rich=true to format them`);
-    const lines = wrapText(p.text(), width, f, ctx.measure);
+    // Headings wrap onto lines of even length, so a word is never left alone on the last.
+    const style = p.oneOf("style", TEXT_STYLES, "body");
+    const heading = style === "display" || style === "title";
+    const lines = (heading ? balanceText : wrapText)(p.text(), width, f, ctx.measure);
     box.data = { lines, font: f, lineHeight: m.lineHeight, icon };
     box.h = lines.length * m.lineHeight;
   },
