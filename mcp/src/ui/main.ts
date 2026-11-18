@@ -665,7 +665,8 @@ async function start(): Promise<void> {
     if (!sayshape) return;
     // A code block's copy button (emit:copy:<code>) is the person's own: it goes to the clipboard, not the model.
     if (name === "copy" && typeof value === "string") { void copyCode(value); return; }
-    void deliver(name, value, sayshape.state.snapshot());
+    // Never state.snapshot(): what password fields hold stays in the interface.
+    void deliver(name, value, sayshape.shareableState());
   });
   document.addEventListener("keydown", onCopyKey);
   syncLoading();

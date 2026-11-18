@@ -37,6 +37,7 @@ import { noAccessibility, type AccessibilityHost, type MirrorEvents, type Mirror
 import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
 import { plainText } from "./a11y/text";
+import { emittedValue, hideSecretsIn, secretValues } from "./secrets";
 import { TextCollector } from "./text-layer/collect";
 import { domTextLayer } from "./text-layer/dom";
 import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, TEXT_MAX_WAIT_MS, TOUCH_SELECT_DEFAULT, type TextLayerHost } from "./text-layer/host";
@@ -468,6 +469,20 @@ export class SayShape {
       popupState: this.popup?.state,
       today: this.today,
     });
+  }
+
+  /**
+   * Every state value, with whatever a password field holds replaced by
+   * "[hidden]" wherever it appears (src/secrets.ts). This is what to send a
+   * host or a model along with an emit:, never `state.snapshot()`.
+   */
+  shareableState(): Record<string, Value> {
+    return hideSecretsIn(this.state.snapshot(), this.secrets());
+  }
+
+  /** The texts password fields hold right now. */
+  private secrets(): Set<string> {
+    return secretValues(this.parsed?.root ?? null, this.state.scope);
   }
 
   /**
@@ -1843,7 +1858,8 @@ export class SayShape {
       set: (path, v) => this.writePath(node, path, v, own),
       removeAt: (path) => this.removeAt(node, path, own),
       warn: (m) => this.warn(m),
-      emit: (name, value) => this.events.emit("action", { name, value, node }),
+      // Passwords inside an emitted record or list are hidden; one named as the whole value (emit:login:{pw}) is sent as written.
+      emit: (name, value) => this.events.emit("action", { name, value: emittedValue(value, this.secrets()), node }),
       go: (screen) => this.go(screen),
       back: () => this.back(),
       notify: (text) => this.notify(text),

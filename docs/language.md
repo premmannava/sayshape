@@ -131,6 +131,8 @@ button "Place order" on="set:placed:true;emit:order:{qty}"
 
 `emit` is how a generated screen talks back to your app, for example to send the user's choice to the model for the next step.
 
+Passwords stay in the interface. Hosts share state with `SayShape.shareableState()`, where whatever an `input kind=password` holds reads `"[hidden]"`, and an emitted record or list has it hidden too. A spec sends a password only by naming it as the whole value (`emit:login:{pw}`); that is deliberate and discouraged.
+
 `notify` shows a message at the bottom of the visible area, drawn by the engine in the theme's colors, and fires a `notify` event so your app can also announce it. Quote the message when it has spaces or `;`:
 
 ```

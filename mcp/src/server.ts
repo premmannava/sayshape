@@ -153,7 +153,7 @@ export function imageCsp(hosts: readonly string[]): { resourceDomains: string[] 
 
 /** What the chat notes say about emit: where the view sends it to the model as it happens (MCP Apps clients). */
 const CHAT_EMIT =
-  'When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.';
+  'When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value (a password field reads "[hidden]"; emit:login:{pw} would send it, so avoid that); reply to it, or call show_interface again with an updated spec.';
 
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
 const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
