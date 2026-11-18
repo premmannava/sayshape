@@ -86,6 +86,56 @@ describe("the newer icons", () => {
   });
 });
 
+// Icons for phone and app mockups and everyday interfaces, drawn for SayShape.
+const APP_ICONS = [
+  "music", "video", "mic", "volume", "volume-off", "alarm", "timer", "laptop", "tablet", "watch", "camera", "headphones", "battery",
+  "wifi", "tv", "sunrise", "sunset", "cloud-sun", "fog", "umbrella", "store", "gift", "ticket", "basket", "menu", "grid", "list",
+  "more", "chevron-up", "chevron-down", "chevron-left", "chevron-right", "compass", "navigation", "route", "bookmark", "send",
+  "archive", "clipboard", "note", "user-plus", "id-badge", "activity", "gauge", "flame", "plant", "leaf", "tree", "planet", "bowl",
+  "coffee", "pizza", "bed", "sofa", "lamp", "bike", "bus", "train",
+] as const;
+
+/** How far a shape reaches on the grid: arcs by their actual sweep, paths by their points. */
+function reach(shape: string): number[] {
+  const n = (shape.match(/-?\d*\.?\d+/g) ?? []).map(Number);
+  if (shape.startsWith("O")) return [n[0]! - n[2]!, n[0]! + n[2]!, n[1]! - n[2]!, n[1]! + n[2]!];
+  if (shape.startsWith("A")) {
+    const [cx, cy, r, from, to] = n as [number, number, number, number, number];
+    const out: number[] = [];
+    for (let d = from; d <= to; d += 1) out.push(cx + r * Math.cos((d * Math.PI) / 180), cy + r * Math.sin((d * Math.PI) / 180));
+    return out;
+  }
+  if (shape.startsWith("R")) return [n[0]!, n[0]! + n[2]!, n[1]!, n[1]! + n[3]!];
+  return n;
+}
+
+describe("the app and everyday icons", () => {
+  it("has each one, drawn in the given color, at least a stroke's width inside the grid", () => {
+    for (const name of APP_ICONS) {
+      expect(isIconName(name), name).toBe(true);
+      const { context, take } = createRecordingContext();
+      drawIcon(context, name, 0, 0, 28, darkTheme.colors.ink);
+      const ops = take();
+      expect(ops.some((o) => o.op === "stroke" || o.op === "fill"), name).toBe(true);
+      for (const op of ops) expect(op.fillStyle || op.strokeStyle, name).toBe(darkTheme.colors.ink);
+      for (const shape of ICONS[name]) for (const e of reach(shape)) expect(e >= 1 && e <= 23, `${name}: ${shape}`).toBe(true);
+    }
+  });
+
+  it("works through the element with no warning, and is named in its guide text", () => {
+    const description = String(registry.get("icon")!.props.name!.description);
+    for (const name of APP_ICONS) {
+      expect(warnings(`icon name=${name}\n`), name).toEqual([]);
+      expect(description).toContain(` ${name},`.replace(",", name === APP_ICONS.at(-1) ? "." : ","));
+    }
+    const ui = render(`icon name=planet size=lg\nicon name=bowl size=lg\nicon name=plant size=lg\n`);
+    expect(ui.drawOps.filter((o) => o.op === "stroke").length).toBeGreaterThan(6);
+    ui.destroy();
+    expect(nearestIcon("hamburger")).toBe("menu");
+    expect(nearestIcon("microphone")).toBe("mic");
+  });
+});
+
 describe("the icon element", () => {
   it("shows a known icon at its size, and warns about an unknown one with the nearest", () => {
     expect(warnings(`icon name=plane size=lg\n`)).toEqual([]);

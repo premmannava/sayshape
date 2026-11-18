@@ -40,6 +40,33 @@ function gearPath(): string {
   return pts.join(" ") + " Z";
 }
 
+/** Short spokes around a center at the given angles (degrees, clockwise from three o'clock), from radius r1 out to r2. */
+function rays(cx: number, cy: number, r1: number, r2: number, degs: readonly number[]): string[] {
+  return degs.map((d) => {
+    const a = (d * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+    return `M${(cx + c * r1).toFixed(2)} ${(cy + s * r1).toFixed(2)} L${(cx + c * r2).toFixed(2)} ${(cy + s * r2).toFixed(2)}`;
+  });
+}
+
+/**
+ * A tilted ring round a ball: an ellipse traced in short steps, with the part
+ * behind the ball left out (the near half crosses in front of it).
+ */
+function ringPath(cx: number, cy: number, a: number, b: number, tilt: number, ball: number): string {
+  const t0 = (tilt * Math.PI) / 180;
+  const out: string[] = [];
+  let pen = false;
+  for (let i = 0; i <= 72; i++) {
+    const t = (i * 5 * Math.PI) / 180;
+    const lx = a * Math.cos(t), ly = b * Math.sin(t);
+    const x = cx + lx * Math.cos(t0) - ly * Math.sin(t0), y = cy + lx * Math.sin(t0) + ly * Math.cos(t0);
+    const show = ly > 0 || Math.hypot(x - cx, y - cy) > ball + 1.6;
+    if (show) out.push(`${pen ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`);
+    pen = show;
+  }
+  return out.join(" ");
+}
+
 export const ICONS = {
   // Status
   check: ["M5 12.5 L10 17.5 L19 7"],
@@ -163,6 +190,93 @@ export const ICONS = {
   pause: ["M8 5.5 V18.5", "M16 5.5 V18.5"],
   image: ["R 3.5 4.5 17 15 2", "O 8.5 9.5 1.5", "M4 17.5 L9.5 12.5 L14 16.5 L16 14.8 L20 18"],
   book: ["M12 6.5 C10 5 7 4.5 4 5 V18 C7 17.5 10 18 12 19.5 C14 18 17 17.5 20 18 V5 C17 4.5 14 5 12 6.5 Z", "M12 6.5 V19.5"],
+  // A note, a pair of notes on one beam.
+  music: ["O 7 17.5 2.5", "O 17 15.5 2.5", "M9.5 17.5 V6 L19.5 4 V15.5", "M9.5 9.5 L19.5 7.5"],
+  video: ["R 3 6.5 12.5 11 2", "M15.5 10.5 L20.5 7.5 V16.5 L15.5 13.5"],
+  mic: ["R 9 3 6 11 3", "M5.5 11 C5.5 14.6 8.4 17.5 12 17.5 C15.6 17.5 18.5 14.6 18.5 11", "M12 17.5 V21", "M9 21 H15"],
+  volume: ["M4 9.5 V14.5 H7.5 L12 18.5 V5.5 L7.5 9.5 Z", "A 12 12 4 -50 50", "A 12 12 7.5 -50 50"],
+  "volume-off": ["M4 9.5 V14.5 H7.5 L12 18.5 V5.5 L7.5 9.5 Z", "M15 9 L21 15", "M21 9 L15 15"],
+  // A clock on two feet with a bell over each shoulder.
+  alarm: ["O 12 13 7.5", "M12 9.5 V13 L14.5 15", "M3.5 7 L7 3.5", "M20.5 7 L17 3.5", "M6.7 18.3 L5 20.5", "M17.3 18.3 L19 20.5"],
+  // A stopwatch: a dial with a crown on top and a button to one side.
+  timer: ["O 12 13.5 7.5", "M10 2.5 H14", "M12 2.5 V6", "M12 13.5 L15 10.5", "M18 7 L19.5 5.5"],
+  // Devices
+  laptop: ["R 4.5 5 15 11 1.5", "M2.5 19 H21.5"],
+  tablet: ["R 4.5 3 15 18 2", "M10.5 18 H13.5"],
+  watch: ["R 7 6.5 10 11 2.5", "M9 6.5 L9.5 3 H14.5 L15 6.5", "M9 17.5 L9.5 21 H14.5 L15 17.5", "M12 9.5 V12 L13.5 13"],
+  camera: ["R 3 7 18 12.5 2", "O 12 13.2 3.5", "M8.5 7 L9.8 4.8 H14.2 L15.5 7"],
+  headphones: ["A 12 12.5 8 175 365", "R 4 12.5 3.5 7 1.5", "R 16.5 12.5 3.5 7 1.5"],
+  battery: ["R 2.5 7.5 17 9 2", "M21.5 10.5 V13.5", "M6.5 10.5 V13.5", "M10 10.5 V13.5"],
+  // Three widening waves over a dot.
+  wifi: ["D 12 17.5", "A 12 17.5 3.6 220 320", "A 12 17.5 7.3 220 320", "A 12 17.5 11 220 320"],
+  tv: ["R 3 6 18 12.5 2", "M8.5 2.5 L12 6 L15.5 2.5", "M8 21 H16"],
+  // Weather, more
+  sunrise: ["M2.5 12.5 H21.5", "A 12 12.5 4.5 180 360", ...rays(12, 12.5, 6.5, 8.8, [225, 270, 315]), "M12 21 V16.5", "M9.8 18.7 L12 16.5 L14.2 18.7"],
+  sunset: ["M2.5 12.5 H21.5", "A 12 12.5 4.5 180 360", ...rays(12, 12.5, 6.5, 8.8, [225, 270, 315]), "M12 16.5 V21", "M9.8 18.8 L12 21 L14.2 18.8"],
+  // A sun showing above and behind a small cloud.
+  "cloud-sun": [
+    "A 9 9.5 3 100 350", ...rays(9, 9.5, 5, 6.8, [135, 180, 225, 270, 315]),
+    "M10 20.5 H18 C19.9 20.5 21 19.1 21 17.5 C21 15.8 19.7 14.5 18 14.5 C17.4 12.4 15.6 11 13.5 11 C11 11 9.1 12.8 8.9 15.2 C7.4 15.6 6.5 16.7 6.5 18 C6.5 19.4 8 20.5 10 20.5 Z",
+  ],
+  fog: [HIGH_CLOUD, "M5 18 H19", "M8 21 H16"],
+  umbrella: ["M3 12 C3 7.3 7 3.5 12 3.5 C17 3.5 21 7.3 21 12 Q18 10 15 12 Q12 10 9 12 Q6 10 3 12 Z", "M12 11 V19 C12 20.1 12.9 21 14 21 C15.1 21 16 20.1 16 19"],
+  // Shops and things to buy
+  // A shop front: a scalloped awning over a door.
+  store: ["M3 9 L4.5 4 H19.5 L21 9 C21 10.7 19.7 12 18 12 C16.3 12 15 10.7 15 9 C15 10.7 13.7 12 12 12 C10.3 12 9 10.7 9 9 C9 10.7 7.7 12 6 12 C4.3 12 3 10.7 3 9 Z", "M5 12 V20 H19 V12", "M10 20 V15.5 H14 V20"],
+  gift: [
+    "R 3 7.5 18 4 1.2", "M4.5 11.5 V19.5 C4.5 20.1 4.9 20.5 5.5 20.5 H18.5 C19.1 20.5 19.5 20.1 19.5 19.5 V11.5", "M12 7.5 V20.5",
+    "M12 7.5 C10.5 4 7 3.5 7 5.8 C7 7 8.5 7.5 12 7.5", "M12 7.5 C13.5 4 17 3.5 17 5.8 C17 7 15.5 7.5 12 7.5",
+  ],
+  // A ticket with a notch in each end and a torn-off stub.
+  ticket: ["M3.5 6 H20.5 V9.5 C19.1 9.5 18 10.6 18 12 C18 13.4 19.1 14.5 20.5 14.5 V18 H3.5 V14.5 C4.9 14.5 6 13.4 6 12 C6 10.6 4.9 9.5 3.5 9.5 Z", "M14.5 8 V9", "M14.5 11.5 V12.5", "M14.5 15 V16"],
+  basket: ["M3 10 H21", "M4.5 10 L6.3 18.8 C6.5 19.5 7.1 20 7.8 20 H16.2 C16.9 20 17.5 19.5 17.7 18.8 L19.5 10", "M7 10 L10 4.5", "M17 10 L14 4.5", "M9.5 13 V17", "M12 13 V17", "M14.5 13 V17"],
+  // Finding your way
+  menu: ["M4 7 H20", "M4 12 H20", "M4 17 H20"],
+  grid: ["R 4 4 6.5 6.5 1.5", "R 13.5 4 6.5 6.5 1.5", "R 4 13.5 6.5 6.5 1.5", "R 13.5 13.5 6.5 6.5 1.5"],
+  list: ["D 4.5 7", "D 4.5 12", "D 4.5 17", "M8.5 7 H19.5", "M8.5 12 H19.5", "M8.5 17 H19.5"],
+  more: ["O 5.5 12 1", "O 12 12 1", "O 18.5 12 1"],
+  "chevron-up": ["M6 15 L12 9 L18 15"],
+  "chevron-down": ["M6 9 L12 15 L18 9"],
+  "chevron-left": ["M15 6 L9 12 L15 18"],
+  "chevron-right": ["M9 6 L15 12 L9 18"],
+  compass: ["O 12 12 9", "M15.5 8.5 L13.5 13.5 L8.5 15.5 L10.5 10.5 Z"],
+  // The arrowhead a map shows for where you are heading.
+  navigation: ["M12 3 L19.5 20 L12 16 L4.5 20 Z"],
+  // A winding way from one stop to another.
+  route: ["O 6 18 2.2", "O 18 6 2.2", "M8.2 18 H16 C17.7 18 19 16.7 19 15 C19 13.3 17.7 12 16 12 H8 C6.3 12 5 10.7 5 9 C5 7.3 6.3 6 8 6 H15.8"],
+  bookmark: ["M6.5 4.5 C6.5 3.9 6.9 3.5 7.5 3.5 H16.5 C17.1 3.5 17.5 3.9 17.5 4.5 V20.5 L12 16.5 L6.5 20.5 Z"],
+  send: ["M20.5 3.5 L3.5 10.5 L10.5 13.5 L13.5 20.5 Z", "M10.5 13.5 L20.5 3.5"],
+  // Papers
+  archive: ["R 3 4 18 4.5 1.5", "M4.5 8.5 V18.5 C4.5 19.6 5.4 20.5 6.5 20.5 H17.5 C18.6 20.5 19.5 19.6 19.5 18.5 V8.5", "M10 12 H14"],
+  clipboard: ["M8.5 4.5 H7 C5.9 4.5 5 5.4 5 6.5 V19.5 C5 20.6 5.9 21.5 7 21.5 H17 C18.1 21.5 19 20.6 19 19.5 V6.5 C19 5.4 18.1 4.5 17 4.5 H15.5", "R 8.5 2.5 7 4 1", "M9 11 H15", "M9 15 H15"],
+  // A note with its corner turned up.
+  note: ["M4 5.5 C4 4.7 4.7 4 5.5 4 H18.5 C19.3 4 20 4.7 20 5.5 V14 L14 20 H5.5 C4.7 20 4 19.3 4 18.5 Z", "M14 20 V15.5 C14 14.7 14.7 14 15.5 14 H20", "M8 8.5 H16", "M8 12 H12.5"],
+  // People, more
+  "user-plus": ["O 9.5 8 4", "M3 20.5 C3 16.8 5.9 14 9.5 14 C13.1 14 16 16.8 16 20.5", "M19 8.5 V13.5", "M16.5 11 H21.5"],
+  "id-badge": ["R 3 5 18 14 2", "O 8.5 10.5 2", "M5.5 16 C5.9 14.6 7.1 13.8 8.5 13.8 C9.9 13.8 11.1 14.6 11.5 16", "M14 10 H18", "M14 13.5 H17"],
+  // Signs of activity
+  activity: ["M3 12 H7 L9.5 5 L14.5 19 L17 12 H21"],
+  gauge: ["A 12 14 8.5 150 390", "M12 14 L15.5 9.5", "D 12 14"],
+  flame: ["M12 21 C8.1 21 5.5 18.3 5.5 14.8 C5.5 11 8.5 8.8 9.5 5.5 C10.8 6.7 11.5 8.3 11.4 10 C12.7 8.4 13.3 5.6 12.6 3 C16.4 5 18.5 9.5 18.5 14.5 C18.5 18.2 15.8 21 12 21 Z"],
+  // Growing things and food
+  // Two leaves on a stem in a pot.
+  plant: ["M6.5 13 H17.5 L16.2 19.8 C16.1 20.4 15.6 20.8 15 20.8 H9 C8.4 20.8 7.9 20.4 7.8 19.8 Z", "M12 13 V8", "M12 9.5 C12 6.2 9.6 4.5 5.5 4.5 C5.5 7.8 7.9 9.5 12 9.5 Z", "M12 8 C12 4.7 14.4 3 18.5 3 C18.5 6.3 16.1 8 12 8 Z"],
+  leaf: ["M6 18 C5 10.5 10 5 19.5 4.5 C19.5 13.5 14 18.5 6 18 Z", "M4.5 19.5 L14 10"],
+  tree: ["M9 16 C6 16 4 13.8 4 11 C4 9 5.2 7.4 6.8 6.7 C7.3 4.6 9.4 3 12 3 C14.6 3 16.7 4.6 17.2 6.7 C18.8 7.4 20 9 20 11 C20 13.8 18 16 15 16 Z", "M12 21 V11", "M12 14 L9.5 11.5", "M12 12.5 L14.5 10"],
+  // A ball with a tilted ring round it.
+  planet: ["O 12 12 6", ringPath(12, 12, 10.2, 3.2, -24, 6)],
+  // A bowl of something hot.
+  bowl: ["M3.5 10 H20.5 C20.5 14.7 16.7 18.5 12 18.5 C7.3 18.5 3.5 14.7 3.5 10 Z", "M9 20.5 H15", "M10 3.5 Q11.2 5 10 6.5", "M14 3.5 Q15.2 5 14 6.5"],
+  coffee: ["M4.5 9 H15.5 V15 C15.5 17.8 13.3 20 10.5 20 H9.5 C6.7 20 4.5 17.8 4.5 15 Z", "M15.5 10.5 H17 C18.4 10.5 19.5 11.6 19.5 13 C19.5 14.4 18.4 15.5 17 15.5 H15.5", "M8 3 Q9.2 4.5 8 6", "M12 3 Q13.2 4.5 12 6"],
+  pizza: ["M12 21 L3.5 5.5 C8.7 3 15.3 3 20.5 5.5 Z", "M4.6 7.5 C9.3 5.5 14.7 5.5 19.4 7.5", "D 10 10.5", "D 14 10.5", "D 12 15"],
+  // Around the house
+  bed: ["M3 5.5 V19.5", "M3 15.5 H21", "M21 15.5 V19.5", "M11 15.5 V11 H18.5 C19.9 11 21 12.1 21 13.5 V15.5", "O 7 12.5 1.7"],
+  sofa: ["M5 10.5 V7.5 C5 6.4 5.9 5.5 7 5.5 H17 C18.1 5.5 19 6.4 19 7.5 V10.5", "M3 12.5 C3 11.4 3.9 10.5 5 10.5 C6.1 10.5 7 11.4 7 12.5 V13.5 H17 V12.5 C17 11.4 17.9 10.5 19 10.5 C20.1 10.5 21 11.4 21 12.5 V17 H3 Z", "M5 17 V19", "M19 17 V19"],
+  lamp: ["M8 4 H16 L19 11.5 H5 Z", "M12 11.5 V19.5", "M8 20 H16"],
+  // Getting around
+  bike: ["O 5.5 15.5 4", "O 18.5 15.5 4", "M5.5 15.5 H12 L9.5 8.5 Z", "M9.5 8.5 H16 L12 15.5", "M16 8.5 L18.5 15.5", "M16 8.5 L15.3 5.5 H18", "M9.5 8.5 L8.8 6", "M7.3 6 H10.3"],
+  bus: ["R 4.5 3.5 15 15 2.5", "M4.5 11.5 H19.5", "M9 6.5 H15", "D 8 15", "D 16 15", "M7.5 18.5 V20.5", "M16.5 18.5 V20.5"],
+  train: ["R 6 3 12 14.5 3", "M6 10 H18", "M10 6 H14", "D 9 13.8", "D 15 13.8", "M8.5 17.5 L6.5 21", "M15.5 17.5 L17.5 21"],
 } satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICONS;
@@ -187,7 +301,16 @@ export function nearestIcon(name: string): IconName | null {
     work: "briefcase", job: "briefcase", document: "file", goal: "target", energy: "bolt", power: "bolt", insight: "idea",
     tip: "idea", security: "lock", person: "user", people: "users", team: "users", date: "calendar", email: "mail",
     message: "chat", favorite: "star", rating: "star", like: "heart", hearts: "heart", spades: "spade", clubs: "club", diamonds: "diamond", notification: "bell", find: "search",
-    export: "download", duplicate: "copy", clipboard: "copy", options: "sliders", delete: "trash", bin: "trash", pencil: "edit", view: "eye", gear: "settings", cog: "settings", storage: "database", host: "server", password: "key", invoice: "receipt", award: "trophy", ai: "sparkle", magic: "sparkle", photo: "image", picture: "image", tool: "wrench", fix: "wrench", script: "code", reload: "refresh", sync: "refresh",
+    export: "download", duplicate: "copy", options: "sliders", delete: "trash", bin: "trash", pencil: "edit", view: "eye", gear: "settings", cog: "settings", storage: "database", host: "server", password: "key", invoice: "receipt", award: "trophy", ai: "sparkle", magic: "sparkle", photo: "image", picture: "image", tool: "wrench", fix: "wrench", script: "code", reload: "refresh", sync: "refresh",
+    hamburger: "menu", ellipsis: "more", kebab: "more", next: "chevron-right", back: "chevron-left", expand: "chevron-down", collapse: "chevron-up",
+    song: "music", audio: "music", sound: "volume", speaker: "volume", microphone: "mic", film: "video", movie: "video", television: "tv",
+    computer: "laptop", smartwatch: "watch", photography: "camera", charge: "battery", wireless: "wifi", internet: "wifi",
+    dawn: "sunrise", dusk: "sunset", partlycloudy: "cloud-sun", mist: "fog", haze: "fog",
+    shopfront: "store", present: "gift", voucher: "ticket", groceries: "basket", direction: "compass", directions: "route",
+    submit: "send", memo: "note", adduser: "user-plus", invite: "user-plus", identity: "id-badge",
+    pulse: "activity", heartbeat: "activity", speed: "gauge", meter: "gauge", fire: "flame", hot: "flame",
+    nature: "leaf", eco: "leaf", forest: "tree", space: "planet", saturn: "planet", soup: "bowl", food: "bowl", tea: "coffee",
+    sleep: "bed", hotel: "bed", furniture: "sofa", cycling: "bike", transit: "bus", rail: "train",
   };
   if (Object.hasOwn(ALIASES, n)) return ALIASES[n]!;
   return ICON_NAMES.find((i) => i.replace(/-/g, "") === n || i.startsWith(n) || n.startsWith(i.replace(/-.*/, ""))) ?? null;
