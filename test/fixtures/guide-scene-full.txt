@@ -882,7 +882,7 @@ ELEMENTS
     duration=<number>  Seconds the animation runs (t goes from 0 to this). 0 is a still picture.
     loop=<boolean>  Start again when it ends.
     light=<string>  Where shine= is lit from: light=300,170.
-    shake=<number>  Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}. Also on group.
+    shake=<number>  Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}.
     rate=<number>  How fast t runs, smoothly: 2 is double, 0 pauses (rate={speed}).
     bg=<string>  Background color behind everything.
     children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let, emit
@@ -890,7 +890,7 @@ ELEMENTS
       scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
         # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
         # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
-        # range(n) for each, pick(list, i), floor, round, abs, min, max, pow, % and a ? b : c. Reuse a drawing with define and use.
+        # range(n) for each, pick(list, i), floor, abs, % and a ? b : c. Reuse a drawing with define and use.
         # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
         # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
         # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
@@ -1063,9 +1063,9 @@ ELEMENTS
     opacity=<number>  Fades everything, 0 to 1.
     shake=<number>  Like scene's.
     z=<number>  Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.
-    trail=<number>  Seconds of fading copies left behind as it moves; trail-count= how many (12). Shapes too.
-    blur=<number>  Softens it, in px: fog, smoke. Shapes too.
-    reflect=<number>  Mirrors it below this y, like water; ripple= waves it, fade= dims it (0 to 1).
+    trail=<number>  Seconds of fading copies left behind as it moves: trail=0.4; trail-count= how many (12). Shapes too.
+    blur=<number>  Softens it, in px: blur=8 for fog or smoke. Shapes too.
+    reflect=<number>  Mirrors it below this y, like water: reflect=220; ripple= waves it, fade= dims it (0 to 1).
     on=<action>  Actions when it's pressed (click, tap, Enter), like a button's on=; makes it pressable and a Tab stop. Inside the scene's each they see the item: on=set:sel:{m.id}.
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
@@ -1115,7 +1115,7 @@ ELEMENTS
     example:
       gradient id=glow kind=radial from="accent 25%" to=accent
 
-  let a={…}  — A named value, worked out each frame, for the lines below it in its block (scene, group, each): x={cos(a)}.
+  let a={…}  — A named value, worked out each frame, for the lines below it in its block: x={cos(a)}.
     only inside: scene, group, define
     example:
       let a={t*1.5}

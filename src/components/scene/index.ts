@@ -63,19 +63,19 @@ const color = (description: string): PropDef => ({ type: "string", description }
 const Z: PropDef = num("Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.", 0);
 const Z_SHAPE: PropDef = { ...num("Like group's z."), unlisted: true };
 /** trail= (trail.ts): said once, on group, with trail-count in its words; unlisted everywhere else. */
-const TRAIL: PropDef = num("Seconds of fading copies left behind as it moves; trail-count= how many (12). Shapes too.");
+const TRAIL: PropDef = num("Seconds of fading copies left behind as it moves: trail=0.4; trail-count= how many (12). Shapes too.");
 const TRAIL_COUNT: PropDef = { ...num("How many trail copies, 1 to 24.", 12), unlisted: true };
 const TRAIL_SHAPE: Record<string, PropDef> = { trail: { ...num("Like group's trail."), unlisted: true }, "trail-count": TRAIL_COUNT };
 
 /** reflect= (reflect.ts): said once, on group; use takes it unlisted. Off with sceneComponentsWith({ reflect: false }). */
 const REFLECT: Record<string, PropDef> = {
-  reflect: num("Mirrors it below this y, like water; ripple= waves it, fade= dims it (0 to 1)."),
+  reflect: num("Mirrors it below this y, like water: reflect=220; ripple= waves it, fade= dims it (0 to 1)."),
   ripple: { ...num("Moving waves in the reflection, 0 to 1.", 0), unlisted: true },
   fade: { ...num("How fast the reflection fades, 0 to 1.", 0.5), unlisted: true },
 };
 
 /** blur= (blur.ts): said once, on group; shapes and use take it unlisted. */
-const BLUR: PropDef = num("Softens it, in px: fog, smoke. Shapes too.");
+const BLUR: PropDef = num("Softens it, in px: blur=8 for fog or smoke. Shapes too.");
 const BLUR_SHAPE: PropDef = { ...BLUR, unlisted: true };
 
 /** Props every shape takes. */
@@ -191,7 +191,7 @@ const scene: ComponentDef = {
     duration: num("Seconds the animation runs (t goes from 0 to this). 0 is a still picture.", 0),
     loop: { type: "boolean", description: "Start again when it ends.", default: true },
     light: { type: "string", description: "Where shine= is lit from: light=300,170." },
-    shake: num("Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}. Also on group."),
+    shake: num("Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}."),
     rate: num("How fast t runs, smoothly: 2 is double, 0 pauses (rate={speed}).", 1),
     bg: color("Background color behind everything."),
   },
@@ -204,7 +204,7 @@ const scene: ComponentDef = {
   example: `scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
   # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
   # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
-  # range(n) for each, pick(list, i), floor, round, abs, min, max, pow, % and a ? b : c. Reuse a drawing with define and use.
+  # range(n) for each, pick(list, i), floor, abs, % and a ? b : c. Reuse a drawing with define and use.
   # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
   # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
   # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
@@ -560,7 +560,7 @@ const letLine: ComponentDef = {
   type: "let",
   category: "content",
   usage: "let a={…}",
-  description: "A named value, worked out each frame, for the lines below it in its block (scene, group, each): x={cos(a)}.",
+  description: "A named value, worked out each frame, for the lines below it in its block: x={cos(a)}.",
   props: {
     name: { type: "name", description: "The value's name.", required: true, unlisted: true },
     value: { type: "expression", description: "Its formula.", required: true, unlisted: true },

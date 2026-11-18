@@ -108,7 +108,7 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - define "text" [holds rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let, emit; only in scene] — A reusable drawing: name it, draw it under this line around 0,0, and draw it anywhere with use.
 - use "text" x=number y=number rotate=number scale=number opacity=number args=expr on=action selected=cond tip=text name=text [only in scene, group, define] — Draws a defined drawing here, moved, turned and scaled like a group.
 - gradient id=name! from=text to=text kind=linear|radial angle=number [only in scene, group, define] — A color blend to fill shapes with fill="url(id)": a sky, a glow, a shiny ball.
-- let a={…} [only in scene, group, define] — A named value, worked out each frame, for the lines below it in its block (scene, group, each): x={cos(a)}.
+- let a={…} [only in scene, group, define] — A named value, worked out each frame, for the lines below it in its block: x={cos(a)}.
 - emit [only in scene, group, define] — Confetti, snow, sparks: count≤600 from=burst second (else endless) fill shape=rect|line x y w h angle spread speed gravity drag wind life size flutter.
 
 PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)
