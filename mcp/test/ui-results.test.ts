@@ -22,11 +22,13 @@
  * label= props, its optional text and its icon-only example changed the button docs shown in
  * repair results, so main/ui-results.json has those lines too.)
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createServer } from "../src/server";
+import { createServer, setAdaptiveGuides } from "../src/server";
+
+afterEach(() => setAdaptiveGuides(true));
 import { McpResultStore } from "../src/mcp-results";
 import { parseViewArgs, type ViewOptions } from "../src/ui/view-options";
 import { UI_CLIENT } from "./clients";
@@ -114,6 +116,8 @@ describe("--no-model-colors", () => {
   });
 
   it("gives byte-for-byte main's tools, docs and emit: result", async () => {
+    // main's tools are the quick start's, which the server still gives with adaptive guides off.
+    setAdaptiveGuides(false);
     const recorded = readFileSync(MAIN_TOOLS, "utf8");
     expect(json(await tools(LOCKED))).toBe(recorded);
     expect(json(await tools(LOCKED, { colors: ["#e4572e"] }))).toBe(recorded);

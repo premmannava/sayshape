@@ -257,9 +257,10 @@ export async function generateSections(o: SectionsOptions): Promise<SectionsResu
     };
   };
 
-  // Changing a screen or continuing a conversation isn't a job for sections: one call, as before.
+  // Changing a screen or continuing a conversation isn't a job for sections: one call, as before (the full
+  // guide unless one was given, as the sections themselves use).
   if (o.refine || o.history?.length) {
-    const single = await generateSpec(o);
+    const single = await generateSpec({ ...o, guide: o.guide ?? {} });
     calls.push({ role: "single", attempt: single.first });
     if (single.repair) calls.push({ role: "single-repair", attempt: single.repair });
     timings.firstTokenMs = single.timings.firstTokenMs;
@@ -327,7 +328,7 @@ export async function generateSections(o: SectionsOptions): Promise<SectionsResu
 
     if (plan.sections.length < 2) {
       const reason = plan.sections.length === 0 ? "the plan couldn't be read" : "the plan has one section";
-      const single = await generateSpec({ ...o, signal: control.signal });
+      const single = await generateSpec({ ...o, guide: o.guide ?? {}, signal: control.signal });
       calls.push({ role: "single", attempt: single.first });
       if (single.repair) calls.push({ role: "single-repair", attempt: single.repair });
       timings.firstLineMs = single.timings.firstLineMs === undefined ? undefined : timings.planMs + single.timings.firstLineMs;

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { cannotDrawViews, colorsNote, createServer, NO_EMIT, quickStart, REPEAT_TEXT, setImageHosts } from "../src/server";
+import { cannotDrawViews, colorsNote, createServer, NO_EMIT, adaptiveStart, REPEAT_TEXT, setImageHosts } from "../src/server";
 import { McpResultStore } from "../src/mcp-results";
 import { engineScriptUrl, fallbackPage, fenced, NOTHING_SENT, PAGE_COLOR_TOKENS, PAGE_DATASETS_TEXT, PAGE_ENGINE_VERSION, PAGE_REPEAT_TEXT, PAGE_TEXT, pageColors, scriptJson, usesMap } from "../src/fallback";
 import { lightTheme, darkTheme, extendTheme, type Theme } from "../../src/theme";
@@ -196,14 +196,14 @@ describe("the page for chat apps that can't draw views", () => {
 describe("emit: in chat apps that can't draw views", () => {
   const EMIT = 'state n=1\ncard\n  text "Pick one" style=title\n  button "Plan this trip" on=set:n:2;emit:plan_trip:{n}\n  button "Done" on=emit:done\n  button "More" on=inc:n\n';
 
-  it("isn't in the quick start they're given; ask the person to reply in the chat instead", async () => {
+  it("isn't in the map they're given; ask the person to reply in the chat instead", async () => {
     const { client } = await connect();
     const show = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
     expect(show.description).toContain(NO_EMIT);
-    expect(show.description).toContain(quickStart(false, true, true));
+    expect(show.description).toContain(adaptiveStart(false, true, true));
     expect(show.description).not.toMatch(/sends a choice to you|inside the conversation|making an artifact/);
     const docs = (await client.callTool({ name: "sayshape_docs", arguments: {} })) as unknown as Result;
-    expect(docs.content[0]!.text).toBe(quickStart(false, true, true));
+    expect(docs.content[0]!.text).toBe(adaptiveStart(false, true, true));
   });
 
   it("is a problem to fix, with no page, on each line that uses it, chained or not", async () => {
@@ -233,7 +233,7 @@ describe("emit: in chat apps that can't draw views", () => {
     expect(r.content[0]!.text).toMatch(/^The interface is showing in the conversation, with no problems/);
     const show2 = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
     expect(show2.description).not.toContain(NO_EMIT);
-    expect(show2.description).toContain(quickStart(false, true));
+    expect(show2.description).toContain(adaptiveStart(false, true));
   });
 });
 

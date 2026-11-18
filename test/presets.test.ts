@@ -97,7 +97,8 @@ describe("report preset: expansion", () => {
 
   it("says what's wrong on the line that's wrong", () => {
     const r = parse(`report "X" data=claims\n  count\n  wiggle amount\n  sum nope\n`, registry, { presets: true, presetValue: (n) => (n === "claims" ? claims : undefined), knownNames: ["claims"] });
-    expect(r.diagnostics.map((d) => [d.line, d.severity])).toEqual([[3, "warning"], [4, "warning"]]);
+    // Both lines make nothing, so both are errors: the report would look complete without them.
+    expect(r.diagnostics.map((d) => [d.line, d.severity])).toEqual([[3, "error"], [4, "error"]]);
     expect(r.diagnostics[0]!.message).toMatch(/isn't a report part/);
     expect(r.diagnostics[1]!.message).toMatch(/no field "nope"\. Its fields: id, opened/);
     expect(parse(`report "X"\n`, registry, { presets: true }).diagnostics[0]!.message).toMatch(/needs data=/);
@@ -147,6 +148,60 @@ describe("report preset: expansion", () => {
     expect(humanize("byLine")).toBe("By line");
     expect(humanize("yoy_change")).toBe("YoY change");
     expect(humanize("id")).toBe("ID");
+  });
+});
+
+describe("report preset: a chart line that draws nothing", () => {
+  // The case seen with a small model: the report's own data named first, the way the guide's example names
+  // another list (line targets month goal actual). It was read as the x field, so the chart was dropped with a
+  // warning and the rest of the report looked complete.
+  const TRAFFIC = `report "Traffic" data=siteVisits
+  sum sessions
+  line siteVisits week sessions
+state siteVisits=[{week: "W1", sessions: 120}, {week: "W2", sessions: 150}, {week: "W3", sessions: 90}]
+`;
+
+  it("reads the report's own list named first as its rows, and draws the chart", () => {
+    const ui = render(TRAFFIC, { presets: true });
+    expect(ui.diagnostics).toEqual([]);
+    expect(ui.warnings).toEqual([]);
+    const chart = ui.find("chart");
+    expect(chart.node.props).toMatchObject({ kind: "line", x: "week", y: "sessions" });
+    expect(chart.node.text).toBe("Sessions by week");
+    expect(chart.box).toBeTruthy();
+  });
+
+  it("does the same for a table that names the report's own list", () => {
+    const ui = render(`report "Traffic" data=siteVisits\n  table siteVisits week sessions\nstate siteVisits=[{week: "W1", sessions: 120}]\n`, { presets: true });
+    expect(ui.diagnostics).toEqual([]);
+    expect(ui.findAll("table-column").map((f) => f.node.props.field)).toEqual(["week", "sessions"]);
+  });
+
+  it("still reads a lone word as a field while the rows aren't known yet", () => {
+    // bar sales on data=sales: sales may be a field of the rows (a count per value), so it isn't taken as the list.
+    const r = parse(`report "X" data=sales\n  bar sales\n`, registry, { presets: true, knownNames: ["sales"] });
+    expect(r.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(r.presets!.expanded).toMatch(/chart "Sales by sales" kind=bar items=\{group\(sales, 'sales'\)\} x=sales y=count/);
+  });
+
+  it("names the line of a chart that can't be drawn, as an error, and draws the rest", () => {
+    const ui = render(TRAFFIC.replace("line siteVisits week sessions", "line week visitors"), { presets: true });
+    const errors = ui.diagnostics.filter((d) => d.severity === "error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.line).toBe(3);
+    expect(errors[0]!.message).toBe('This line chart isn\'t shown: siteVisits has no field "visitors". Its fields: week, sessions');
+    expect(ui.findAll("chart")).toHaveLength(0);
+    expect(ui.findAll("stat")).toHaveLength(1);
+  });
+
+  it("is never a finished answer in sayshape/model: the spec goes back for repair", async () => {
+    const broken = TRAFFIC.replace("line siteVisits week sessions", "line week visitors");
+    const model = fakeModel([{ content: [broken] }, { content: [TRAFFIC] }]);
+    const r = await generateSpec({ config: { url: "http://model.test/v1", model: "m" }, registry, request: "weekly traffic", guide: { mode: "report" }, repairOn: "errors", fetch: model.fetch });
+    expect(r.first.diagnostics.map((d) => [d.line, d.severity])).toEqual([[3, "error"]]);
+    expect(model.requests[1]!.body.messages.at(-1)!.content).toContain("Line 3 (error): This line chart isn't shown");
+    expect(r.spec).toBe(TRAFFIC);
+    expect(r.diagnostics).toEqual([]);
   });
 });
 

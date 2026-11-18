@@ -26,6 +26,7 @@ import { resolveProfile, type ComponentProfile } from "./profiles";
 import type { Registry } from "./registry";
 import { reportGuide } from "./presets/report";
 import { lookGuide } from "./look";
+import { assembleGuide } from "./capabilities";
 
 /** What a model answers, alone, when the report guide (mode "report") can't show what was asked. */
 export const REPORT_FALLBACK = "FULL";
@@ -70,7 +71,7 @@ export interface GuideOptions {
    */
   profile?: string | ComponentProfile | readonly string[];
   /**
-   * The larger worked examples, by name: todo, form, cart, orders, booking, equipment, calculator, shopping.
+   * The larger worked examples, by name: todo, form, signup, cart, orders, booking, equipment, calculator, shopping.
    * true or left out = the mode's default (full: todo, cart, orders and
    * booking, exactly as before, or if a profile rules all of them out, the
    * first of COMPACT_EXAMPLE_ORDER it can build; compact: the first of COMPACT_EXAMPLE_ORDER
@@ -111,6 +112,18 @@ export interface GuideOptions {
    * parser accepts them either way.
    */
   pictures?: boolean;
+  /**
+   * Opt-in (src/capabilities.ts): build the guide for just these building blocks
+   * (capabilities such as "forms" or "calculations", element names, or both)
+   * instead of every element. See assembleGuide and docs/capabilities.md. Left
+   * out (default), the guide is exactly what it was.
+   */
+  capabilities?: readonly string[];
+  /**
+   * The engine draws the report preset (its presets option): capability guides
+   * and the map offer "report" only then. Doesn't change the other modes.
+   */
+  presets?: boolean;
 }
 
 /** What the guide says about pictures (GuideOptions.pictures), from PICTURE_PROPS. */
@@ -136,7 +149,7 @@ ${Object.entries(MOTION_PROPS).map(([n, d]) => propLine(n, d)).join("\n")}
 }
 
 export type GuideMode = "full" | "compact" | "report";
-export type WorkedExampleName = "todo" | "form" | "cart" | "orders" | "booking" | "equipment" | "calculator" | "shopping";
+export type WorkedExampleName = "todo" | "form" | "signup" | "cart" | "orders" | "booking" | "equipment" | "calculator" | "shopping";
 
 function propLine(name: string, d: PropDef): string {
   const type = d.type === "enum" && d.values ? d.values.join("|") : d.type;
@@ -164,7 +177,7 @@ function componentBlock(c: ComponentDef, examples: boolean): string {
  * along: a table's table-column, a tab's tabs. Unknown names are returned so
  * the caller can say so.
  */
-export function elementGuide(registry: Registry, names: readonly string[], opts: { behavior?: boolean; pictures?: boolean } = {}): { text: string; unknown: string[] } {
+export function elementGuide(registry: Registry, names: readonly string[], opts: { behavior?: boolean; pictures?: boolean; alone?: boolean } = {}): { text: string; unknown: string[] } {
   const wanted: ComponentDef[] = [];
   const unknown: string[] = [];
   const add = (name: string) => {
@@ -175,7 +188,8 @@ export function elementGuide(registry: Registry, names: readonly string[], opts:
   for (const n of names) {
     const def = registry.get(n);
     add(n);
-    if (!def) continue;
+    // alone: just these elements, for a guide that already lists the ones they need.
+    if (!def || opts.alone) continue;
     if (Array.isArray(def.children)) def.children.forEach(add);
     def.parents?.forEach(add);
   }
@@ -309,6 +323,13 @@ card
   input "Email" bind=email kind=email placeholder="you@example.com"
   check "I agree to the club rules" bind=agree
   button "Sign up" on="emit:signup:{email};notify:'Welcome!'" disabled={!agree || trim(email) == ''}`,
+  signup: `state name="" email=""
+derive ready={len(trim(name)) >= 2 && includes(email, '@') && includes(email, '.')}
+card
+  text "Create your account" style=title
+  input "Name" bind=name required=true error="{len(trim(name)) < 2 ? 'At least 2 letters' : ''}"
+  input "Email" bind=email kind=email required=true placeholder="you@example.com"
+  button "Create account" on="emit:signup:{email};notify:'Account created'" disabled={!ready}`,
   booking: `state guests=2 nights=3
 card
   text "Cabin booking" style=title
@@ -637,6 +658,7 @@ function userFacingRules(has: (type: string) => boolean, mode: "full" | "compact
 
 /** The guide in sections, in order. languageGuide() joins them with blank lines. */
 export function guideSections(registry: Registry, opts: GuideOptions = {}): GuideSection[] {
+  if (opts.capabilities) return assembleGuide(registry, opts.capabilities, opts).sections;
   const ctx = context(registry, opts);
   if (ctx.mode === "report") return [{ name: "report", text: reportGuide(REPORT_FALLBACK) }, ...(opts.notes?.trim() ? [{ name: "notes", text: `ABOUT THIS APP\n${opts.notes.trim()}` }] : [])];
   return ctx.mode === "compact" ? compactSections(ctx) : fullSections(ctx);

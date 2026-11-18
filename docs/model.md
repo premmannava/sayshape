@@ -221,7 +221,15 @@ report "Claims review" subtitle="2025" data=claims filter=status
 
 It is a preset, not a component: the parser expands it into ordinary elements (`text`, `select`, `grid`, `card`, `stat`, `chart`, `table`) before reading the spec, so accessibility, Copy text, the inspector and everything else work as usual. Element ids, state, derived values and diagnostics keep the spec's own line numbers. `ui.expandedSpec` (and `ParseResult.presets.expanded`, or `expandPresets()` on its own) shows what a report became.
 
+A part line that makes nothing (an unknown part, a field the data doesn't have) is an error on its own line, such as `This line chart isn't shown: sales has no field "visitors". Its fields: month, amount`, so a report missing what was asked for goes back for repair instead of looking complete. The report's own list named first (`line sales month amount` on `data=sales`) means its rows.
+
 Turn it on in the engine with `presets: true` (`render(spec, { presets: true })` in tests), and give the model the report guide, `guide: { mode: "report" }`: about 490 tokens (o200k_base) instead of about 5,500 for the compact guide, teaching only the report, how to write data, and to answer `FULL` alone (`REPORT_FALLBACK`) when the request needs anything else. `generateReport()` does both steps: it asks with the report guide and, if the answer is `FULL`, once more with the compact guide (or `fallbackGuide`), adding up the usage of both. `generateSpec` checks specs with presets on whenever the guide is in report mode (or with `presets: true`). Off, `report` is an unknown element, as it always was, and every other guide is unchanged.
+
+### Guides for what's being built (the default)
+
+`generateSpec` with no `guide` uses adaptive guides: it sends a small map of the language first, a report is answered from it in one call, and for anything else the model names what it needs (`USE: …`) and is asked again with that guide (two calls, the first answer one line). The result's `route` says what was chosen. A `guide` you pass (text, or options with a `mode`, `profile` or `capabilities`) is sent as it is, in one call, as before; `guide: {}` is the full guide.
+
+`generateAdaptive()` sends a guide for just the capabilities a screen needs (`capabilities: ["forms", "calculations"]`, one call), or, for an open-ended request, a small map of the language first: a report is answered from it, and for anything else the model names what it needs (`USE: …`) and writes with that guide. `GuideOptions.capabilities` builds the same guide for `generateSpec` and `languageGuide`. See [adaptive guides](capabilities.md).
 
 ### Repairs
 

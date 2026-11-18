@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { UI_CLIENT } from "./clients";
-import { COLORS_DESCRIPTION, colorsNote, createServer, interfaceKey, quickStart, REPEAT_TEXT } from "../src/server";
+import { COLORS_DESCRIPTION, colorsNote, createServer, interfaceKey, adaptiveStart, REPEAT_TEXT } from "../src/server";
 import { chosenColors, colorsArrival, sameColors, toolColors } from "../src/ui/host-brand";
 import { decodeViewOptions, encodeViewOptions, parseViewArgs, type ViewOptions } from "../src/ui/view-options";
 import { themeForPreset } from "../src/ui/theme-selection";
@@ -40,8 +40,8 @@ describe("the colors argument", () => {
     expect(COLORS_DESCRIPTION.match(/[.!?](\s|$)/g) ?? []).toHaveLength(1);
     expect(COLORS_DESCRIPTION.endsWith(".")).toBe(true);
     expect(COLORS_DESCRIPTION).toMatch(/only when the person, or the instructions you were given, named colors/);
-    // The quick start (in the description) and sayshape_docs don't mention it.
-    expect(tool.description).toContain(quickStart());
+    // The map (in the description) and sayshape_docs don't mention it.
+    expect(tool.description).toContain(adaptiveStart());
     expect(tool.description).not.toMatch(/colors argument|"colors"/);
   });
 

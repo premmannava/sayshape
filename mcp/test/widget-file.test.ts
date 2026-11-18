@@ -481,7 +481,7 @@ describe("show_interface with --widget-dir", () => {
     const path = /^(\/\S+\.html)$/m.exec(text)?.[1];
     expect(path).toBeTruthy();
     expect(isAbsolute(path!)).toBe(true);
-    expect(await readFile(path!, "utf8")).toBe(widgetFragment({ spec: SPEC, engine: STAND_IN }));
+    expect(await readFile(path!, "utf8")).toBe(widgetFragment({ spec: SPEC, engine: STAND_IN, presets: true }));
     expect(text).toMatch(/Create the widget from that file exactly as it is/);
     expect(text).toMatch(/Don't read it and don't edit it/);
     expect(text).not.toMatch(/<\w|```|PAGE|jsdelivr/i);
@@ -495,7 +495,7 @@ describe("show_interface with --widget-dir", () => {
     const c = await connect(undefined, true, { widgetInline: true });
     const text = (await show(c, { spec: SPEC })).content[0]!.text;
     const path = /^(\/\S+\.html)$/m.exec(text)?.[1];
-    expect(await readFile(path!, "utf8")).toBe(widgetFragment({ spec: SPEC, engine: STAND_IN, inline: true }));
+    expect(await readFile(path!, "utf8")).toBe(widgetFragment({ spec: SPEC, engine: STAND_IN, inline: true, presets: true }));
     expect(text).toMatch(/Create the widget from that file exactly as it is/);
   });
 

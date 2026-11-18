@@ -198,13 +198,26 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
   const mainRows = main !== undefined ? data.value(main) : undefined;
   const suffix = r.no > 1 ? String(r.no) : "";
   const filters = (prop("filter") ?? "").split(",").map((f) => f.trim()).filter(Boolean);
-  const checkField = (line: number, list: string | undefined, rows: unknown, field: string): boolean => {
+  /** Why a field can't be used: the rows are known and don't have it. Undefined when it's fine (or the rows aren't known yet). */
+  const missingField = (list: string | undefined, rows: unknown, field: string): string | undefined => {
     const row = firstRow(rows);
-    if (row && !(field in row)) {
-      warn(line, `${list ?? "The data"} has no field "${field}". Its fields: ${Object.keys(row).join(", ")}`);
-      return false;
-    }
-    return true;
+    return row && !(field in row) ? `${list ?? "The data"} has no field "${field}". Its fields: ${Object.keys(row).join(", ")}` : undefined;
+  };
+  const checkField = (line: number, list: string | undefined, rows: unknown, field: string): boolean => {
+    const problem = missingField(list, rows, field);
+    if (problem) warn(line, problem);
+    return !problem;
+  };
+  // A part line that makes nothing is an error, like any skipped line: the screen would look complete without
+  // the chart, figure or table that was asked for, so the line is named and a model is sent back to fix it.
+  const drop = (line: number, part: string, why: string) => diags.push({ line, severity: "error", message: `This ${part} isn't shown: ${why}` });
+  const firstMissing = (list: string | undefined, rows: unknown, fields: readonly string[]) => fields.map((f) => missingField(list, rows, f)).find(Boolean);
+  // The report's own list named first (line sales month amount on data=sales), as another list would be: it means the report's rows.
+  // Only with words left after it that the part needs (a chart's x), so "bar sales" can still mean a field
+  // called sales while the rows aren't known yet.
+  const dropOwnName = (words: string[], needAfter: number) => {
+    const row = firstRow(mainRows);
+    if (main !== undefined && words[0] === main && words.length > needAfter && !(row && main in row)) words.shift();
   };
 
   // The rows parts work on: the data, narrowed by each filter that has something chosen.
@@ -248,8 +261,9 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
     if ((FIGURE_OPS as readonly string[]).includes(op)) {
       if (group !== "figures") { at(c.line, 1, "grid min=170 gap=12"); group = "figures"; }
       const field = words[0];
-      if (op !== "count" && !field) { warn(c.line, `${op} needs a field: ${op} amount`); continue; }
-      if (field && !checkField(c.line, main, mainRows, field)) continue;
+      if (op !== "count" && !field) { drop(c.line, `${op} figure`, `${op} needs a field: ${op} amount`); continue; }
+      const noField = field ? missingField(main, mainRows, field) : undefined;
+      if (noField) { drop(c.line, `${op} figure`, noField); continue; }
       let list = rows;
       for (const w of where) list = `filter(${list}, '${w.key}', ${literal(w.value)})`;
       const cond = where.map((w) => w.value).join(", ");
@@ -272,12 +286,15 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
     if ((CHART_KINDS as readonly string[]).includes(op)) {
       if (group !== "charts") { at(c.line, 1, "grid min=300 gap=12"); group = "charts"; }
       // A first word that names a list other than the report's data is the chart's own list.
+      dropOwnName(words, 1);
       const own = ownList(words, main, mainRows, data, 2) ? words.shift() : undefined;
       if (own) reads.add(own);
       const [x, ...ys] = words;
-      if (!x) { warn(c.line, `${op} needs the field to go along: ${op} month revenue, or ${op} region for a count per region`); continue; }
+      const chartPart = `${op} chart`;
+      if (!x) { drop(c.line, chartPart, `${op} needs the field to go along: ${op} month revenue, or ${op} region for a count per region`); continue; }
       const listRows = own ? data.value(own) : mainRows;
-      if (![x, ...ys].every((f) => checkField(c.line, own ?? main, listRows, f))) continue;
+      const noField = firstMissing(own ?? main, listRows, [x, ...ys]);
+      if (noField) { drop(c.line, chartPart, noField); continue; }
       let items: string, y: string;
       if (own) {
         items = own;
@@ -285,7 +302,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
         if (!picked.length) {
           const row = firstRow(listRows);
           const num = row && Object.keys(row).find((k) => k !== x && typeof row[k] === "number");
-          if (!num) { warn(c.line, `Say which field of ${own} to show: ${op} ${own} ${x} amount`); continue; }
+          if (!num) { drop(c.line, chartPart, `say which field of ${own} to show: ${op} ${own} ${x} amount`); continue; }
           picked = [num];
         }
         y = picked.join(",");
@@ -307,12 +324,14 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
     if (op === "table") {
       group = null;
       tables++;
+      dropOwnName(words, 0);
       const own = ownList(words, main, mainRows, data, 1) ? words.shift() : undefined;
       if (own) reads.add(own);
       const listRows = own ? data.value(own) : mainRows;
       const row = firstRow(listRows);
       const fields = words.length ? words : row ? Object.keys(row) : [];
-      if (!fields.every((f) => checkField(c.line, own ?? main, listRows, f))) continue;
+      const noField = firstMissing(own ?? main, listRows, fields);
+      if (noField) { drop(c.line, "table", noField); continue; }
       if (!fields.length) {
         // The data isn't here yet: a placeholder until it is (a host expands again then).
         at(c.line, 1, `skeleton shape=block`);
@@ -330,7 +349,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
       continue;
     }
 
-    warn(c.line, `"${op || c.text}" isn't a report part. Each line under a report is a figure (${FIGURE_OPS.join(", ")}), a chart (${CHART_KINDS.join(", ")}) or table`);
+    drop(c.line, "line", `"${op || c.text}" isn't a report part. Each line under a report is a figure (${FIGURE_OPS.join(", ")}), a chart (${CHART_KINDS.join(", ")}) or table`);
   }
 }
 
@@ -351,7 +370,18 @@ state targets=[{month: "Jan", goal: 1000, actual: 1200}, {month: "Feb", goal: 10
 export function reportGuide(fallbackWord: string): string {
   return `You show data in SayShape with one report. Output only SayShape: no prose, no code fences.
 
-EXAMPLE
+${reportSyntax()}
+
+ANYTHING ELSE
+If the request needs what a report can't show (a form, inputs, buttons, tabs, settings, cards of text, steps), write only ${fallbackWord} and nothing else.`;
+}
+
+/**
+ * How to write a report, with its example: the part of the report guide every guide that offers the
+ * preset shares (the report guide, and the capability map and guides in src/capabilities.ts).
+ */
+export function reportSyntax(): string {
+  return `EXAMPLE
 ${REPORT_EXAMPLE}
 
 REPORT
@@ -365,8 +395,5 @@ REPORT
 
 DATA
 - Data from the app: use its names in data= and charts; never copy its rows.
-- Data in the request: after the report, one state line per list, every row on that line, numbers unquoted, short field names.
-
-ANYTHING ELSE
-If the request needs what a report can't show (a form, inputs, buttons, tabs, settings, cards of text, steps), write only ${fallbackWord} and nothing else.`;
+- Data in the request: after the report, one state line per list, every row on that line, numbers unquoted, short field names.`;
 }

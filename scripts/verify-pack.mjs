@@ -543,7 +543,7 @@ async function verifyMcp(browser) {
   }
 
   // The existing end-to-end checks, pointed at the installed copy.
-  const e2e = [["e2e-import.mjs", "--mcp-result import (no browser)", false], ["e2e.mjs", "the view in a sandboxed iframe: handshake, streaming, themes, an emit: action back to the chat", true], ["e2e-data.mjs", "--data from the model's query to the rows in the view", true], ["e2e-fallback.mjs", "the page for text-only chat apps, opened in Chromium in light and dark", true], ["e2e-widget.mjs", "the widget file for chat apps that show widgets from files, opened under a locked-down policy", true]];
+  const e2e = [["e2e-import.mjs", "--mcp-result import (no browser)", false], ["e2e.mjs", "the view in a sandboxed iframe: handshake, streaming, themes, an emit: action back to the chat", true], ["e2e-data.mjs", "--data from the model's query to the rows in the view", true], ["e2e-fallback.mjs", "the page for text-only chat apps, opened in Chromium in light and dark", true], ["e2e-widget.mjs", "the widget file for chat apps that show widgets from files, opened under a locked-down policy", true], ["e2e-report.mjs", "reports with no flag: a report on the first turn, drawn by the view and a widget file, not offered on the CDN page", true]];
   for (const [script, what, needsBrowser] of e2e) {
     if (needsBrowser && !browser) {
       console.log(`  - skipped ${script} (no browser)`);

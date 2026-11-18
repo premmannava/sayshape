@@ -209,9 +209,9 @@ describe("bounded refinement", () => {
 });
 
 describe("existing callers", () => {
-  it("get the full guide, no context policy, and the same request shape as before", async () => {
+  it("with a guide of their own get it, no context policy, and the same request shape as before", async () => {
     const m = fakeModel([{ content: [good] }]);
-    const r = await generateSpec({ config, registry, request: "a card", fetch: m.fetch });
+    const r = await generateSpec({ config, registry, request: "a card", guide: {}, fetch: m.fetch });
     const sent = m.requests[0]!.body;
     expect(sent.messages[0]!.content).toContain("ELEMENTS AT A GLANCE");
     expect(sent.messages.slice(1)).toEqual([{ role: "user", content: "a card" }]);
