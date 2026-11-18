@@ -10,6 +10,7 @@ import { coreComponents } from "../src/components";
 import { mapComponents } from "../src/components/map";
 import { sceneComponents } from "../src/components/scene";
 import { slideComponents } from "../src/components/slides";
+import { deviceComponents } from "../src/components/device";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { render } from "../src/testing";
@@ -20,7 +21,7 @@ import { exampleSpec as exampleOf } from "./examples";
 import { textOverflows } from "./overflow";
 
 // deck and slide are in coreComponents; the slides entry point lists the same two.
-const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneComponents];
+const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneComponents, ...deviceComponents];
 
 /**
  * Experimental scenes are where the model paints: their colors are the spec's,
@@ -30,6 +31,8 @@ const ALL: ComponentDef[] = [...coreComponents, ...mapComponents, ...sceneCompon
 const SCENE_TYPES = new Set(sceneComponents.map((c) => c.type));
 /** Slides draw a slide, and everything on it, scaled to fit (childTransform), which the text check can't follow either. */
 const SLIDE_TYPES = new Set(slideComponents.map((c) => c.type));
+/** A device draws its screen, and everything on it, scaled to fit (childTransform) too. */
+const DEVICE_TYPES = new Set(deviceComponents.map((c) => c.type));
 const registry = new Registry(ALL);
 const WIDTHS = [320, 600, 1024];
 /** Phone and chat widths, where text is most likely not to fit. */
@@ -176,7 +179,7 @@ describe.each(ALL.map((d) => [d.type, d] as const))("%s", (_type, def) => {
   });
 
   // The map draws through a transform (it scales the world to fit), which the check can't follow.
-  if (!["map", "pin"].includes(def.type) && !SCENE_TYPES.has(def.type) && !SLIDE_TYPES.has(def.type)) {
+  if (!["map", "pin"].includes(def.type) && !SCENE_TYPES.has(def.type) && !SLIDE_TYPES.has(def.type) && !DEVICE_TYPES.has(def.type)) {
     describe.each(FIT_WIDTHS)("drawn at %ipx", (width) => {
       it("keeps its text inside itself, without squeezing it", () => {
         const ui = render(exampleSpec(def), { components: ALL, width });

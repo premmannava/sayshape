@@ -47,6 +47,10 @@
       "types": "./dist/types/components/slides/index.d.ts",
       "import": "./dist/slides.js"
     },
+    "./device": {
+      "types": "./dist/types/components/device/index.d.ts",
+      "import": "./dist/device.js"
+    },
     "./testing": {
       "types": "./dist/types/testing/index.d.ts",
       "import": "./dist/testing.js"
