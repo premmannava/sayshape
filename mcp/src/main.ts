@@ -149,7 +149,7 @@ async function main(): Promise<void> {
   // Layout first: only the model's guide changes; the view already draws placeholders while a spec streams in.
   setLayoutFirst(args.includes("--layout-first"));
   // Adaptive guides: the map up front and one docs call for the rest; the view draws reports (view.presets).
-  setAdaptiveGuides(view.presets === true);
+  setAdaptiveGuides(args.includes("--adaptive-guides"));
   // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.
   setImageHosts(view.imageHosts ?? []);
   const httpAt = args.indexOf("--http");

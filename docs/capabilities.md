@@ -16,7 +16,7 @@ The code is in `src/capabilities.ts` (the map and the assembler), `src/model/ada
 
 - It follows the app: `scenes` only with the scene elements registered, `behavior` only with `behavior: true` (otherwise `drag=` is left out of every guide), `report` only with `presets: true`.
 - An example is shown only if the guide's own elements can build it, so no control is added just to keep an example.
-- Names are matched case-blind, singular or plural, in any order: the same set always gives the same text, so prompts and token counts are stable.
+- Names are matched case-blind and in any order, and a singular or plural of a capability is that capability (`form` is `forms`) unless it's an element's own name (`list` is the element, `lists` the capability). The same set always gives the same text, so prompts and token counts are stable.
 - A name that can't be used comes back in `problems`, with a message saying why and what to ask for instead (`"scenes" isn't available here: this app doesn't draw scenes. Ask for data or content instead.`).
 - A capability brings what its guide relies on: `behavior` brings `button` (its guide says to add a Pause button), `scenes` brings `each` (a scene repeats shapes with `each items={range(n)}`).
 

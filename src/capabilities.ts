@@ -156,10 +156,13 @@ export function capabilityElements(registry: Registry, name: string): string[] {
     .map((c) => c.type);
 }
 
-/** A name as asked: lower case, and a plural or singular of a capability read as it (form → forms). */
-function canonical(topic: string, names: readonly string[]): string {
+/**
+ * A name as asked: lower case, and a plural or singular of a capability read as it (form → forms),
+ * unless it's an element's own name (list is the element, lists the capability).
+ */
+function canonical(topic: string, names: readonly string[], registry: Registry): string {
   const t = topic.trim().toLowerCase();
-  if (names.includes(t)) return t;
+  if (names.includes(t) || registry.has(t)) return t;
   if (names.includes(t + "s")) return t + "s";
   if (t.endsWith("s") && names.includes(t.slice(0, -1))) return t.slice(0, -1);
   return t;
@@ -254,7 +257,7 @@ export function assembleGuide(registry: Registry, topics: readonly string[], opt
   const problems: TopicProblem[] = [];
   let wantsFull = false;
   for (const raw of topics) {
-    const t = canonical(raw, allNames);
+    const t = canonical(raw, allNames, registry);
     if (!t) continue;
     if (t === FULL_GUIDE_TOPIC) { wantsFull = true; continue; }
     const def = CAPABILITIES.find((c) => c.name === t);

@@ -95,6 +95,14 @@ describe("assembling a guide", () => {
     expect(assembleGuide(withMap, ["forms", "calculations", "slider"]).text).toBe(a.text);
   });
 
+  it("reads an element's own name as the element, even when a capability is its plural", () => {
+    const g = assembleGuide(core, ["list"]);
+    expect(g.elements).toEqual(["list"]);
+    expect(g.capabilities).toEqual([]);
+    expect(g.exposed).toEqual(expect.arrayContaining(["list", "list-item"]));
+    expect(assembleGuide(core, ["lists"]).capabilities).toEqual(["lists"]);
+  });
+
   it("puts the shared rules in once, and the elements' syntax from their definitions", () => {
     const g = assembleGuide(withMap, ["lists", "calculations", "forms"]);
     for (const head of ["FORMAT", "EXPRESSIONS", "RULES", "ELEMENTS"]) expect(g.text.split(`\n${head}`).length - 1 + (g.text.startsWith(head) ? 1 : 0)).toBe(1);

@@ -213,9 +213,11 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
   const drop = (line: number, part: string, why: string) => diags.push({ line, severity: "error", message: `This ${part} isn't shown: ${why}` });
   const firstMissing = (list: string | undefined, rows: unknown, fields: readonly string[]) => fields.map((f) => missingField(list, rows, f)).find(Boolean);
   // The report's own list named first (line sales month amount on data=sales), as another list would be: it means the report's rows.
-  const dropOwnName = (words: string[]) => {
+  // Only with words left after it that the part needs (a chart's x), so "bar sales" can still mean a field
+  // called sales while the rows aren't known yet.
+  const dropOwnName = (words: string[], needAfter: number) => {
     const row = firstRow(mainRows);
-    if (main !== undefined && words[0] === main && !(row && main in row)) words.shift();
+    if (main !== undefined && words[0] === main && words.length > needAfter && !(row && main in row)) words.shift();
   };
 
   // The rows parts work on: the data, narrowed by each filter that has something chosen.
@@ -284,7 +286,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
     if ((CHART_KINDS as readonly string[]).includes(op)) {
       if (group !== "charts") { at(c.line, 1, "grid min=300 gap=12"); group = "charts"; }
       // A first word that names a list other than the report's data is the chart's own list.
-      dropOwnName(words);
+      dropOwnName(words, 1);
       const own = ownList(words, main, mainRows, data, 2) ? words.shift() : undefined;
       if (own) reads.add(own);
       const [x, ...ys] = words;
@@ -322,7 +324,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
     if (op === "table") {
       group = null;
       tables++;
-      dropOwnName(words);
+      dropOwnName(words, 0);
       const own = ownList(words, main, mainRows, data, 1) ? words.shift() : undefined;
       if (own) reads.add(own);
       const listRows = own ? data.value(own) : mainRows;

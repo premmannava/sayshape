@@ -177,6 +177,13 @@ state siteVisits=[{week: "W1", sessions: 120}, {week: "W2", sessions: 150}, {wee
     expect(ui.findAll("table-column").map((f) => f.node.props.field)).toEqual(["week", "sessions"]);
   });
 
+  it("still reads a lone word as a field while the rows aren't known yet", () => {
+    // bar sales on data=sales: sales may be a field of the rows (a count per value), so it isn't taken as the list.
+    const r = parse(`report "X" data=sales\n  bar sales\n`, registry, { presets: true, knownNames: ["sales"] });
+    expect(r.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    expect(r.presets!.expanded).toMatch(/chart "Sales by sales" kind=bar items=\{group\(sales, 'sales'\)\} x=sales y=count/);
+  });
+
   it("names the line of a chart that can't be drawn, as an error, and draws the rest", () => {
     const ui = render(TRAFFIC.replace("line siteVisits week sessions", "line week visitors"), { presets: true });
     const errors = ui.diagnostics.filter((d) => d.severity === "error");
