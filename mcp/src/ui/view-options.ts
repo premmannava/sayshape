@@ -16,6 +16,8 @@
  *   --no-copy-text      hide the "Copy text" button (shown by default)
  *   --no-select-text    no invisible text layer over the canvas: the words can't be selected, copied by
  *                       dragging or found with Ctrl/Cmd+F, and nothing extra is added to the page (on by default)
+ *   --no-chat-look      draw as before the chat look: the theme's background behind the interface, instead
+ *                       of the chat app's own background showing through
  *   --select-touch      let a long press on a touch screen select a word, with the phone's own handles and Copy menu
  *                       (off by default until checked on real phones); --no-select-touch says off explicitly
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
@@ -55,6 +57,11 @@ export interface ViewOptions {
    * Absent means on.
    */
   selectText?: boolean;
+  /**
+   * False with --no-chat-look: the view paints the theme's surface behind the interface, as before. Absent
+   * means on: the chat app's background shows through, where it said whether it's light or dark.
+   */
+  chatLook?: boolean;
   /** --select-touch / --no-select-touch: whether a long press on a touch screen selects a word (left out, the engine's default: off for now). Mouse and pen selection are unaffected. */
   selectTouch?: boolean;
   /** Experimental scenes are registered (the server must agree: setScenes). Absent means off. */
@@ -106,6 +113,7 @@ export function parseViewArgs(args: readonly string[]): ViewOptions {
   if (args.includes("--no-save-image")) out.saveImage = false;
   if (args.includes("--no-copy-text")) out.copyText = false;
   if (args.includes("--no-select-text")) out.selectText = false;
+  if (args.includes("--no-chat-look")) out.chatLook = false;
   if (args.includes("--select-touch")) out.selectTouch = true;
   if (args.includes("--no-select-touch")) out.selectTouch = false;
   if (args.includes("--no-model-colors")) out.modelColors = false;
@@ -245,7 +253,7 @@ export function encodeViewOptions(o: ViewOptions): string {
   // so a tag written before lists existed reads the same way; several are colors=rrggbb,rrggbb.
   const list = colorList(o.colors).map((c) => c.slice(1));
   const accent = list.length === 1 ? `&accent=${list[0]}` : list.length ? `&colors=${list.join(",")}` : "";
-  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.modelColors === false ? "&model=0" : ""}${o.selectText === false ? "&select=0" : ""}${o.selectTouch === undefined ? "" : `&touch=${o.selectTouch ? 1 : 0}`}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
+  return `picker=${o.themePicker ? 1 : 0}&theme=${o.theme}${accent}&save=${o.saveImage ? 1 : 0}&copy=${o.copyText ? 1 : 0}${o.modelColors === false ? "&model=0" : ""}${o.selectText === false ? "&select=0" : ""}${o.chatLook === false ? "&chat=0" : ""}${o.selectTouch === undefined ? "" : `&touch=${o.selectTouch ? 1 : 0}`}${o.scene ? "&scene=1" : ""}${o.behavior ? "&behavior=1" : ""}${o.logo ? `&logo=${encodeURIComponent(o.logo)}` : ""}${images}`;
 }
 
 /** The settings from encodeViewOptions; anything missing or unknown keeps its default. */
@@ -257,6 +265,7 @@ export function decodeViewOptions(raw: string | null | undefined): ViewOptions {
   if (p.get("save") === "0") out.saveImage = false;
   if (p.get("copy") === "0") out.copyText = false;
   if (p.get("select") === "0") out.selectText = false;
+  if (p.get("chat") === "0") out.chatLook = false;
   if (p.get("touch") === "0") out.selectTouch = false;
   if (p.get("touch") === "1") out.selectTouch = true;
   if (p.get("model") === "0") out.modelColors = false;
