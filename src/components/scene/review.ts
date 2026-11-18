@@ -137,6 +137,8 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
     translate(x: number, y: number) { st.m = mul(st.m, [1, 0, 0, 1, x, y]); },
     rotate(a: number) { st.m = mul(st.m, [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0]); },
     scale(x: number, y: number) { st.m = mul(st.m, [x, 0, 0, y, 0, 0]); },
+    // glow= and shadow= read it to size their blur.
+    getTransform() { const [a, b, c, d, e, f] = st.m; return { a, b, c, d, e, f }; },
     beginPath() { path = []; segment = []; },
     moveTo: add, lineTo: add,
     quadraticCurveTo(a: number, b: number, x: number, y: number) { add(a, b); add(x, y); },
