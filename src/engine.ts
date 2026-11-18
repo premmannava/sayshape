@@ -729,6 +729,10 @@ export class SayShape {
     const d = this.state.derivation(key);
     if (!d) return false;
     const item = path.replace(/^remove:/, "") !== key;
+    if (item && path.startsWith("remove:")) {
+      this.warn(`Can't do ${path}: ${key} is derived (derive ${key} on line ${d.line}), and its items were made by the expression (extend, map, rank and group make new ones), so they aren't in any list in state. ${REMOVE_FROM_SOURCE}`);
+      return true;
+    }
     this.warn(`Can't change ${path}: ${key} is derived (derive ${key} on line ${d.line}), so it changes only when what it's computed from changes.${item ? " Its items were built by the expression, not taken from a list in state: filter, sort, search and take keep items that can be changed" : ""}`);
     return true;
   }
@@ -1912,6 +1916,12 @@ export class SayShape {
   private removeAt(node: SayShapeNode, path: string, own?: OwnCopy): void {
     const place = this.placeFor(node, path, own);
     const at = place?.steps.at(-1);
+    const first = path.split(".")[0]!;
+    // A loop variable holding an item no list in state has: one extend() or map() made.
+    if (!place && PATH.test(path) && !this.state.has(first) && this.scopeFor(node, own)(first) !== undefined) {
+      this.warn(`Can't do remove:${path}: ${first} was made by an expression (extend, map, rank and group make new items), so it isn't in any list in state. ${REMOVE_FROM_SOURCE}`);
+      return;
+    }
     if (!place || typeof at !== "number") {
       this.warn(`remove:${path} needs ${path} to be an item of a list in state, like remove:t inside each items=todos as=t. To remove by position, write remove:list:index`);
       return;
@@ -2799,6 +2809,9 @@ function applyPose(g: CanvasRenderingContext2D, box: Box, pose: EnterPose): void
 }
 
 /** How often, at most, the mirror follows regions that move without layout (an animated scene's shapes). */
+/** What to do instead of removing an item an expression made (remove:t inside each over extend() or map()). */
+const REMOVE_FROM_SOURCE = "Remove from the source list instead: loop over it (each items=tasks as=t, with if= to hide items) or over filter() or sort() of it, which keep items removable";
+
 const REGION_REFRESH_MS = 250;
 
 /** How long a notify: message stays up, and how long it takes to fade in or out. */

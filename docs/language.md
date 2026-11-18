@@ -122,6 +122,16 @@ Interactive elements run actions from their `on=` prop.
 
 The key of `inc`, `dec`, `toggle` and `set` can be a path into data, like `toggle:t.done` ([Lists](#lists)). A quoted value is text: `set:msg:'Hi there'`.
 
+`remove:t` inside an `each` over a filtered or sorted list removes the item from the list in state it came from, since `filter`, `sort`, `search`, `take` and `slice` keep the items themselves:
+
+```sayshape
+state tasks=[{text: "Pay rent", done: true}, {text: "Call Sam", done: false}]
+each items={sort(filter(tasks, 'done'), 'text')} as=t
+  button "Delete {t.text}" on=remove:t
+```
+
+Items made by `extend`, `map`, `rank` or `group` are new, in no list in state, so `remove:t` on one does nothing and warns: remove from the source list instead.
+
 Run several in order with `;`:
 
 ```
