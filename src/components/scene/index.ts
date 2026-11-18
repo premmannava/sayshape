@@ -104,6 +104,21 @@ export function sceneTime(box: Box, ctx: PaintContext, duration: number, loop: b
   return Math.min(elapsed, duration);
 }
 
+/** Smallest share of its own width scale= takes. */
+export const MIN_SCENE_SCALE = 0.1;
+
+/**
+ * How wide a scene is shown in a space `room` wide: all of it, unless maxw=
+ * (screen pixels) or scale= (a share of its own width w) asks for less. Never
+ * wider than the space, never under a pixel.
+ */
+export function shownWidth(room: number, w: number, maxw?: number, scale?: number): number {
+  let shown = room;
+  if (maxw !== undefined && Number.isFinite(maxw) && maxw > 0) shown = Math.min(shown, maxw);
+  if (scale !== undefined && Number.isFinite(scale)) shown = Math.min(shown, w * Math.min(1, Math.max(MIN_SCENE_SCALE, scale)));
+  return Math.max(1, shown);
+}
+
 // ---------- the elements ----------
 
 const scene: ComponentDef = {
@@ -120,6 +135,8 @@ const scene: ComponentDef = {
     duration: num("Seconds the animation runs (t goes from 0 to this). 0 is a still picture.", 0),
     loop: { type: "boolean", description: "Start again when it ends.", default: true },
     bg: color("Background color behind everything."),
+    maxw: num("The widest it's shown, in screen pixels, centered; it still shrinks on a narrower screen. A phone drawn at w=393: maxw=295."),
+    scale: num("Show it at this share of its own w (0.1 to 1), centered, like maxw={w * scale}."),
   },
   children: SHAPES,
   provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS },
@@ -146,6 +163,10 @@ const scene: ComponentDef = {
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const w = Math.max(1, p.num("w", 600)), h = Math.max(1, p.num("h", 340));
+    // maxw= or scale= show it smaller than its space, centered in it, at its own proportions.
+    const shown = shownWidth(box.w, w, p.has("maxw") ? p.num("maxw", 0) : undefined, p.has("scale") ? p.num("scale", 1) : undefined);
+    box.x += (box.w - shown) / 2;
+    box.w = shown;
     box.h = Math.min(MAX_SCENE_HEIGHT, (box.w * h) / w);
   },
   paint(box, ctx) {

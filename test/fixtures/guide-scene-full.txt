@@ -883,6 +883,8 @@ ELEMENTS
     duration=<number>  Seconds the animation runs (t goes from 0 to this). 0 is a still picture.
     loop=<boolean>  Start again when it ends.
     bg=<string>  Background color behind everything.
+    maxw=<number>  The widest it's shown, in screen pixels, centered; it still shrinks on a narrower screen. A phone drawn at w=393: maxw=295.
+    scale=<number>  Show it at this share of its own w (0.1 to 1), centered, like maxw={w * scale}.
     children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
     example:
       scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
