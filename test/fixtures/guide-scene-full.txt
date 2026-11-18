@@ -103,7 +103,7 @@ EVERY ELEMENT ACCEPTS
 
 ELEMENTS AT A GLANCE
 - layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll, deck, slide
-- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient, let
+- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient, let, emit
 - data: stat, rating, chart, chart-line, chart-rule, chart-band, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
 - navigation: screen, tabs, tab, breadcrumb, pagination
@@ -885,7 +885,7 @@ ELEMENTS
     shake=<number>  Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}. Also on group.
     rate=<number>  How fast t runs, smoothly: 2 is double, 0 pauses (rate={speed}).
     bg=<string>  Background color behind everything.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let
+    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let, emit
     example:
       scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
         # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
@@ -1066,7 +1066,7 @@ ELEMENTS
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let
+    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let, emit
     only inside: scene, group, define
     example:
       group x={600*((t/3) % 1)} y=200
@@ -1076,7 +1076,7 @@ ELEMENTS
 
   define "<text>"  — A reusable drawing: name it, draw it under this line around 0,0, and draw it anywhere with use. It reads names its use passes in args.
     "<text>" (required)  The drawing's name, used by use.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let
+    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let, emit
     only inside: scene
     example:
       define "cactus"
@@ -1113,6 +1113,11 @@ ELEMENTS
     only inside: scene, group, define
     example:
       let a={t*1.5}
+
+  emit  — Confetti, snow, sparks: count≤600 from=burst second (else endless) fill shape=rect|line x y w h angle spread speed gravity drag wind life size flutter.
+    only inside: scene, group, define
+    example:
+      emit count=60 from=1 spread=360 shape=line fill="accent, warn"
 
 PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)
 - a headline number with its change and recent trend: stat change="+12%" spark=weekly

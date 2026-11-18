@@ -32,6 +32,7 @@ import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
 import { numOf, paintScene, strOf, type Frame } from "./draw";
 import { lightPoint } from "./light";
+import { emitDef } from "./emit";
 import { apply } from "./interact";
 import { locateOf } from "../../each";
 import { dragShape, keyShape, rangeOf } from "./drag";
@@ -40,6 +41,7 @@ import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, region
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
 export { MAX_SCENE_SHAPES, MAX_SCENE_STEPS, MAX_USE_DEPTH, THEME_COLORS } from "./draw";
+export { MAX_SCENE_PARTICLES } from "./emit";
 export { reviewScene, reviewScenes, MAX_DRAWING_PROBLEMS, PHONE_WIDTH, type MeasureText } from "./review";
 export { liveOf as sceneRegions, type SceneRegion } from "./interact";
 
@@ -47,7 +49,7 @@ export { liveOf as sceneRegions, type SceneRegion } from "./interact";
 const MAX_SCENE_HEIGHT = 2000;
 
 /** What a scene and its groups and drawings hold. */
-const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use", "define", "gradient", "let"] as const;
+const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use", "define", "gradient", "let", "emit"] as const;
 const IN_SCENE = ["scene", "group", "define"] as const;
 
 const num = (description: string, def?: number): PropDef => (def === undefined ? { type: "number", description } : { type: "number", description, default: def });
@@ -228,6 +230,7 @@ function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeat
     // t is read from the frame, not captured, so a drawing can be redrawn at an earlier moment (trails).
     const base: Scope = (name) => (name === "t" ? f.time : name === "PI" ? Math.PI : ctx.scope(name));
     f.motion = ctx.motion;
+    f.clock = { duration: p.num("duration", 0), loop: p.bool("loop", true) };
     f.sceneId = box.node.id;
     if (box.node.props.shake !== undefined) f.shake = numOf(box.node, "shake", base);
     const light = lightPoint(box.node.props.light === undefined ? undefined : strOf(box.node, "light", base));
@@ -515,7 +518,7 @@ const letLine: ComponentDef = {
  *   new SayShape(canvas, { components: [...coreComponents, ...sceneComponents] })
  * Leave them out and scenes are off: "scene" is then an unknown element.
  */
-export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient, letLine];
+export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient, letLine, emitDef];
 
 /** What each feature adds: elements, and props on other elements. Off, they're left out. */
 const FEATURE_PARTS: Record<keyof SceneFeatures, { elements: readonly string[]; props: readonly string[] }> = {

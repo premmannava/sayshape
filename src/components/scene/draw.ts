@@ -21,6 +21,7 @@ import { fadeColor, gradientStops } from "./fade";
 import { highlightOf } from "./light";
 import { shakeOffset, shakeSeed } from "./shake";
 import { letScope } from "./lets";
+import { drawEmit } from "./emit";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -130,6 +131,12 @@ export interface Frame {
   shake?: number;
   /** Scene features this host has on (sceneComponentsWith); unset means all on. */
   features?: { particles: boolean; reflect: boolean };
+  /** The scene's duration= and loop=: emit fits endless particle flows to a loop. */
+  clock?: { duration: number; loop: boolean };
+  /** Particles drawn so far this frame, those asked for, and the first emit line that got fewer than it asked (emit.ts). */
+  particles?: number;
+  particlesAsked?: number;
+  particlesOver?: number;
   /** The scene line's id, seeding its shake. */
   sceneId?: string;
   /** Told about each element just before it's drawn (the drawing check uses this to know what drew what). */
@@ -540,6 +547,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       });
       return;
     }
+    case "emit": if (f.features?.particles !== false) drawEmit(node, scope, f); return;
     case "group":
     case "use": {
       let kids = node.children, inner = scope;
