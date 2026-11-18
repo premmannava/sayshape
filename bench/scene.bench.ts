@@ -1,7 +1,7 @@
 /**
  * Scene benchmarks: one frame of the factory monitor, the same scene with
  * nothing pressable, 150 shapes with and without z or trails, finding what's under the
- * pointer, particles (emit) and a reflected skyline.
+ * pointer, particles (emit), a reflected skyline and blur (fog, a blurred snowstorm).
  *
  *   npm run bench -- bench/scene.bench.ts
  *
@@ -161,4 +161,42 @@ describe("scene reflect", () => {
   bench("skyline reflect, cached buffer + ripple", cached);
   bench("skyline reflect, contents read t", moving);
   bench("skyline, no reflect", none);
+});
+
+/**
+ * blur= (blur.ts) with OffscreenCanvas stubbed by the recording canvas: the
+ * snowstorm with 12 near flakes in one blurred group and 10 far ones blurred
+ * each, against the same flakes sharp, and a drifting fog bank (cached bitmap).
+ */
+const SNOW_BLUR = `scene "Snowstorm" w=600 h=340 duration=10 bg="#16324F"
+  each items={range(10)} as=i
+    circle x={(i*67 + t*12) % 620 - 10} y={(i*41 + t*18) % 360 - 10} r=2 fill="#FFFFFF" opacity=0.5 blur=2
+  each items={range(140)} as=i
+    circle x={(i*37 + t*(30 + 20*random(i))) % 620 - 10} y={(i*53 + t*(40 + 30*random(i+7))) % 360 - 10} r={1.5 + 3*random(i+3)} fill="#FFFFFF" opacity={0.5 + 0.5*random(i+11)}
+  group blur=4
+    each items={range(12)} as=i
+      circle x={(i*97 + t*60) % 680 - 40} y={(i*61 + t*90) % 420 - 40} r={10 + 8*random(i+5)} fill="#FFFFFF" opacity=0.8`;
+const FOG = `scene "Fog" w=600 h=340 duration=12 bg="#1E2D44"
+  rect x=0 y=210 w=600 h=130 fill="#2F4858"
+  group x={-80 + 15*t} y=0 blur=24 opacity=0.85
+    ellipse x=160 y=190 rx=150 ry=30 fill="#FFFFFF 45%"
+    ellipse x=380 y=212 rx=190 ry=36 fill="#FFFFFF 35%"
+    ellipse x=600 y=180 rx=150 ry=28 fill="#FFFFFF 40%"`;
+
+describe("scene blur", () => {
+  class Offscreen {
+    private rec = createRecordingContext();
+    constructor(public width: number, public height: number) {}
+    getContext() { return this.rec.context; }
+  }
+  const g = globalThis as { OffscreenCanvas?: unknown };
+  g.OffscreenCanvas ??= Offscreen;
+  const frame = (spec: string) => {
+    const ui = render(spec, { components, width: 1000, animate: true, clock: true });
+    return () => { ui.clock.advance(16); };
+  };
+  bench("snowstorm, blurred near and far flakes", frame(SNOW_BLUR));
+  bench("snowstorm, same flakes sharp", frame(SNOW_BLUR.replace(/ blur=\d+/g, "")));
+  bench("fog bank drifting, cached blur", frame(FOG));
+  bench("fog bank, sharp", frame(FOG.replace(" blur=24", "")));
 });

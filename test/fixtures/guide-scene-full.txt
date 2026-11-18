@@ -1064,6 +1064,7 @@ ELEMENTS
     shake=<number>  Like scene's.
     z=<number>  Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.
     trail=<number>  Seconds of fading copies left behind as it moves; trail-count= how many (12). Shapes too.
+    blur=<number>  Softens it, in px: fog, smoke. Shapes too.
     reflect=<number>  Mirrors it below this y, like water; ripple= waves it, fade= dims it (0 to 1).
     on=<action>  Actions when it's pressed (click, tap, Enter), like a button's on=; makes it pressable and a Tab stop. Inside the scene's each they see the item: on=set:sel:{m.id}.
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.

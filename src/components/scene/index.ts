@@ -74,6 +74,10 @@ const REFLECT: Record<string, PropDef> = {
   fade: { ...num("How fast the reflection fades, 0 to 1.", 0.5), unlisted: true },
 };
 
+/** blur= (blur.ts): said once, on group; shapes and use take it unlisted. */
+const BLUR: PropDef = num("Softens it, in px: fog, smoke. Shapes too.");
+const BLUR_SHAPE: PropDef = { ...BLUR, unlisted: true };
+
 /** Props every shape takes. */
 const PAINT: Record<string, PropDef> = {
   fill: color('Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.'),
@@ -86,6 +90,7 @@ const PAINT: Record<string, PropDef> = {
   glow: { type: "boolean", description: "A soft light around it in its own color: a sun, a lamp, a live dot.", default: false },
   z: Z_SHAPE,
   ...TRAIL_SHAPE,
+  blur: BLUR_SHAPE,
 };
 /** For filled shapes only. */
 const SHINE: Record<string, PropDef> = {
@@ -482,7 +487,7 @@ const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), z: Z, trail: TRAIL, "trail-count": TRAIL_COUNT, ...REFLECT, ...PRESS, ...HOVER, ...DRAG },
+  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), z: Z, trail: TRAIL, "trail-count": TRAIL_COUNT, blur: BLUR, ...REFLECT, ...PRESS, ...HOVER, ...DRAG },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
@@ -521,6 +526,7 @@ const use: ComponentDef = {
     x: num("Across."), y: num("Down."), rotate: num("Degrees."), scale: num("Size.", 1), opacity: num("0 to 1.", 1),
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
     z: Z_SHAPE,
+    blur: BLUR_SHAPE,
     ...unlisted(REFLECT),
     ...TRAIL_SHAPE,
     ...PRESS,
