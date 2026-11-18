@@ -11,6 +11,7 @@
  * objects or globals, so model-written expressions cannot run code.
  */
 import { displayData, fieldOf, isData, isList, isRecord, isScalar, makeList, makeRecord, MAX_DATA_DEPTH, MAX_DATA_VALUES, readField, toNumber } from "./data";
+import { TEXT_HAS, TEXT_IS } from "./text-checks";
 import type { DataList, DataRecord, Value } from "./types";
 
 type Node =
@@ -260,6 +261,29 @@ function range(a: Value | undefined, b: Value | undefined): Value {
   return counting(from, count);
 }
 
+/** Text for the text checks: text as it is, a number as written, and null for anything else (null, true/false, lists, records). */
+const checkedText = (v: Value | undefined): string | null => (typeof v === "string" ? v : typeof v === "number" && isFinite(v) ? String(v) : null);
+
+/** The check a name picks for has() or is(); any other name is an error listing them, even for empty text. */
+function namedCheck<T>(fn: string, checks: ReadonlyMap<string, T>, kind: Value | undefined): T {
+  const found = typeof kind === "string" ? checks.get(kind) : undefined;
+  if (found === undefined) throw new ExprError(`${fn}() checks ${[...checks.keys()].map((k) => `'${k}'`).join(", ")}, not ${typeof kind === "string" ? `'${kind}'` : describeValue(kind)}`);
+  return found;
+}
+
+/**
+ * contains, starts and ends: whether text has another text in it, at its start or at its end,
+ * ignoring case unless the third argument is 'case'. Empty or null text is false, never an error.
+ */
+function textMatch(fn: "contains" | "starts" | "ends", text: Value | undefined, part: Value | undefined, mode: Value | undefined): boolean {
+  if (mode !== undefined && mode !== "case") throw new ExprError(`${fn}() ignores case, or with 'case' as its third argument matches it; nothing else goes there`);
+  if (isList(text) || isRecord(text)) throw new ExprError(`${fn}() checks text, not ${describeValue(text)}${fn === "contains" ? ": for a list use includes(list, value)" : ""}`);
+  const t = checkedText(text), p = checkedText(part);
+  if (!t || p === null) return false;
+  const [a, b] = mode === "case" ? [t, p] : [t.toLowerCase(), p.toLowerCase()];
+  return fn === "contains" ? a.includes(b) : fn === "starts" ? a.startsWith(b) : a.endsWith(b);
+}
+
 const BUILTINS: Record<string, Fn> = {
   min: (...a) => extreme(false, a),
   max: (...a) => extreme(true, a),
@@ -323,7 +347,17 @@ const BUILTINS: Record<string, Fn> = {
   },
   /** range(5) is [0, 1, 2, 3, 4], range(1, 4) is [1, 2, 3]: the end is left out, like slice(). */
   range: (a, b) => range(a, b),
-  /** Whether a list holds a value, or text contains other text. */
+  /** has(pw, 'digit'): whether text has a digit, an upper or lower case letter, a symbol or a space, in any script. */
+  has: (t, kind) => { const re = namedCheck("has", TEXT_HAS, kind); const s = checkedText(t); return !!s && re.test(s); },
+  /** is(email, 'email'): whether the text is an email, url, phone, zip, number or date (YYYY-MM-DD). */
+  is: (t, kind) => { const ok = namedCheck("is", TEXT_IS, kind); const s = checkedText(t)?.trim(); return !!s && ok(s); },
+  /** contains(name, query): text in other text, ignoring case; contains(code, 'A', 'case') matches case. */
+  contains: (t, part, mode) => textMatch("contains", t, part, mode),
+  /** starts(name, 'Dr'): whether text starts with other text, ignoring case unless the third argument is 'case'. */
+  starts: (t, part, mode) => textMatch("starts", t, part, mode),
+  /** ends(file, '.pdf'): whether text ends with other text, ignoring case unless the third argument is 'case'. */
+  ends: (t, part, mode) => textMatch("ends", t, part, mode),
+  /** Whether a list holds a value, or text contains other text (matching case: contains() ignores it). */
   includes: (v, x) => (isList(v) ? v.some((item) => item === x) : typeof v === "string" && x !== undefined && x !== null ? v.includes(formatValue(x)) : false),
   round: (n, d = 0) => {
     const f = 10 ** toNumber(d);
@@ -418,6 +452,8 @@ const SIGNATURES: Record<string, string> = {
   extend: "extend(list, 'q', {field: q.a * 2}) adds computed fields to each item, which is q inside the braces",
   map: "map(list, 'q', q.a * 2) makes one value per item, which is q in the third argument",
   range: "range(n) for 0 to n - 1, or range(from, to) with to left out",
+  has: "has(text, 'digit'), or 'upper', 'lower', 'symbol' or 'space'", is: "is(text, 'email'), or 'url', 'phone', 'zip', 'number' or 'date'",
+  contains: "contains(text, part), or contains(text, part, 'case') to match case", starts: "starts(text, part[, 'case'])", ends: "ends(text, part[, 'case'])",
 };
 
 function tooManyArgs(name: string, got: number): string {
@@ -442,7 +478,8 @@ const FUNCTION_HINTS: Record<string, string> = {
   maxby: "first(sort(list, 'field', 'desc'))", minby: "first(sort(list, 'field'))",
   max_by: "first(sort(list, 'field', 'desc'))", min_by: "first(sort(list, 'field'))",
   mean: "avg(list, 'field')", average: "avg(list, 'field')", total: "sum(list, 'field')",
-  where: "filter(list, 'field', value)", contains: "includes(list, value)",
+  where: "filter(list, 'field', value)", startswith: "starts(text, part)", starts_with: "starts(text, part)", endswith: "ends(text, part)", ends_with: "ends(text, part)",
+  match: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns", regex: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns", test: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns",
   groupby: "group(list, 'field', 'amount')", group_by: "group(list, 'field', 'amount')", aggregate: "group(list, 'field', 'amount')", pivot: "group(list, 'field', 'amount')",
   format: "number(n) or money(n)", currency: "money(n)", tofixed: "fixed(n, 2)", str: "text in quotes: \"{n} items\"", string: "text in quotes: \"{n} items\"",
   if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes",
@@ -611,6 +648,10 @@ function parseExpr(src: string, fns?: ExpressionFunctions): Node {
           return { k: "call", fn: t.v, args, extra };
         }
         if (args.length > MAX_ARGS[t.v]!) throw new ExprError(tooManyArgs(t.v, args.length));
+        // A check named in quotes is known now, so a misspelt one is reported on its line, not when it runs.
+        const kind = args[1];
+        if (t.v === "has" && kind?.k === "lit") namedCheck("has", TEXT_HAS, kind.v);
+        if (t.v === "is" && kind?.k === "lit") namedCheck("is", TEXT_IS, kind.v);
         return { k: "call", fn: t.v, args };
       }
       return { k: "id", name: t.v };

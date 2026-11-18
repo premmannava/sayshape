@@ -19,7 +19,8 @@ EXPRESSIONS
 - {…} reads state: {count}, {price*qty}, {done ? 'Yes' : 'No'}, {round(total, 2)}
 - Text can mix words and expressions: "Total: ${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! and a ? b : c
-- Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, range, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend, map
+- Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, range, has, is, contains, starts, ends, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend, map
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Words inside {…} are state names. Quote text: {done ? 'Packed' : 'To pack'}, tone={late ? 'bad' : 'good'}
 
 ACTIONS (on=…)
@@ -59,7 +60,7 @@ DATA AND LISTS
 - For a list inside each item (an order's lines, a day's activities), put an each inside the each: each items=o.lines as=line
 - SayShape has no JSX, HTML or JavaScript. {…} only computes values; it never makes elements. Repeat with each.
 - To let people add an item they name, bind an input to a state value, add it, then clear it: input "New item" bind=task on="add:todos:{text: task, done: false};set:task:''"
-- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={includes(lower(t.name), lower(query))}; count matches with len(search(trails, 'name', query))
+- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={contains(t.name, query)}; count matches with len(search(trails, 'name', query))
 
 A to-do list:
   state task="" todos=[{text: "Pack water", done: true}, {text: "Charge headlamp", done: false}, {text: "Snacks", done: false}]

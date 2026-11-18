@@ -7,6 +7,7 @@ import { MOTION } from "../design";
 import { detailProp, fillTint, iconBefore, iconProblems, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
 import { drawIcon, isIconName, type IconName } from "../icons";
 import { fitLines, wrapText } from "../text";
+import { EMAIL } from "../text-checks";
 
 const VARIANTS = ["primary", "secondary", "danger"] as const;
 
@@ -935,8 +936,6 @@ function fieldHeight(p: PropReader, controlHeight: number): number {
   const rows = linesOf(p);
   return rows > 1 ? Math.max(controlHeight, rows * multiLineHeight() + 2 * MULTI_PAD) : controlHeight;
 }
-
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** What's wrong with a field's value, in plain words, or "": required, an email's or a number's form, then its own error=. */
 export function fieldProblem(p: PropReader, unparsed: boolean): string {
