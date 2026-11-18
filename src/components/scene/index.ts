@@ -91,17 +91,38 @@ const PRESS_SHAPE: Record<string, PropDef> = {
 
 const leaf = { layout: (box: Box) => { box.h = 0; }, semantics: () => false as const, parents: IN_SCENE, noBox: true } satisfies Partial<ComponentDef>;
 
-/** The scene's time in seconds for this frame, asking for the next frame while it moves. */
-export function sceneTime(box: Box, ctx: PaintContext, duration: number, loop: boolean): number {
+/** The fastest a scene's clock runs, either way (rate=). */
+export const MAX_SCENE_RATE = 100;
+
+/**
+ * The scene's time in seconds for this frame, asking for the next frame while it moves.
+ *
+ * The clock integrates: each frame adds the real seconds since the last one times
+ * rate, so changing rate (a speed control bound to state) changes only how fast
+ * things move, never where they are. rate=0 pauses; a negative rate runs it backwards.
+ */
+export function sceneTime(box: Box, ctx: PaintContext, duration: number, loop: boolean, rate = 1): number {
   if (duration <= 0) return 0;
   // Without motion (the animate option, or reduced motion), a still: the end of the animation.
   if (!ctx.motion) return duration;
+  const r = Number.isFinite(rate) ? Math.max(-MAX_SCENE_RATE, Math.min(MAX_SCENE_RATE, rate)) : 1;
   const view = ctx.view(box.node);
-  if (view.start === undefined) view.start = ctx.now;
-  const elapsed = Math.max(0, (ctx.now - view.start) / 1000);
-  if (loop) { ctx.requestFrame(); return elapsed % duration; }
-  if (elapsed < duration) ctx.requestFrame();
-  return Math.min(elapsed, duration);
+  // Time runs from an anchor: the moment the rate last changed and the scene time then.
+  // A new rate re-anchors at the current moment, so it changes speed, never position.
+  if (typeof view.since !== "number") { view.since = ctx.now; view.base = 0; view.rate = r; }
+  const num = (k: string) => Number(view[k] ?? 0);
+  if (num("rate") !== r) {
+    let base = num("base") + Math.max(0, (ctx.now - num("since")) / 1000) * num("rate");
+    if (!loop) base = Math.max(0, Math.min(duration, base));
+    view.base = base; view.since = ctx.now; view.rate = r;
+  }
+  const played = num("base") + Math.max(0, (ctx.now - num("since")) / 1000) * r;
+  // Seconds played so far, unwrapped (trails use it to know what was on screen before a restart).
+  view.played = played;
+  let t = loop ? played % duration : Math.max(0, Math.min(duration, played));
+  if (t < 0) t += duration;
+  if (r !== 0 && (loop || (r > 0 ? t < duration : t > 0))) ctx.requestFrame();
+  return t;
 }
 
 // ---------- the elements ----------
@@ -119,6 +140,7 @@ const scene: ComponentDef = {
     h: num("Height of the drawing area, in scene pixels.", 340),
     duration: num("Seconds the animation runs (t goes from 0 to this). 0 is a still picture.", 0),
     loop: { type: "boolean", description: "Start again when it ends.", default: true },
+    rate: num("How fast t runs: 2 is double speed, 0 pauses. Changing it never makes things jump: rate={speed}.", 1),
     bg: color("Background color behind everything."),
   },
   children: SHAPES,
@@ -151,14 +173,16 @@ const scene: ComponentDef = {
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const w = Math.max(1, p.num("w", 600)), h = Math.max(1, p.num("h", 340));
-    const t = sceneTime(box, ctx, p.num("duration", 0), p.bool("loop", true));
-    const base: Scope = (name) => (name === "t" ? t : name === "PI" ? Math.PI : ctx.scope(name));
+    const t = sceneTime(box, ctx, p.num("duration", 0), p.bool("loop", true), p.num("rate", 1));
     const g = ctx.g;
     const sx = box.w / w, sy = box.h / h;
     const f: Frame = {
-      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
+      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: t,
+      played: ctx.motion ? Number(ctx.view(box.node).played ?? t) : t,
       m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
     };
+    // t is read from the frame, not captured, so a drawing can be redrawn at an earlier moment (trails).
+    const base: Scope = (name) => (name === "t" ? f.time : name === "PI" ? Math.PI : ctx.scope(name));
     if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
     g.save();
     g.beginPath();

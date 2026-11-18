@@ -196,6 +196,84 @@ describe("the scene clock", () => {
   });
 });
 
+describe("scene rate=", () => {
+  const box = { node: { id: "1:scene", type: "scene", props: {}, children: [], line: 1, indent: 0 } } as unknown as Box;
+  const clock = (now: number) => {
+    const views = new Map<string, Record<string, number>>();
+    let frames = 0;
+    const ctx = {
+      now, motion: true,
+      view: (n: { id: string }) => { let v = views.get(n.id); if (!v) views.set(n.id, (v = {})); return v; },
+      requestFrame: () => { frames++; },
+    } as unknown as PaintContext & { now: number };
+    return { ctx, frames: () => frames };
+  };
+
+  it("runs the clock faster or slower without a jump when the rate changes", () => {
+    const c = clock(0);
+    expect(sceneTime(box, c.ctx, 100, true, 5)).toBe(0);
+    c.ctx.now = 1000;
+    expect(sceneTime(box, c.ctx, 100, true, 5)).toBeCloseTo(5);
+    // The switch: the first frame at the new rate starts from where the old one left off.
+    c.ctx.now = 1016;
+    const switched = sceneTime(box, c.ctx, 100, true, 20);
+    expect(switched).toBeCloseTo(5 + 0.016 * 5);
+    c.ctx.now = 2016;
+    expect(sceneTime(box, c.ctx, 100, true, 20)).toBeCloseTo(switched + 20);
+  });
+
+  it("pauses at rate=0, stops asking for frames, and resumes where it stopped", () => {
+    const c = clock(0);
+    sceneTime(box, c.ctx, 10, true, 1);
+    c.ctx.now = 2000;
+    expect(sceneTime(box, c.ctx, 10, true, 0)).toBeCloseTo(2);
+    const asked = c.frames();
+    c.ctx.now = 60000;
+    expect(sceneTime(box, c.ctx, 10, true, 0)).toBeCloseTo(2);
+    expect(c.frames()).toBe(asked);
+    // A minute paused, then playing again: no leap forward.
+    c.ctx.now = 61000;
+    expect(sceneTime(box, c.ctx, 10, true, 1)).toBeCloseTo(2);
+    c.ctx.now = 62000;
+    expect(sceneTime(box, c.ctx, 10, true, 1)).toBeCloseTo(3);
+  });
+
+  it("wraps at duration when looping, runs backwards with a negative rate, and holds at the ends without loop", () => {
+    const c = clock(0);
+    sceneTime(box, c.ctx, 4, true, 3);
+    c.ctx.now = 2000;
+    expect(sceneTime(box, c.ctx, 4, true, 3)).toBeCloseTo(2);
+    c.ctx.now = 2100;
+    expect(sceneTime(box, c.ctx, 4, true, -2)).toBeCloseTo(2.3);
+    c.ctx.now = 3600;
+    expect(sceneTime(box, c.ctx, 4, true, -2)).toBeCloseTo(3.3);
+    const once = clock(0);
+    sceneTime(box, once.ctx, 2, false, 4);
+    once.ctx.now = 1000;
+    expect(sceneTime(box, once.ctx, 2, false, 4)).toBe(2);
+    expect(sceneTime(box, once.ctx, 2, false, 1000)).toBe(2);
+  });
+
+  it("keeps planets where they are when a speed control switches from 5x to 20x", () => {
+    const SPEC = `state speed=5
+scene "Orbit" w=200 h=100 duration=1000 rate={speed}
+  label "o" x={10 + t} y=50 fill=ink`;
+    const ui = render(SPEC, { components: [...coreComponents, ...sceneComponents], clock: true, animate: true });
+    const x = () => Number(ui.drawOps.find((o) => o.op === "fillText" && o.args[0] === "o")!.args[1]);
+    const start = x();
+    ui.clock.advance(1000);
+    const at5 = x();
+    ui.set("speed", 20);
+    // The switch itself moves nothing.
+    expect(x()).toBeCloseTo(at5, 5);
+    ui.clock.advance(1000);
+    const at20 = x();
+    const perSecond = (at5 - start) / 5;
+    expect((at20 - at5) / perSecond).toBeCloseTo(20, 0);
+    ui.destroy();
+  });
+});
+
 describe("path data", () => {
   const sink = () => {
     const calls: string[] = [];

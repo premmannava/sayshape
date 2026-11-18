@@ -109,6 +109,10 @@ export interface Frame {
   shapes: number;
   steps: number;
   useDepth: number;
+  /** The scene's time this frame, in seconds: what t reads. Drawing at another moment sets it and puts it back. */
+  time: number;
+  /** Scene seconds played since it started, unwrapped by loops (equal to time for a still). */
+  played?: number;
   /** Told about each element just before it's drawn (the drawing check uses this to know what drew what). */
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */

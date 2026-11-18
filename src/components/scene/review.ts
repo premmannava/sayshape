@@ -205,16 +205,16 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
 function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; dragOver?: number } {
   const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
   const duration = Math.max(0, numOf(scene, "duration", scope, 0));
-  const at: Scope = (name) => (name === "t" ? duration : name === "PI" ? Math.PI : scope(name));
   const marks: Mark[] = [];
   let current: SayShapeNode | null = null;
   const g = measuringContext(marks, () => current, measure ?? estimate);
   const f: Frame = {
     g, font: (wt, size) => `${wt} ${size}px sans-serif`, colors: theme.colors,
-    defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
+    defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: duration,
     onNode: (n) => { current = n; },
     m: IDENTITY, press: { regions: [], open: [], copy: [], locate: stateLocate },
   };
+  const at: Scope = (name) => (name === "t" ? f.time : name === "PI" ? Math.PI : scope(name));
   if (behavior) f.press!.drag = { scene: IDENTITY, w, h, count: 0 };
   paintScene(f, scene.children, at, w, h, undefined);
   // What a label with nothing under it sits on: the scene's background, or the card it's in.

@@ -881,6 +881,7 @@ ELEMENTS
     h=<number>  Height of the drawing area, in scene pixels.
     duration=<number>  Seconds the animation runs (t goes from 0 to this). 0 is a still picture.
     loop=<boolean>  Start again when it ends.
+    rate=<number>  How fast t runs: 2 is double speed, 0 pauses. Changing it never makes things jump: rate={speed}.
     bg=<string>  Background color behind everything.
     children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
     example:
