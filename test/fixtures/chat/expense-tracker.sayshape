@@ -1,0 +1,23 @@
+state budget=1200
+state expenses=[{name: "Groceries", category: "Food", date: "Nov 12", amount: 142.5}, {name: "Electric bill", category: "Utilities", date: "Nov 10", amount: 96}, {name: "Dinner with friends", category: "Food", date: "Nov 9", amount: 68.4}, {name: "Train pass", category: "Transport", date: "Nov 3", amount: 120}, {name: "Running shoes", category: "Shopping", date: "Nov 2", amount: 135}, {name: "Streaming", category: "Utilities", date: "Nov 1", amount: 15.99}]
+derive spent={sum(pluck(expenses, 'amount'))}
+text "November spending" style=title
+grid min=140
+  stat label="Spent" value="{money(spent)}" change="+8%" good=down
+  stat label="Left to spend" value="{money(budget - spent)}"
+  stat label="Biggest" value="$142.50"
+card
+  text "Monthly budget" weight=semibold
+  row
+    meter value={spent} max={budget} format=money bands="900,1100" good=down
+    column gap=4
+      text "{money(spent)} of {money(budget)}"
+      text "On track: 12 days left" tone=muted
+list
+  each items=expenses as=e
+    list-item "{e.name}" detail="{e.category} · {e.date}" trailing="{money(e.amount)}"
+chart "By category" kind=bar items={group(expenses, 'category', 'amount')} x=category y=amount format=money
+table items=expenses
+  table-column "Item" field=name
+  table-column "Category" field=category
+  table-column "Amount" field=amount format=money

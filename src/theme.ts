@@ -71,6 +71,14 @@ export interface Theme {
   text: { caption: number; body: number; lead: number; title: number; display: number };
   control: { height: number };
   /**
+   * Set by the chat density (src/look.ts), the default in chat hosts: a
+   * list-item puts its title, detail and trailing value on one line where
+   * they fit. Missing: the detail goes under the title.
+   */
+  listInline?: boolean;
+  /** Default gaps between the children of column, row and grid, set by the chat density. Missing: 8, 10 and 14. */
+  gaps?: { column: number; row: number; grid: number };
+  /**
    * For slides: the type, spacing, corners and control
    * height inside a slide, which is laid out 960 px wide and then scaled to
    * fit its space, so these are larger than the screen's. Missing: slides

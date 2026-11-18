@@ -26,7 +26,7 @@ export const column: ComponentDef = {
   semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    stack(box, ctx, p.num("pad", 0), p.num("gap", 8));
+    stack(box, ctx, p.num("pad", 0), p.num("gap", ctx.theme.gaps?.column ?? 8));
   },
 };
 
@@ -98,7 +98,7 @@ export const row: ComponentDef = {
   semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    rowLayout(box, ctx, p.num("pad", 0), p.num("gap", 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true), {
+    rowLayout(box, ctx, p.num("pad", 0), p.num("gap", ctx.theme.gaps?.row ?? 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true), {
       fit: p.bool("fit", false),
       justify: ROW_JUSTIFY.find((v) => v === p.str("justify")),
       stretch: p.bool("stretch", false),
@@ -107,7 +107,7 @@ export const row: ComponentDef = {
   },
   minWidth(node, ctx) {
     const p = ctx.props(node);
-    return rowMinWidth(node, ctx, p.num("pad", 0), p.num("gap", 10), p.bool("wrap", true));
+    return rowMinWidth(node, ctx, p.num("pad", 0), p.num("gap", ctx.theme.gaps?.row ?? 10), p.bool("wrap", true));
   },
 };
 
@@ -365,7 +365,7 @@ export const grid: ComponentDef = {
   semantics: () => null,
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    const gap = Math.max(0, p.num("gap", 14));
+    const gap = Math.max(0, p.num("gap", ctx.theme.gaps?.grid ?? 14));
     const stretch = p.bool("stretch", false);
     const kids = ctx.visibleChildren(box.node);
     // A column is never narrower than its widest child needs, whatever min= says.
@@ -451,6 +451,8 @@ export const list: ComponentDef = {
 };
 
 const ITEM_PAD_X = 16, ITEM_PAD_Y = 12;
+/** Between the title and the detail when they share a line (theme.listInline). */
+const ITEM_INLINE_GAP = 10;
 const ITEM_ICON = 20, ITEM_ICON_GAP = 12;
 /** Where a list's row starts, and how far in its separator begins. */
 interface ListRow { y: number; inset: number }
@@ -488,11 +490,14 @@ export const listItem: ComponentDef = {
     const chevronW = p.has("on") ? 20 : 0;
     const iconW = isIconName(p.str("icon")) ? ITEM_ICON + ITEM_ICON_GAP : 0;
     const textW = Math.max(40, box.w - ITEM_PAD_X * 2 - trailingW - chevronW - iconW);
-    const title = wrapText(p.text(), textW, titleFont, ctx.measure);
-    const detail = p.has("detail") ? wrapText(p.str("detail"), textW, detailFont, ctx.measure) : [];
     const titleLH = Math.round(t.text.body * 1.35), detailLH = 18;
-    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW };
-    let y = box.y + ITEM_PAD_Y + title.length * titleLH + (detail.length ? 2 + detail.length * detailLH : 0);
+    // The chat density: title, detail and trailing value on one line when they fit, else as below.
+    const titleW = t.listInline && p.has("detail") ? ctx.measure.width(p.text(), titleFont) : 0;
+    const inline = titleW > 0 && titleW + ITEM_INLINE_GAP + ctx.measure.width(p.str("detail"), detailFont) <= textW;
+    const title = inline ? [p.text()] : wrapText(p.text(), textW, titleFont, ctx.measure);
+    const detail = inline ? [p.str("detail")] : p.has("detail") ? wrapText(p.str("detail"), textW, detailFont, ctx.measure) : [];
+    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW, ...(inline ? { detailX: titleW + ITEM_INLINE_GAP } : {}) };
+    let y = box.y + ITEM_PAD_Y + title.length * titleLH + (detail.length && !inline ? 2 + detail.length * detailLH : 0);
     // Elements inside go under the text, lined up with it.
     const left = ITEM_PAD_X + iconW;
     for (const k of ctx.visibleChildren(box.node)) {
@@ -506,7 +511,7 @@ export const listItem: ComponentDef = {
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number };
+    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number; detailX?: number };
     const p = ctx.props(box.node);
     const pressable = p.has("on");
     if (pressable) {
@@ -528,7 +533,12 @@ export const listItem: ComponentDef = {
     g.font = d.titleFont;
     g.fillStyle = c.ink;
     for (const l of d.title) { g.fillText(l, tx, y + d.titleLH / 2); y += d.titleLH; }
-    if (d.detail.length) {
+    if (d.detailX !== undefined) {
+      // On the title's line, after it.
+      g.font = d.detailFont;
+      g.fillStyle = c.muted;
+      g.fillText(d.detail[0] ?? "", tx + d.detailX, box.y + ITEM_PAD_Y + d.titleLH / 2);
+    } else if (d.detail.length) {
       y += 2;
       g.font = d.detailFont;
       g.fillStyle = c.muted;

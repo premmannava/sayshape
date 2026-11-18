@@ -29,7 +29,7 @@ import { Registry } from "./registry";
 import { Store } from "./state";
 import { CanvasMeasurer, ellipsize, font as fontString, wrapText } from "./text";
 import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
-import { applyLook, lookKey, type Look } from "./look";
+import { applyLook, CHAT_DENSITY, lookKey, type AppliedLook, type Look } from "./look";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
 import { domAccessibilityHost } from "./a11y/dom";
@@ -190,7 +190,20 @@ export interface SayShapeOptions {
    * Default true; false keeps the host's look and reports the line with a warning.
    */
   look?: boolean;
+  /**
+   * Where the view is shown. "chat": inside a chat app's message, which is
+   * the frame and the background. The chat density is then the default look
+   * (tighter type, spacing and controls, list rows on one line where they
+   * fit; a spec's own look density= still wins) and the screen's padding
+   * defaults to CHAT_PADDING. The engine never paints a background of its
+   * own (it clears to transparent), so the host leaves its page showing
+   * through. Default: none, the look exactly as before.
+   */
+  context?: "chat";
 }
+
+/** The padding around the whole screen in a chat (context "chat"): room for focus rings and card shadows, no more. */
+export const CHAT_PADDING = 12;
 
 /** The widest picture() draws, in CSS pixels, so a very wide table can't make a huge image. */
 export const MAX_PICTURE_WIDTH = 2400;
@@ -582,7 +595,7 @@ export class SayShape {
     this.parsed = parse(this.source, this.registry, {
       partial: this.streaming,
       ...(this.opts.streamPlaceholders ? { deferUnknownNames: true } : {}),
-      rootProps: { pad: String(this.opts.padding ?? 20), gap: String(s.md) },
+      rootProps: { pad: String(this.opts.padding ?? (this.opts.context === "chat" ? CHAT_PADDING : 20)), gap: String(s.md) },
       // State the app set itself counts as known, so reading it isn't flagged.
       knownNames: Object.keys(this.state.snapshot()),
       ...(this.opts.behavior ? { behavior: true } : {}),
@@ -1254,7 +1267,7 @@ export class SayShape {
    * in another theme (a deck's slides without their rounded frame).
    */
   async picture(opts: { pixelRatio?: number; background?: boolean; widen?: boolean; width?: number; state?: Record<string, Value>; frame?: (box: Box) => boolean; theme?: Theme } = {}): Promise<HTMLCanvasElement> {
-    const theme = opts.theme ? applyLook(opts.theme, this.lookChoice) : this.theme;
+    const theme = opts.theme ? applyLook(opts.theme, this.appliedLook()) : this.theme;
     let width = opts.width ?? (this.metrics.width || this.opts.width || 600);
     let cut: Rect | null = null;
     let out!: HTMLCanvasElement;
@@ -2688,9 +2701,16 @@ export class SayShape {
     return this.lookChoice;
   }
 
+  /** The look drawn with: the spec's, over the chat density in a chat (context "chat") unless the spec chose a density. */
+  private appliedLook(): AppliedLook | null {
+    const look = this.lookChoice;
+    if (this.opts.context !== "chat" || look?.density) return look;
+    return { ...look, density: CHAT_DENSITY };
+  }
+
   private resolveTheme(): Theme {
     // The look over the host's theme, then (in a forced-colors mode) the person's colors over both.
-    const chosen = applyLook(this.chosenTheme(), this.lookChoice);
+    const chosen = applyLook(this.chosenTheme(), this.appliedLook());
     // In a forced-colors mode the person's own colors win over any theme.
     if (typeof matchMedia !== "undefined" && matchMedia("(forced-colors: active)").matches) {
       return forcedColorsTheme(chosen, (name) => this.systemColor(name));

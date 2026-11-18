@@ -1,4 +1,4 @@
-export { SayShape, roundRectPath, type SayShapeOptions, type SayShapeEvents, type Metrics } from "./engine";
+export { SayShape, roundRectPath, CHAT_PADDING, type SayShapeOptions, type SayShapeEvents, type Metrics } from "./engine";
 export { parse, tokenizeLine, MAX_DEPTH, type ParseOptions, type ParseResult, type LookLine } from "./parser";
 export { evaluate, interpolate, formatValue, checkSyntax, identifiers, type EvalResult, type Scope } from "./expr";
 export { parseActions, runActions, type Action } from "./actions";
@@ -12,7 +12,7 @@ export { resolveProfile, PROFILES, ALWAYS_EXPOSED, type ComponentProfile, type R
 export { COMMON_IMAGE_HOSTS } from "./images";
 export { lightTheme, darkTheme, studioLightTheme, studioDarkTheme, extendTheme, themeFromCSS, forcedColorsTheme, type Theme } from "./theme";
 export { reviewLayout, NESTED_CARD, MAX_LAYOUT_PROBLEMS } from "./review";
-export { applyLook, LOOK_OPTIONS, LOOK_PROPS, LOOK_FONTS, lookOptions, type Look, type LookProp } from "./look";
+export { applyLook, CHAT_DENSITY, LOOK_OPTIONS, LOOK_PROPS, LOOK_FONTS, lookOptions, type Look, type LookProp } from "./look";
 export { CanvasMeasurer, MonoMeasurer, wrapText, type TextMeasurer } from "./text";
 export { PropReader, COMMON_PROPS, CATEGORIES, type ComponentDef, type ElementPick, type PropDef, type LayoutContext, type PaintContext, type PressContext, type DragContext, type Category } from "./component";
 export { coreComponents } from "./components";

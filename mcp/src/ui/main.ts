@@ -211,7 +211,8 @@ const modelColors = viewOptions.modelColors !== false;
 /** The theme interfaces are drawn in, with the logo the server was started with (--logo) for slides. */
 let face: Theme | null = null;
 function faceTheme(theme: Theme): Theme {
-  const t = interfaceTheme(theme);
+  // The chat look sizes things with the engine's chat density (context "chat"); --no-chat-look keeps CHAT_TOKENS.
+  const t = viewOptions.chatLook === false ? interfaceTheme(theme) : theme;
   face = viewOptions.logo ? { ...t, deck: { ...t.deck, logo: viewOptions.logo } } : t;
   return face;
 }
@@ -650,6 +651,8 @@ async function start(): Promise<void> {
     theme: faceTheme(theme),
     // The chat app already boxes the view: a card that is the whole interface draws no frame of its own.
     bareRootCard: true,
+    // Drawn as inside a chat (the chat density, a narrow gutter) unless --no-chat-look.
+    ...(viewOptions.chatLook === false ? {} : { context: "chat" as const }),
     // Only the hosts the server was started with (--image-hosts). The view has no origin of
     // its own to load from, and the server asks the chat app's sandbox to allow just these.
     imageHosts: viewOptions.imageHosts ?? [],

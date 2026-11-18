@@ -16,8 +16,9 @@
  *   --no-copy-text      hide the "Copy text" button (shown by default)
  *   --no-select-text    no invisible text layer over the canvas: the words can't be selected, copied by
  *                       dragging or found with Ctrl/Cmd+F, and nothing extra is added to the page (on by default)
- *   --no-chat-look      draw as before the chat look: the theme's background behind the interface, instead
- *                       of the chat app's own background showing through
+ *   --no-chat-look      draw as before the chat look: the theme's background behind the interface and the
+ *                       view's CHAT_TOKENS, instead of the chat app's own background showing through and the
+ *                       engine's chat density (context "chat")
  *   --select-touch      let a long press on a touch screen select a word, with the phone's own handles and Copy menu
  *                       (off by default until checked on real phones); --no-select-touch says off explicitly
  *   --scene             turn on experimental scenes: pictures and animations the model paints (off by default)
@@ -58,8 +59,9 @@ export interface ViewOptions {
    */
   selectText?: boolean;
   /**
-   * False with --no-chat-look: the view paints the theme's surface behind the interface, as before. Absent
-   * means on: the chat app's background shows through, where it said whether it's light or dark.
+   * False with --no-chat-look: the view paints the theme's surface behind the interface and draws it with
+   * CHAT_TOKENS, as before. Absent means on: the chat app's background shows through, where it said whether
+   * it's light or dark, and the engine draws with context "chat" (its chat density).
    */
   chatLook?: boolean;
   /** --select-touch / --no-select-touch: whether a long press on a touch screen selects a word (left out, the engine's default: off for now). Mouse and pen selection are unaffected. */
