@@ -16,6 +16,9 @@ import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type Sce
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
+import { fadeColor, gradientStops } from "./fade";
+import { highlightOf } from "./light";
+import { shakeOffset, shakeSeed } from "./shake";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -92,8 +95,12 @@ export function colorOf(raw: string, f: Pick<Frame, "colors">): string | null {
     if (typeof base !== "string") return null;
     return themed[2] === undefined ? base : faded(base, Math.min(100, Number(themed[2])) / 100);
   }
-  return isColor(v) ? v : null;
+  if (isColor(v)) return v;
+  // A written color at an opacity: "#E0807A 30%", "rgb(224, 128, 122) 0%".
+  const see = SEE_THROUGH.exec(v);
+  return see && isColor(see[1]!) ? fadeColor(see[1]!, Math.min(100, Number(see[2])) / 100) : null;
 }
+const SEE_THROUGH = /^(.*\S)\s+(\d{1,3})%$/;
 const GRADIENT_REF = /^url\(#?([A-Za-z_][\w-]*)\)$/;
 
 // ---------- painting ----------
@@ -113,6 +120,14 @@ export interface Frame {
   time: number;
   /** Scene seconds played since it started, unwrapped by loops (equal to time for a still). */
   played?: number;
+  /** The scene's light=, in canvas pixels: where shine=true shapes are lit from. Upper left when unset. */
+  light?: readonly [number, number];
+  /** True while the scene moves (motion on): shake= only jolts then. */
+  motion?: boolean;
+  /** The scene's own shake=, in scene pixels: everything but its background jolts. */
+  shake?: number;
+  /** The scene line's id, seeding its shake. */
+  sceneId?: string;
   /** Told about each element just before it's drawn (the drawing check uses this to know what drew what). */
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
@@ -160,8 +175,9 @@ function paintOf(raw: string | undefined, bounds: Bounds, f: Frame, scope: Scope
       const dx = (Math.cos(a) * len) / 2, dy = (Math.sin(a) * len) / 2;
       grad = f.g.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
     }
-    grad.addColorStop(0, from);
-    grad.addColorStop(1, to);
+    const [a, b] = gradientStops(from, to);
+    grad.addColorStop(0, a);
+    grad.addColorStop(1, b);
     return grad;
   }
   return colorOf(v, f);
@@ -207,10 +223,11 @@ function depthOff(g: CanvasRenderingContext2D): void {
   g.shadowColor = "transparent"; g.shadowBlur = 0; g.shadowOffsetY = 0;
 }
 
-/** shine=true: light from the upper left and a darker far edge over the fill, so a circle reads as a ball. */
-function shine(g: CanvasRenderingContext2D, b: Bounds): void {
+/** shine=true: light from the upper left (or the scene's light=) and a darker far edge over the fill, so a circle reads as a ball. */
+function shine(g: CanvasRenderingContext2D, b: Bounds, f: Frame): void {
   const cx = b.x + b.w / 2, cy = b.y + b.h / 2, r = Math.max(b.w, b.h, 1) / 2;
-  const light = g.createRadialGradient(b.x + b.w * 0.34, b.y + b.h * 0.3, 0, cx, cy, r);
+  const [hx, hy] = highlightOf(b, f.m, f.light);
+  const light = g.createRadialGradient(hx, hy, 0, cx, cy, r);
   light.addColorStop(0, "rgba(255, 255, 255, 0.6)");
   light.addColorStop(0.55, "rgba(255, 255, 255, 0)");
   light.addColorStop(0.55, "rgba(0, 0, 0, 0)");
@@ -231,7 +248,7 @@ function finishShape(node: SayShapeNode, scope: Scope, bounds: Bounds, f: Frame,
     g.fillStyle = fill; g.fill();
     if (deep) { depthOff(g); deep = false; }
     const lit = node.props.shine === undefined ? false : read(node, "shine", scope);
-    if (lit === true || lit === "true") shine(g, bounds);
+    if (lit === true || lit === "true") shine(g, bounds, f);
   }
   const stroke = paintOf(strokeRaw, bounds, f, scope);
   if (stroke) {
@@ -261,6 +278,9 @@ function withLook(node: SayShapeNode, scope: Scope, f: Frame, cx: number, cy: nu
   f.m = was;
   g.restore();
 }
+
+/** A label's weight= as a font weight: regular is 500, as it always was. */
+const LABEL_WEIGHTS: Record<string, number> = { light: 300, regular: 500, bold: 800, heavy: 900 };
 
 /** Lines that can be pressed: shapes, groups and uses with on=. */
 const PRESSABLE = new Set(["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use"]);
@@ -471,21 +491,26 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       if (!text) return;
       f.shapes++;
       withLook(node, scope, f, x, y, () => {
-        g.font = f.font(strOf(node, "weight", scope) === "bold" ? 800 : 500, size);
+        const italic = strOf(node, "style", scope) === "italic";
+        g.font = (italic ? "italic " : "") + f.font(LABEL_WEIGHTS[strOf(node, "weight", scope) ?? ""] ?? 500, size);
         const align = strOf(node, "align", scope);
         g.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
         g.textBaseline = "middle";
         const w = g.measureText(text).width;
         const left = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
         const b = { x: left, y: y - size / 2, w, h: size };
-        const fill = paintOf(node.props.fill === undefined ? "#000000" : strOf(node, "fill", scope), b, f, scope);
-        if (fill) {
-          const deep = depthOn(node, scope, f, solidOf(node.props.fill === undefined ? "#000000" : strOf(node, "fill", scope), f, scope));
-          g.fillStyle = fill; g.fillText(text, x, y);
-          if (deep) depthOff(g);
-        }
+        const fillRaw = node.props.fill === undefined ? "#000000" : strOf(node, "fill", scope);
+        const fill = paintOf(fillRaw, b, f, scope);
         const stroke = paintOf(node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), b, f, scope);
-        if (stroke) { g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.strokeText(text, x, y); }
+        // An outline goes under the words, so it frames the letters instead of eating into them.
+        let deep = depthOn(node, scope, f, solidOf(fill ? fillRaw : node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), f, scope));
+        if (stroke) {
+          g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.lineJoin = "round";
+          g.strokeText(text, x, y);
+          if (deep) { depthOff(g); deep = false; }
+        }
+        if (fill) { g.fillStyle = fill; g.fillText(text, x, y); }
+        if (deep) depthOff(g);
         addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
         if (f.press) for (const r of f.press.open) r.words.push(text);
       });
@@ -508,7 +533,11 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       const g2 = f.g;
       const was = f.m;
       g2.save();
-      const gx = n("x"), gy = n("y");
+      let gx = n("x"), gy = n("y");
+      if (node.props.shake !== undefined && f.motion) {
+        const [sx, sy] = shakeOffset(n("shake"), shakeSeed(node.id), f.time);
+        gx += sx; gy += sy;
+      }
       g2.translate(gx, gy);
       f.m = translate(f.m, gx, gy);
       const deg = n("rotate");
@@ -542,5 +571,10 @@ export function paintScene(f: Frame, nodes: readonly SayShapeNode[], scope: Scop
   if (f.press) f.press.alpha = f.g.globalAlpha;
   const fill = paintOf(bg, { x: 0, y: 0, w, h }, f, scope);
   if (fill) { f.g.fillStyle = fill; f.g.fillRect(0, 0, w, h); }
+  if (f.shake && f.motion) {
+    const [dx, dy] = shakeOffset(f.shake, shakeSeed(f.sceneId ?? ""), f.time);
+    f.g.translate(dx, dy);
+    f.m = translate(f.m, dx, dy);
+  }
   drawAll(nodes, scope, f);
 }

@@ -30,7 +30,9 @@ import type { Scope } from "../../expr";
 import type { Box, Rect } from "../../types";
 import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
-import { paintScene, type Frame } from "./draw";
+import { numOf, paintScene, strOf, type Frame } from "./draw";
+import { lightPoint } from "./light";
+import { apply } from "./interact";
 import { locateOf } from "../../each";
 import { dragShape, keyShape, rangeOf } from "./drag";
 import type { PartSemantics } from "../../a11y/semantics";
@@ -140,11 +142,13 @@ const scene: ComponentDef = {
     h: num("Height of the drawing area, in scene pixels.", 340),
     duration: num("Seconds the animation runs (t goes from 0 to this). 0 is a still picture.", 0),
     loop: { type: "boolean", description: "Start again when it ends.", default: true },
-    rate: num("How fast t runs: 2 is double speed, 0 pauses. Changing it never makes things jump: rate={speed}.", 1),
+    light: { type: "string", description: "Where shine= is lit from: light=300,170." },
+    shake: num("Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}. Also on group."),
+    rate: num("How fast t runs, smoothly: 2 is double, 0 pauses (rate={speed}).", 1),
     bg: color("Background color behind everything."),
   },
   children: SHAPES,
-  provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS },
+  provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS, ownProps: ["shake", "light"] },
   picks: [
     { for: "a picture or animation no other element can show", write: 'scene "A rabbit hopping across a meadow" w=600 h=340 duration=3' },
     { for: "a diagram people press parts of: a floor plan, a network, a production line", write: 'scene "Floor 3: four meeting rooms" w=600 h=360' },
@@ -152,7 +156,7 @@ const scene: ComponentDef = {
   example: `scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
   # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
   # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
-  # range(n) for each, and pick(list, i). Reuse a drawing with define and use.
+  # range(n) for each, pick(list, i), floor, round, abs, min, max, pow, % and a ? b : c. Reuse a drawing with define and use.
   # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
   # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
   # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
@@ -183,6 +187,11 @@ const scene: ComponentDef = {
     };
     // t is read from the frame, not captured, so a drawing can be redrawn at an earlier moment (trails).
     const base: Scope = (name) => (name === "t" ? f.time : name === "PI" ? Math.PI : ctx.scope(name));
+    f.motion = ctx.motion;
+    f.sceneId = box.node.id;
+    if (box.node.props.shake !== undefined) f.shake = numOf(box.node, "shake", base);
+    const light = lightPoint(box.node.props.light === undefined ? undefined : strOf(box.node, "light", base));
+    if (light) f.light = apply(f.m, light[0], light[1]);
     if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
     g.save();
     g.beginPath();
@@ -383,7 +392,8 @@ const label: ComponentDef = {
     x: num("Where it's anchored, across."),
     y: num("Its middle, down."),
     size: num("Text size in scene pixels.", 16),
-    weight: { type: "enum", values: ["regular", "bold"], description: "regular or bold.", default: "regular" },
+    weight: { type: "enum", values: ["light", "regular", "bold", "heavy"], description: "Letter weight.", default: "regular" },
+    style: { type: "enum", values: ["normal", "italic"], description: "italic slants it.", default: "normal" },
     align: { type: "enum", values: ["left", "center", "right"], description: "Which end of the words sits at x.", default: "left" },
     ...PAINT,
     ...PRESS_SHAPE,
@@ -396,7 +406,7 @@ const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), ...PRESS, ...DRAG },
+  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), ...PRESS, ...DRAG },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
@@ -448,7 +458,7 @@ const gradient: ComponentDef = {
   props: {
     id: { type: "name", description: "Its name, for url(id).", required: true },
     from: color("The first color: a theme color or \"#hex\", like fill."),
-    to: color("The last color."),
+    to: color('The last color ("#FFF3B0 0%" fades out).'),
     kind: { type: "enum", values: ["linear", "radial"], description: "linear (a straight blend) or radial (from the middle out).", default: "linear" },
     angle: num("Direction of a linear blend in degrees: 90 is top to bottom, 0 left to right.", 90),
   },

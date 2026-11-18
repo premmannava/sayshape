@@ -930,7 +930,9 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
         diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" has no prop "${name}". Known props: ${known.join(", ")}` });
         continue;
       }
-      checkProp(name, rawValue, pdef, lineNo, diagnostics, fns);
+      // A prop the element draws with itself (a scene's shake=) reads what it provides inside.
+      const ownFns = def.provides?.ownProps?.includes(name) ? def.provides.functions ?? fns : fns;
+      checkProp(name, rawValue, pdef, lineNo, diagnostics, ownFns);
     }
     for (const message of motionProblems(tok.type, tok.props, def)) diagnostics.push({ line: lineNo, severity: "warning", message });
     if ("tip" in tok.props && def.drawnByParent && !def.props.tip) {
@@ -961,6 +963,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     }
 
     const inScope = new Set<string>(provided.names);
+    if (def.provides?.ownProps?.length) for (const n of def.provides.names ?? []) inScope.add(n);
     for (const n of stack) if (n.type === "each") for (const name of loopNames(n)) inScope.add(name);
     // An each's own items= and key= are read outside and inside it respectively; only check items=.
     const exprs = tok.type === "each"

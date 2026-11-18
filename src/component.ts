@@ -332,7 +332,11 @@ export interface ComponentDef {
    * defines them. Only lines inside the element see these; the element
    * evaluates those lines itself, with the same functions.
    */
-  provides?: { names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions };
+  provides?: {
+    names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions;
+    /** The element's own props that it evaluates with these too (a scene's shake= reads t and ease). */
+    ownProps?: readonly string[];
+  };
   /** Restrict where this component may appear. */
   parents?: readonly string[];
   /** A short spec snippet for docs and the model prompt. */

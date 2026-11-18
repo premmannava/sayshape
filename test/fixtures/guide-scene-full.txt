@@ -881,14 +881,16 @@ ELEMENTS
     h=<number>  Height of the drawing area, in scene pixels.
     duration=<number>  Seconds the animation runs (t goes from 0 to this). 0 is a still picture.
     loop=<boolean>  Start again when it ends.
-    rate=<number>  How fast t runs: 2 is double speed, 0 pauses. Changing it never makes things jump: rate={speed}.
+    light=<string>  Where shine= is lit from: light=300,170.
+    shake=<number>  Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}. Also on group.
+    rate=<number>  How fast t runs, smoothly: 2 is double, 0 pauses (rate={speed}).
     bg=<string>  Background color behind everything.
     children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
     example:
       scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
         # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
         # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
-        # range(n) for each, and pick(list, i). Reuse a drawing with define and use.
+        # range(n) for each, pick(list, i), floor, round, abs, min, max, pow, % and a ? b : c. Reuse a drawing with define and use.
         # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
         # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
         # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
@@ -1031,7 +1033,8 @@ ELEMENTS
     x=<number>  Where it's anchored, across.
     y=<number>  Its middle, down.
     size=<number>  Text size in scene pixels.
-    weight=<regular|bold>  regular or bold.
+    weight=<light|regular|bold|heavy>  Letter weight.
+    style=<normal|italic>  italic slants it.
     align=<left|center|right>  Which end of the words sits at x.
     fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
@@ -1055,6 +1058,7 @@ ELEMENTS
     rotate=<number>  Turns everything, in degrees, around the group's x and y.
     scale=<number>  Grows or shrinks everything.
     opacity=<number>  Fades everything, 0 to 1.
+    shake=<number>  Like scene's.
     on=<action>  Actions when it's pressed (click, tap, Enter), like a button's on=; makes it pressable and a Tab stop. Inside the scene's each they see the item: on=set:sel:{m.id}.
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
@@ -1095,7 +1099,7 @@ ELEMENTS
   gradient  — A color blend to fill shapes with fill="url(id)": a sky, a glow, a shiny ball.
     id=<name, required>  Its name, for url(id).
     from=<string>  The first color: a theme color or "#hex", like fill.
-    to=<string>  The last color.
+    to=<string>  The last color ("#FFF3B0 0%" fades out).
     kind=<linear|radial>  linear (a straight blend) or radial (from the middle out).
     angle=<number>  Direction of a linear blend in degrees: 90 is top to bottom, 0 left to right.
     only inside: scene, group, define
