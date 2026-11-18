@@ -151,7 +151,7 @@ describe("icons in a scene", () => {
     expect(main).toHaveLength(1);
     expect(problems(`scene "S" w=300 h=200\n  icon name=tick x=10 y=20`)).toEqual(main);
     expect(main[0]).toMatch(/^warning: name="tick" isn't an icon\. Did you mean name=check\?/);
-    expect(problems(`scene "S" w=300 h=200\n  icon x=10 y=20`)).toEqual([`warning: "glyph" needs name=`]);
+    expect(problems(`scene "S" w=300 h=200\n  icon x=10 y=20`)).toEqual([`warning: "icon" in a "scene" needs name=`]);
     expect(problems(`scene "S" w=300 h=200\n  icon name=sun x=10 y=20 size=12px`)[0]).toMatch(/size/);
   });
 
@@ -369,5 +369,16 @@ describe("named fills on scene shapes", () => {
       expect(grad?.gradientStops?.map((s) => s.color)).toEqual([sky.from, sky.to]);
       expect(ui.drawOps.some((op) => op.op === "fill" && op.fillStyle === ui.sayshape.theme.colors.accent)).toBe(true);
     }
+  });
+});
+
+describe("icon written inside a scene", () => {
+  it("names it as written in its warnings", async () => {
+    const { parse: read } = await import("../src/parser");
+    const { Registry: Reg } = await import("../src/registry");
+    const { coreComponents: core } = await import("../src/components");
+    const { sceneComponents: scenes } = await import("../src/components/scene");
+    const d = read(`scene "A" w=100 h=100\n  icon name=sun x=1 y=2 tone=warn\n`, new Reg([...core, ...scenes])).diagnostics;
+    expect(d.map((x) => x.message)).toEqual([expect.stringMatching(/^"icon" in a "scene" has no prop "tone"/)]);
   });
 });

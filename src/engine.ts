@@ -1216,11 +1216,14 @@ export class SayShape {
     return seenW > 0 && seenH > 0 && seenH >= Math.min(r.h, SIGHT_PX) - 0.5;
   }
 
-  /** Motion is on: the animate option isn't false and the person doesn't prefer reduced motion. */
+  /** The system's prefers-reduced-transparency query, read once when the engine starts watching the page. */
+  private transparencyQuery: MediaQueryList | null = null;
+
   private reducedTransparency(): boolean {
-    return this.opts.reducedTransparency ?? (typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-transparency: reduce)").matches);
+    return this.opts.reducedTransparency ?? this.transparencyQuery?.matches ?? false;
   }
 
+  /** Motion is on: the animate option isn't false and the person doesn't prefer reduced motion. */
   private motionOn(): boolean {
     return this.opts.animate !== false && !(this.opts.reducedMotion ?? prefersReducedMotion());
   }
@@ -2681,6 +2684,12 @@ export class SayShape {
     const onForced = () => { this.theme = this.resolveTheme(); this.invalidate("layout"); };
     forced.addEventListener("change", onForced);
     this.cleanup.push(() => forced.removeEventListener("change", onForced));
+    // Asking for less transparency (or no longer) redraws glass cards solid (or blurred) at once.
+    const clear = matchMedia("(prefers-reduced-transparency: reduce)");
+    this.transparencyQuery = clear;
+    const onClear = () => this.invalidate("paint");
+    clear.addEventListener("change", onClear);
+    this.cleanup.push(() => clear.removeEventListener("change", onClear));
     const mo = new MutationObserver(onScheme);
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class", "style"] });
     this.cleanup.push(() => { mq.removeEventListener("change", onScheme); mo.disconnect(); });

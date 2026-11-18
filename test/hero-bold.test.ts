@@ -47,19 +47,28 @@ describe("hero card under look mood=bold", () => {
     expect(muted).toBe(boldHeroTheme(ui.sayshape.theme).colors.muted);
   });
 
-  it("text on the strongest part of the wash still reads at AA, ink and muted", () => {
-    for (const [name, host] of THEMES) {
-      const t = applyLook(host, { mood: "bold" });
+  it("the card's own wash keeps the host's accent", () => {
+    const ui = render(SPEC("bold"), { theme: lightTheme });
+    const stops = ui.drawOps.filter((op) => op.op === "fill" && op.gradientStops?.length).map((op) => op.gradientStops![0]!.color);
+    expect(stops).toContain(ui.sayshape.theme.colors.accent);
+  });
+
+  it("text on the strongest part of the wash reads at AA in every text tone", () => {
+    for (const [name, hostTheme] of THEMES) {
+      const t = applyLook(hostTheme, { mood: "bold" });
       expect(t.mood).toBe("bold");
       const c = boldHeroTheme(t).colors;
+      const host = t.colors;
       const wash = isDarkTheme(t) ? HERO_BOLD_WASH.dark : HERO_BOLD_WASH.light;
       // The wash's two ends over the card, plus the corner glow (at most ~0.24 more accent) at its start.
       const glow = isDarkTheme(t) ? 0.24 : 0.16;
-      const ends = [c.accent, c.accent2].map((a) => mixColors(c.raised, a, wash)!);
-      const corner = mixColors(ends[0]!, c.accent, glow)!;
+      // The wash is drawn in the host's own accent; the words inside use the lifted colors.
+      const ends = [host.accent, host.accent2].map((a) => mixColors(host.raised, a, wash)!);
+      const corner = mixColors(ends[0]!, host.accent, glow)!;
       for (const bg of [...ends, corner]) {
-        expect(contrastRatio(c.ink, bg)!, `${name} ink`).toBeGreaterThanOrEqual(4.5);
-        expect(contrastRatio(c.muted, bg)!, `${name} muted`).toBeGreaterThanOrEqual(4.5);
+        for (const k of ["ink", "muted", "accent", "good", "warn", "bad"] as const) {
+          expect(contrastRatio(c[k], bg)!, `${name} ${k}`).toBeGreaterThanOrEqual(4.5);
+        }
       }
     }
   });

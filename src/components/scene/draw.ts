@@ -176,7 +176,8 @@ function paintOf(raw: string | undefined, bounds: Bounds, f: Frame, scope: Scope
     grad.addColorStop(1, to);
     return grad;
   }
-  if (f.theme && (SCENE_FILLS as readonly string[]).includes(v)) return fillGradient(f.g, f.theme, v as FillName, bounds);
+  // A named fill; where there's none to draw (a forced-colors mode), the shape still shows, solid.
+  if (f.theme && (SCENE_FILLS as readonly string[]).includes(v)) return fillGradient(f.g, f.theme, v as FillName, bounds) ?? colorOf("raised", f);
   return colorOf(v, f);
 }
 

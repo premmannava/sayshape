@@ -22,6 +22,7 @@
  * These are warnings for the model to tidy up, not errors: the scene still
  * shows. Headless, like layout: no canvas or DOM, so it runs on a server.
  */
+import { shownWidth } from "./size";
 import { MAX_DRAGGABLE } from "./drag";
 import type { Diagnostic, SayShapeNode, Value } from "../../types";
 import type { Scope } from "../../expr";
@@ -188,6 +189,8 @@ const quote = (s: string) => (s.length > 32 ? `"${s.slice(0, 30)}…"` : `"${s}"
 export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: Theme; measure?: MeasureText; behavior?: boolean } = {}): Diagnostic[] {
   try {
     const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
+    // How wide it shows on a phone: maxw= and scale= can make it narrower than the phone.
+    const phoneW = shownWidth(PHONE_WIDTH, w, scene.props.maxw === undefined ? undefined : numOf(scene, "maxw", scope, 0), scene.props.scale === undefined ? undefined : numOf(scene, "scale", scope, 1));
     const theme = opts.theme ?? lightTheme;
     const drawn = drawAtRest(scene, scope, theme, opts.measure, !!opts.behavior);
     const out: Diagnostic[] = [];
@@ -202,7 +205,7 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
       noted.add(`${n.line}:${n.message}`);
       out.push({ line: n.line, severity: "warning", message: `Drawing: ${n.message}` });
     }
-    out.push(...findProblems(drawn.marks, drawn.regions, w, h));
+    out.push(...findProblems(drawn.marks, drawn.regions, w, h, phoneW));
     if (drawn.dragOver !== undefined) out.push({ line: drawn.dragOver, severity: "warning", message: `Drawing: a scene can have at most ${MAX_DRAGGABLE} draggable shapes, so this one and those after it can't be dragged. Drag fewer, or use a slider` });
     out.push(...swipeTraps(drawn.regions, w, h));
     // Contrast in both modes when no theme was asked for: theme colors change between them.
@@ -228,7 +231,7 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
       out.push({ line: c.line, severity: "warning", message: `Drawing: ${who} hard to read${mode}: the color is too close to what's under ${count === 1 ? "it" : "them"} (contrast ${c.ratio.toFixed(1)}:1, needs ${MIN_CONTRAST}:1). Pick a lighter or darker fill, or a theme color like ink or onAccent` });
     }
     // Last, and always kept: it's about the whole picture, and it never crowds out a problem that's only in one place.
-    const phone = phoneText(drawn.marks, w);
+    const phone = phoneText(drawn.marks, w, phoneW);
     if (phone) return [...out.slice(0, MAX_DRAWING_PROBLEMS - 1), phone];
     return out.slice(0, MAX_DRAWING_PROBLEMS);
   } catch {
@@ -259,7 +262,7 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
   return { marks, regions: f.press!.regions, under, notes: f.notes ?? [], ...(over !== undefined ? { dragOver: over } : {}) };
 }
 
-function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w: number, h: number): Diagnostic[] {
+function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w: number, h: number, phoneW = PHONE_WIDTH): Diagnostic[] {
   const out: Diagnostic[] = [];
   const said = new Set<string>();
   const warn = (line: number, message: string) => {
@@ -312,7 +315,7 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
     }
   }
   // On a phone the whole picture shrinks to PHONE_WIDTH, and things to press shrink with it.
-  const k = PHONE_WIDTH / w;
+  const k = phoneW / w;
   const pressable = regions.map((r) => ({ r, b: regionBounds(r) })).filter((x): x is { r: SceneRegion; b: Rect } => !!x.b);
   for (const { r, b } of pressable) {
     if (overlap(b, { x: 0, y: 0, w, h }) <= 0) {
@@ -342,8 +345,8 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
  * other problem. It asks for bigger words, not a smaller w, because a small
  * w makes the whole scene huge on a wide screen.
  */
-function phoneText(marks: readonly Mark[], w: number): Diagnostic | null {
-  const k = PHONE_WIDTH / w;
+function phoneText(marks: readonly Mark[], w: number, phoneW = PHONE_WIDTH): Diagnostic | null {
+  const k = phoneW / w;
   const small = marks
     .filter((m) => m.kind === "label" && m.alpha >= 0.15 && m.text?.trim())
     .map((l) => ({ l, px: (l.size ?? l.bounds.h) * k }))

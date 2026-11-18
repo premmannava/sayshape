@@ -854,7 +854,10 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     }
     openState = null;
     // An element that means something else inside an enclosing one (icon in a scene draws a glyph) becomes it, silently.
+    const asWritten = tok.type;
     if (tok.type) tok.type = renamedIn(stack, indent, tok.type, registry);
+    // Messages name the element as it was written (icon in a scene, not glyph).
+    const shownType = asWritten && asWritten !== tok.type ? `${asWritten}" in a "${stack[stack.length - 1]?.type ?? "scene"}` : tok.type;
     // "on choose_a" blocks are a common guess at handling a press inside the spec. Say how it works
     // instead, once, without the knock-on messages about the rest of the line.
     if (tok.type === "on" && !defOf("on", registry)) {
@@ -944,7 +947,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       const pdef = def.props[name] ?? universalProp(name);
       if (!pdef) {
         const known = [...Object.keys(def.props), ...Object.keys(COMMON_PROPS)];
-        diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" has no prop "${name}". Known props: ${known.join(", ")}` });
+        diagnostics.push({ line: lineNo, severity: "warning", message: `"${shownType}" has no prop "${name}". Known props: ${known.join(", ")}` });
         continue;
       }
       checkProp(name, rawValue, pdef, lineNo, diagnostics, fns);
@@ -956,7 +959,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     }
     for (const [name, pdef] of Object.entries(def.props)) {
       const exempt = pdef.unlessProp && pdef.unlessProp.values.includes(tok.props[pdef.unlessProp.name] ?? "");
-      if (pdef.required && !exempt && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs ${name}=` });
+      if (pdef.required && !exempt && !(name in tok.props)) diagnostics.push({ line: lineNo, severity: "warning", message: `"${shownType}" needs ${name}=` });
     }
     if (def.check) {
       // A component's own check must never stop parsing (rule 2).

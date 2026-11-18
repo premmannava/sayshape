@@ -152,9 +152,13 @@ export const HERO_BOLD_WASH = { light: 0.22, dark: 0.3 } as const;
 const isBold = (theme: Theme) => theme.mood === "bold" && !theme.name.endsWith("-forced-colors");
 
 const boldHero = new WeakMap<Theme, Theme>();
+/** The theme a bold hero's lifted theme came from, for drawing the card itself. */
+const heroBase = new WeakMap<Theme, Theme>();
+/** The text colors a bold hero lifts: muted words and the tones (tone=accent, good, warn, bad). */
+const BOLD_HERO_TONES = ["muted", "accent", "good", "warn", "bad"] as const;
 /**
- * The theme inside a hero card under look mood=bold: its muted color moved
- * toward ink (5% at a time) until it reads at AA (4.55, as the scrim checks)
+ * The theme inside a hero card under look mood=bold: its muted and tone
+ * colors (accent, good, warn, bad) each moved toward ink (5% at a time) until it reads at AA (4.55, as the scrim checks)
  * on both ends of the wash and on the glowing corner. Ink already does.
  */
 export function boldHeroTheme(theme: Theme): Theme {
@@ -166,9 +170,14 @@ export function boldHeroTheme(theme: Theme): Theme {
   const ends = [c.accent, c.accent2].map((a) => mixColors(c.raised, a, wash) ?? c.raised);
   const bgs = [...ends, mixColors(ends[0]!, c.accent, dark ? 0.24 : 0.16) ?? ends[0]!];
   const reads = (color: string) => bgs.every((bg) => (contrastRatio(color, bg) ?? 0) >= 4.55);
-  let muted = c.muted;
-  for (let k = 0.05; !reads(muted) && k <= 1.0001; k += 0.05) muted = mixColors(c.muted, c.ink, k) ?? c.ink;
-  out = muted === c.muted ? theme : { ...theme, colors: { ...c, muted } };
+  const lifted: Partial<Theme["colors"]> = {};
+  for (const k of BOLD_HERO_TONES) {
+    let color = c[k];
+    for (let t = 0.05; !reads(color) && t <= 1.0001; t += 0.05) color = mixColors(c[k], c.ink, t) ?? c.ink;
+    if (color !== c[k]) lifted[k] = color;
+  }
+  out = Object.keys(lifted).length ? { ...theme, colors: { ...c, ...lifted } } : theme;
+  if (out !== theme) heroBase.set(out, theme);
   boldHero.set(theme, out);
   return out;
 }
@@ -235,14 +244,17 @@ card on=emit:open_order
   text "Trail runner socks" weight=semibold
   text "Arrives Thursday" tone=muted`,
   check(props) {
-    return isFillName(props.fill) && props.variant === "glass" ? ["fill= and variant=glass don't mix; the fill was used. Keep one of them"] : [];
+    if (!isFillName(props.fill) || props.variant === undefined || props.variant === "raised") return [];
+    return props.variant === "glass"
+      ? ["fill= and variant=glass don't mix; the fill was used. Keep one of them"]
+      : [`fill= takes the place of variant=${props.variant}; the fill was used. Keep one of them`];
   },
   theme(theme, node) {
     // A fill: the words inside take colors that read on its gradient (the theme's own, unchanged in a forced-colors mode).
     if (isFillName(node.props.fill)) return onFillTheme(theme, node.props.fill);
     // Glass: the quieter text colors lift toward ink until they read through the tint over any backdrop.
     if (node.props.variant === "glass") return glassTheme(theme);
-    // A bold hero's stronger wash: muted words inside lift toward ink until they hold AA on it.
+    // A bold hero's stronger wash: muted and toned words inside lift toward ink until they hold AA on it.
     return node.props.variant === "hero" && isBold(theme) ? boldHeroTheme(theme) : theme;
   },
   semantics(box, ctx) {
@@ -252,13 +264,16 @@ card on=emit:open_order
   layout(box, ctx) {
     const p = ctx.props(box.node);
     // The host already frames the view (bareRootCard): the one top-level card adds no padding.
-    const bare = ctx.bare?.(box.node) ?? false;
+    // A fill or glass is the card's own content (its words take colors for it), so it keeps its surface even then.
+    const own = isFillName(box.node.props.fill) || box.node.props.variant === "glass";
+    const bare = !own && (ctx.bare?.(box.node) ?? false);
     stack(box, ctx, bare ? 0 : p.num("pad", ctx.theme.space.lg), p.num("gap", ctx.theme.space.md));
     if (bare) box.data = { ...box.data, bare: true };
     markTablesInsideCard(box);
   },
   surface(box, ctx) {
-    const c = ctx.theme.colors;
+    // A bold hero's own wash is drawn in the host's colors, not the lifted ones its words use.
+    const c = (heroBase.get(ctx.theme) ?? ctx.theme).colors;
     // A bare card has no fill: what's in it sits on the page.
     if (box.data?.bare) return c.surface;
     // A fill's theme already has the gradient's middle as raised.
@@ -277,7 +292,8 @@ card on=emit:open_order
       if (ctx.props(box.node).has("on")) ctx.addHit(box);
       return;
     }
-    const { g, theme } = ctx;
+    const { g } = ctx;
+    const theme = heroBase.get(ctx.theme) ?? ctx.theme;
     const c = theme.colors;
     const p = ctx.props(box.node);
     const fill = cardFill(box, theme);
