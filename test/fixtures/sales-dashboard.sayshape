@@ -1,0 +1,15 @@
+# Sales dashboard: every rep's attainment comes from one extend().
+state reps=[{name: "Ana", region: "West", revenue: 182000, quota: 150000}, {name: "Ben", region: "East", revenue: 96000, quota: 120000}, {name: "Chloé", region: "West", revenue: 140000, quota: 140000}, {name: "Dev", region: "South", revenue: 61000, quota: 100000}, {name: "Emi", region: "East", revenue: 133000, quota: 110000}]
+derive board={sort(extend(reps, 'r', {att: round(r.revenue / r.quota * 100)}), 'att', 'desc')}
+text "Q3 sales" style=title
+row
+  stat label="Revenue" value={money(sum(reps, 'revenue'))}
+  stat label="Team attainment" value="{round(sum(reps, 'revenue') / sum(reps, 'quota') * 100)}%"
+  stat label="At or above quota" value={len(filter(board, 'att', {from: 100}))}
+chart "Attainment (%)" kind=hbar items=board x=name y=att
+table "Reps" items=board
+  table-column field=name
+  table-column field=region
+  table-column field=revenue format=money
+  table-column field=quota format=money
+  table-column "Attainment %" field=att

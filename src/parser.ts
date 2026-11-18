@@ -18,7 +18,7 @@ import { MAX_RULES, MAX_RULE_ACTIONS, MAX_RULE_INTERVAL, MIN_RULE_INTERVAL, RULE
 import { RULE_FUNCTIONS } from "./math";
 import { dragAxis, readPaths } from "./drag-axis";
 import { looksLikeData, parseData } from "./data";
-import { bareExpression, checkSyntax, identifiers, itemNames, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
+import { bareExpression, checkSyntax, identifiers, namedItems, quotedTemplate, splitTemplate, wholeExpression, type ExpressionFunctions } from "./expr";
 import { actionTargets } from "./actions";
 import { loopNames } from "./each";
 import { PATH } from "./paths";
@@ -688,8 +688,8 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
   // Where bind= and actions write, to report writes to derived names.
   const writes: Array<{ name: string; line: number }> = [];
   const derivedLines: DerivedDef[] = [];
-  // Names extend() gives its items, checked against state and derived names once those are known.
-  const itemUses: Array<{ line: number; names: string[] }> = [];
+  // Names extend() and map() give their items, checked against state and derived names once those are known.
+  const itemUses: Array<{ line: number; names: Array<{ name: string; fn: string }> }> = [];
   // Behavior (opt-in): rules, what controls write (so a rule can be stopped), and what dialogs bind.
   const rules: RuleDef[] = [];
   const controls = new Set<string>();
@@ -968,11 +968,11 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       : expressionsOf(tok.text, tok.props, def.props, fns);
     const names = [...new Set(exprs.flatMap((e) => identifiers(e, fns)))].filter((n) => !inScope.has(n));
     if (names.length && !provided.anyNames) outsideUses.push({ line: lineNo, names });
-    const items = [...new Set(exprs.flatMap((e) => itemNames(e, fns)))];
-    for (const name of items) {
-      if (inScope.has(name)) diagnostics.push({ line: lineNo, severity: "warning", message: `extend() names its item "${name}", which is already a loop variable here. Give the item another name` });
+    const items = [...new Map(exprs.flatMap((e) => namedItems(e, fns)).map((n) => [n.name, n] as const)).values()];
+    for (const { name, fn } of items) {
+      if (inScope.has(name)) diagnostics.push({ line: lineNo, severity: "warning", message: `${fn}() names its item "${name}", which is already a loop variable here. Give the item another name` });
     }
-    if (items.length) itemUses.push({ line: lineNo, names: items.filter((n) => !inScope.has(n)) });
+    if (items.length) itemUses.push({ line: lineNo, names: items.filter((n) => !inScope.has(n.name)) });
     for (const [name, raw] of Object.entries(tok.props)) {
       const pdef = def.props[name] ?? universalProp(name);
       const wrote = (n: string) => { written.add(n); controls.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
@@ -1018,11 +1018,11 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
   // Derived names count as defined, even ones left out for a cycle (that's reported already).
   for (const d of derivedLines) if (d.reads.length) outsideUses.push({ line: d.line, names: d.reads });
   const defined = new Set([...state.map((s) => s.key), ...derivedLines.map((d) => d.name)]);
-  for (const d of derivedLines) itemUses.push({ line: d.line, names: itemNames(d.expr) });
+  for (const d of derivedLines) itemUses.push({ line: d.line, names: namedItems(d.expr) });
   for (const { line, names } of itemUses) {
-    for (const name of names) {
+    for (const { name, fn } of names) {
       if (defined.has(name) || ENGINE_STATE.includes(name)) {
-        diagnostics.push({ line, severity: "warning", message: `extend() names its item "${name}", but "${name}" is already ${derivedLines.some((d) => d.name === name) ? "derived" : "state"}, so it would mean two things. Give the item another name, like '${name}_'` });
+        diagnostics.push({ line, severity: "warning", message: `${fn}() names its item "${name}", but "${name}" is already ${derivedLines.some((d) => d.name === name) ? "derived" : "state"}, so it would mean two things. Give the item another name, like '${name}_'` });
       }
     }
   }
