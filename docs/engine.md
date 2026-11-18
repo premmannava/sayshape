@@ -93,6 +93,8 @@ ui.on("action", ({ name, value }) => {
 });
 ```
 
+`reviewLayout(ui.tree)` checks design rules a spec can break while parsing cleanly, as warnings with line numbers: today, a `card` inside a `card` (no card variant is meant as an inner panel; a column or a divider separates parts inside one). The MCP server sends them back with the drawing problems, without holding the interface back, and the playground lists them with the parser's.
+
 ## Scenes (experimental, off by default)
 
 A `scene` is a picture or animation the model paints itself from shapes (`rect`, `circle`, `ellipse`, `line`, `path`, `polygon`, `label`, `group`, `define`/`use`, `gradient`), for things no other element shows: a goal celebration, a rabbit hopping, a car on a road. Any prop can be a formula of `t`, the seconds since the scene started, and lines inside a scene can call extra math (`sin`, `cos`, `ease`, `wave`, `random`, `range`, `pick`, …). It is the one place where specs choose their own colors.

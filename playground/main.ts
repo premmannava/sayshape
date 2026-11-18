@@ -1,4 +1,4 @@
-import { SayShape, COMMON_IMAGE_HOSTS, coreComponents, languageGuide, type Diagnostic, type SayShapeNode } from "../src";
+import { SayShape, COMMON_IMAGE_HOSTS, coreComponents, languageGuide, reviewLayout, type Diagnostic, type SayShapeNode } from "../src";
 import { mapComponents } from "../src/components/map";
 import { sceneComponents } from "../src/components/scene";
 import { setupAppearance } from "./appearance/panel";
@@ -201,7 +201,10 @@ $("capture").addEventListener("click", async () => {
 
 // ------------------------------------------------------------ panels
 
-sayshape.on("diagnostics", (d) => {
+sayshape.on("diagnostics", (parsed) => {
+  // The layout check's warnings (a card inside a card) join the parser's, as the MCP server sends them to the model.
+  const tree = sayshape.tree;
+  const d = tree ? [...parsed, ...reviewLayout(tree)].sort((a, b) => a.line - b.line) : parsed;
   diagnostics = d;
   $("diagCount").textContent = String(d.length);
   const list = $("diags");
