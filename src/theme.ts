@@ -236,8 +236,8 @@ export const studioLightTheme: Theme = {
     series2: "#0E87A8",
     series3: "#D63A7A",
     series4: "#C2690A",
-    series5: "#0F8C63",
-    series6: "#8B5CF6",
+    series5: "#8B5CF6",
+    series6: "#0F8C63",
   },
 };
 
@@ -269,8 +269,8 @@ export const studioDarkTheme: Theme = {
     series2: "#3CC8E6",
     series3: "#F27AB4",
     series4: "#F5BE4F",
-    series5: "#4FD1A0",
-    series6: "#C38BFF",
+    series5: "#C38BFF",
+    series6: "#4FD1A0",
   },
 };
 
