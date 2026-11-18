@@ -29,7 +29,9 @@
  * - Width: columns get their natural widths, and text columns narrow (never
  *   below MIN_TEXT_COLUMN, nor below their longest word up to
  *   MAX_SCROLL_TEXT_COLUMN, so words aren't split) to fit. Text cells that no longer fit on one line
- *   wrap to at most MAX_CELL_LINES lines, ending with "…" past that; a row is
+ *   wrap, in full; only text longer than MAX_CELL_LINES lines is shortened, ending with "…" and a
+ *   "Show all" toggle under it (its own Tab stop, a button with expanded state) that shows the
+ *   rest, kept as view state (ctx.view, "e:<item>:<column>"); a row is
  *   as tall as its tallest cell (never shorter than one line), and numbers
  *   stay on one line. When even the narrowest columns don't fit, the table
  *   scrolls sideways instead: every column keeps a readable width, the first
@@ -80,8 +82,11 @@ const LOCALE = "en-US";
 const MIN_TEXT_COLUMN = 96;
 /** Room for the sort arrow beside a header. */
 const ARROW = 14;
-/** A text cell wraps onto at most this many lines; past that it ends with an ellipsis. */
-export const MAX_CELL_LINES = 3;
+/**
+ * A text cell wraps in full up to this many lines; past that it's shortened to them, ending with an
+ * ellipsis, and a "Show all" toggle under it shows the rest (nothing is lost, only folded).
+ */
+export const MAX_CELL_LINES = 8;
 /** How visible a sortable header's neutral arrow is at rest, and under the pointer or focus. */
 const ARROW_REST = 0.4;
 const ARROW_HOVER = 0.8;
@@ -129,6 +134,8 @@ export interface TableCell {
   sign?: "good" | "bad";
   /** The bar's length as a fraction of its scale, negative to the left of zero. */
   bar?: number;
+  /** Text longer than MAX_CELL_LINES lines: folded ("closed", lines cut with "…") or unfolded ("open"); a toggle line under it. */
+  more?: "closed" | "open";
 }
 
 export interface TableRow {
@@ -248,6 +255,10 @@ export function keyOf(item: Value, field: string): string | number | null {
 }
 
 const rowDetail = (key: string | number) => `row:${typeof key === "number" ? "n" : "s"}:${key}`;
+/** A long cell's Show all toggle, by item (its place in the list) and column, and where it's kept open in view state. */
+const moreDetail = (item: number, ci: number) => `more:${item}:${ci}`;
+const foldKey = (item: number, ci: number) => `e:${item}:${ci}`;
+const MORE_LABEL = { closed: "Show all", open: "Show less" } as const;
 const sortDetail = (field: string) => `sort:${field}`;
 
 /**
@@ -350,7 +361,7 @@ function readColumns(node: SayShapeNode, ctx: Pick<LayoutContext, "visibleChildr
   });
 }
 
-function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx: Pick<LayoutContext, "theme" | "measure" | "warn" | "visibleChildren" | "props">, loading = false): TableGeometry {
+function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx: Pick<LayoutContext, "theme" | "measure" | "warn" | "visibleChildren" | "props" | "view">, loading = false): TableGeometry {
   const t: Theme = ctx.theme, m = ctx.measure;
   const line = box.node.line;
   const warn = (msg: string) => ctx.warn?.(`table on line ${line}: ${msg}`);
@@ -502,6 +513,7 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
 
   // Each row is as tall as its tallest cell, and never shorter than one line.
   let rowY = top + headerH;
+  const view = ctx.view?.(box.node);
   const rows: TableRow[] = order.map((i, r) => {
     const key = usable[i] ? keys[i]! : null;
     const selectable = bindable && key !== null;
@@ -509,8 +521,19 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
       const room = columns[ci]!.w - 2 * pad;
       // Only text wraps; numbers keep to one line (their column is never narrower than they are).
       const badge = badges[r]![ci], n = numbers[r]![ci], col = columns[ci]!;
-      const lines = badge ? [fit(full, room - 2 * BADGE_PAD, badgeFont, m)] : col.format === "text" ? fitLines(full, room, cellFont, m, MAX_CELL_LINES) : [fit(full, room, cellFont, m)];
+      let more: TableCell["more"];
+      let lines: string[];
+      if (badge) lines = [fit(full, room - 2 * BADGE_PAD, badgeFont, m)];
+      else if (col.format !== "text") lines = [fit(full, room, cellFont, m)];
+      else {
+        lines = wrapText(full, room, cellFont, m);
+        if (lines.length > MAX_CELL_LINES) {
+          more = view?.[foldKey(i, ci)] ? "open" : "closed";
+          if (more === "closed") lines = fitLines(full, room, cellFont, m, MAX_CELL_LINES);
+        }
+      }
       const cell: TableCell = { full, lines };
+      if (more) cell.more = more;
       if (n !== undefined) cell.n = n;
       if (badge) cell.badge = badge;
       if (col.tone === "sign" && n !== undefined && n !== 0) cell.sign = n > 0 ? "good" : "bad";
@@ -520,7 +543,8 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
       }
       return cell;
     });
-    const h = Math.max(rowH, Math.max(1, ...cells.map((c) => c.lines.length)) * cellLH + 2 * t.space.sm);
+    // A folded cell has its toggle as one more line under its text.
+    const h = Math.max(rowH, Math.max(1, ...cells.map((c) => c.lines.length + (c.more ? 1 : 0))) * cellLH + 2 * t.space.sm);
     const y = rowY;
     rowY += h;
     return {
@@ -833,7 +857,6 @@ function paintTable(box: Box, ctx: PaintContext): void {
         const right = col.align === "right";
         g.textAlign = right ? "right" : "left";
         // Lines sit centred in the row, so a short cell next to a tall one lines up with its middle.
-        const top = ry + (row.h - cell.lines.length * d.cellLH) / 2;
         if (cell.bar !== undefined && col.bar) paintBar(ctx, col, cell.bar, x, ry, row.h);
         if (cell.badge) {
           // A badge: the tone's own color at low opacity behind its text, like details.
@@ -851,7 +874,10 @@ function paintTable(box: Box, ctx: PaintContext): void {
           return;
         }
         g.fillStyle = cell.full === EMPTY_CELL ? c.muted : cell.sign ? c[cell.sign] : col.tone === "sign" ? c.ink : tone === "negative" ? c.bad : tone === "positive" ? c.good : c.ink;
-        cell.lines.forEach((line, li) => g.fillText(line, right ? x + col.w - pad : x + pad, top + li * d.cellLH + d.cellLH / 2));
+        const n = cell.lines.length + (cell.more ? 1 : 0);
+        const first = ry + (row.h - n * d.cellLH) / 2;
+        cell.lines.forEach((line, li) => g.fillText(line, right ? x + col.w - pad : x + pad, first + li * d.cellLH + d.cellLH / 2));
+        if (cell.more) paintMore(cell.more, row.index, ci, x, first + cell.lines.length * d.cellLH, col.w);
       });
     });
     if (!last || s) rule(row.y + row.h);
@@ -860,6 +886,22 @@ function paintTable(box: Box, ctx: PaintContext): void {
   g.globalAlpha = base;
 
   if (d.totals) paintTotals(box, ctx, d, colX, clipped, visiblePart, !!s);
+
+  /** A long cell's toggle: a line of accent text under it, pressable on its own (above the row). */
+  function paintMore(state: "closed" | "open", item: number, ci: number, x: number, y: number, w: number) {
+    const detail = moreDetail(item, ci);
+    const label = MORE_LABEL[state];
+    g.font = d!.headerFont;
+    g.textAlign = "left";
+    g.fillStyle = c.accent;
+    g.fillText(label, x + pad, y + d!.cellLH / 2);
+    const lw = g.measureText(label).width;
+    if (ctx.isHovered(box.node, detail)) g.fillRect(x + pad, Math.round(y + d!.cellLH * 0.8), lw, 1);
+    const part = tablePart(box, x + pad / 2, y, Math.min(w - pad, lw + pad), d!.cellLH);
+    ctx.addHit(part, { detail });
+    if (ctx.isFocused(box.node, detail)) focusRing(part.x - 2, part.y - 2, part.w + 4, part.h + 4);
+    g.font = d!.cellFont;
+  }
 
   if (d.empty) {
     g.fillStyle = c.muted;
@@ -1055,7 +1097,11 @@ table items=gear key=id bind=picked sort=by direction=dir
         selected: row.selectable ? row.selected : undefined,
         rect: { x: box.x + d.frame.x, y: box.y + row.y, w: d.frame.w, h: row.h },
       });
-      row.cells.forEach((cell, ci) => parts.push({ detail: `cell:${row.index}:${ci}`, within: rowDetail, role: ci === 0 ? "rowheader" : "cell", name: cell.full }));
+      row.cells.forEach((cell, ci) => {
+        parts.push({ detail: `cell:${row.index}:${ci}`, within: rowDetail, role: ci === 0 ? "rowheader" : "cell", name: cell.full });
+        // The whole text is the cell's name either way; the toggle is for eyes, and named for its column.
+        if (cell.more) parts.push({ detail: moreDetail(row.index, ci), within: `cell:${row.index}:${ci}`, role: "button", name: `${MORE_LABEL[cell.more]} of ${d.columns[ci]!.label}`, expanded: cell.more === "open" });
+      });
     });
     if (d.totals) {
       parts.push({ detail: "total", role: "row", rect: { x: box.x + d.frame.x, y: box.y + d.totals.y, w: d.frame.w, h: d.totals.h } });
@@ -1132,6 +1178,14 @@ table items=gear key=id bind=picked sort=by direction=dir
 function pressTable(ctx: PressContext): void {
   const detail = ctx.target.detail;
   if (typeof detail !== "string" || detail.startsWith("scroll:")) return;
+  const fold = /^more:(\d+):(\d+)$/.exec(detail);
+  if (fold) {
+    const v = ctx.view(ctx.target.node), k = foldKey(Number(fold[1]), Number(fold[2]));
+    if (v[k]) delete v[k];
+    else v[k] = 1;
+    ctx.relayout?.();
+    return;
+  }
   const p = ctx.props(ctx.target.node);
   if (detail.startsWith("sort:")) {
     const field = detail.slice(5);

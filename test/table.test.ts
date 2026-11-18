@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
-import { cellText, EMPTY_CELL, fitColumns, keyOf, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS, sortedOrder, type TableGeometry } from "../src/components/table";
+import { cellText, EMPTY_CELL, fitColumns, keyOf, MAX_CELL_LINES, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS, sortedOrder, type TableGeometry } from "../src/components/table";
 import { toData } from "../src/data";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
@@ -676,7 +676,7 @@ describe("table cells that wrap", () => {
     const [a, b, c] = g.rows;
     const note = b!.cells[1]!;
     expect(note.lines.length).toBeGreaterThan(1);
-    expect(note.lines.length).toBeLessThanOrEqual(3);
+    expect(note.lines.length).toBeLessThanOrEqual(MAX_CELL_LINES);
     for (const [ci, cell] of b!.cells.entries()) for (const l of cell.lines) expect(monoWidth(l, g.cellFont), l).toBeLessThanOrEqual(g.columns[ci]!.w - 2 * theme.space.md + 1e-6);
     expect(a!.h).toBe(rowHeight(theme));
     expect(b!.h).toBe(note.lines.length * lineHeight(theme) + 2 * theme.space.sm);
@@ -689,16 +689,17 @@ describe("table cells that wrap", () => {
     expect(box.h).toBe(g.frame.y + g.frame.h);
   });
 
-  it("shows at most three lines, the last ending in an ellipsis", () => {
-    const ui = render(`state rows=${rows("word ".repeat(80).trim())} pick=""\ntable items=rows key=id bind=pick\n${three}\n`, { width: phone });
+  it("folds only text past MAX_CELL_LINES lines, the last ending in an ellipsis, with a toggle line under it", () => {
+    const ui = render(`state rows=${rows("word ".repeat(200).trim())} pick=""\ntable items=rows key=id bind=pick\n${three}\n`, { width: phone });
     const g = geo(ui);
     const note = g.rows[1]!.cells[1]!;
-    expect(note.lines).toHaveLength(3);
-    expect(note.lines[2]!.endsWith("…")).toBe(true);
+    expect(note.lines).toHaveLength(MAX_CELL_LINES);
+    expect(note.more).toBe("closed");
+    expect(note.lines[MAX_CELL_LINES - 1]!.endsWith("…")).toBe(true);
     expect(note.lines[0]!.endsWith("…")).toBe(false);
-    expect(note.full).toBe("word ".repeat(80).trim());
+    expect(note.full).toBe("word ".repeat(200).trim());
     for (const l of note.lines) expect(monoWidth(l, g.cellFont)).toBeLessThanOrEqual(g.columns[1]!.w);
-    expect(g.rows[1]!.h).toBe(3 * lineHeight(lightTheme) + 2 * lightTheme.space.sm);
+    expect(g.rows[1]!.h).toBe((MAX_CELL_LINES + 1) * lineHeight(lightTheme) + 2 * lightTheme.space.sm);
   });
 
   it("keeps every row at one line's height when everything fits", () => {
