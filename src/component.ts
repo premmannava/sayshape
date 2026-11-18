@@ -238,6 +238,12 @@ export interface PressContext {
   relayout?(): void;
   /** Move keyboard focus to another part of this element (the row below in a tree), by the detail it was painted with. */
   focusPart?(detail: unknown): void;
+  /**
+   * Check the form around this element (its nearest card, else the screen): every shown field
+   * with ComponentDef.validate says what's wrong with it, the first wrong one takes focus and
+   * is announced. True when nothing is wrong. (A button with validate=true.)
+   */
+  validate?(): boolean;
 }
 
 /** Pressing or typing in an open popup. ctx.target.node is the popup's owner. */
@@ -346,7 +352,15 @@ export interface ComponentDef {
    * run by the parser after each prop is checked on its own. Gets the props as
    * written; returns warnings that say how to fix the line. Never throws.
    */
-  check?(props: Readonly<Record<string, string>>): string[];
+  check?(props: Readonly<Record<string, string>>, text?: string): string[];
+  /**
+   * A form field's check, for a button with validate=true: show what's wrong with the field now,
+   * as if it had been used and left, by writing its view state (what its layout reads), and
+   * return the problem in plain words, or "" when there's none.
+   */
+  validate?(p: PropReader, view: ElementView): string;
+  /** A tip the element shows without tip= (an icon-only button's label=); "" for none. */
+  ownTip?(p: PropReader): string;
 
   /** Set box.h (and box.children for containers). box.x/y/w are given. */
   layout(box: Box, ctx: LayoutContext): void;

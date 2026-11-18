@@ -686,6 +686,7 @@ A pressable button that runs actions. Use emit: to tell the app what the user ch
 | `icon` | string | Icon name before the label. |
 | `size` | `md` / `sm` | md or sm (smaller). |
 | `fit` | boolean | Natural width, even on a phone. |
+| `validate` | boolean | First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is. |
 
 ```
 button "Book now" on=emit:book
@@ -715,6 +716,8 @@ A checkbox that toggles a true/false state value.
 | `"text"` | text, required | The label next to the box. |
 | `bind` | state, required | The state name this checkbox reads and writes. |
 | `detail` | string | A muted line under the label. |
+| `required` | condition | When true it must be ticked, or it says error= (default Required) once toggled. |
+| `error` | string | Its message: for a required box left unticked, else shown while not empty. |
 
 ```
 state agreed=false

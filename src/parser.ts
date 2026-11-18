@@ -944,7 +944,7 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
     if (def.check) {
       // A component's own check must never stop parsing (rule 2).
       let found: string[] = [];
-      try { found = def.check(tok.props); } catch { found = []; }
+      try { found = def.check(tok.props, tok.text); } catch { found = []; }
       for (const message of found) diagnostics.push({ line: lineNo, severity: "warning", message });
     }
     if (tok.type === "if" && tok.props.if === undefined) {
