@@ -900,6 +900,15 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       skipDeeperThan = indent;
       return;
     }
+    if (def.unusable) {
+      let why: string | undefined;
+      try { why = def.unusable(tok.props, tok.text); } catch { why = undefined; }
+      if (why) {
+        diagnostics.push({ line: lineNo, severity: "error", message: `${why}. This line and anything under it were skipped` });
+        skipDeeperThan = indent;
+        return;
+      }
+    }
     if (def.text?.required && tok.text === undefined) {
       diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" needs quoted text, like ${tok.type} "Label"` });
     }

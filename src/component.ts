@@ -354,6 +354,12 @@ export interface ComponentDef {
    */
   check?(props: Readonly<Record<string, string>>, text?: string): string[];
   /**
+   * Why a line can't be drawn at all (a control screen readers couldn't name),
+   * or undefined. The parser skips the line and anything under it with this
+   * error. Gets the props as written. Never throws.
+   */
+  unusable?(props: Readonly<Record<string, string>>, text?: string): string | undefined;
+  /**
    * A form field's check, for a button with validate=true: show what's wrong with the field now,
    * as if it had been used and left, by writing its view state (what its layout reads), and
    * return the problem in plain words, or "" when there's none.

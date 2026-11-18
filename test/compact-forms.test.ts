@@ -138,12 +138,15 @@ describe("icon-only buttons", () => {
     expect(tipText(ui)).toBe("Removes it for good");
   });
 
-  it("need label=, with a line-numbered warning", () => {
-    const d = render(`state n=0\nbutton icon=trash on=inc:n\n`).diagnostics;
-    expect(d).toEqual([{ line: 2, severity: "warning", message: expect.stringMatching(/icon-only button needs label=/) }]);
-    // The button still draws and works; a screen reader falls back to nothing better than its role.
-    const plain = render(`button on=emit:x\n`).diagnostics;
-    expect(plain.map((x) => x.message).join(" ")).toMatch(/needs quoted text, like button "Save", or icon= and label=/);
+  it("need label=: without it the line is skipped, so no nameless button is drawn", () => {
+    const ui = render(`state n=0\nbutton icon=trash on=inc:n\n`);
+    expect(ui.diagnostics).toEqual([{ line: 2, severity: "error", message: expect.stringMatching(/icon-only button needs label=.*skipped/) }]);
+    expect(ui.findAll({ type: "button" })).toEqual([]);
+    const plain = render(`button on=emit:x\n`);
+    expect(plain.diagnostics.map((x) => x.message).join(" ")).toMatch(/needs quoted text, like button "Save", or icon= and label=/);
+    expect(plain.findAll({ type: "button" })).toEqual([]);
+    // label= alone is enough: screen readers have a name.
+    expect(render(`button icon=trash label="Remove" on=emit:x\n`).diagnostics).toEqual([]);
   });
 });
 

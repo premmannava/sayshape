@@ -65,12 +65,17 @@ export const button: ComponentDef = {
     validate: { type: "boolean", default: false, description: "First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is." },
     label: { type: "string", description: "What screen readers say, and an icon-only button's tip, e.g. label=\"Remove {e.name}\"." },
   },
+  // A button with nothing to say would be a nameless control to a screen reader: skipped, not drawn.
+  unusable(props, text) {
+    if (text !== undefined || props.label?.trim()) return undefined;
+    return props.icon === undefined
+      ? `"button" needs quoted text, like button "Save", or icon= and label= for an icon-only button`
+      : `An icon-only button needs label=, which screen readers say and its tip shows, like button icon=${props.icon} label="Remove"`;
+  },
   check(props, text) {
     const out = iconProblems(props.icon, "icon");
-    if (text === undefined && props.icon === undefined) out.push(`"button" needs quoted text, like button "Save", or icon= and label= for an icon-only button`);
-    else if (text === undefined && !props.label?.trim()) out.push(`An icon-only button needs label=, which screen readers say and its tip shows, like button icon=${props.icon} label="Remove"`);
     // Speech users press a button by saying what it shows (WCAG 2.5.3), so a label= beside text includes the text.
-    else if (text !== undefined && props.label !== undefined && !/[{]/.test(text + props.label) && !props.label.toLowerCase().includes(text.trim().toLowerCase())) {
+    if (text !== undefined && props.label !== undefined && !/[{]/.test(text + props.label) && !props.label.toLowerCase().includes(text.trim().toLowerCase())) {
       out.push(`label="${props.label}" doesn't include the button's text "${text}", so people who say what they see can't press it. Start it with the text, like label="${text} …"`);
     }
     return out;
