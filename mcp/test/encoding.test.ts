@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,7 +10,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "../src/server";
 import { fallbackPage } from "../src/fallback";
 import { widgetFragment, type WidgetOptions } from "../src/widget-file";
-import { loadPackedEngine, type PackedEngine } from "../src/widget-engine";
+import type { PackedEngine } from "../src/widget-engine";
 import { adapterSource } from "../src/widget-hosts";
 import { UI_CLIENT } from "./clients";
 
@@ -27,8 +29,16 @@ const nonAscii = (s: string) => [...new Set(s.match(/[^\x00-\x7f]/gu) ?? [])].jo
 /** The spec the loader passes to setSpec: the JSON after `var spec =`. */
 const specIn = (html: string) => JSON.parse(/var spec = (.*);\n/.exec(html)![1]!) as string;
 
+// The real engine, built the way `npm run build` builds it, so its own characters are checked too
+// (CI runs these tests without a build).
 let engine: PackedEngine;
-beforeAll(async () => { engine = await loadPackedEngine(); });
+let built = "";
+beforeAll(async () => {
+  built = await mkdtemp(join(tmpdir(), "sayshape-engine-"));
+  execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/pack-widget-engine.mjs", import.meta.url)), built], { stdio: "pipe" });
+  engine = JSON.parse(await readFile(join(built, "widget-engine.json"), "utf8")) as PackedEngine;
+}, 180_000);
+afterAll(async () => { if (built) await rm(built, { recursive: true, force: true }); });
 
 describe("text outside ASCII on every output path", () => {
   const variants: Array<[string, () => WidgetOptions]> = [
