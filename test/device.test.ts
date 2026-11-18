@@ -8,6 +8,7 @@ import { render } from "../src/testing";
 import type { AccessibleSummary } from "../src/testing";
 import { darkTheme, lightTheme } from "../src/theme";
 import type { Box } from "../src/types";
+import { deviceSamples } from "../playground/device-samples";
 
 const WITH = [...coreComponents, ...deviceComponents];
 const on = (spec: string, width = 600, theme = lightTheme) => render(spec, { components: WITH, width, theme });
@@ -197,5 +198,17 @@ describe("what it draws", () => {
     expect(ui.diagnostics.some((d) => d.severity === "warning" && /colour/.test(d.message))).toBe(true);
     expect(deviceBox(ui)).toBeDefined();
     ui.destroy();
+  });
+});
+
+describe("playground samples", () => {
+  it.each(Object.entries(deviceSamples))("%s parses, fits its screen and draws in light and dark", (_name, sample) => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const ui = on(sample.spec, 600, theme);
+      expect(ui.diagnostics).toEqual([]);
+      expect(ui.warnings).toEqual([]);
+      expect(dataOf(deviceBox(ui)).clipped).toBe(false);
+      ui.destroy();
+    }
   });
 });

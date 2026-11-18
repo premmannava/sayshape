@@ -1,10 +1,12 @@
 import { SayShape, COMMON_IMAGE_HOSTS, coreComponents, languageGuide, type Diagnostic, type SayShapeNode } from "../src";
 import { mapComponents } from "../src/components/map";
 import { sceneComponents } from "../src/components/scene";
+import { deviceComponents } from "../src/components/device";
 import { setupAppearance } from "./appearance/panel";
 import { setupAsk } from "./ask";
 import { samples as coreSamples } from "./samples";
 import { sceneSamples } from "./scene-samples";
+import { deviceSamples } from "./device-samples";
 import { slideSamples } from "./slides-samples";
 import { behaviorSamples, behaviorSceneSamples } from "./behavior-samples";
 import { playgroundGuide } from "./model-guide";
@@ -21,12 +23,15 @@ const imageHosts = [...COMMON_IMAGE_HOSTS];
 const scenes = new URLSearchParams(location.search).get("scene") === "1";
 // Experimental behavior (rules that tick, dragging in scenes) is off unless asked for too: ?behavior=1
 const behavior = new URLSearchParams(location.search).get("behavior") === "1";
-const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : [])], imageHosts, behavior }).expose("sayshape");
+// The experimental device frame (phone and laptop mockups) is off unless asked for too: ?device=1
+const devices = new URLSearchParams(location.search).get("device") === "1";
+const sayshape = new SayShape(canvas, { components: [...coreComponents, ...mapComponents, ...(scenes ? sceneComponents : []), ...(devices ? deviceComponents : [])], imageHosts, behavior }).expose("sayshape");
 // Scene and behavior samples only work with those on. Slide decks are always on.
 const samples = {
   ...coreSamples,
   ...slideSamples,
   ...(scenes ? sceneSamples : {}),
+  ...(devices ? deviceSamples : {}),
   ...(behavior ? behaviorSamples : {}),
   ...(behavior && scenes ? behaviorSceneSamples : {}),
 };
