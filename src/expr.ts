@@ -11,7 +11,7 @@
  * objects or globals, so model-written expressions cannot run code.
  */
 import { displayData, fieldOf, isData, isList, isRecord, isScalar, makeList, makeRecord, MAX_DATA_DEPTH, readField, toNumber } from "./data";
-import type { Value } from "./types";
+import type { DataRecord, Value } from "./types";
 
 type Node =
   | { k: "lit"; v: Value }
@@ -20,6 +20,8 @@ type Node =
   | { k: "bin"; op: string; a: Node; b: Node }
   | { k: "cond"; c: Node; a: Node; b: Node }
   | { k: "call"; fn: string; args: Node[]; extra?: Fn }
+  /** extend(list, 'q', {field: expr}): the record is worked out once per item, with the item named q. */
+  | { k: "extend"; list: Node; as: string; entries: Array<[string, Node]> }
   | { k: "list"; items: Node[] }
   | { k: "rec"; entries: Array<[string, Node]> }
   | { k: "get"; obj: Node; key: Node };
@@ -188,6 +190,38 @@ function group(v: Value, by: Value | undefined, field: Value | undefined, how: V
   }));
 }
 
+/** What a value is, for messages: "a number", "text", "a list". */
+function describeValue(v: Value | undefined): string {
+  return v === null || v === undefined ? "null" : typeof v === "number" ? "a number" : typeof v === "string" ? "text" : typeof v === "boolean" ? "true/false" : isList(v) ? "a list" : "a record";
+}
+
+/** A copy of a record with fields added: ones it has already are replaced where they are, new ones come last. */
+function withFields(item: DataRecord, fields: ReadonlyArray<readonly [string, Value]>): DataRecord {
+  const merged = new Map<string, Value>(Object.entries(item));
+  for (const [k, x] of fields) merged.set(k, x);
+  return makeRecord([...merged]);
+}
+
+/**
+ * rank(list, 'score', 'desc'): the list as it is, each record with a rank field: 1 for the best,
+ * and items that tie share a rank (1, 1, 3). 'asc' (the default, as in sort()) makes the smallest 1.
+ * Only numbers rank; an item whose field isn't one gets null. Sorting is still sort()'s job.
+ */
+function rank(v: Value, field: Value | undefined, dir: Value | undefined): Value {
+  if (!isList(v) || typeof field !== "string") return NaN;
+  if (dir !== undefined && dir !== "asc" && dir !== "desc") throw new ExprError(`rank() orders 'asc' or 'desc', not ${typeof dir === "string" ? `'${dir}'` : String(dir)}`);
+  const x: Array<number | null> = v.map((item, i) => {
+    if (!isRecord(item)) throw new ExprError(`rank(): item ${i} is ${describeValue(item)}, not a record`);
+    const n = fieldOf(item, field);
+    return typeof n === "number" && !isNaN(n) ? n : null;
+  });
+  const sign = dir === "desc" ? -1 : 1;
+  const at = x.flatMap((n, i) => (n === null ? [] : [i])).sort((a, b) => sign * (x[a]! - x[b]!));
+  const ranks = new Array<number | null>(v.length).fill(null);
+  at.forEach((i, pos) => { ranks[i] = pos > 0 && x[i] === x[at[pos - 1]!] ? ranks[at[pos - 1]!]! : pos + 1; });
+  return makeList(v.map((item, i) => withFields(item as DataRecord, [["rank", ranks[i]!]])));
+}
+
 const BUILTINS: Record<string, Fn> = {
   min: (...a) => extreme(false, a),
   max: (...a) => extreme(true, a),
@@ -214,6 +248,8 @@ const BUILTINS: Record<string, Fn> = {
     const key = (item: Value) => (field === undefined ? item : fieldOf(item, field));
     return makeList([...v].sort((x, y) => (desc ? -1 : 1) * order(key(x), key(y))));
   },
+  /** The list with a rank field on each item (1 is best, ties share a rank): rank(players, 'score', 'desc'). */
+  rank: (v, field, dir) => rank(v, field, dir),
   /** The first item of a list, or null when it's empty: first(sort(sales, 'revenue', 'desc')).month. */
   first: (v) => (isList(v) ? v[0] ?? null : NaN),
   /** The last item of a list, or null when it's empty. */
@@ -311,7 +347,9 @@ const BUILTINS: Record<string, Fn> = {
 // A frozen copy with no prototype, looked up by own property only, so names
 // like `constructor` or `__defineGetter__` can't reach Object.prototype.
 const FUNCTIONS: Readonly<Record<string, Fn>> = Object.freeze(Object.assign(Object.create(null) as Record<string, Fn>, BUILTINS));
-const isFunctionName = (name: string) => Object.hasOwn(FUNCTIONS, name);
+/** Functions with their own syntax, parsed in parseExpr instead of called: extend(list, 'q', {…}). */
+const SPECIAL = ["extend"];
+const isFunctionName = (name: string) => Object.hasOwn(FUNCTIONS, name) || SPECIAL.includes(name);
 
 /**
  * The most arguments each function takes. Extra ones used to be ignored, which hid the mistake:
@@ -321,7 +359,7 @@ const isFunctionName = (name: string) => Object.hasOwn(FUNCTIONS, name);
 const MAX_ARGS: Readonly<Record<string, number>> = Object.freeze(Object.assign(
   Object.create(null) as Record<string, number>,
   Object.fromEntries(Object.entries(BUILTINS).map(([k, f]) => [k, f.length])),
-  { min: Infinity, max: Infinity, round: 2, fixed: 2, money: 2 },
+  { min: Infinity, max: Infinity, round: 2, fixed: 2, money: 2, extend: 3 },
 ));
 
 /** How to call the functions models most often give too many arguments. */
@@ -331,6 +369,8 @@ const SIGNATURES: Record<string, string> = {
   find: "find(list, 'field', value)", search: "search(list, 'field', text)", sort: "sort(list, 'field', 'desc')",
   count: "count(list, 'field', value)", sum: "sum(list, 'field', 'qty')", avg: "avg(list, 'field')",
   group: "group(list, 'field', 'amount', 'avg')", first: "first(list)", last: "last(list)", pluck: "pluck(list, 'field')",
+  rank: "rank(list, 'field', 'desc') adds a rank field to each item (1 is best, ties share a rank)",
+  extend: "extend(list, 'q', {field: q.a * 2}) adds computed fields to each item, which is q inside the braces",
 };
 
 function tooManyArgs(name: string, got: number): string {
@@ -345,7 +385,7 @@ function noMethods(name: string): string {
   const hint = Object.hasOwn(FUNCTION_HINTS, key) ? FUNCTION_HINTS[key] : undefined;
   return `SayShape has no methods like .${name}(): ${hint ? `use ${hint}` : `use its functions, such as ${["filter", "sort", "take", "slice", "pluck", "sum"].join(", ")}`}`;
 }
-export const EXPRESSION_FUNCTIONS = Object.keys(FUNCTIONS);
+export const EXPRESSION_FUNCTIONS = [...Object.keys(FUNCTIONS), ...SPECIAL];
 
 /** Names models reach for from other languages, and what to write instead. */
 const FUNCTION_HINTS: Record<string, string> = {
@@ -358,7 +398,9 @@ const FUNCTION_HINTS: Record<string, string> = {
   where: "filter(list, 'field', value)", contains: "includes(list, value)",
   groupby: "group(list, 'field', 'amount')", group_by: "group(list, 'field', 'amount')", aggregate: "group(list, 'field', 'amount')", pivot: "group(list, 'field', 'amount')",
   format: "number(n) or money(n)", currency: "money(n)", tofixed: "fixed(n, 2)", str: "text in quotes: \"{n} items\"", string: "text in quotes: \"{n} items\"",
-  if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes", map: "each, pluck(list, 'field') for one field of every item, or sum/avg/join with a field",
+  if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes", map: "extend(list, 'q', {field: q.price * 2}) for a computed field on every item, pluck(list, 'field') for one field of every item, or sum/avg/join with a field",
+  mutate: "extend(list, 'q', {field: q.price * 2})", assign: "extend(list, 'q', {field: q.price * 2})", withcolumn: "extend(list, 'q', {field: q.price * 2})", addfield: "extend(list, 'q', {field: q.price * 2})",
+  ranking: "rank(list, 'field', 'desc')", row_number: "rank(list, 'field', 'desc')", dense_rank: "rank(list, 'field', 'desc')",
   values: "pluck(list, 'field')", column: "pluck(list, 'field')", get: "pluck(list, 'field')",
   // Scene math is only for lines inside a scene; models reach for it in derive lines too.
   clamp: "min(max(x, low), high) here (clamp works only on lines inside a scene)",
@@ -467,6 +509,27 @@ function parseExpr(src: string, fns?: ExpressionFunctions): Node {
     }
   }
 
+  /** extend(list, 'q', {field: expression, …}), after the name: its own syntax, since the record is worked out once per item. */
+  function extendCall(): Node {
+    const usage = () => new ExprError("extend() takes a list, a name for each item in quotes, and a record of new fields: extend(rows, 'r', {total: r.price * r.qty})");
+    next();
+    const list = ternary();
+    if (peek().v !== ",") throw usage();
+    next();
+    const as = next();
+    if (as.t !== "str" || !/^[A-Za-z_]\w*$/.test(as.v) || ["true", "false", "null"].includes(as.v)) {
+      throw new ExprError(`extend()'s second argument names each item, like 'q' in quotes (a plain word), not ${as.t === "str" ? `'${as.v}'` : `"${as.v || "end"}"`}`);
+    }
+    if (peek().v !== ",") throw usage();
+    next();
+    if (peek().v !== "{") throw new ExprError("extend()'s third argument must be the new fields written out in braces, like {total: q.price * q.qty}");
+    next();
+    const rec = nested(() => { const r = recordBody("}"); expect("}"); return r; }) as Extract<Node, { k: "rec" }>;
+    if (peek().v === ",") throw new ExprError(tooManyArgs("extend", 4));
+    expect(")");
+    return { k: "extend", list, as: as.v, entries: rec.entries };
+  }
+
   function atom(): Node {
     const t = next();
     if (t.t === "num") return { k: "lit", v: Number(t.v) };
@@ -475,6 +538,7 @@ function parseExpr(src: string, fns?: ExpressionFunctions): Node {
       if (t.v === "true") return { k: "lit", v: true };
       if (t.v === "false") return { k: "lit", v: false };
       if (t.v === "null") return { k: "lit", v: null };
+      if (t.v === "extend" && peek().v === "(") return extendCall();
       if (peek().v === "(") {
         const extra = extraOf(fns, t.v);
         if (!isFunctionName(t.v) && !extra) throw new ExprError(unknownFunction(t.v, fns));
@@ -565,6 +629,23 @@ function run(n: Node, scope: Scope): Value {
       if ("error" in r) throw new ExprError(r.error);
       return r.value;
     }
+    case "extend": {
+      const list = run(n.list, scope);
+      if (!isList(list)) return NaN;
+      // One name for the item in the whole expression: it can't also mean state, a derived value or an outer item.
+      if (scope(n.as) !== undefined) throw new ExprError(`extend() names its item "${n.as}", but "${n.as}" is already a name here. Pick another, like '${n.as}_'`);
+      let current: Value = null;
+      const inner: Scope = (name) => (name === n.as ? current : scope(name));
+      return makeList(list.map((item, i) => {
+        if (!isRecord(item)) throw new ExprError(`extend(): item ${i} is ${describeValue(item)}, not a record`);
+        current = item;
+        try {
+          return withFields(item, n.entries.map(([k, x]) => [k, run(x, inner)] as const));
+        } catch (e) {
+          throw e instanceof ExprError ? new ExprError(`extend(): item ${i}: ${e.message}`) : e;
+        }
+      }));
+    }
     case "call": {
       // Called detached, so `this` is never the function table.
       const fn = n.extra ?? FUNCTIONS[n.fn]!;
@@ -598,7 +679,7 @@ const extraCaches = new WeakMap<ExpressionFunctions, Map<string, Node | ExprErro
  * plain parse error ("Unexpected =") didn't say what to write instead.
  */
 const hasArrow = (src: string) => /=>/.test(src.replace(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"/g, ""));
-const NO_ARROWS = "SayShape has no arrow functions (x => …): list functions take a field name and a value instead, like filter(list, 'priority', 'High'), count(list, 'done') or sort(list, 'price', 'desc')";
+const NO_ARROWS = "SayShape has no arrow functions (x => …): list functions take a field name and a value instead, like filter(list, 'priority', 'High'), count(list, 'done') or sort(list, 'price', 'desc'). To work something out for each item, use extend(list, 'x', {total: x.price * x.qty})";
 
 /** A JavaScript template string (`Total: ${n}`): models write them, and the parse error didn't say what to write. */
 const NO_TEMPLATES = "SayShape has no template strings (`…`): put the text in quotes outside the braces, and it fills in each {…}: value=\"${total}K\" or text \"Total: {money(total)}\"";
@@ -647,19 +728,46 @@ export function checkSyntax(src: string, fns?: ExpressionFunctions): string | nu
   try { compile(src, fns); return null; } catch (e) { return e instanceof Error ? e.message : String(e); }
 }
 
-/** Collect the state names an expression reads (with an element's extra functions, if it calls them). */
+/**
+ * Collect the state names an expression reads (with an element's extra functions, if it calls them).
+ * The name extend() gives its items is not one: it only exists inside that call's braces.
+ */
 export function identifiers(src: string, fns?: ExpressionFunctions): string[] {
   try {
     const out = new Set<string>();
+    const walk = (n: Node, bound: ReadonlySet<string>): void => {
+      if (n.k === "id") { if (!bound.has(n.name)) out.add(n.name); }
+      else if (n.k === "un") walk(n.a, bound);
+      else if (n.k === "bin") { walk(n.a, bound); walk(n.b, bound); }
+      else if (n.k === "cond") { walk(n.c, bound); walk(n.a, bound); walk(n.b, bound); }
+      else if (n.k === "call") n.args.forEach((a) => walk(a, bound));
+      else if (n.k === "list") n.items.forEach((a) => walk(a, bound));
+      else if (n.k === "rec") n.entries.forEach(([, x]) => walk(x, bound));
+      else if (n.k === "get") { walk(n.obj, bound); walk(n.key, bound); }
+      else if (n.k === "extend") {
+        walk(n.list, bound);
+        const inside = new Set(bound).add(n.as);
+        n.entries.forEach(([, x]) => walk(x, inside));
+      }
+    };
+    walk(compile(src, fns), new Set());
+    return [...out];
+  } catch { return []; }
+}
+
+/** The names extend() calls in an expression give their items, for the parser to check against state and derived names. */
+export function itemNames(src: string, fns?: ExpressionFunctions): string[] {
+  try {
+    const out = new Set<string>();
     const walk = (n: Node): void => {
-      if (n.k === "id") out.add(n.name);
-      else if (n.k === "un") walk(n.a);
+      if (n.k === "un") walk(n.a);
       else if (n.k === "bin") { walk(n.a); walk(n.b); }
       else if (n.k === "cond") { walk(n.c); walk(n.a); walk(n.b); }
       else if (n.k === "call") n.args.forEach(walk);
       else if (n.k === "list") n.items.forEach(walk);
       else if (n.k === "rec") n.entries.forEach(([, x]) => walk(x));
       else if (n.k === "get") { walk(n.obj); walk(n.key); }
+      else if (n.k === "extend") { out.add(n.as); walk(n.list); n.entries.forEach(([, x]) => walk(x)); }
     };
     walk(compile(src, fns));
     return [...out];

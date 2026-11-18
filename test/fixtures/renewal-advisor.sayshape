@@ -1,0 +1,18 @@
+# Renewal advisor over the host's `quotes` (carrierId, carrier, premium, deductible, coverageLimit, changePct, status, note).
+state priceWeight=60 claims=2 claimSize=1500 quotes=[]
+derive rows={extend(quotes, 'q', {expected: q.premium + claims * min(q.deductible, claimSize)})}
+derive w={priceWeight / 100}
+derive costLo={min(rows, 'expected')} costHi={max(rows, 'expected')}
+derive covLo={min(rows, 'coverageLimit')} covHi={max(rows, 'coverageLimit')}
+derive scored={rank(extend(rows, 'r', {score: round(100 * (w * (costHi - r.expected) / (costHi - costLo + 0.0001) + (1 - w) * (r.coverageLimit - covLo) / (covHi - covLo + 0.0001)))}), 'score', 'desc')}
+derive ranked={sort(scored, 'rank')}
+text "Renewal advisor" style=title
+slider "Weight on price: {priceWeight}%" bind=priceWeight min=0 max=100 step=5
+stepper "Expected claims a year" bind=claims min=0 max=10
+stat label="Best match" value={first(ranked).carrier}
+table "Quotes, best first" items=ranked
+  table-column field=carrier
+  table-column field=expected format=money
+  table-column field=coverageLimit format=money
+  table-column field=score
+  table-column field=rank
