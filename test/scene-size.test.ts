@@ -53,4 +53,10 @@ describe("scene maxw= and scale=", () => {
     ui.click(box.x - 30, box.y + box.h / 2);
     expect(ui.state.n).toBe(1);
   });
+
+  it("warns about a scale= outside 0.1 to 1, and draws it clamped", () => {
+    const ui = render(`scene "A phone" w=393 h=852 scale=3`, { components, width: 800 });
+    expect(ui.diagnostics.map((d) => d.message)).toEqual([expect.stringMatching(/^scale= goes from 0.1 to 1/)]);
+    expect(ui.find({ type: "scene" }).box!.w).toBe(393);
+  });
 });

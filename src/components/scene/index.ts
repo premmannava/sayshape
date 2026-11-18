@@ -30,7 +30,7 @@ import type { Scope } from "../../expr";
 import type { Box, Rect } from "../../types";
 import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
-import { shownWidth } from "./size";
+import { MIN_SCENE_SCALE, shownWidth } from "./size";
 export { shownWidth, MIN_SCENE_SCALE } from "./size";
 import { paintScene, type Frame } from "./draw";
 import { locateOf } from "../../each";
@@ -155,6 +155,11 @@ const scene: ComponentDef = {
   each items={range(3)} as=i
     ellipse x={100 + i*200} y=300 rx=180 ry={70 + 20*i} fill={pick(['#2D6A4F', '#40916C', '#52B788'], i)}
   label "Good morning" x=300 y=60 size=28 weight=bold fill="#FFFFFF" align=center opacity={ease(t, 2, 3)}`,
+  check(props) {
+    // A literal scale= outside its range is drawn clamped; say so, as device does.
+    const n = props.scale === undefined ? NaN : Number(props.scale);
+    return Number.isFinite(n) && (n < MIN_SCENE_SCALE || n > 1) ? [`scale= goes from ${MIN_SCENE_SCALE} to 1, a share of the scene's own w, so scale=${props.scale} is drawn at ${Math.min(1, Math.max(MIN_SCENE_SCALE, n))}. Or use maxw= for a width in pixels`] : [];
+  },
   minWidth: () => 120,
   layout(box, ctx) {
     const p = ctx.props(box.node);
