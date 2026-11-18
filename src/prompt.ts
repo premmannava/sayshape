@@ -663,6 +663,8 @@ export function describeGuide(registry: Registry, opts: GuideOptions = {}): Guid
 /** A component as a host with these features on sees it: props of features that are off left out. */
 function withProps(c: ComponentDef, behavior: boolean, pictures = false): ComponentDef {
   let props = propsFor(c.props, behavior);
+  // Props said once on another element aren't repeated here.
+  if (Object.values(props).some((d) => d.unlisted)) props = Object.fromEntries(Object.entries(props).filter(([, d]) => !d.unlisted));
   // Props (and children) a component keeps quiet are left out until a guide asks for them.
   const quiet = pictures ? [] : c.quiet ?? [];
   if (quiet.length) props = Object.fromEntries(Object.entries(props).filter(([n]) => !quiet.includes(n)));

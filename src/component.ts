@@ -36,6 +36,12 @@ export interface PropDef {
    * guide and the docs act as if the prop weren't there (scene drag= needs behavior).
    */
   needs?: "behavior";
+  /**
+   * Accepted and checked like any prop, but left out of the guide and docs for
+   * this element: it's described once, in full, on another element (a scene's
+   * shapes take group's z=, trail= and blur=), so the guide doesn't repeat it.
+   */
+  unlisted?: boolean;
 }
 
 /** A component's props as a host with these features on sees them. */
