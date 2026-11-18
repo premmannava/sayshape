@@ -4,6 +4,15 @@ import { darkTheme, forcedColorsTheme, lightTheme, studioDarkTheme, studioLightT
 import { applyLook } from "../src/look";
 import { blendOver } from "../src/scrim";
 import { contrastRatio } from "../src/contrast";
+import { fillOf } from "../src/fills";
+import { card } from "../src/components/layout";
+import { coreComponents } from "../src/components";
+import { parse } from "../src/parser";
+import { Registry } from "../src/registry";
+import { PropReader, type PaintContext } from "../src/component";
+import { GLASS_BLUR } from "../src/glass";
+import { createRecordingContext, render } from "../src/testing";
+import type { Box } from "../src/types";
 
 type Call = { op: string; args: unknown[]; filter?: string };
 
@@ -146,5 +155,85 @@ describe("glass tint", () => {
   it("leaves a forced-colors theme alone", () => {
     const forced = forcedColorsTheme(lightTheme, (s) => (s === "Canvas" ? "#000000" : "#FFFFFF"));
     expect(glassTheme(forced)).toBe(forced);
+  });
+});
+
+const DOCK = `image "Desert at dusk" src="https://images.unsplash.com/photo-1" ratio=16:9
+  row
+    card variant=glass
+      text "Music" weight=semibold
+      text "Playing" tone=muted
+    card variant=glass
+      text "Maps" weight=semibold
+      text "12 min home" tone=muted`;
+
+/** The alphas of the glass tint fills (raised, no gradient) the card draws. */
+function tints(ui: ReturnType<typeof render>, raised: string): number[] {
+  return ui.drawOps.filter((op) => op.op === "fill" && !op.gradientStops && op.fillStyle === raised).map((op) => op.globalAlpha);
+}
+
+describe("card variant=glass", () => {
+  it.each([["light", lightTheme], ["dark", darkTheme]] as const)("falls back to a stronger tint with no blur on a canvas without filters (%s)", (_n, theme) => {
+    const ui = render(`card variant=glass\n  text "Now playing" weight=semibold\n  text "Side A" tone=muted`, { theme });
+    expect(ui.drawOps.some((op) => op.op === "drawImage")).toBe(false);
+    expect(tints(ui, theme.colors.raised)).toEqual([glassAlpha(theme).fallback]);
+    const inside = glassTheme(theme).colors;
+    expect(ui.drawOps.find((op) => op.op === "fillText" && op.args[0] === "Side A")!.fillStyle).toBe(inside.muted);
+    // No shadow: a shadow under a see-through card would darken what shows through.
+    expect(ui.drawOps.filter((op) => op.op === "fill").length).toBe(1);
+    ui.destroy();
+  });
+
+  it("draws a dock-style row of glass cards over a picture in light and dark", () => {
+    for (const theme of [lightTheme, darkTheme]) {
+      const ui = render(DOCK, { theme, imageHosts: ["images.unsplash.com"] });
+      expect(ui.diagnostics ?? []).toEqual([]);
+      expect(ui.text()).toEqual(expect.arrayContaining(["Music", "Playing", "Maps", "12 min home"]));
+      ui.destroy();
+    }
+  });
+
+  it("is solid for a person who prefers less transparency", () => {
+    const ui = render(`card variant=glass\n  text "Hi"`, { theme: lightTheme, reducedTransparency: true });
+    expect(tints(ui, lightTheme.colors.raised)).toEqual([1]);
+    ui.destroy();
+  });
+
+  it("uses the lighter tint when the engine blurred the backdrop", () => {
+    const reg = new Registry(coreComponents);
+    const node = parse(`card variant=glass\n  text "Hi"`, reg).root.children[0]!;
+    const { context, take } = createRecordingContext();
+    const box: Box = { node, x: 0, y: 0, w: 300, h: 120, children: [] };
+    let asked = 0;
+    const ctx = {
+      g: context, theme: lightTheme, scope: {}, now: 0,
+      props: (n: typeof node) => new PropReader(n, {} as never),
+      roundRect: () => {}, tween: () => 0, isHovered: () => false, isPressed: () => false, addHit: () => {},
+      backdrop: (_b: Box, path: () => void, blur: number) => { asked = blur; path(); return true; },
+    } as unknown as PaintContext;
+    card.paint!(box, ctx);
+    expect(asked).toBe(GLASS_BLUR);
+    expect(take().filter((op) => op.op === "fill").map((op) => op.globalAlpha)).toEqual([glassAlpha(lightTheme).blur]);
+  });
+
+  it("warns when fill= and variant=glass are written together, and the fill wins", () => {
+    const reg = new Registry(coreComponents);
+    const r = parse(`card fill=sky variant=glass\n  text "Hi"`, reg);
+    expect(r.diagnostics.find((d) => d.message.includes("variant=glass"))).toMatchObject({ line: 1, severity: "warning" });
+    const ui = render(`card fill=sky variant=glass\n  text "Hi"`, { theme: lightTheme });
+    expect(ui.drawOps.some((op) => op.gradientStops?.[0]?.color === fillOf(lightTheme, "sky")!.from)).toBe(true);
+    ui.destroy();
+  });
+
+  it("warns for an unknown variant with its line", () => {
+    const r = parse(`text "a"\ncard variant=frosted\n  text "Hi"`, new Registry(coreComponents));
+    expect(r.diagnostics.find((d) => d.message.includes("variant"))).toMatchObject({ line: 2, severity: "warning" });
+  });
+
+  it("is a plain raised card in a forced-colors mode", () => {
+    const forced = forcedColorsTheme(lightTheme, (s) => (s === "Canvas" ? "#FFFFFF" : "#000000"));
+    const ui = render(`card variant=glass\n  text "Hi"`, { theme: forced });
+    expect(tints(ui, forced.colors.raised).every((a) => a === 1)).toBe(true);
+    ui.destroy();
   });
 });

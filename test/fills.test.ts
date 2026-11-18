@@ -124,7 +124,7 @@ describe("card fill=", () => {
 
   it("keeps the card's semantics: a pressable fill card is still a button", () => {
     const ui = render(`card fill=accent on=emit:open\n  text "Open"`);
-    ui.click("Open");
+    ui.press("card");
     expect(ui.emitted.map((e) => e.name)).toContain("open");
     expect(JSON.stringify(ui.accessibility())).toContain(`"role":"button","name":"Open"`);
     ui.destroy();

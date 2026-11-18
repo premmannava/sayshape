@@ -35,7 +35,7 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - row gap=number pad=number align=top|center|bottom wrap=true|false fit=true|false justify=start|end|between [holds elements] — Places children side by side, splitting the width equally.
 - overlap at=top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right inset=number [holds elements] — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card.
 - grid min=number cols=number gap=number [holds elements] — Places children in responsive equal columns.
-- card gap=number pad=number variant=raised|hero|tinted|outline on=action tone=accent|good|warn|bad|muted fill=sky|sunset|dusk|night|accent [holds elements] — A surface that groups related content, stacked vertically.
+- card gap=number pad=number variant=raised|hero|tinted|outline|glass on=action tone=accent|good|warn|bad|muted fill=sky|sunset|dusk|night|accent [holds elements] — A surface that groups related content, stacked vertically.
 - list [holds elements] — A bordered list of rows, separated by lines.
 - list-item "text" detail=text trailing=text tone=accent|good|warn|bad|muted icon=text on=action [holds elements; only in list] — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title.
 - accordion "text" bind=path! gap=number on=action detail=text [holds elements] — A heading that shows or hides the content under it when pressed.
