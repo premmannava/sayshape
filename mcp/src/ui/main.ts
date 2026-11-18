@@ -643,6 +643,8 @@ async function start(): Promise<void> {
   sayshape = new SayShape(canvas, {
     components: [...coreComponents, ...mapComponents, ...(viewOptions.scene ? sceneComponents : [])],
     ...(viewOptions.behavior ? { behavior: true } : {}),
+    // --adaptive-guides: report blocks expand into ordinary elements before they're drawn.
+    ...(viewOptions.presets ? { presets: true } : {}),
     // The invisible text layer (selecting, copying by drag, Ctrl/Cmd+F) unless --no-select-text.
     ...(viewOptions.selectText === false ? { selectText: false } : {}),
     ...(viewOptions.selectTouch !== undefined ? { selectTouch: viewOptions.selectTouch } : {}),

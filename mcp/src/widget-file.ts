@@ -59,6 +59,8 @@ export interface WidgetOptions {
   /** --scene, --behavior: the experimental elements the engine registers. */
   scenes?: boolean;
   behavior?: boolean;
+  /** --adaptive-guides: report blocks expand into ordinary elements (the engine's presets). */
+  presets?: boolean;
   /** False with --no-select-text: the engine adds no text layer. Absent means on. */
   selectText?: boolean;
   selectTouch?: boolean;
@@ -182,7 +184,7 @@ ${o.inline ? "" : UNPACK}  function start() {
       var chosen = root.getAttribute("data-theme");
       return chosen === "dark" || (chosen !== "light" && media && media.matches) ? themes.dark : themes.light;
     }
-    var ui = new S.SayShape(canvas, { components: components, theme: theme(), imageHosts: ${scriptJson(o.imageHosts ?? [])}${o.behavior ? ", behavior: true" : ""}${o.selectText === false ? ", selectText: false" : ""}${o.selectTouch === undefined ? "" : `, selectTouch: ${o.selectTouch}`} });
+    var ui = new S.SayShape(canvas, { components: components, theme: theme(), imageHosts: ${scriptJson(o.imageHosts ?? [])}${o.behavior ? ", behavior: true" : ""}${o.presets ? ", presets: true" : ""}${o.selectText === false ? ", selectText: false" : ""}${o.selectTouch === undefined ? "" : `, selectTouch: ${o.selectTouch}`} });
     function apply() {
       var t = theme();
       box.style.background = t.colors.surface;

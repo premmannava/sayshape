@@ -43,6 +43,8 @@ import { sceneComponents, reviewScenes } from "../../src/components/scene";
 import type { ComponentDef } from "../../src/component";
 import { elementGuide, elementIndex, guideSections, languageGuide, motionGuide, picturesGuide, pickList, PICKS_HEADING, PICKS_HEADING_SHORT } from "../../src/prompt";
 import { lookGuide } from "../../src/look";
+import { assembleGuide, availableCapabilities, FULL_GUIDE_TOPIC, languageMap, problemsText } from "../../src/capabilities";
+import type { GuideOptions } from "../../src/prompt";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
@@ -67,6 +69,7 @@ let registry = new Registry(components);
 let scenesOn = false;
 let behaviorOn = false;
 let layoutFirstOn = false;
+let adaptiveOn = false;
 let imageHosts: readonly string[] = [];
 /**
  * The guide's sections, worked out once per mode. They depend only on the
@@ -105,6 +108,35 @@ const behaviorFor = (textOnly: boolean, fileMode: boolean): boolean => behaviorO
  * entrance motion or content over images, so it isn't offered the topics for them.
  */
 const ownEngine = (textOnly: boolean, fileMode: boolean): boolean => !textOnly || fileMode;
+
+/**
+ * --adaptive-guides (opt-in, src/capabilities.ts): show_interface's description carries the map of the
+ * language (and the report syntax, where reports are drawn) in place of the quick start, and sayshape_docs
+ * returns one guide for every capability and element asked for together. The view and widget files draw
+ * reports (the engine's presets); the CDN page's pinned engine has no reports, so it's never offered them.
+ * Off by default: the tools, their descriptions and results are exactly what they were. Call before
+ * createServer; main.ts does.
+ */
+export function setAdaptiveGuides(on: boolean): void {
+  adaptiveOn = on;
+}
+
+/** Whether reports are offered and read: with --adaptive-guides, on a client drawing with this server's own engine. */
+const reportsFor = (textOnly: boolean, fileMode: boolean): boolean => adaptiveOn && ownEngine(textOnly, fileMode);
+
+/** The host's switches, as guide options, for the map and the guides sayshape_docs builds. */
+function adaptiveOptions(textOnly: boolean, fileMode: boolean): GuideOptions {
+  const own = ownEngine(textOnly, fileMode);
+  return {
+    imageHosts,
+    presets: reportsFor(textOnly, fileMode),
+    behavior: behaviorFor(textOnly, fileMode),
+    look: own,
+    motion: own,
+    pictures: own,
+    ...(layoutFirstOn ? { layoutFirst: true } : {}),
+  };
+}
 
 /** What a text-only client is told in place of a page when the spec is a deck. */
 const PAGE_DECK_TEXT = "The deck is written correctly, but this app can't show slide decks yet, so there is no page to open. Tell the person it needs a chat app that draws SayShape views.";
@@ -246,6 +278,64 @@ export function quickStart(withData = false, withMcp = false, textOnly = false, 
   ].join("\n");
 }
 
+/** The topics sayshape_docs keeps beside the capabilities with --adaptive-guides: the ones that aren't capabilities. */
+function extraTopics(withData: boolean, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): Record<string, string> {
+  const caps = new Set(availableCapabilities(registry, adaptiveOptions(textOnly, fileMode)).map((c) => c.name));
+  return Object.fromEntries(Object.entries(topics(withData, withMcp, textOnly, fileMode, pressesSaved)).filter(([n]) => !caps.has(n) && !CAPABILITY_TOPICS.has(n)));
+}
+/** Old topic names that are capabilities now, so they're asked for through the assembler even where a host has them off. */
+const CAPABILITY_TOPICS = new Set(["actions", "lists", "behavior", "look", "motion", "pictures"]);
+
+/** The one line in a chat about emit:, for every client, as in the quick start. */
+function emitLine(textOnly: boolean, pressesSaved: boolean): string {
+  return textOnly ? `- ${pressesSaved ? PRESSES_SAVED : NO_EMIT}` : "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}";
+}
+const CHAT_LINE = "IN A CHAT: under 600px. Title, filters, a few KPIs in grid min=140, one main chart; no nested cards. Caption estimates.";
+
+/**
+ * With --adaptive-guides, what every model gets up front in show_interface's description, in place of the
+ * quick start: the map (how the pieces connect, the capabilities and elements, the report syntax where
+ * reports are drawn) and how to ask sayshape_docs for the rest, once.
+ */
+export function adaptiveStart(withData = false, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): string {
+  const extra = Object.keys(extraTopics(withData, withMcp, textOnly, fileMode, pressesSaved));
+  const ask = `For anything else, call sayshape_docs once with every capability and element the screen needs, such as topics: ["forms", "calculations"], elements: ["slider"], then write it. Other topics: ${extra.join(", ")}.`;
+  return [
+    languageMap(registry, { ...adaptiveOptions(textOnly, fileMode), ask }),
+    `${CHAT_LINE}
+${emitLine(textOnly, pressesSaved)}`,
+    ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
+  ].join("\n\n");
+}
+
+/**
+ * With --adaptive-guides: one guide for every capability and element asked for, from the same assembler as
+ * sayshape/model, plus any of the other topics; names that can't be used are listed with what to ask for
+ * instead. Nothing usable and no "full": the problems and the map, never the whole guide by accident.
+ */
+export function adaptiveDocs(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): string {
+  const extra = extraTopics(withData, withMcp, textOnly, fileMode, pressesSaved);
+  const others = topicNames.filter((n) => n in extra);
+  const asked = [...topicNames.filter((n) => !(n in extra)), ...elements];
+  if (!asked.length && !others.length) return adaptiveStart(withData, withMcp, textOnly, fileMode, pressesSaved);
+  const parts: string[] = [];
+  if (asked.length) {
+    const g = assembleGuide(registry, asked, adaptiveOptions(textOnly, fileMode));
+    const wantedFull = asked.some((n) => n.trim().toLowerCase() === FULL_GUIDE_TOPIC);
+    if (g.full && !wantedFull) {
+      parts.push(`NOT INCLUDED\n${problemsText(g.problems)}`);
+      if (!others.length) parts.push(adaptiveStart(withData, withMcp, textOnly, fileMode, pressesSaved));
+    } else {
+      // The intro ("output only SayShape") is for a model writing its whole answer; here the spec goes in show_interface.
+      parts.push(g.sections.filter((sec) => sec.name !== "intro").map((sec) => sec.text).join("\n\n"));
+      if (g.problems.length) parts.push(`NOT INCLUDED\n${problemsText(g.problems)}`);
+    }
+  }
+  // The chat line and the emit: line are in show_interface's description already, so they aren't repeated.
+  for (const n of others) parts.push(extra[n]!);
+  return parts.join("\n\n");
+}
+
 /**
  * A child element that only goes inside parents whose docs always bring it
  * along (table-column with table, tab with tabs): the quick start's element
@@ -260,6 +350,7 @@ function arrivesWithParent(c: ComponentDef): boolean {
 
 /** Docs for exactly what was asked for, plus what it depends on. */
 export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): string {
+  if (adaptiveOn) return adaptiveDocs(elements, topicNames, withData, withMcp, textOnly, fileMode, pressesSaved);
   const parts: string[] = [];
   const t = topics(withData, withMcp, textOnly, fileMode, pressesSaved);
   if (elements.length) {
@@ -333,7 +424,8 @@ export interface SpecCheck {
 /** Parse a spec with the engine's own parser and components. Never throws. hostNames: state the interface fills in (datasets). */
 export function checkSpec(spec: string, hostNames: readonly string[] = [], textOnly = false, fileMode = false): SpecCheck {
   const behavior = behaviorFor(textOnly, fileMode);
-  const parsed = parse(spec, registry, { knownNames: hostNames, ...(behavior ? { behavior } : {}) });
+  const presets = reportsFor(textOnly, fileMode);
+  const parsed = parse(spec, registry, { knownNames: hostNames, ...(behavior ? { behavior } : {}), ...(presets ? { presets } : {}) });
   const { diagnostics } = parsed;
   return {
     errors: diagnostics.filter((d) => d.severity === "error"),
@@ -504,8 +596,10 @@ export function createServer(opts: ServerOptions): McpServer {
       instructions:
         "The person installed SayShape so that visual answers appear as interactive SayShape interfaces inside the chat. " +
         "Whenever they ask for a chart, graph, table, dashboard, scorecard, stat card, form, calculator, tracker, checklist or any other visual or interactive answer, " +
-        "use show_interface rather than writing HTML, React, SVG or chart code, or making an artifact. Its description has a quick start; " +
-        "choose elements from its PICK BY WHAT YOU'RE SHOWING list, then call sayshape_docs only for the elements you're about to use. " +
+        "use show_interface rather than writing HTML, React, SVG or chart code, or making an artifact. " +
+        (adaptiveOn
+          ? "Its description has a map of SayShape: write a report straight away, or call sayshape_docs once with every capability and element the screen needs. "
+          : "Its description has a quick start; choose elements from its PICK BY WHAT YOU'RE SHOWING list, then call sayshape_docs only for the elements you're about to use. ") +
         "Asked to restyle an interface (dark mode, bigger text)? Its theme and sizes follow the chat app: say so in a sentence instead of changing it, and never write the request into the interface." +
         (data
           ? " A database is connected: answer questions about it with describe_data and query_data, then show the result with show_interface, " +
@@ -520,13 +614,20 @@ export function createServer(opts: ServerOptions): McpServer {
     "sayshape_docs",
     {
       title: "SayShape docs",
-      description:
-        "Returns the props and an example for the SayShape elements you name, and any topics you ask for. " +
-        "Ask only for what you're about to use, e.g. elements: [\"chart\", \"table\"]. With nothing named, returns the quick start.",
-      inputSchema: {
-        elements: z.array(z.string().max(40)).max(12).optional().describe("Element names, e.g. [\"chart\", \"table\", \"stepper\"]."),
-        topics: z.array(z.string().max(40)).max(6).optional().describe(`Topics: ${Object.keys(topics(!!data, !!mcpResults)).join(", ")}.`),
-      },
+      description: adaptiveOn
+        ? "Returns one SayShape guide for every capability and element you name together: the syntax, how they connect, " +
+          "and a short example. Ask once, for everything the screen needs, e.g. topics: [\"forms\", \"calculations\"], elements: [\"slider\"]. With nothing named, returns the map."
+        : "Returns the props and an example for the SayShape elements you name, and any topics you ask for. " +
+          "Ask only for what you're about to use, e.g. elements: [\"chart\", \"table\"]. With nothing named, returns the quick start.",
+      inputSchema: adaptiveOn
+        ? {
+            elements: z.array(z.string().max(40)).max(12).optional().describe("Element names, e.g. [\"slider\", \"table\"]."),
+            topics: z.array(z.string().max(40)).max(12).optional().describe(`Capabilities: ${[...availableCapabilities(registry, adaptiveOptions(false, false)).map((c) => c.name), FULL_GUIDE_TOPIC].join(", ")}. Also: ${Object.keys(extraTopics(!!data, !!mcpResults)).join(", ")}.`),
+          }
+        : {
+            elements: z.array(z.string().max(40)).max(12).optional().describe("Element names, e.g. [\"chart\", \"table\", \"stepper\"]."),
+            topics: z.array(z.string().max(40)).max(6).optional().describe(`Topics: ${Object.keys(topics(!!data, !!mcpResults)).join(", ")}.`),
+          },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async ({ elements, topics: names }) => {
@@ -550,7 +651,7 @@ export function createServer(opts: ServerOptions): McpServer {
     (data ? " To show rows from the database, pass data={\"name\": \"d1\"} with a dataset id from query_data and use that name in the spec (items=name)." : "") +
     (mcpResults ? " For imported MCP results, call list_datasets then pass the selected id in data. The model never needs the full rows." : "") +
     "\n\n" +
-    quickStart(!!data, !!mcpResults, textOnly, fileModeFor(textOnly), pressesSavedFor(textOnly));
+    (adaptiveOn ? adaptiveStart : quickStart)(!!data, !!mcpResults, textOnly, fileModeFor(textOnly), pressesSavedFor(textOnly));
 
   const showTool = registerAppTool(
     server,
@@ -645,6 +746,7 @@ export function createServer(opts: ServerOptions): McpServer {
             engine: await widgetEngine(),
             scenes: scenesOn,
             behavior: behaviorOn,
+            ...(adaptiveOn ? { presets: true } : {}),
             ...(opts.view?.selectText === false ? { selectText: false } : {}),
             ...(opts.view?.selectTouch !== undefined ? { selectTouch: opts.view.selectTouch } : {}),
             imageHosts,
@@ -755,12 +857,14 @@ export function createServer(opts: ServerOptions): McpServer {
   }
 
   const csp = imageCsp(opts.view?.imageHosts ?? []);
+  // With --adaptive-guides the view draws reports: the model is told it may write them.
+  const viewOpts: ViewOptions = adaptiveOn ? { ...(opts.view ?? DEFAULT_VIEW_OPTIONS), presets: true } : opts.view ?? DEFAULT_VIEW_OPTIONS;
   registerAppResource(server, "SayShape interface", UI_URI, { mimeType: RESOURCE_MIME_TYPE, description: "Draws a SayShape spec with the SayShape engine." }, async () => ({
     contents: [
       {
         uri: UI_URI,
         mimeType: RESOURCE_MIME_TYPE,
-        text: withViewOptions(await opts.uiHtml(), opts.view ?? DEFAULT_VIEW_OPTIONS),
+        text: withViewOptions(await opts.uiHtml(), viewOpts),
         // Everything is inline: no scripts, styles or fonts from anywhere else, and images only
         // from --image-hosts. Clipboard write is asked for so Copy text works; chat apps may
         // still say no, and the view falls back.

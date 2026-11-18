@@ -27,7 +27,7 @@ interface McpClient {
 }
 
 /** The file a package's exports gives for a subpath ("." or "./server"), as an absolute file URL. */
-function packageFile(pkg: string, subpath: string): string {
+export function packageFile(pkg: string, subpath: string): string {
   const dir = `${MCP_DIR}node_modules/${pkg}/`;
   const json = JSON.parse(readFileSync(`${dir}package.json`, "utf8")) as { exports?: Record<string, unknown> };
   const entry = json.exports?.[subpath] ?? json.exports?.[subpath.replace(/[^/]+$/, "*")];
@@ -39,7 +39,7 @@ function packageFile(pkg: string, subpath: string): string {
   return pathToFileURL(`${dir}${file}`).href;
 }
 
-async function load<T>(url: string): Promise<T> {
+export async function load<T>(url: string): Promise<T> {
   try {
     return (await import(/* @vite-ignore */ url)) as T;
   } catch (e) {

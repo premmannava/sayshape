@@ -20,6 +20,8 @@
  *   sayshape-mcp --logo https://cdn.example.com/logo.png   a logo in the corner of every slide of a deck
  *                                (slide decks need no flag; --slides is accepted and does nothing)
  *   sayshape-mcp --behavior      experimental: rules that tick and, with --scene, shapes people drag (off by default)
+ *   sayshape-mcp --adaptive-guides  opt-in: a small map of SayShape up front (reports writable at once) and
+ *                                one sayshape_docs call for the capabilities a screen needs (off by default)
  *   sayshape-mcp --image-hosts cdn.example.com,*.images.example.com
  *                                the only hosts images may load from (https only; left out, the sites
  *                                models know image addresses on, COMMON_IMAGE_HOSTS in src/images.ts)
@@ -57,7 +59,7 @@ import { fileURLToPath } from "node:url";
 import { basename, resolve } from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { cannotDrawViews, createServer, setBehavior, setImageHosts, setLayoutFirst, setScenes } from "./server";
+import { cannotDrawViews, createServer, setAdaptiveGuides, setBehavior, setImageHosts, setLayoutFirst, setScenes } from "./server";
 import { accentNotes, parseViewArgs, type ViewOptions } from "./ui/view-options";
 import { DataSource } from "./data";
 import { McpResultStore } from "./mcp-results";
@@ -91,7 +93,7 @@ async function main(): Promise<void> {
       "Usage: sayshape-mcp [--data database.db] [--mcp-result result.json ...]",
       "                    [--http [port] [--host address] [--rate-limit n] [--trust-proxy [hops]] [--allow-public-data]]",
       "                    [--theme-picker] [--theme teal|purple|blue|neutral|studio] [--accent color | --colors list]",
-      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--no-select-text] [--select-touch] [--scene] [--behavior] [--layout-first] [--logo <https url>]",
+      "                    [--no-model-colors] [--no-save-image] [--no-copy-text] [--no-select-text] [--select-touch] [--scene] [--behavior] [--layout-first] [--adaptive-guides] [--logo <https url>]",
       "                    [--image-hosts host1,host2,... | --no-image-hosts] [--widget-dir folder [--widget-inline] [--widget-host name]]",
       "",
       "  --widget-dir <folder>  for chat apps that can't draw interfaces but can show a widget made from a file:",
@@ -130,6 +132,8 @@ async function main(): Promise<void> {
       "  --slides         does nothing: slide decks (deck, slide) are always on; kept so existing setups still start",
       "  --behavior       experimental: rules that tick (timers, simulations) and, with --scene, dragging (off by default)",
       "  --layout-first   tell models to write the layout first and the data last, so an interface draws while it is written (off by default)",
+      "  --adaptive-guides  a small map of SayShape up front, with reports writable at once, and one sayshape_docs call for the",
+      "                   capabilities and elements a screen needs, in place of the quick start (off by default)",
       "  --image-hosts    the only hosts images may load from, comma-separated; *.example.com allows its subdomains",
       "                   (https only, and the host must send CORS headers; left out, images load from the",
       "                   well-known sites models know addresses on, such as upload.wikimedia.org and images.unsplash.com)",
@@ -144,6 +148,8 @@ async function main(): Promise<void> {
   setBehavior(view.behavior === true);
   // Layout first: only the model's guide changes; the view already draws placeholders while a spec streams in.
   setLayoutFirst(args.includes("--layout-first"));
+  // Adaptive guides: the map up front and one docs call for the rest; the view draws reports (view.presets).
+  setAdaptiveGuides(view.presets === true);
   // Images: the model's guide, the view's engine and the chat app's CSP all get the same list.
   setImageHosts(view.imageHosts ?? []);
   const httpAt = args.indexOf("--http");

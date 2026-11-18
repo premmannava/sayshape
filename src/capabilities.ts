@@ -35,6 +35,8 @@ export interface CapabilityDef {
   when: string;
   /** Element categories it brings (every registered element in them, scene elements aside). */
   categories?: readonly Category[];
+  /** Elements of those categories it leaves to another capability. */
+  except?: readonly string[];
   /** Element types it brings, where registered. */
   elements?: readonly string[];
   /** Elements whose full docs (props explained, example) it brings, not just their one-line signature. */
@@ -57,14 +59,15 @@ export const CAPABILITIES: readonly CapabilityDef[] = [
   { name: "report", requires: "presets", instead: ["data", "lists"], when: "figures, charts and a table over one list, with filters, and nothing else on screen reads those filters" },
   { name: "lists", elements: ["each"], fullSections: ["data"], examples: ["orders", "todo", "shopping"], when: "lists and records in state: repeat with each; filter, sort, group and total them" },
   { name: "calculations", elements: ["stat", "stepper", "slider"], examples: ["calculator"], when: "values worked out from other values with derive, updating as people change inputs" },
-  { name: "forms", categories: ["input"], examples: ["signup", "form"], when: "fields, choices and buttons people fill in: required=, error= and disabled= checks, and emit: to send it" },
-  { name: "actions", fullSections: ["actions"], when: "what presses do: change state (set, inc, add, remove), go between screens, notify, or tell the app (emit)" },
+  { name: "forms", categories: ["input"], except: ["link", "menu", "menu-item"], examples: ["signup", "form"], when: "fields, choices and buttons people fill in: required=, error= and disabled= checks, and emit: to send it" },
+  { name: "actions", elements: ["button", "link", "menu", "menu-item"], fullSections: ["actions"], when: "what presses do: change state (set, inc, add, remove), go between screens, notify, or tell the app (emit)" },
   { name: "layout", categories: ["layout"], when: "cards, rows, grids, columns, accordions, carousels, scroll areas, dialogs and slide decks" },
   { name: "content", categories: ["content"], when: "text, images, badges, avatars, callouts, icons and code" },
   { name: "data", categories: ["data"], when: "numbers and records: charts, tables, stats, meters, details, compare, boards, trees, flows, schedules, maps" },
   { name: "navigation", categories: ["navigation"], when: "several screens, tabs, breadcrumbs and pages" },
   { name: "feedback", categories: ["feedback"], when: "progress, loading placeholders and empty states" },
-  { name: "scenes", requires: "scenes", details: ["scene"], instead: ["data", "content"], when: "pictures and animations drawn from shapes, which read state and the time t" },
+  // A scene repeats shapes with each items={range(n)}, as its example shows.
+  { name: "scenes", requires: "scenes", elements: ["each"], details: ["scene"], instead: ["data", "content"], when: "pictures and animations drawn from shapes, which read state and the time t" },
   // Its guide says to give people a Pause button, so the button comes along.
   { name: "behavior", requires: "behavior", elements: ["button"], fullSections: ["behavior"], details: ["group"], instead: ["actions"], when: "things that change by themselves on a timer (countdowns, simulations), and shapes people drag" },
   { name: "look", requires: "look", when: "a screen's overall style: mood, type, shape and density" },
@@ -149,7 +152,7 @@ export function capabilityElements(registry: Registry, name: string): string[] {
   const scene = new Set(sceneElements(registry));
   const own = new Set([...(def.elements ?? []), ...(def.details ?? []), ...(def.name === "scenes" ? scene : [])]);
   return registry.all()
-    .filter((c) => own.has(c.type) || (!!def.categories?.includes(c.category) && !scene.has(c.type)))
+    .filter((c) => own.has(c.type) || (!!def.categories?.includes(c.category) && !scene.has(c.type) && !def.except?.includes(c.type)))
     .map((c) => c.type);
 }
 
@@ -206,7 +209,10 @@ function buildSections(registry: Registry, caps: readonly CapabilityDef[], named
   const compact = guideSections(registry, base);
   const swaps = new Set(caps.flatMap((c) => c.fullSections ?? []));
   const full = swaps.size ? guideSections(registry, { ...base, mode: "full" }) : [];
-  const sections = compact.map((s) => (swaps.has(s.name) ? full.find((f) => f.name === s.name) ?? s : s));
+  // Without lists in the guide, the expressions section's line on list functions has nothing to work on.
+  const lists = profile.types.includes("each") || profile.types.some((t) => registry.get(t)?.category === "data");
+  const sections = compact.map((s) => (swaps.has(s.name) ? full.find((f) => f.name === s.name) ?? s : s))
+    .map((s) => (s.name === "expressions" && !lists ? { ...s, text: s.text.replace(/\n- On lists: [^\n]*/, "") } : s));
 
   // Full docs, example included, for what was asked for by name and what a capability details.
   const detailed = profile.types.filter((t) => named.includes(t) || caps.some((c) => c.details?.includes(t)));
