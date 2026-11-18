@@ -1,6 +1,6 @@
 /**
  * Scene benchmarks: one frame of the factory monitor, the same scene with
- * nothing pressable, and finding what's under the pointer.
+ * nothing pressable, 150 shapes with and without z, and finding what's under the pointer.
  *
  *   npm run bench -- bench/scene.bench.ts
  *
@@ -44,6 +44,25 @@ describe("scene frame", () => {
   bench("200 plain circles", () => {
     manyPlain.sayshape.invalidate("paint");
     manyPlain.sayshape.renderNow();
+  });
+});
+
+/** 150 moving shapes, as in a snowstorm, drawn in written order or sorted by z each frame. */
+const FLAKES = `scene "150 flakes" w=600 h=340 duration=10
+  each items={range(150)} as=i
+    circle x={(random(i)*600 + t*20) % 600} y={(random(i + 1)*340 + t*30) % 340} r={1 + 3*random(i + 2)} fill="#FFFFFF"`;
+
+describe("scene depth", () => {
+  const flat = render(FLAKES, { components, width: 1000 });
+  const deep = render(FLAKES.replace('fill="#FFFFFF"', 'fill="#FFFFFF" z={random(i + 2)}'), { components, width: 1000 });
+
+  bench("150 shapes, no z", () => {
+    flat.sayshape.invalidate("paint");
+    flat.sayshape.renderNow();
+  });
+  bench("150 shapes sorted by z", () => {
+    deep.sayshape.invalidate("paint");
+    deep.sayshape.renderNow();
   });
 });
 
