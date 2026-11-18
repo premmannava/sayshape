@@ -279,17 +279,36 @@ export const ICONS = {
   train: ["R 6 3 12 14.5 3", "M6 10 H18", "M10 6 H14", "D 9 13.8", "D 15 13.8", "M8.5 17.5 L6.5 21", "M15.5 17.5 L17.5 21"],
 } satisfies Record<string, readonly string[]>;
 
-export type IconName = keyof typeof ICONS;
-export const ICON_NAMES = Object.keys(ICONS) as IconName[];
+/** An icon's own name, as it's listed. */
+export type CanonicalIconName = keyof typeof ICONS;
+
+/**
+ * Other names models often write for an icon, accepted as that icon: they draw
+ * it with no warning, but the guide lists only the icons' own names.
+ */
+export const ICON_ALIASES = {
+  "plant-2": "plant", cup: "coffee", stopwatch: "timer", mute: "volume-off", headset: "headphones",
+  coupon: "ticket", shop: "store", couch: "sofa", bicycle: "bike", "layout-grid": "grid", "id-card": "id-badge", dots: "more",
+} as const satisfies Record<string, CanonicalIconName>;
+
+/** A name that draws an icon: one of the icons' own names, or an alias of one. */
+export type IconName = CanonicalIconName | keyof typeof ICON_ALIASES;
+/** The icons' own names, without aliases: what the guide lists. */
+export const ICON_NAMES = Object.keys(ICONS) as CanonicalIconName[];
 
 export function isIconName(name: string): name is IconName {
-  return Object.hasOwn(ICONS, name);
+  return Object.hasOwn(ICONS, name) || Object.hasOwn(ICON_ALIASES, name);
+}
+
+/** The icon a name draws: itself, or the icon an alias stands for. */
+export function resolveIcon(name: IconName): CanonicalIconName {
+  return Object.hasOwn(ICON_ALIASES, name) ? ICON_ALIASES[name as keyof typeof ICON_ALIASES] : (name as CanonicalIconName);
 }
 
 /** The icon whose name is closest to a wrong one, for a helpful warning: "tick" → check. */
-export function nearestIcon(name: string): IconName | null {
+export function nearestIcon(name: string): CanonicalIconName | null {
   const n = name.toLowerCase().replace(/[^a-z]/g, "");
-  const ALIASES: Record<string, IconName> = {
+  const ALIASES: Record<string, CanonicalIconName> = {
     tick: "check", ok: "check", done: "check", success: "check-circle", close: "x", error: "x-circle", cancel: "x",
     alert: "warning", caution: "warning", question: "help", time: "clock", up: "arrow-up", down: "arrow-down",
     increase: "trend-up", growth: "trend-up", decrease: "trend-down", decline: "trend-down", add: "plus", remove: "minus",
@@ -342,8 +361,9 @@ function parseShape(src: string): Shape {
 }
 
 function shapesOf(name: IconName): Shape[] {
-  let s = parsed.get(name);
-  if (!s) parsed.set(name, (s = ICONS[name].map(parseShape)));
+  const own = resolveIcon(name);
+  let s = parsed.get(own);
+  if (!s) parsed.set(own, (s = ICONS[own].map(parseShape)));
   return s;
 }
 

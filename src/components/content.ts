@@ -899,7 +899,7 @@ export const icon: ComponentDef = {
   category: "content",
   description: "A small symbol on its own, like a status mark or a weather sign. To start a line of text or a list row with one, use icon= on text or list-item instead.",
   props: {
-    name: { type: "string", required: true, description: `Which icon: ${ICON_NAMES.join(", ")}.` },
+    name: { type: "string", required: true, description: `Which icon: ${ICON_NAMES.join(", ")}. A few common other names (cup, stopwatch, plant-2) work too.` },
     tone: toneProp,
     size: { type: "enum", values: ICON_SIZE_NAMES, default: "md", description: "sm, md or lg." },
     label: { type: "string", description: "What the icon means, read by screen readers, when nothing beside it says so, e.g. label=\"Sunny\". Leave it out for decoration." },

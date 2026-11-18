@@ -1,7 +1,7 @@
 /** SayShape's own icons, the icon element, and icon= on text and list-item. */
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
-import { ICON_NAMES, ICONS, drawIcon, isIconName, nearestIcon } from "../src/icons";
+import { ICON_ALIASES, ICON_NAMES, ICONS, drawIcon, isIconName, nearestIcon, resolveIcon } from "../src/icons";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { createRecordingContext } from "../src/testing/canvas";
@@ -133,6 +133,43 @@ describe("the app and everyday icons", () => {
     ui.destroy();
     expect(nearestIcon("hamburger")).toBe("menu");
     expect(nearestIcon("microphone")).toBe("mic");
+  });
+});
+
+describe("other names for an icon", () => {
+  const opsOf = (name: string) => {
+    const { context, take } = createRecordingContext();
+    drawIcon(context, name as never, 0, 0, 24, lightTheme.colors.ink);
+    return take();
+  };
+
+  it("draws an alias exactly as the icon it stands for", () => {
+    for (const [alias, own] of Object.entries(ICON_ALIASES)) {
+      expect(isIconName(alias), alias).toBe(true);
+      expect(Object.hasOwn(ICONS, own), alias).toBe(true);
+      expect(Object.hasOwn(ICONS, alias), `${alias} is an icon's own name`).toBe(false);
+      expect(resolveIcon(alias as keyof typeof ICON_ALIASES)).toBe(own);
+      expect(opsOf(alias), alias).toEqual(opsOf(own));
+    }
+    expect(resolveIcon("plant")).toBe("plant");
+  });
+
+  it("accepts an alias with no warning, on the element and on icon=, but lists only the icons' own names", () => {
+    expect(warnings(`icon name=plant-2\nicon name=cup\ntext "Hi" icon=stopwatch\n`)).toEqual([]);
+    const a = render(`icon name=plant-2 size=lg\n`), b = render(`icon name=plant size=lg\n`);
+    expect(a.drawOps).toEqual(b.drawOps);
+    a.destroy();
+    b.destroy();
+    for (const alias of Object.keys(ICON_ALIASES)) expect(ICON_NAMES as readonly string[]).not.toContain(alias);
+    const description = String(registry.get("icon")!.props.name!.description);
+    expect(description).not.toContain("plant-2,");
+    expect(description).toMatch(/other names .*work too/);
+  });
+
+  it("still warns about a name that's neither, with the nearest icon", () => {
+    expect(warnings(`icon name=plant-3\n`)[0]).toMatch(/name="plant-3" isn't an icon\. Did you mean name=plant\?/);
+    expect(warnings(`icon name=hamburger\n`)[0]).toMatch(/Did you mean name=menu\?/);
+    expect(isIconName("toString")).toBe(false);
   });
 });
 
