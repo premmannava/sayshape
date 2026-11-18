@@ -47,6 +47,11 @@ export interface Box extends Rect {
   children: Box[];
   /** Component-private layout results (wrapped lines, scale factors...). */
   data?: Record<string, unknown>;
+  /**
+   * The height from the top that a row centres on, when less than h: a field or check without
+   * the message under it, so a button beside it stays level with the field when a message shows.
+   */
+  band?: number;
 }
 
 /** A clickable or focusable region registered during paint. */

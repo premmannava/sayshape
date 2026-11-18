@@ -85,8 +85,35 @@ const BOLD_MIX = 0.3;
 const BOLD_SHADOW = 1.8;
 const MAX_SHADOW_ALPHA = 0.6;
 
+/**
+ * A look as the engine applies it: a spec's choices, or the host's chat
+ * density (SayShapeOptions.context "chat") where the spec chose none.
+ * "chat" is never written in a spec: hosts set it.
+ */
+export type AppliedLook = Omit<Look, "density"> & { density?: LookOption<"density"> | typeof CHAT_DENSITY };
+export const CHAT_DENSITY = "chat";
+
+/**
+ * The chat density, relative to the host's own tokens (a 40 px control, a
+ * 30 px display size, 22 px card padding): figures about 26 px, headings a
+ * step smaller, card padding about 15 px, gaps about 0.7 as wide, controls
+ * 36 px. Body and caption text keep the host's sizes, for reading.
+ */
+const CHAT = { space: 0.7, control: 0.9, display: 0.87, title: 0.9, lead: 0.94 } as const;
+
+/** The chat density's tokens over a theme; listInline lays list rows out on one line where they fit, gaps tightens containers. */
+function chatPatch(t: Theme): DeepPartial<Theme> {
+  return {
+    space: scale(t.space, CHAT.space, 2),
+    control: { height: Math.max(MIN_CONTROL, Math.round(t.control.height * CHAT.control)) },
+    text: { display: Math.round(t.text.display * CHAT.display), title: Math.round(t.text.title * CHAT.title), lead: Math.round(t.text.lead * CHAT.lead) },
+    listInline: true,
+    gaps: { column: 6, row: 8, grid: 10 },
+  };
+}
+
 /** A look as a short key, for telling whether it changed ("" for none). */
-export function lookKey(look: Look | null | undefined): string {
+export function lookKey(look: AppliedLook | null | undefined): string {
   if (!look) return "";
   return LOOK_PROPS.filter((p) => look[p]).map((p) => `${p}=${look[p]}`).join(" ");
 }
@@ -100,7 +127,7 @@ const made = new WeakMap<Theme, Map<string, Theme>>();
  * A theme this made is traced back to the host's first, so passing it back in
  * (setTheme(sayshape.theme)) gives the same result, not a doubled one.
  */
-export function applyLook(theme: Theme, look: Look | null | undefined): Theme {
+export function applyLook(theme: Theme, look: AppliedLook | null | undefined): Theme {
   const base = baseOf.get(theme) ?? theme;
   const key = lookKey(look);
   if (!key) return base;
@@ -118,9 +145,9 @@ export function applyLook(theme: Theme, look: Look | null | undefined): Theme {
 const scale = <T extends Record<string, number>>(o: T, k: number, min = 0): T =>
   Object.fromEntries(Object.entries(o).map(([n, v]) => [n, Math.max(min, Math.round(v * k))])) as T;
 
-function lookPatch(t: Theme, look: Look): DeepPartial<Theme> {
-  const patch: DeepPartial<Theme> = {};
-  if (look.density) {
+function lookPatch(t: Theme, look: AppliedLook): DeepPartial<Theme> {
+  const patch: DeepPartial<Theme> = look.density === CHAT_DENSITY ? chatPatch(t) : {};
+  if (look.density && look.density !== CHAT_DENSITY) {
     patch.space = scale(t.space, SPACE_SCALE[look.density], 2);
     patch.control = { height: Math.max(MIN_CONTROL, Math.round(t.control.height * CONTROL_SCALE[look.density])) };
   }
@@ -128,7 +155,7 @@ function lookPatch(t: Theme, look: Look): DeepPartial<Theme> {
   if (look.shape) patch.radius = Object.fromEntries(Object.entries(t.radius).map(([n, v]) => [n, Math.max(Math.min(v, 1), Math.round(v * RADIUS_SCALE[look.shape!]))])) as Theme["radius"];
   if (look.type === "editorial") {
     patch.font = { display: LOOK_FONTS.serifDisplay };
-    patch.text = { display: Math.round(t.text.display * EDITORIAL_TEXT.display), title: Math.round(t.text.title * EDITORIAL_TEXT.title) };
+    patch.text = { ...patch.text, display: Math.round((patch.text?.display ?? t.text.display) * EDITORIAL_TEXT.display), title: Math.round((patch.text?.title ?? t.text.title) * EDITORIAL_TEXT.title) };
   } else if (look.type === "classic") {
     patch.font = { family: LOOK_FONTS.serifText, display: LOOK_FONTS.serifText };
   } else if (look.type === "system") {

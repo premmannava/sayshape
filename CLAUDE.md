@@ -168,7 +168,7 @@ Known gaps: the map can't be reached by keyboard (recorded in `test/contract.tes
 
 Limits: most elements cap what they parse or draw (derived values, options, rows, columns, chart items, nesting depth, data sizes, `each` copies) and show a message instead of more. Every limit and its constant is listed in [`docs/internals.md`](docs/internals.md), under "Limits": check there before adding or changing one.
 
-Not built yet (see `docs/PLAN.md`): data sources and host commands, a form element that checks every field on submit, virtualized scrolling for very long lists, the overlays still to come (toasts, sheets; the popup layer only serves a component's own popup, like select's list, and `dialog` is the one overlay), tables beyond 200 rows or with vertical scrolling or editing, series from different lists, time zones and recurring events, a production model server package and the reference store app. Don't describe these as existing.
+Not built yet (see `docs/PLAN.md`): data sources and host commands, `required=` on selects, radios and date pickers, virtualized scrolling for very long lists, the overlays still to come (toasts, sheets; the popup layer only serves a component's own popup, like select's list, and `dialog` is the one overlay), tables beyond 200 rows or with vertical scrolling or editing, series from different lists, time zones and recurring events, a production model server package and the reference store app. Don't describe these as existing.
 
 ## Where to look next
 

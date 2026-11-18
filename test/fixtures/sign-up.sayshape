@@ -1,0 +1,10 @@
+state name="" email="" pw="" confirm="" plan="free" terms=false plans=["free", "pro", "team"]
+card
+  text "Create your account" style=title
+  input "Name" bind=name required=true
+  input "Email" bind=email kind=email required=true
+  input "Password" bind=pw kind=password required=true error="{len(pw) < 8 ? 'At least 8 characters' : ''}"
+  input "Confirm password" bind=confirm kind=password required=true error="{confirm != pw ? 'The passwords differ' : ''}"
+  select "Plan" items=plans bind=plan
+  check "I accept the terms" bind=terms required=true error="Accept the terms to continue"
+  button "Create account" validate=true on=emit:signup

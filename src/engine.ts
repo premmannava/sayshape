@@ -30,7 +30,7 @@ import { Registry } from "./registry";
 import { Store } from "./state";
 import { CanvasMeasurer, ellipsize, font as fontString, wrapText } from "./text";
 import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
-import { applyLook, lookKey, type Look } from "./look";
+import { applyLook, CHAT_DENSITY, lookKey, type AppliedLook, type Look } from "./look";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
 import { domAccessibilityHost } from "./a11y/dom";
@@ -38,6 +38,7 @@ import { noAccessibility, type AccessibilityHost, type MirrorEvents, type Mirror
 import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
 import { plainText } from "./a11y/text";
+import { emittedValue, hideInText, hideSecretsIn, MAX_REMEMBERED, secretValues } from "./secrets";
 import { TextCollector } from "./text-layer/collect";
 import { domTextLayer } from "./text-layer/dom";
 import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, TEXT_MAX_WAIT_MS, TOUCH_SELECT_DEFAULT, type TextLayerHost } from "./text-layer/host";
@@ -195,7 +196,20 @@ export interface SayShapeOptions {
    * Default true; false keeps the host's look and reports the line with a warning.
    */
   look?: boolean;
+  /**
+   * Where the view is shown. "chat": inside a chat app's message, which is
+   * the frame and the background. The chat density is then the default look
+   * (tighter type, spacing and controls, list rows on one line where they
+   * fit; a spec's own look density= still wins) and the screen's padding
+   * defaults to CHAT_PADDING. The engine never paints a background of its
+   * own (it clears to transparent), so the host leaves its page showing
+   * through. Default: none, the look exactly as before.
+   */
+  context?: "chat";
 }
+
+/** The padding around the whole screen in a chat (context "chat"): room for focus rings and card shadows, no more. */
+export const CHAT_PADDING = 12;
 
 /** The widest picture() draws, in CSS pixels, so a very wide table can't make a huge image. */
 export const MAX_PICTURE_WIDTH = 2400;
@@ -298,6 +312,10 @@ export class SayShape {
   private hostPaused = false;
 
   hover: HitTarget | null = null;
+  /** What hover hooks (ComponentDef.hover) were last told the mouse is over: never a tip, a popup's part or a finger. */
+  private hoverSent: HitTarget | null = null;
+  /** The pointer resting on the canvas is a mouse or pen (not a finger), so moving parts under it can be hovered. */
+  private mouseOver = false;
   /** The element being dragged, while the pointer is held on one that defines drag. */
   private dragging: HitTarget | null = null;
   focus: HitTarget | null = null;
@@ -484,6 +502,33 @@ export class SayShape {
   }
 
   /**
+   * Every state value, with whatever a password field holds replaced by
+   * "[hidden]" wherever it appears (src/secrets.ts). This is what to send a
+   * host or a model along with an emit:, never `state.snapshot()`.
+   */
+  shareableState(): Record<string, Value> {
+    return hideSecretsIn(this.state.snapshot(), this.secrets());
+  }
+
+  /** Every text a password field held when an action ran, so a copy made and the field cleared still hides. */
+  private remembered = new Set<string>();
+
+  /** Notes what password fields hold now (before an action runs: it may copy and clear them). */
+  private rememberSecrets(): void {
+    for (const v of secretValues(this.parsed?.root ?? null, this.state.scope)) {
+      this.remembered.delete(v);
+      this.remembered.add(v);
+    }
+    while (this.remembered.size > MAX_REMEMBERED) this.remembered.delete(this.remembered.values().next().value as string);
+  }
+
+  /** The texts password fields hold now, and every one they held when an action ran. */
+  private secrets(): Set<string> {
+    this.rememberSecrets();
+    return new Set(this.remembered);
+  }
+
+  /**
    * The screen as plain text, for copying, since nothing on a canvas can be
    * selected: headings, text and values as shown, fields as "Label: value",
    * and tables and chart data as tab-separated rows that paste into a
@@ -566,6 +611,12 @@ export class SayShape {
   }
 
   private renderStages(): void {
+    this.runStages();
+    // A hovered part that's gone (or now behind a dialog or popup) is left; what that writes shows in this same frame.
+    if (this.syncHover()) this.runStages();
+  }
+
+  private runStages(): void {
     if (this.dirty.parse) this.runParse();
     if (this.dirty.layout) this.runLayout();
     if (this.dirty.paint) this.runPaint();
@@ -583,7 +634,7 @@ export class SayShape {
     this.parsed = parse(this.source, this.registry, {
       partial: this.streaming,
       ...(this.opts.streamPlaceholders ? { deferUnknownNames: true } : {}),
-      rootProps: { pad: String(this.opts.padding ?? 20), gap: String(s.md) },
+      rootProps: { pad: String(this.opts.padding ?? (this.opts.context === "chat" ? CHAT_PADDING : 20)), gap: String(s.md) },
       // State the app set itself counts as known, so reading it isn't flagged.
       knownNames: Object.keys(this.state.snapshot()),
       ...(this.opts.behavior ? { behavior: true } : {}),
@@ -730,6 +781,10 @@ export class SayShape {
     const d = this.state.derivation(key);
     if (!d) return false;
     const item = path.replace(/^remove:/, "") !== key;
+    if (item && path.startsWith("remove:")) {
+      this.warn(`Can't do ${path}: ${key} is derived (derive ${key} on line ${d.line}), and its items were made by the expression (extend, map, rank and group make new ones), so they aren't in any list in state. ${REMOVE_FROM_SOURCE}`);
+      return true;
+    }
     this.warn(`Can't change ${path}: ${key} is derived (derive ${key} on line ${d.line}), so it changes only when what it's computed from changes.${item ? " Its items were built by the expression, not taken from a list in state: filter, sort, search and take keep items that can be changed" : ""}`);
     return true;
   }
@@ -1156,7 +1211,7 @@ export class SayShape {
     // An element with a tip gets a region for it under its children's and its own parts, so the
     // pointer shows the tip anywhere on it. When it isn't pressable on its own, the region is a
     // Tab stop too, so the keyboard and a tap reach it. (A scene draws its shapes' tips itself.)
-    if (box.node.props.tip !== undefined && !loading && !def?.provides && this.tipOf(box.node)) {
+    if ((box.node.props.tip !== undefined || def?.ownTip) && !loading && !def?.provides && this.tipOf(box.node)) {
       // Parts there only for a child's tip ("tip:…") don't count: the element's own tip still needs its stop.
       const own = this.hits.slice(before).some((h) => h.box.node.id === box.node.id && !isTipPart(h.detail));
       const placed = xf ? applyTransform(box, xf) : box;
@@ -1267,7 +1322,7 @@ export class SayShape {
    * in another theme (a deck's slides without their rounded frame).
    */
   async picture(opts: { pixelRatio?: number; background?: boolean; widen?: boolean; width?: number; state?: Record<string, Value>; frame?: (box: Box) => boolean; theme?: Theme } = {}): Promise<HTMLCanvasElement> {
-    const theme = opts.theme ? applyLook(opts.theme, this.lookChoice) : this.theme;
+    const theme = opts.theme ? applyLook(opts.theme, this.appliedLook()) : this.theme;
     let width = opts.width ?? (this.metrics.width || this.opts.width || 600);
     let cut: Rect | null = null;
     let out!: HTMLCanvasElement;
@@ -1481,7 +1536,56 @@ export class SayShape {
         this.invalidate("paint");
         this.focusDom();
       },
+      validate: () => this.validateAround(target.node),
     };
+  }
+
+  /**
+   * A button with validate=true: every shown field around it (in its nearest card, else the open
+   * dialog or the screen) shows what's wrong with it now, as if it had been used and left. The
+   * first wrong one takes keyboard focus and is announced. Fields that aren't laid out (if= false,
+   * other screens) aren't checked. True when nothing is wrong.
+   */
+  private validateAround(node: SayShapeNode): boolean {
+    this.endEdit();
+    const chainTo = (tree: Box | null): Box[] | null => {
+      if (!tree) return null;
+      if (tree.node.id === node.id) return [tree];
+      for (const k of tree.children) {
+        const below = chainTo(k);
+        if (below) return [tree, ...below];
+      }
+      return null;
+    };
+    const chain = chainTo(this.modal) ?? chainTo(this.rootBox);
+    if (!chain) return true;
+    const form = chain.slice(0, -1).reverse().find((b) => b.node.type === "card") ?? chain[0]!;
+    const wrong: { node: SayShapeNode; problem: string }[] = [];
+    walkBoxes(form, (b) => {
+      const def = this.registry.get(b.node.type);
+      if (!def?.validate) return;
+      const problem = def.validate(new PropReader(b.node, scopeOf(b.node, this.state.scope)), this.viewOf(b.node));
+      if (problem) wrong.push({ node: b.node, problem });
+    });
+    this.invalidate("layout");
+    const first = wrong[0];
+    if (!first) return true;
+    // Lay out now, so the messages take their room before focus moves to the first field.
+    this.renderNow();
+    const box = this.boxOf(first.node);
+    const hit = this.hits.find((h) => h.focusable && h.box.node.id === first.node.id);
+    if (box) {
+      const target: HitTarget = hit ? { node: first.node, box: hit.box, detail: hit.detail } : { node: first.node, box };
+      this.keyboardMode = true;
+      if (this.registry.get(first.node.type)?.editor) this.beginEdit(target);
+      else { this.focus = target; this.focusDom(); }
+    }
+    const p = new PropReader(first.node, scopeOf(first.node, this.state.scope));
+    const name = p.text() || p.str("label") || p.str("placeholder");
+    const more = wrong.length > 1 ? `${wrong.length} fields need attention. ` : "";
+    this.a11y.announce(`${more}${name ? `${name}: ` : ""}${first.problem}`);
+    this.invalidate("paint");
+    return false;
   }
 
   // ---------------------------------------------------------------- popups
@@ -1504,6 +1608,47 @@ export class SayShape {
     this.popupHits = [];
     this.focus = { node: owner.node, box: owner.box };
     this.invalidate("layout");
+  }
+
+  /**
+   * Tell hover hooks the mouse is now over target (null: over nothing that has one).
+   * Within one element the hook gets both parts; between two, the first hears
+   * it was left, then the second that it was entered. Hovering isn't a press:
+   * it doesn't count as the person acting.
+   */
+  private hoverTo(target: HitTarget | null): void {
+    const to = target && target.layer !== "popup" && target.detail !== TIP && !isTipPart(target.detail) && this.registry.get(target.node.type)?.hover ? target : null;
+    const was = this.hoverSent;
+    if (was === to || (was && to && sameTarget(was, to))) return;
+    this.hoverSent = to;
+    const tell = (t: HitTarget, from: unknown, into: unknown) => this.registry.get(t.node.type)?.hover?.(this.pressContext(t), from, into);
+    if (was && to && was.node.id === to.node.id) { tell(to, was.detail, to.detail); return; }
+    if (was) tell(was, was.detail, undefined);
+    if (to) tell(to, undefined, to.detail);
+  }
+
+  /**
+   * After a frame: a hovered part that's no longer drawn (its if= turned false,
+   * the spec changed) or is now behind a dialog or an open popup is left. The
+   * pointer resting where it was isn't hit-tested again; its next move does that.
+   * Returns whether anything was left.
+   */
+  private syncHover(): boolean {
+    const s = this.hoverSent;
+    // While something animates under a resting mouse (a frame is already asked for), what's under it is
+    // found again, once a frame: a planet orbiting away from the pointer is left, one arriving is entered.
+    const p = this.pointer;
+    if ((this.frame || this.dirty.paint) && p && this.mouseOver && !this.dragging && !this.popup) {
+      const t = this.targetAt(p.x, p.y);
+      const was = this.hoverSent;
+      this.hoverTo(t);
+      if (this.hoverSent !== was) { this.hover = t; return true; }
+    }
+    if (!s) return false;
+    const from = Math.max(0, this.modalFrom);
+    if (!this.popup && this.hits.some((h, i) => i >= from && sameRegion(h, s))) return false;
+    this.hoverTo(null);
+    return true;
   }
 
   /** Close the open popup, sending keyboard focus back to its owner when it's still shown. */
@@ -1864,6 +2009,7 @@ export class SayShape {
   private runActionString(src: string, node: SayShapeNode, own?: OwnCopy): void {
     const parsed = parseActions(src, own?.functions);
     if ("error" in parsed) return;
+    this.rememberSecrets();
     runActions(parsed.actions, {
       // Inside each, actions read the item's loop variables first; an element's own copies before that.
       scope: this.scopeFor(node, own),
@@ -1871,10 +2017,12 @@ export class SayShape {
       set: (path, v) => this.writePath(node, path, v, own),
       removeAt: (path) => this.removeAt(node, path, own),
       warn: (m) => this.warn(m),
-      emit: (name, value) => this.events.emit("action", { name, value, node }),
+      // Passwords inside an emitted record or list are hidden; one named as the whole value (emit:login:{pw}) is sent as written.
+      emit: (name, value) => this.events.emit("action", { name, value: emittedValue(value, this.secrets()), node }),
       go: (screen) => this.go(screen),
       back: () => this.back(),
-      notify: (text) => this.notify(text),
+      // A password named in a message is hidden there too: the message reaches the host and screen readers.
+      notify: (text) => this.notify(hideInText(text, this.secrets())),
     });
   }
 
@@ -1924,6 +2072,12 @@ export class SayShape {
   private removeAt(node: SayShapeNode, path: string, own?: OwnCopy): void {
     const place = this.placeFor(node, path, own);
     const at = place?.steps.at(-1);
+    const first = path.split(".")[0]!;
+    // A loop variable holding an item no list in state has: one extend() or map() made.
+    if (!place && PATH.test(path) && !this.state.has(first) && this.scopeFor(node, own)(first) !== undefined) {
+      this.warn(`Can't do remove:${path}: ${first} was made by an expression (extend, map, rank and group make new items), so it isn't in any list in state. ${REMOVE_FROM_SOURCE}`);
+      return;
+    }
     if (!place || typeof at !== "number") {
       this.warn(`remove:${path} needs ${path} to be an item of a list in state, like remove:t inside each items=todos as=t. To remove by position, write remove:list:index`);
       return;
@@ -1993,10 +2147,12 @@ export class SayShape {
     return accessibleKey(t.node, t.detail === TIP ? undefined : t.detail);
   }
 
-  /** An element's tip= text, filled in from state, or "" without one. */
+  /** An element's tip= text, filled in from state, or its own (an icon-only button's label=), or "" without one. */
   private tipOf(node: SayShapeNode): string {
-    if (node.props.tip === undefined) return "";
-    return new PropReader(node, scopeOf(node, this.state.scope)).str("tip", "").trim();
+    const own = this.registry.get(node.type)?.ownTip;
+    if (node.props.tip === undefined && !own) return "";
+    const p = new PropReader(node, scopeOf(node, this.state.scope));
+    return node.props.tip !== undefined ? p.str("tip", "").trim() : own!(p);
   }
 
   /** Whose tip shows now: what's pinned by a tap, focused from the keyboard, or under the pointer (or its tip). */
@@ -2391,9 +2547,6 @@ export class SayShape {
       const r = c.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
-    const sameTarget = (a: HitTarget | null, b: HitTarget | null) =>
-      a === b || (!!a && !!b && a.node.id === b.node.id && a.detail === b.detail);
-
     const onMove = (e: PointerEvent) => {
       this.pointer = local(e);
       // A drag that began on text selects it: the press (or the element's own drag, like a table's
@@ -2403,6 +2556,7 @@ export class SayShape {
         if (this.dragging) { this.dragging = null; this.dragHeld = []; }
         this.pressed = null;
         this.hover = null;
+        this.hoverTo(null);
         this.invalidate("paint");
         c.style.cursor = "text";
         return;
@@ -2416,11 +2570,15 @@ export class SayShape {
       if (this.tipShown) this.invalidate("paint");
       if (!sameTarget(t, this.hover)) { this.hover = t; this.invalidate("paint"); }
       else if (t?.detail !== undefined) this.invalidate("paint");
+      // A finger doesn't hover (a tap's move would fire on-hover); a mouse or a pen does.
+      this.mouseOver = e.pointerType !== "touch";
+      if (this.mouseOver) this.hoverTo(t);
     };
     const onLeave = () => {
       if (this.dragging) return; // the pointer is captured; the drag ends on release
       this.pointer = null;
       if (this.hover || this.pressed) { this.hover = null; this.pressed = null; this.invalidate("paint"); }
+      this.hoverTo(null);
       this.inspector.pointerLeave();
     };
     // Set while a press is focusing the canvas, so onFocus can tell a click from Tab.
@@ -2553,6 +2711,7 @@ export class SayShape {
         // What's under the pointer has moved: hover follows it once the frame is laid out.
         this.renderNow();
         this.hover = this.targetAt(at.x, at.y);
+        this.hoverTo(this.hover);
         this.invalidate("paint");
       }
     };
@@ -2706,9 +2865,16 @@ export class SayShape {
     return this.lookChoice;
   }
 
+  /** The look drawn with: the spec's, over the chat density in a chat (context "chat") unless the spec chose a density. */
+  private appliedLook(): AppliedLook | null {
+    const look = this.lookChoice;
+    if (this.opts.context !== "chat" || look?.density) return look;
+    return { ...look, density: CHAT_DENSITY };
+  }
+
   private resolveTheme(): Theme {
     // The look over the host's theme, then (in a forced-colors mode) the person's colors over both.
-    const chosen = applyLook(this.chosenTheme(), this.lookChoice);
+    const chosen = applyLook(this.chosenTheme(), this.appliedLook());
     // In a forced-colors mode the person's own colors win over any theme.
     if (typeof matchMedia !== "undefined" && matchMedia("(forced-colors: active)").matches) {
       return forcedColorsTheme(chosen, (name) => this.systemColor(name));
@@ -2799,6 +2965,10 @@ function scaledEditor(spec: EditorSpec, t: ChildTransform): EditorSpec {
   };
 }
 
+function sameTarget(a: HitTarget | null, b: HitTarget | null): boolean {
+  return a === b || (!!a && !!b && a.node.id === b.node.id && a.detail === b.detail);
+}
+
 function sameRegion(h: HitRegion, t: HitTarget): boolean {
   return h.box.node.id === t.node.id && h.detail === t.detail;
 }
@@ -2816,6 +2986,9 @@ function applyPose(g: CanvasRenderingContext2D, box: Box, pose: EnterPose): void
     g.translate(-cx, -cy);
   }
 }
+
+/** What to do instead of removing an item an expression made (remove:t inside each over extend() or map()). */
+const REMOVE_FROM_SOURCE = "Remove from the source list instead: loop over it (each items=tasks as=t, with if= to hide items) or over filter() or sort() of it, which keep items removable";
 
 /** How often, at most, the mirror follows regions that move without layout (an animated scene's shapes). */
 const REGION_REFRESH_MS = 250;

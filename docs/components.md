@@ -33,7 +33,7 @@ column gap=6
 
 ### `row`
 
-Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.
+Places children side by side, splitting the width equally. On narrow screens they wrap; cards keep their own height, top-aligned.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -43,6 +43,7 @@ Places children side by side, splitting the width equally. On narrow screens the
 | `wrap` | boolean | Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line. |
 | `fit` | boolean | Keep children at their natural width. |
 | `justify` | `start` / `end` / `between` | Where children sit: start, end, or between (spread). Implies fit. |
+| `stretch` | boolean | Cards side by side share the tallest one's height, for panels that should line up. |
 
 Children: any elements.
 
@@ -73,13 +74,14 @@ overlap at=top-right
 
 ### `grid`
 
-Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
+Places children in responsive equal columns. Cards keep their own height, top-aligned.
 
 | Prop | Type | Description |
 |---|---|---|
 | `min` | number | Narrowest a column may be, in pixels (default 200). |
 | `cols` | number | Most columns; fewer when min doesn't fit. |
 | `gap` | number | Space between children in pixels (default 14). |
+| `stretch` | boolean | Cards side by side share the tallest one's height, for panels that should line up. |
 
 Children: any elements.
 
@@ -681,17 +683,20 @@ A pressable button that runs actions. Use emit: to tell the app what the user ch
 
 | Prop | Type | Description |
 |---|---|---|
-| `"text"` | text, required | The button label. |
+| `"text"` | text | The button label. Leave it out for an icon-only button, with icon= and label=. |
 | `on` | action | What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ; |
 | `variant` | `primary` / `secondary` / `danger` | primary (filled), secondary (outlined) or danger. |
 | `disabled` | condition | Expression; when true the button is greyed out and can't be pressed. |
 | `icon` | string | Icon name before the label. |
 | `size` | `md` / `sm` | md or sm (smaller). |
 | `fit` | boolean | Natural width, even on a phone. |
+| `validate` | boolean | First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is. |
+| `label` | string | What screen readers say, and an icon-only button's tip, e.g. label="Remove {e.name}". |
 
 ```
-button "Book now" on=emit:book
+button "Book now" validate=true on=emit:book
 button "Back" variant=secondary on=dec:step
+button icon=trash label="Remove" variant=secondary on=emit:remove
 ```
 
 ### `link`
@@ -717,10 +722,12 @@ A checkbox that toggles a true/false state value.
 | `"text"` | text, required | The label next to the box. |
 | `bind` | state, required | The state name this checkbox reads and writes. |
 | `detail` | string | A muted line under the label. |
+| `required` | condition | When true it must be ticked, or it says error= (default Required) once toggled. |
+| `error` | string | Its message: for a required box left unticked, else shown while not empty. |
 
 ```
 state agreed=false
-check "I agree to the terms" bind=agreed
+check "I agree to the terms" bind=agreed required=true error="Accept the terms to continue"
 ```
 
 ### `switch`
@@ -842,7 +849,7 @@ A text field people type into, such as a name, an email, a search, a new item, o
 
 | Prop | Type | Description |
 |---|---|---|
-| `"text"` | text | The label above the field. Leave it out only when the screen makes the purpose obvious. |
+| `"text"` | text | The label above the field. Leave it out only when the screen makes the purpose obvious, or in a row of fields with placeholder=, its name then. |
 | `bind` | state, required | The state name or path it reads and writes, like task or t.title. |
 | `placeholder` | string | A hint shown while the field is empty, e.g. Sunscreen. |
 | `kind` | `text` / `email` / `number` / `password` / `search` | text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one. |

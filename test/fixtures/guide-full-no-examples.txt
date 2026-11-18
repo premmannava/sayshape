@@ -19,7 +19,8 @@ EXPRESSIONS
 - {…} reads state: {count}, {price*qty}, {done ? 'Yes' : 'No'}, {round(total, 2)}
 - Text can mix words and expressions: "Total: ${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! and a ? b : c
-- Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend
+- Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, range, has, is, contains, starts, ends, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend, map
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Words inside {…} are state names. Quote text: {done ? 'Packed' : 'To pack'}, tone={late ? 'bad' : 'good'}
 
 ACTIONS (on=…)
@@ -49,7 +50,7 @@ DATA AND LISTS
 - Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}
 - A filter with an All choice: derive shown={region == 'All' ? orders : filter(orders, 'region', region)}
 - Totals per category: derive byCat={sort(group(spend, 'category', 'amount'), 'amount', 'desc')} makes one record per category, its fields named after the ones you grouped by and added up: {category, count, amount}, where count is how many items it has and amount their total. Then items=byCat x=category y=amount. Use your own field names: grouping by 'team' and adding up 'hours' gives {team, count, hours}. group(list, 'category') only counts; a fourth argument works out 'avg', 'min' or 'max' instead of the total. Groups are read-only
-- A value worked out for every item: derive rows={extend(orders, 'o', {total: o.price * o.qty})} gives each order a total (o is the item, only inside the braces, and can't be a state name), then derive ranked={rank(rows, 'total', 'desc')} adds rank (1 is best, ties share it) in the list's order. New fields can't read each other: chain a second extend. Never write one numbered copy per row
+- A value worked out for every item: derive rows={extend(orders, 'o', {total: o.price * o.qty})} gives each order a total (o is the item, only inside the braces, and can't be a state name), then derive ranked={rank(rows, 'total', 'desc')} adds rank (1 is best, ties share it) in the list's order. New fields can't read each other: chain a second extend. A list from a formula: derive plan={map(range(1, years + 1), 'y', {year: y, total: save * y})} (range's end is left out; y only inside map's last argument). Never write one numbered copy per row
 - Data the app passes in can be large (thousands of rows). Never copy its rows into the spec: read it by name, and put totals, groups and filters over it in derive lines, so they're worked out once
 - To compare two fields of an item (an answer and its correct answer), set a field when choosing, then count it: radio "{o}" bind=q.pick value={o} on="set:q.ok:{o == q.answer}" and later count(qs, 'ok')
 - Format for people: money(2400) shows $2,400.00, number(37000) shows 37,000, compact(12345678) shows 12.3M and compact(n, 'USD') shows $12.3M (use it for big figures in stats), plural(n, 'item') shows 1 item or 3 items, lower(), upper(), trim()
@@ -59,7 +60,7 @@ DATA AND LISTS
 - For a list inside each item (an order's lines, a day's activities), put an each inside the each: each items=o.lines as=line
 - SayShape has no JSX, HTML or JavaScript. {…} only computes values; it never makes elements. Repeat with each.
 - To let people add an item they name, bind an input to a state value, add it, then clear it: input "New item" bind=task on="add:todos:{text: task, done: false};set:task:''"
-- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={includes(lower(t.name), lower(query))}; count matches with len(search(trails, 'name', query))
+- To filter a list as people type, bind an input and show matching items: each items=trails as=t, then list-item "{t.name}" if={contains(t.name, query)}; count matches with len(search(trails, 'name', query))
 
 A to-do list:
   state task="" todos=[{text: "Pack water", done: true}, {text: "Charge headlamp", done: false}, {text: "Snacks", done: false}]
@@ -115,13 +116,14 @@ ELEMENTS
     pad=<number>  Inner padding in pixels (default 0).
     children: any elements
 
-  row  — Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.
+  row  — Places children side by side, splitting the width equally. On narrow screens they wrap; cards keep their own height, top-aligned.
     gap=<number>  Space between children in pixels (default 10).
     pad=<number>  Inner padding in pixels (default 0).
     align=<top|center|bottom>  Vertical alignment of children: top, center or bottom.
     wrap=<boolean>  Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line.
     fit=<boolean>  Keep children at their natural width.
     justify=<start|end|between>  Where children sit: start, end, or between (spread). Implies fit.
+    stretch=<boolean>  Cards side by side share the tallest one's height, for panels that should line up.
     children: any elements
 
   overlap  — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card. The first child sets the size.
@@ -129,10 +131,11 @@ ELEMENTS
     inset=<number>  How far in from the edges they sit, in pixels (default 8).
     children: any elements
 
-  grid  — Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.
+  grid  — Places children in responsive equal columns. Cards keep their own height, top-aligned.
     min=<number>  Narrowest a column may be, in pixels (default 200).
     cols=<number>  Most columns; fewer when min doesn't fit.
     gap=<number>  Space between children in pixels (default 14).
+    stretch=<boolean>  Cards side by side share the tallest one's height, for panels that should line up.
     children: any elements
 
   card  — A surface that groups related content, stacked vertically. Give it on= to make the whole card pressable.
@@ -367,13 +370,15 @@ ELEMENTS
     only inside: details
 
   button "<text>"  — A pressable button that runs actions. Use emit: to tell the app what the user chose.
-    "<text>" (required)  The button label.
+    "<text>"  The button label. Leave it out for an icon-only button, with icon= and label=.
     on=<action>  What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ;
     variant=<primary|secondary|danger>  primary (filled), secondary (outlined) or danger.
     disabled=<condition>  Expression; when true the button is greyed out and can't be pressed.
     icon=<string>  Icon name before the label.
     size=<md|sm>  md or sm (smaller).
     fit=<boolean>  Natural width, even on a phone.
+    validate=<boolean>  First show what's wrong with every field in its card (required=, error=, kind=); on= runs only when nothing is.
+    label=<string>  What screen readers say, and an icon-only button's tip, e.g. label="Remove {e.name}".
 
   link "<text>"  — Pressable text for a secondary action, lighter than a button.
     "<text>" (required)  The link text.
@@ -384,6 +389,8 @@ ELEMENTS
     "<text>" (required)  The label next to the box.
     bind=<state, required>  The state name this checkbox reads and writes.
     detail=<string>  A muted line under the label.
+    required=<condition>  When true it must be ticked, or it says error= (default Required) once toggled.
+    error=<string>  Its message: for a required box left unticked, else shown while not empty.
 
   switch "<text>"  — An on/off switch with a label, for settings that take effect right away.
     "<text>" (required)  The label for the setting.
@@ -437,7 +444,7 @@ ELEMENTS
     on=<action>  Actions to run after the user lets go, or after each arrow key, e.g. emit:changed. Separate several with ;
 
   input "<text>"  — A text field people type into, such as a name, an email, a search, a new item, or with lines= a note or a message. Each keystroke writes its bind= state, and required= and kind=email or number say what's wrong once it's been left.
-    "<text>"  The label above the field. Leave it out only when the screen makes the purpose obvious.
+    "<text>"  The label above the field. Leave it out only when the screen makes the purpose obvious, or in a row of fields with placeholder=, its name then.
     bind=<state, required>  The state name or path it reads and writes, like task or t.title.
     placeholder=<string>  A hint shown while the field is empty, e.g. Sunscreen.
     kind=<text|email|number|password|search>  text, email, number, password or search. Picks the phone keyboard and autofill; number writes a number, or null while empty. email and number also say when what's typed isn't one.
@@ -694,7 +701,7 @@ RULES
 - Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.
 - Use cards to group related content, not around every title, element or section, and never a card inside a card. Keep page headings outside cards.
 - Dashboards: a title with its filters just under it, a few meaningful KPIs (3 or 4 stats), one main chart, then supporting detail (a smaller chart or a table). The design is built in: write plain elements, not extra props for looks.
-- Put peer KPI and chart cards in grid min=170 gap=12. Their heights align automatically within each row. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls.
+- Put peer KPI and chart cards in grid min=170 gap=12. Cards keep their own height; add stretch=true when a row's panels should line up. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls.
 - Keep screens focused: one task per screen, short labels, real-looking values.
 - Screens may be narrow (a phone, a chat). For side-by-side figures use grid min=140 rather than row. Keep stat values short: compact() for large numbers.
 - For several screens, write the starting screen first: it shows as soon as it arrives.

@@ -45,6 +45,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `look` | `true` | Read a spec's look line (`look mood=bold type=editorial`), which lays look tokens over this theme, never colors of its own; `false` keeps the theme as it is and reports the line with a warning ([Look](language.md#look)). `sayshape.look` holds the choices in use |
 | `behavior` | `false` | Experimental: `every` rules and dragging in scenes ([Behavior](#behavior-experimental-off-by-default)) |
 | `clock` | the real clock | Where time comes from (`now`, `setTimeout`, `clearTimeout`): scene motion, fade-ins and rules. `sayshape/testing` passes one a test advances |
+| `context` | none | `"chat"`: the view is inside a chat app's message, which frames it and gives the background (the engine never paints one; leave the page showing through). The chat density is then the default look: figures about 26 px with the type scale to match, card padding about 15 px, 36 px controls, tighter gaps in `column`, `row` and `grid`, list rows on one line (title, detail and trailing value side by side) where they fit, and `padding` 12 (`CHAT_PADDING`). A spec's `look density=` still wins. Leave it out for the look as before |
 | `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it nothing animates (as with `animate: false`), and rules wait for a first press or key |
 
 **Changed with entrance motion:** reduced motion used to count only when `animate` was left out, and the `reducedMotion` option only held rules back. Now it wins over `animate: true`, and with it (or `animate: false`) nothing moves: fade-ins, gliding values, `enter=` entrances, an image's `zoom=slow` and scene motion are all drawn at rest. A host that passed `animate: true` to force motion for everyone no longer can; pass `reducedMotion: false` if you truly mean to ignore the person's setting.
@@ -92,6 +93,8 @@ ui.on("action", ({ name, value }) => {
   if (name === "order") submitOrder(value);
 });
 ```
+
+`reviewLayout(ui.tree)` checks design rules a spec can break while parsing cleanly, as warnings with line numbers: today, a `card` inside a `card` (no card variant is meant as an inner panel; a column or a divider separates parts inside one). The MCP server sends them back with the drawing problems, without holding the interface back, and the playground lists them with the parser's.
 
 ## Scenes (experimental, off by default)
 
@@ -269,6 +272,10 @@ const brand = extendTheme(lightTheme, {
 });
 ui.setTheme(brand);
 ```
+
+Cards side by side in a `row` or `grid` keep their own heights unless the spec writes `stretch=true`. A host that wants the earlier look, where they always shared a height, sets `stretchCards: true` on its theme (`extendTheme(lightTheme, { stretchCards: true })`); a spec's `stretch=false` still wins.
+
+To match the page around the interface, `themeFromTokens({ background, surface, text, textSecondary, border, accent, radius, fontFamily, fontSize, series })` turns the host's own tokens into a theme (the wrappers' `theme` takes the same object); see [Host tokens](integration/web-component.md#host-tokens).
 
 ### Trying styles in the playground
 

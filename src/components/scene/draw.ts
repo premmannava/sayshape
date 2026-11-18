@@ -12,10 +12,21 @@ import type { Theme } from "../../theme";
 import type { SayShapeNode, Value } from "../../types";
 import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
+import { STYLED, capOf, drawCommands, joinOf, roundPolyline, traceRounded } from "./line-style";
 import { apply, flattenPath, invert, rotate, scale, translate, type ClipRect, type Geom, type Matrix, type SceneRegion } from "./interact";
+import { hoverActions } from "./hover";
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
+import { fadeColor, gradientStops } from "./fade";
+import { highlightOf } from "./light";
+import { shakeOffset, shakeSeed } from "./shake";
+import { letScope } from "./lets";
+import { drawByDepth, hasDepth, type DepthHooks } from "./depth";
+import { drawEmit } from "./emit";
+import { drawReflection, type ReflectBuffer } from "./reflect";
+import { drawTrail, type TrailHooks, type TrailState } from "./trail";
+import { blurShape, drawBlurred } from "./blur";
 import { drawIcon, isIconName } from "../../icons";
 import { fillGradient, type FillName } from "../../fills";
 
@@ -100,8 +111,21 @@ export function colorOf(raw: string, f: Pick<Frame, "colors">): string | null {
     if (typeof base !== "string") return null;
     return themed[2] === undefined ? base : faded(base, Math.min(100, Number(themed[2])) / 100);
   }
-  return isColor(v) ? v : null;
+  if (isColor(v)) return v;
+  // A written color at an opacity: "#E0807A 30%", "rgb(224, 128, 122) 0%".
+  const see = SEE_THROUGH.exec(v);
+  if (!see || !isColor(see[1]!)) return null;
+  const alpha = Math.min(100, Number(see[2])) / 100;
+  // A CSS name ("red 30%"): the canvas says what color it is.
+  return fadeColor(see[1]!, alpha) ?? fadeColor(cssHex(see[1]!, (f as Partial<Frame>).g), alpha);
 }
+/** A CSS color name as the canvas writes it back ("#ff0000"), or the name unchanged when there's no canvas to ask. */
+function cssHex(name: string, g: CanvasRenderingContext2D | undefined): string {
+  if (!g) return name;
+  const was = g.fillStyle;
+  try { g.fillStyle = name; return typeof g.fillStyle === "string" ? g.fillStyle : name; } finally { g.fillStyle = was; }
+}
+const SEE_THROUGH = /^(.*\S)\s+(\d{1,3})%$/;
 const GRADIENT_REF = /^url\(#?([A-Za-z_][\w-]*)\)$/;
 
 // ---------- painting ----------
@@ -121,6 +145,30 @@ export interface Frame {
   useDepth: number;
   /** Set to hear about lines that drew nothing for a reason the parser couldn't see (an icon name from a formula). */
   notes?: Array<{ line: number; message: string }>;
+  /** The scene's time this frame, in seconds: what t reads. Drawing at another moment sets it and puts it back. */
+  time: number;
+  /** Scene seconds played since it started, unwrapped by loops (equal to time for a still). */
+  played?: number;
+  /** The scene's light=, in canvas pixels: where shine=true shapes are lit from. Upper left when unset. */
+  light?: readonly [number, number];
+  /** True while the scene moves (motion on): shake= only jolts then. */
+  motion?: boolean;
+  /** The scene's own shake=, in scene pixels: everything but its background jolts. */
+  shake?: number;
+  /** Scene features this host has on (sceneComponentsWith); unset means all on. */
+  features?: { particles: boolean; reflect: boolean };
+  /** The scene's duration= and loop=: emit fits endless particle flows to a loop. */
+  clock?: { duration: number; loop: boolean };
+  /** Particles drawn so far this frame, those asked for, and the first emit line that got fewer than it asked (emit.ts). */
+  particles?: number;
+  particlesAsked?: number;
+  particlesOver?: number;
+  /** The each copies and uses a drawing is inside, kept while press recording is off (a reflection), so particles seed the same. */
+  seedCopy?: readonly string[];
+  /** The scene line's id, seeding its shake. */
+  sceneId?: string;
+  /** Set while the scene moves: trail= copies' budget and the clock they read (trail.ts). */
+  trails?: TrailState;
   /** Told about each element just before it's drawn (the drawing check uses this to know what drew what). */
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
@@ -129,6 +177,16 @@ export interface Frame {
   ends: Map<string, [number, number]>;
   /** The clip=true groups around the line being drawn, outermost first: only what's inside all of them shows. */
   clips?: readonly ClipRect[];
+  /** A new offscreen canvas, for reflect= (reflect.ts); unset where there's none (Node, the drawing check), and nothing reflects. */
+  offscreen?: (w: number, h: number) => ReflectBuffer;
+  /** The scene's own matrix and size (what a viewer sees), and its loop's length in seconds (0 when it doesn't loop). */
+  view?: { m: Matrix; w: number; h: number; period?: number };
+  /** The line whose reflection is being drawn: drawn plainly, with nothing inside reflecting again. */
+  reflecting?: SayShapeNode;
+  /** Offscreen buffers blurred groups have used this frame (blur.ts, at most MAX_BLUR_LAYERS). */
+  layers?: number;
+  /** The shape being drawn again inside its blur (blur.ts): drawn plainly this time. */
+  blurring?: SayShapeNode;
   /**
    * Set to record pressable shapes (on=) as they're drawn: the regions in the
    * order they start, the ones open around the line being drawn, and which
@@ -172,8 +230,9 @@ function paintOf(raw: string | undefined, bounds: Bounds, f: Frame, scope: Scope
       const dx = (Math.cos(a) * len) / 2, dy = (Math.sin(a) * len) / 2;
       grad = f.g.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
     }
-    grad.addColorStop(0, from);
-    grad.addColorStop(1, to);
+    const [a, b] = gradientStops(from, to);
+    grad.addColorStop(0, a);
+    grad.addColorStop(1, b);
     return grad;
   }
   // A named fill; where there's none to draw (a forced-colors mode), the shape still shows, solid.
@@ -204,6 +263,8 @@ function solidOf(raw: string | undefined, f: Frame, scope: Scope): string | null
  */
 function depthOn(node: SayShapeNode, scope: Scope, f: Frame, own: string | null): boolean {
   if (node.props.glow === undefined && node.props.shadow === undefined) return false;
+  // Trail copies skip the blur: faint copies don't show it, and it's the costly part.
+  if (f.trails?.inCopy) return false;
   const g = f.g;
   const t = g.getTransform();
   const k = Math.sqrt(Math.abs(t.a * t.d - t.b * t.c)) || 1;
@@ -221,10 +282,11 @@ function depthOff(g: CanvasRenderingContext2D): void {
   g.shadowColor = "transparent"; g.shadowBlur = 0; g.shadowOffsetY = 0;
 }
 
-/** shine=true: light from the upper left and a darker far edge over the fill, so a circle reads as a ball. */
-function shine(g: CanvasRenderingContext2D, b: Bounds): void {
+/** shine=true: light from the upper left (or the scene's light=) and a darker far edge over the fill, so a circle reads as a ball. */
+function shine(g: CanvasRenderingContext2D, b: Bounds, f: Frame): void {
   const cx = b.x + b.w / 2, cy = b.y + b.h / 2, r = Math.max(b.w, b.h, 1) / 2;
-  const light = g.createRadialGradient(b.x + b.w * 0.34, b.y + b.h * 0.3, 0, cx, cy, r);
+  const [hx, hy] = highlightOf(b, f.m, f.light);
+  const light = g.createRadialGradient(hx, hy, 0, cx, cy, r);
   light.addColorStop(0, "rgba(255, 255, 255, 0.6)");
   light.addColorStop(0.55, "rgba(255, 255, 255, 0)");
   light.addColorStop(0.55, "rgba(0, 0, 0, 0)");
@@ -245,14 +307,15 @@ function finishShape(node: SayShapeNode, scope: Scope, bounds: Bounds, f: Frame,
     g.fillStyle = fill; g.fill();
     if (deep) { depthOff(g); deep = false; }
     const lit = node.props.shine === undefined ? false : read(node, "shine", scope);
-    if (lit === true || lit === "true") shine(g, bounds);
+    if (lit === true || lit === "true") shine(g, bounds, f);
   }
   const stroke = paintOf(strokeRaw, bounds, f, scope);
   if (stroke) {
     g.strokeStyle = stroke;
     g.lineWidth = Math.max(0, numOf(node, "width", scope, 1));
-    g.lineCap = "round";
-    g.lineJoin = "round";
+    const styled = STYLED.has(node.type);
+    g.lineCap = styled && node.props.cap !== undefined ? capOf(strOf(node, "cap", scope)) : "round";
+    g.lineJoin = styled && node.props.join !== undefined ? joinOf(strOf(node, "join", scope)) : "round";
     const dash = strOf(node, "dash", scope);
     g.setLineDash(dash ? (dash.match(/\d+(\.\d+)?/g) ?? []).map(Number).filter((x) => x >= 0).slice(0, 8) : []);
     g.stroke();
@@ -262,6 +325,8 @@ function finishShape(node: SayShapeNode, scope: Scope, bounds: Bounds, f: Frame,
 
 /** Apply opacity and a rotation around (cx, cy), then draw, then undo them. */
 function withLook(node: SayShapeNode, scope: Scope, f: Frame, cx: number, cy: number, draw: () => void): void {
+  // Trail copies are drawn sharp (as they're drawn without glow): each copy is a new line object, so a blur buffer would never be reused.
+  if (node.props.blur !== undefined && !f.trails?.inCopy && blurShape(node, scope, f, numOf, drawShape)) return;
   const g = f.g;
   g.save();
   if (node.props.opacity !== undefined) g.globalAlpha *= Math.min(1, Math.max(0, numOf(node, "opacity", scope, 1)));
@@ -295,12 +360,13 @@ function openRegion(node: SayShapeNode, scope: Scope, f: Frame): SceneRegion | n
       if (drag) dr.count++;
     }
   } else if (dr && node.props.drag !== undefined && DRAGGABLE.has(node.type)) dr.over = node.line;
-  if (!on && !drag) return null;
+  const hover = hoverActions(node);
+  if (!on && !drag && !hover) return null;
   const sel = node.props.selected === undefined ? undefined : read(node, "selected", scope);
   const r: SceneRegion = {
     key: rec.copy.length ? `${node.id}#${rec.copy.join(".")}` : node.id,
     node, scope, on, locate: rec.locate, geoms: [], words: [],
-    ...(drag ? { drag } : {}),
+    ...(drag ? { drag } : {}), ...hover,
   };
   const parent = rec.open[rec.open.length - 1];
   if (parent) r.parent = parent;
@@ -348,20 +414,45 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
 
 /** Draw a scene's lines with this scope. Stops quietly at the shape and step limits. */
 export function drawAll(nodes: readonly SayShapeNode[], scope: Scope, f: Frame): void {
+  // z= somewhere in the block (depth.ts): its lines, each copies included, are drawn back to front.
+  if (hasDepth(nodes)) drawByDepth(nodes, scope, f, DEPTH);
+  else drawBlock(nodes, scope, f, drawOne);
+}
+
+type Leaf = (node: SayShapeNode, scope: Scope, f: Frame) => void;
+const DEPTH: DepthHooks = { walk: drawBlock, draw: drawOne, z: (node, scope) => numOf(node, "z", scope, 0), maxShapes: MAX_SCENE_SHAPES };
+const TRAIL: TrailHooks = { draw: drawShape, num: numOf, str: strOf, maxShapes: MAX_SCENE_SHAPES, maxSteps: MAX_SCENE_STEPS };
+
+/** Work through a block's lines, handing each one to draw to leaf (drawOne, or depth.ts noting it). */
+function drawBlock(nodes: readonly SayShapeNode[], scope: Scope, f: Frame, leaf: Leaf): void {
+  // A let's name can't be written to below it (drawLines); put back what was there for the lines after this block.
+  const rec = f.press, locate = rec?.locate;
+  try { drawLines(nodes, scope, f, leaf); } finally { if (rec && locate) rec.locate = locate; }
+}
+
+function drawLines(nodes: readonly SayShapeNode[], scope: Scope, f: Frame, leaf: Leaf): void {
   for (const node of nodes) {
     if (++f.steps > MAX_SCENE_STEPS || f.shapes >= MAX_SCENE_SHAPES) return;
     if (node.type === "define" || node.type === "gradient") continue;
+    // let a={…} (lets.ts): the lines after it in this block read a; it isn't drawn.
+    if (node.type === "let") { scope = letScope(node, scope, f); letLocate(node, f); continue; }
     if (node.props.if !== undefined) {
       const r = evaluate(wholeExpression(node.props.if) ?? node.props.if, scope, SCENE_FUNCTIONS);
       if (!r.ok || !r.value) continue;
     }
-    if (node.type === "if") { drawAll(node.children, scope, f); continue; }
-    if (node.type === "each") { drawEach(node, scope, f); continue; }
-    drawOne(node, scope, f);
+    if (node.type === "if") { drawBlock(node.children, scope, f, leaf); continue; }
+    if (node.type === "each") { drawEach(node, scope, f, leaf); continue; }
+    leaf(node, scope, f);
   }
 }
 
-function drawEach(node: SayShapeNode, scope: Scope, f: Frame): void {
+/** Below a let, writing its name (on=set:a:…) goes nowhere rather than to state of that name. */
+function letLocate(node: SayShapeNode, f: Frame): void {
+  const rec = f.press, outer = rec?.locate, name = node.props.name;
+  if (rec && outer) rec.locate = (n) => (n === name ? null : outer(n));
+}
+
+function drawEach(node: SayShapeNode, scope: Scope, f: Frame, leaf: Leaf): void {
   const raw = node.props.items;
   if (raw === undefined) return;
   const expr = wholeExpression(raw) ?? raw;
@@ -390,11 +481,11 @@ function drawEach(node: SayShapeNode, scope: Scope, f: Frame): void {
       const place = listPlace && { key: listPlace.key, steps: [...listPlace.steps, i] };
       rec.copy.push(`${node.id}:${key}`);
       rec.locate = (name) => (name === as ? place : name === index ? null : outer(name));
-      drawAll(node.children, own, f);
+      drawBlock(node.children, own, f, leaf);
       rec.copy.pop();
       rec.locate = outer;
     } else {
-      drawAll(node.children, own, f);
+      drawBlock(node.children, own, f, leaf);
     }
   }
 }
@@ -404,6 +495,8 @@ function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
   const from = node.props.after === undefined ? null : afterOf(node, node.props.after.trim(), f);
   const was = f.m;
   if (from) { f.g.save(); f.g.translate(from, 0); f.m = translate(f.m, from, 0); }
+  // trail= (trail.ts): fading copies at earlier times first, so the line draws on top of them.
+  if (node.props.trail !== undefined && f.trails && !f.trails.inCopy) drawTrail(node, scope, f, TRAIL);
   const region = openRegion(node, scope, f);
   drawShape(node, scope, f);
   closeRegion(region, f);
@@ -472,14 +565,15 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
     }
     case "path": {
       const d = strOf(node, "d", scope) ?? "";
+      const round = node.props.round === undefined ? 0 : n("round");
       f.shapes++;
       withLook(node, scope, f, 0, 0, () => {
         g.beginPath();
-        const b = tracePath(d, g) ?? { x: 0, y: 0, w: 0, h: 0 };
+        const b = (round > 0 ? traceRounded(d, g, round) : tracePath(d, g)) ?? { x: 0, y: 0, w: 0, h: 0 };
         // A path with only an outline isn't filled, as in SVG paths drawn as lines.
         finishShape(node, scope, b, f, node.props.stroke === undefined ? "#000000" : null);
         if (f.press?.open.length) {
-          const rings = flattenPath(d);
+          const rings = flattenPath(d, round);
           const fill = node.props.fill === undefined ? (node.props.stroke === undefined ? "#000000" : undefined) : strOf(node, "fill", scope);
           if (fill !== undefined && fill.trim() !== "" && fill.trim() !== "none") addGeom(f, { kind: "poly", m: f.m, rings });
           else for (const pts of rings) addGeom(f, { kind: "polyline", m: f.m, pts, width: Math.max(0, n("width", 1)) });
@@ -495,9 +589,13 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       f.shapes++;
       withLook(node, scope, f, b.x + b.w / 2, b.y + b.h / 2, () => {
         g.beginPath();
-        g.moveTo(pts[0]![0], pts[0]![1]);
-        for (const [px, py] of pts.slice(1)) g.lineTo(px, py);
-        g.closePath();
+        const round = node.props.round === undefined ? 0 : n("round");
+        if (round > 0) drawCommands(roundPolyline(pts, true, round), g);
+        else {
+          g.moveTo(pts[0]![0], pts[0]![1]);
+          for (const [px, py] of pts.slice(1)) g.lineTo(px, py);
+          g.closePath();
+        }
         finishShape(node, scope, b, f, "#000000");
         addGeom(f, { kind: "poly", m: f.m, rings: [pts] });
       });
@@ -509,21 +607,32 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       if (!text) return;
       f.shapes++;
       withLook(node, scope, f, x, y, () => {
-        g.font = f.font(labelWeight(strOf(node, "weight", scope)), size);
+        const italic = strOf(node, "style", scope) === "italic";
+        g.font = (italic ? "italic " : "") + f.font(labelWeight(strOf(node, "weight", scope)), size);
         const align = strOf(node, "align", scope);
         g.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
         g.textBaseline = "middle";
         const w = g.measureText(text).width;
         const left = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
         const b = { x: left, y: y - size / 2, w, h: size };
-        const fill = paintOf(node.props.fill === undefined ? "#000000" : strOf(node, "fill", scope), b, f, scope);
-        if (fill) {
-          const deep = depthOn(node, scope, f, solidOf(node.props.fill === undefined ? "#000000" : strOf(node, "fill", scope), f, scope));
-          g.fillStyle = fill; g.fillText(text, x, y);
-          if (deep) depthOff(g);
-        }
+        const fillRaw = node.props.fill === undefined ? "#000000" : strOf(node, "fill", scope);
+        const fill = paintOf(fillRaw, b, f, scope);
         const stroke = paintOf(node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), b, f, scope);
-        if (stroke) { g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.strokeText(text, x, y); }
+        // An outline goes under the words, so it frames the letters instead of eating into them.
+        // A shadow or glow is cast by the solid words, as before: with an outline too, they cast it first,
+        // then the outline and the words go on top of it.
+        const deep = depthOn(node, scope, f, solidOf(fill ? fillRaw : node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), f, scope));
+        if (deep && fill && stroke) { g.fillStyle = fill; g.fillText(text, x, y); depthOff(g); }
+        if (stroke) {
+          g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.lineJoin = "round";
+          g.strokeText(text, x, y);
+          if (deep && !fill) depthOff(g);
+        }
+        if (fill) {
+          g.fillStyle = fill; g.fillText(text, x, y);
+          if (deep && !stroke) depthOff(g);
+        }
+        if (deep && !fill && !stroke) depthOff(g);
         addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
         if (node.props.id !== undefined) f.ends.set(node.props.id.trim(), apply(f.m, left + w, y));
         if (f.press) for (const r of f.press.open) r.words.push(text);
@@ -550,8 +659,11 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       });
       return;
     }
+    // Particles are never copied into a trail: they'd spend the scene's particle budget on faint ghosts.
+    case "emit": if (f.features?.particles !== false && !f.trails?.inCopy) drawEmit(node, scope, f); return;
     case "group":
     case "use": {
+      if (node.props.reflect !== undefined && f.reflecting !== node && f.features?.reflect !== false && f.offscreen && !f.trails?.inCopy) drawReflection(node, scope, f, drawAll, numOf);
       let kids = node.children, inner = scope;
       if (node.type === "use") {
         const d = node.text === undefined ? undefined : f.defs.get(node.text);
@@ -567,7 +679,11 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       const g2 = f.g;
       const was = f.m;
       g2.save();
-      const gx = n("x"), gy = n("y");
+      let gx = n("x"), gy = n("y");
+      if (node.props.shake !== undefined && f.motion) {
+        const [sx, sy] = shakeOffset(n("shake"), shakeSeed(node.id), f.time);
+        gx += sx; gy += sy;
+      }
       g2.translate(gx, gy);
       f.m = translate(f.m, gx, gy);
       const deg = n("rotate");
@@ -595,7 +711,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
           if (args) rec.locate = (name) => (args(name) !== scope(name) ? null : outer(name));
         }
       }
-      drawAll(kids, inner, f);
+      if (f.trails?.inCopy || !drawBlurred(node, scope, kids, inner, f, drawAll, numOf)) drawAll(kids, inner, f);
       if (node.type === "use") { f.useDepth--; if (rec && outer) { rec.copy.pop(); rec.locate = outer; } }
       g2.restore();
       f.m = was;
@@ -612,10 +728,15 @@ export function paintScene(f: Frame, nodes: readonly SayShapeNode[], scope: Scop
   if (f.press) f.press.alpha = f.g.globalAlpha;
   const fill = paintOf(bg, { x: 0, y: 0, w, h }, f, scope);
   if (fill) { f.g.fillStyle = fill; f.g.fillRect(0, 0, w, h); }
+  if (f.shake && f.motion) {
+    const [dx, dy] = shakeOffset(f.shake, shakeSeed(f.sceneId ?? ""), f.time);
+    f.g.translate(dx, dy);
+    f.m = translate(f.m, dx, dy);
+  }
   drawAll(nodes, scope, f);
 }
 
 /** A label's canvas weight: bold 800, light 300, anything else regular (500, a little firmer than body text on a picture). */
 export function labelWeight(weight: string | undefined): number {
-  return weight === "bold" ? 800 : weight === "light" ? 300 : 500;
+  return weight === "bold" ? 800 : weight === "heavy" ? 900 : weight === "light" ? 300 : 500;
 }

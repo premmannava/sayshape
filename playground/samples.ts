@@ -15,7 +15,7 @@ state customers=[{id:"acme",name:"Acme Co",plan:"Pro",revenue:18400,status:"Acti
 state plans=[{id:"all",name:"All plans"},{id:"Basic",name:"Basic"},{id:"Pro",name:"Pro"},{id:"Team",name:"Team"}]
 derive eligible={onlyActive ? filter(customers, 'status', 'Active') : customers}
 derive shown={plan == 'all' ? search(eligible, 'name', query) : filter(search(eligible, 'name', query), 'plan', plan)}
-card
+column gap=14
   row align=top
     column gap=4
       text "Executive overview" style=title
@@ -580,7 +580,7 @@ card
     label: "Inventory",
     prompt: "An equipment inventory table I can sort by any column, where picking a row shows that item's details.",
     spec: `state equipment=[{id: "laptop", name: "Laptop", category: "Computers", price: 1200, stock: 12}, {id: "monitor", name: "27-inch monitor", category: "Displays", price: 350, stock: 24}, {id: "dock", name: "USB-C dock", category: "Accessories", price: 189.5, stock: 0}, {id: "keyboard", name: "Keyboard", category: "Accessories", price: 79, stock: 41}, {id: "headset", name: "Headset", category: "Audio", price: 129, stock: 7}, {id: "webcam", name: "Webcam", category: "Video", price: 95, stock: 3}] selected="laptop" sortField="name" sortDirection="asc"
-card
+column gap=14
   text "Equipment" style=title
   text "{len(equipment)} items, sorted by {sortField} ({sortDirection == 'asc' ? 'low to high' : 'high to low'})" tone=muted
   table items=equipment key=id bind=selected sort=sortField direction=sortDirection on="emit:selected:{selected}"
@@ -621,7 +621,7 @@ card
     prompt: "Help me pick a storage plan, then show where my order is.",
     spec: `state view="Compare" page=0
 state plans=[{name: "Basic", price: 9, storage: 50, support: "Email", backup: false}, {name: "Pro", price: 19, storage: 500, support: "Chat", backup: true}, {name: "Team", price: 49, storage: 2000, support: "Phone", backup: true}]
-card
+column gap=14
   text "Choose a storage plan" style=title
   segmented bind=view options="Compare,Browse,Order"
   if={view == 'Compare'}
@@ -702,7 +702,7 @@ card
   stepper "Quantity" bind=qty min=1 max=10
   date-picker "Delivery date" bind=needBy min="2026-11-02" max="2027-12-31" placeholder="Choose a delivery date"
   input "Note" bind=note placeholder="What is it for?"
-  card if={item != ''}
+  column gap=4 if={item != ''}
     text "Summary" weight=semibold
     text "{plural(qty, find(items, 'id', item).name)}"
     text "{needBy == '' ? 'Pick a delivery date' : 'Delivered by ' + needBy}" tone={needBy == '' ? 'warn' : 'muted'}
