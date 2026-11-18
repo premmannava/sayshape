@@ -359,7 +359,7 @@ const label: ComponentDef = {
     x: num("Where it's anchored, across."),
     y: num("Its middle, down."),
     size: num("Text size in scene pixels.", 16),
-    weight: { type: "enum", values: ["regular", "bold"], description: "regular or bold.", default: "regular" },
+    weight: { type: "enum", values: ["light", "regular", "bold"], description: "light (large calm figures: 72°, a clock), regular or bold.", default: "regular" },
     align: { type: "enum", values: ["left", "center", "right"], description: "Which end of the words sits at x.", default: "left" },
     ...PAINT,
     ...PRESS_SHAPE,

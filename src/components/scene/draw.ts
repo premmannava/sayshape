@@ -467,7 +467,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       if (!text) return;
       f.shapes++;
       withLook(node, scope, f, x, y, () => {
-        g.font = f.font(strOf(node, "weight", scope) === "bold" ? 800 : 500, size);
+        g.font = f.font(labelWeight(strOf(node, "weight", scope)), size);
         const align = strOf(node, "align", scope);
         g.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
         g.textBaseline = "middle";
@@ -539,4 +539,9 @@ export function paintScene(f: Frame, nodes: readonly SayShapeNode[], scope: Scop
   const fill = paintOf(bg, { x: 0, y: 0, w, h }, f, scope);
   if (fill) { f.g.fillStyle = fill; f.g.fillRect(0, 0, w, h); }
   drawAll(nodes, scope, f);
+}
+
+/** A label's canvas weight: bold 800, light 300, anything else regular (500, a little firmer than body text on a picture). */
+export function labelWeight(weight: string | undefined): number {
+  return weight === "bold" ? 800 : weight === "light" ? 300 : 500;
 }

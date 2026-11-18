@@ -26,6 +26,7 @@ export const LOOK_OPTIONS = {
     editorial: "serif headings over the app's own text, a little larger: magazines, stories, portfolios",
     classic: "serif headings and text: letters, menus, long reading",
     technical: "monospaced headings: developer tools, data, specs",
+    system: "the device's own interface font for everything: native-looking apps, widgets, phone screens",
   },
   shape: {
     sharp: "nearly square corners: precise, formal",
@@ -68,6 +69,8 @@ export function lookOptions(prop: LookProp): string[] {
 export const LOOK_FONTS = {
   serifDisplay: '"Fraunces", "Playfair Display", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif',
   serifText: '"Source Serif 4", "Source Serif Pro", Charter, "Bitstream Charter", "Iowan Old Style", Georgia, serif',
+  /** The platform's UI face: San Francisco on Apple devices, Segoe UI on Windows, Roboto on Android. Always installed, so never fetched. */
+  system: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif',
 } as const;
 
 const SPACE_SCALE = { compact: 0.75, airy: 1.35 } as const;
@@ -128,6 +131,8 @@ function lookPatch(t: Theme, look: Look): DeepPartial<Theme> {
     patch.text = { display: Math.round(t.text.display * EDITORIAL_TEXT.display), title: Math.round(t.text.title * EDITORIAL_TEXT.title) };
   } else if (look.type === "classic") {
     patch.font = { family: LOOK_FONTS.serifText, display: LOOK_FONTS.serifText };
+  } else if (look.type === "system") {
+    patch.font = { family: LOOK_FONTS.system, display: LOOK_FONTS.system };
   } else if (look.type === "technical") {
     // The host's own monospaced stack, so it's a face the host already uses.
     patch.font = { display: t.font.mono };

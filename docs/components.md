@@ -287,7 +287,7 @@ A paragraph or heading that wraps to the available width. Use {expressions} to s
 |---|---|---|
 | `"text"` | text, required | The words to show. May include {expressions}. |
 | `style` | `display` / `title` / `lead` / `body` / `caption` | display, title, lead, body or caption. |
-| `weight` | `regular` / `semibold` / `bold` | regular, semibold or bold. Titles default to semibold. |
+| `weight` | `light` / `regular` / `semibold` / `bold` | light, regular, semibold or bold. Titles default to semibold; light suits a large figure in style=display (72°, $1,240). |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `align` | `left` / `center` / `right` | left, center or right. |
 | `strike` | boolean | Draw a line through the text, e.g. for an old price. |
@@ -418,6 +418,7 @@ A labelled number, for key figures like totals or counts. Add change= to show ho
 | `icon` | string | Icon name before the label. |
 | `detail` | string | A muted line under the figure. |
 | `short` | boolean | Shorten 1,250,000 to 1.25M; false keeps it as given. |
+| `weight` | `light` / `regular` / `semibold` | How heavy the figure is: semibold (default), regular, or light for a large, calm number like a temperature, a price or a clock. |
 
 ```
 state price=24 qty=2
