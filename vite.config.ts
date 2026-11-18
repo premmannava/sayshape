@@ -37,14 +37,30 @@ export default defineConfig(({ mode }) => {
           slides: resolve(__dirname, "src/components/slides/index.ts"),
           testing: resolve(__dirname, "src/testing/index.ts"),
           model: resolve(__dirname, "src/model/index.ts"),
+          // Framework wrappers: each its own entry, with the framework left to the host
+          // (an optional peer dependency), so the core bundle never contains framework code.
+          react: resolve(__dirname, "src/react/index.tsx"),
+          element: resolve(__dirname, "src/element/index.ts"),
+          vue: resolve(__dirname, "src/vue/index.ts"),
+          svelte: resolve(__dirname, "src/svelte/index.ts"),
         },
         formats: ["es"],
+      },
+      rollupOptions: {
+        external: [/^react(-dom)?(\/.*)?$/, /^vue(\/.*)?$/, /^svelte(\/.*)?$/],
+        // Rollup drops "use client" from modules it bundles; put it back on the React entry,
+        // so Next.js treats sayshape/react as a client component.
+        output: { banner: (chunk) => (chunk.isEntry && chunk.name === "react" ? `"use client";` : "") },
+        onwarn(warning, warn) {
+          if (warning.code === "MODULE_LEVEL_DIRECTIVE" && warning.message.includes("use client")) return;
+          warn(warning);
+        },
       },
       sourcemap: true,
     },
     test: {
       environment: "node",
-      include: ["test/**/*.test.ts"],
+      include: ["test/**/*.test.ts", "test/**/*.test.tsx"],
       benchmark: { include: ["bench/**/*.bench.ts"] },
     },
   };

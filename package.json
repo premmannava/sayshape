@@ -55,6 +55,22 @@
       "types": "./dist/types/model/index.d.ts",
       "import": "./dist/model.js"
     },
+    "./react": {
+      "types": "./dist/types/react/index.d.ts",
+      "import": "./dist/react.js"
+    },
+    "./element": {
+      "types": "./dist/types/element/index.d.ts",
+      "import": "./dist/element.js"
+    },
+    "./vue": {
+      "types": "./dist/types/vue/index.d.ts",
+      "import": "./dist/vue.js"
+    },
+    "./svelte": {
+      "types": "./dist/types/svelte/index.d.ts",
+      "import": "./dist/svelte.js"
+    },
     "./global": "./dist/sayshape.global.js",
     "./map/global": "./dist/sayshape-map.global.js"
   },
@@ -96,6 +112,26 @@
     "verify:pack": "node scripts/verify-pack.mjs",
     "token-bench": "vite-node scripts/token-bench.ts --"
   },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "svelte": ">=4",
+    "vue": ">=3.3"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@a2ui/lit": "0.15.0",
     "@a2ui/markdown-it": "0.2.2",
@@ -104,13 +140,20 @@
     "@fontsource/instrument-sans": "5.3.0",
     "@fontsource/inter": "5.3.0",
     "@playwright/test": "1.56.1",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
     "@types/jsdom": "21.1.7",
     "@types/node": "22.9.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "d3-geo": "^3.1.1",
     "fast-check": "4.3.0",
     "gifenc": "^1.0.3",
     "gpt-tokenizer": "4.1.2",
     "jsdom": "25.0.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "svelte": "5.57.3",
     "topojson-client": "^3.1.0",
     "topojson-server": "^3.0.1",
     "topojson-simplify": "^3.0.3",
@@ -119,6 +162,7 @@
     "vite": "5.4.10",
     "vite-node": "^2.1.4",
     "vitest": "2.1.4",
+    "vue": "3.5.45",
     "world-atlas": "^2.0.2"
   },
   "overrides": {
