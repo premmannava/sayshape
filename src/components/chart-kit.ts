@@ -176,6 +176,12 @@ export function niceStep(raw: number): number {
   return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
 }
 
+/**
+ * On bar scales, the share of a step that must be left above the tallest bar
+ * (and below the deepest): about the height of the value label over it.
+ */
+export const BAR_HEADROOM = 0.4;
+
 /** Clean float noise (0.1 + 0.2) from a tick without toFixed, which fails past 100 digits. */
 function cleanTick(v: number, step: number): number {
   if (Math.abs(v) < step * 1e-9) return 0;
@@ -199,7 +205,14 @@ export function chartScale(values: readonly number[], kind: Kind, target: number
   }
   // Halves, so a range like -1e308..1e308 doesn't overflow to Infinity.
   const step = niceStep((hi / 2 - lo / 2) / Math.max(1, target) * 2);
-  const first = Math.floor(lo / step + 1e-9), last = Math.ceil(hi / step - 1e-9);
+  let first = Math.floor(lo / step + 1e-9), last = Math.ceil(hi / step - 1e-9);
+  // Bars: room for the value written over the tallest (and under the deepest)
+  // bar. Without it a bar that reaches the top tick gets its label inside while
+  // the others' sit above; one more step when the end is that close.
+  if (kind === "bar") {
+    if (hi > 0 && last * step - hi < step * BAR_HEADROOM) last++;
+    if (lo < 0 && lo - first * step < step * BAR_HEADROOM) first--;
+  }
   const ticks: number[] = [];
   // Count steps with k, not first + k: past 2^53, adding 1 to first changes nothing.
   const count = last - first;

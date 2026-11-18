@@ -53,3 +53,17 @@ describe("fills meet the 0 line", () => {
     expect(fills[0]!.gradientStops!.map((s) => s.offset)).toEqual([0, 1]);
   });
 });
+
+describe("bar headroom", () => {
+  it("adds a step over a value that reaches the top tick, and under one that reaches the bottom", async () => {
+    const { chartScale, BAR_HEADROOM } = await import("../src/components/chart-kit");
+    const up = chartScale([0, 12, 38, 40], "bar", 4);
+    expect(up.max - 40).toBeGreaterThanOrEqual(up.step * BAR_HEADROOM);
+    const down = chartScale([-40, 10], "bar", 4);
+    expect(-40 - down.min).toBeGreaterThanOrEqual(down.step * BAR_HEADROOM);
+    // Room already there: the scale stays as it was.
+    expect(chartScale([0, 35], "bar", 4).max).toBe(40);
+    // Lines are scaled to their values, with no headroom.
+    expect(chartScale([10, 40], "line", 4).max).toBe(40);
+  });
+});
