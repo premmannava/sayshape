@@ -5,8 +5,11 @@
  * call their model themselves. Nothing here is used by the engine itself; it's
  * for apps and tools.
  */
-export { generateSpec, repairPrompt, type Attempt, type GenerateOptions, type GenerateResult, type Phase } from "./generate";
+export { generateSpec, repairPrompt, type Attempt, type EditReport, type GenerateOptions, type GenerateResult, type Phase } from "./generate";
 export { refineMessages, nextRefineContext, sumUsage, DEFAULT_MAX_CHANGES, type RefineContext, type ContextPolicy, type ContextInfo, type UsageTotals } from "./context";
 export { cachedPrompt, type CachedPrompt, type CachedPromptOptions, type CacheTtl, type TextBlock } from "./cache";
 export { streamChat, ModelError, type ChatMessage, type ModelConfig, type StreamPart, type Usage } from "./stream";
 export { SpecFilter, sayShapeLineTest, tidySpec, type FilterOutput } from "./clean";
+export { refineEditMessages, parseEdits, applyEdits, numberSpec, wholeSpecFrom, type LineEdit } from "./edits";
+export { generateSections, parsePlan, planText, plannerInstructions, sectionInstructions, DEFAULT_MAX_SECTIONS, MAX_SECTIONS_LIMIT, type Plan, type SectionsOptions, type SectionsResult, type SectionsCost, type SectionCall, type CallRole } from "./sections";
+export { generateReport, asksForFullGuide, type ReportOptions, type ReportResult } from "./report";

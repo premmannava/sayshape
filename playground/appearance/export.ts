@@ -16,7 +16,7 @@ export type ExportPlan =
   | { mode: "system"; light: Colors; dark: Colors };
 
 export function exportPlan(p: AppearancePrefs): ExportPlan {
-  const changes = (s: Scheme) => resolveTheme(p.preset, s, p.accent).changes;
+  const changes = (s: Scheme) => resolveTheme(p.preset, s, p.accent ? [p.accent] : null).changes;
   return p.mode === "system" ? { mode: "system", light: changes("light"), dark: changes("dark") } : { mode: p.mode, changes: changes(p.mode) };
 }
 

@@ -1,11 +1,11 @@
 /**
  * The playground's style presets and how a preset, a mode and an optional
- * custom accent become a SayShape Theme. Themes are built with SayShape's own
+ * brand colors become a SayShape Theme. Themes are built with SayShape's own
  * extendTheme from a base pair (SayShape's light and dark themes, or Studio's),
  * changing color tokens only.
  */
 import { darkTheme, extendTheme, lightTheme, studioDarkTheme, studioLightTheme, type Theme } from "../../src/theme";
-import { contrast, effectiveAccent, mix, over, TEXT_CONTRAST, UI_CONTRAST } from "./color";
+import { colorList, contrast, deriveSeries, effectiveAccent, luminance, mix, over, TEXT_CONTRAST, UI_CONTRAST } from "./color";
 
 export type PresetId = "teal" | "purple" | "blue" | "neutral" | "studio";
 export type Mode = "light" | "dark" | "system";
@@ -64,34 +64,57 @@ export interface Resolved {
   theme: Theme;
   /** Only the color tokens that differ from SayShape's base theme for this scheme. */
   changes: Colors;
-  /** The accent asked for, and whether it had to be adjusted to be readable in this scheme. */
+  /** The first color asked for (the accent), and whether it had to be adjusted to be readable in this scheme. */
   requestedAccent: string | null;
   accentAdjusted: boolean;
 }
 
 /**
- * The theme for a preset in a scheme, with a custom accent if one was asked
- * for. The requested accent is resolved separately in each scheme, so the
- * same request can stay as is in one and be adjusted in the other.
+ * The surface a chart's colors must read on in a scheme: of the surface and
+ * the raised (card) color, the one they have the least contrast with, so
+ * colors readable on it are readable on both. Series are lighter than the
+ * background in dark mode (the lighter of the two is then the harder) and
+ * darker in light mode.
  */
-export function resolveTheme(presetId: PresetId, scheme: Scheme, accent: string | null): Resolved {
+function chartSurface(colors: Theme["colors"], scheme: Scheme): string {
+  const surfaceFirst = luminance(colors.surface) <= luminance(colors.raised);
+  return surfaceFirst === (scheme === "light") ? colors.surface : colors.raised;
+}
+
+const SERIES_KEYS = ["series1", "series2", "series3", "series4", "series5", "series6"] as const;
+
+/**
+ * The theme for a preset in a scheme, with brand colors if some were asked
+ * for: a list of 1 to 6 hex colors, most important first. Entries that aren't
+ * hex colors are ignored, and so is anything past six; with no usable color
+ * the preset is left as it is. The first does what an accent does: the
+ * accent, the text on it, the map's highlight and the first chart series. The
+ * series come from deriveSeries: the colors given, in order, then ones worked
+ * out from the first. Nothing else changes. The colors are resolved
+ * separately in each scheme, so the same request can stay as is in one and
+ * be adjusted in the other.
+ */
+export function resolveTheme(presetId: PresetId, scheme: Scheme, colors: readonly string[] | null): Resolved {
   const preset = presetById(presetId) ?? PRESETS[0]!;
   const base = baseTheme(scheme, preset);
   const changes: Colors = { ...preset[scheme] };
+  const given = colorList(colors);
   let accentAdjusted = false;
-  if (accent) {
-    const e = effectiveAccent(accent, base.colors.surface);
+  if (given.length) {
+    // The accent is made readable on the surface, as it always was; the other series on the harder of surface and raised.
+    const e = effectiveAccent(given[0]!, base.colors.surface);
     accentAdjusted = e.adjusted;
     changes.accent = e.accent;
     changes.onAccent = e.onAccent;
     // The map's highlighted country follows the accent, softened toward the surface.
     changes.landHighlight = mix(e.accent, base.colors.surface, scheme === "dark" ? 0.6 : 0.65);
+    deriveSeries(given, chartSurface(base.colors, scheme), scheme, base.colors.surface).forEach((c, i) => { changes[SERIES_KEYS[i]!] = c; });
   }
   // Keep only real differences, so the default exports as nothing to change.
   for (const k of Object.keys(changes) as Array<keyof Theme["colors"]>) {
     if (changes[k]?.toLowerCase() === base.colors[k].toLowerCase()) delete changes[k];
   }
-  return { theme: extendTheme(base, { colors: changes }), changes, requestedAccent: accent, accentAdjusted };
+  return { theme: extendTheme(base, { colors: changes }), changes, requestedAccent: given[0] ?? null, accentAdjusted };
 }
 
 export interface ContrastCheck {

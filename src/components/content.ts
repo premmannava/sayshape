@@ -1,13 +1,13 @@
-import type { ComponentDef, LayoutContext, PaintContext } from "../component";
+import type { ComponentDef, LayoutContext, PaintContext, PropReader } from "../component";
 import type { TextMeasurer } from "../text";
 import type { Theme } from "../theme";
-import type { Box, Rect, Value } from "../types";
+import type { Box, Rect, SayShapeNode, Value } from "../types";
 import { isList, isRecord } from "../data";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
 import { easeOut, paintGhost } from "../ghost";
 import { traceSmoothLine } from "./chart";
-import { fillTint, iconProblems, iconProp, partBox, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, WEIGHTS } from "./util";
+import { detailProp, fillTint, iconBefore, iconProblems, iconProp, paintPill, partBox, PILL_TONES, PILL_VARIANTS, pillWidth, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, WEIGHTS } from "./util";
 import { drawIcon, ICON_NAMES, isIconName, type IconName } from "../icons";
 import { looksRich, parseRich, plainOf, wrapRich, type RichLine, type RichStyle, type Run } from "../rich";
 import type { PartSemantics } from "../a11y/semantics";
@@ -59,18 +59,18 @@ text "**Free** cancellation until *2 days* before; see [the terms](https://north
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const m = textMetrics(ctx.theme, p.oneOf("style", TEXT_STYLES, "body"), p.has("weight") ? p.oneOf("weight", WEIGHTS, "regular") : undefined);
-    const f = `${m.weight} ${m.size}px ${ctx.theme.font.family}`;
+    const f = `${m.weight} ${m.size}px ${m.family}`;
     const icon = textIcon(p.str("icon"), m.size);
     const width = Math.max(0, box.w - (icon ? icon.indent : 0));
     if (p.bool("rich")) {
       // Markers come from the spec's own words; values from state are filled in as plain words.
       const runs = parseRich(p.template(), (t) => p.fill(t));
-      const fontOf = richFont(ctx.theme, m.weight, m.size);
+      const fontOf = richFont(ctx.theme, m.weight, m.size, m.family);
       const lines = wrapRich(runs, width, fontOf, ctx.measure);
       const links: RichText["links"] = [];
       for (const r of runs) if (r.link !== undefined && !links.some((l) => l.index === r.link)) links.push({ index: r.link, text: runs.filter((x) => x.link === r.link).map((x) => x.text).join(""), href: r.href! });
       const rich: RichText = { runs, lines: lines, links };
-      box.data = { lines: [], font: f, lineHeight: m.lineHeight, icon, rich, weight: m.weight, size: m.size };
+      box.data = { lines: [], font: f, lineHeight: m.lineHeight, icon, rich, weight: m.weight, size: m.size, family: m.family };
       box.h = Math.max(1, lines.length) * m.lineHeight;
       return;
     }
@@ -86,7 +86,7 @@ text "**Free** cancellation until *2 days* before; see [the terms](https://north
     // Rich text needs its longest word as shown, without markers or link addresses.
     const shown = p.bool("rich") ? parseRich(p.template(), (t) => p.fill(t)).map((r) => r.text).join("") : p.text();
     const words = shown.split(/\s+/).filter(Boolean);
-    return Math.min(100, Math.max(0, ...words.map((w) => textWidth(ctx, w, m.weight, m.size))));
+    return Math.min(100, Math.max(0, ...words.map((w) => ctx.measure.width(w, `${m.weight} ${m.size}px ${m.family}`))));
   },
   press(ctx) {
     // A link in rich text: sent to the host as emit:link with its address. SayShape never opens it.
@@ -147,23 +147,23 @@ function richSegments(runs: readonly Run[]): Array<{ key: string; text: string }
 }
 
 /** The font for a styled stretch of rich text, from the text's own weight and size. */
-function richFont(theme: Theme, weight: number, size: number): (s: RichStyle) => string {
+function richFont(theme: Theme, weight: number, size: number, family: string): (s: RichStyle) => string {
   return (s) => s.code
     ? `${s.bold ? 700 : 500} ${Math.max(10, size - 1)}px ${theme.font.mono}`
-    : `${s.italic ? "italic " : ""}${s.bold ? Math.max(700, weight) : weight} ${size}px ${theme.font.family}`;
+    : `${s.italic ? "italic " : ""}${s.bold ? Math.max(700, weight) : weight} ${size}px ${family}`;
 }
 
 /** Rich text: each stretch in its own font, code on a faint pill, links in the accent and underlined. */
 function paintRich(box: Box, ctx: PaintContext): void {
   const p = ctx.props(box.node);
-  const d = box.data as { rich: RichText; lineHeight: number; icon: TextIcon | null; weight: number; size: number };
+  const d = box.data as { rich: RichText; lineHeight: number; icon: TextIcon | null; weight: number; size: number; family: string };
   const { g, theme } = ctx;
   const c = theme.colors;
   const color = toneColor(theme, p.oneOf("tone", TONES, "default"));
   const align = p.oneOf("align", ALIGN, "left");
   const left = box.x + (d.icon ? d.icon.indent : 0);
   if (d.icon) drawIcon(g, d.icon.name, box.x, box.y + (d.lineHeight - d.icon.size) / 2, d.icon.size, color);
-  const fontOf = richFont(theme, d.weight, d.size);
+  const fontOf = richFont(theme, d.weight, d.size, d.family);
   g.textBaseline = "middle";
   g.textAlign = "left";
   const linkSeen = new Set<number>();
@@ -254,20 +254,24 @@ export const stat: ComponentDef = {
       type: "expression",
       description: "A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]}, spark=weekly, or from a list of records spark={pluck(sales, 'revenue')}.",
     },
+    icon: iconBefore("label"),
+    detail: detailProp("figure"),
+    short: { type: "boolean", default: true, description: "Shorten 1,250,000 to 1.25M; false keeps it as given." },
   },
   picks: [
     { for: "a headline number with its change and recent trend", write: "stat change=\"+12%\" spark=weekly" },
   ],
   example: `state price=24 qty=2
 stat label="Total" value="\${price*qty}"`,
+  check: (props) => iconProblems(props.icon, "icon"),
   semantics(box, ctx) {
     const p = ctx.props(box.node);
-    const change = p.str("change");
-    return { role: "text", name: `${p.str("label")}: ${p.str("value")}${change ? `, ${change}` : ""}` };
+    const change = p.str("change"), detail = p.str("detail");
+    return { role: "text", name: `${p.str("label")}: ${p.str("value")}${change ? `, ${change}` : ""}${detail ? `, ${detail}` : ""}` };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    const d = statLayout(p.str("label"), p.str("value"), box.w, ctx.theme, ctx.measure);
+    const d = statLayout(p.str("label"), statValue(p), box.w, ctx.theme, ctx.measure, statHint.get(box.node), statExtra(p));
     if (!p.has("change") && !p.has("spark") && !p.has("trend")) {
       box.data = { ...d };
       box.h = d.height;
@@ -281,8 +285,8 @@ stat label="Total" value="\${price*qty}"`,
     // What its label and its value need at the smallest size, so "Days 2" stays small; long values wrap below 110.
     const p = ctx.props(node);
     const label = p.str("label");
-    const labelW = textWidth(ctx, label, 400, STAT_LABEL);
-    const valueW = textWidth(ctx, p.str("value"), STAT_WEIGHT, statSizes(ctx.theme).at(-1)!);
+    const labelW = textWidth(ctx, label, 400, STAT_LABEL) + (isIconName(p.str("icon")) ? STAT_ICON + STAT_ICON_GAP : 0);
+    const valueW = textWidth(ctx, statValue(p), STAT_WEIGHT, statSizes(ctx.theme).at(-1)!);
     return Math.max(40, Math.min(110, Math.max(labelW, valueW)));
   },
   paint(box, ctx) {
@@ -295,7 +299,17 @@ stat label="Total" value="\${price*qty}"`,
     g.textBaseline = "alphabetic";
     g.font = ctx.font(400, STAT_LABEL);
     g.fillStyle = ctx.theme.colors.muted;
-    d.label.forEach((l, i) => g.fillText(l, x, box.y + 12 + i * STAT_LABEL_LH));
+    // An icon leads the first line of the label; centred, the pair is centred together.
+    const iconName = p.str("icon");
+    const lead = d.labelIndent && isIconName(iconName) ? d.labelIndent : 0;
+    const labelW = lead && center ? Math.max(...d.label.map((l) => g.measureText(l).width), 0) : 0;
+    const lx = lead && center ? x - (labelW + lead) / 2 : x;
+    if (lead) {
+      g.textAlign = "left";
+      drawIcon(g, iconName as IconName, lx, box.y + 12 - STAT_ICON + 3, STAT_ICON, ctx.theme.colors.muted);
+    }
+    d.label.forEach((l, i) => g.fillText(l, lx + lead, box.y + 12 + i * STAT_LABEL_LH));
+    if (lead && center) g.textAlign = "center";
     const extra = (box.data as Partial<StatExtras>).extras ? (box.data as unknown as StatExtras) : null;
     if (ctx.isLoading(box.node)) {
       // The figure is on its way: a placeholder where it will be.
@@ -331,6 +345,13 @@ stat label="Total" value="\${price*qty}"`,
       g.fillText(shown, vx, box.y + d.valueTop + d.valueLH * (i + 1) + rise);
     });
     if (extra) paintStatExtras(box, ctx, extra, { x, vx, center, reveal, rise, base });
+    if (d.detail.length) {
+      g.font = ctx.font(400, STAT_DETAIL_SIZE);
+      g.fillStyle = ctx.theme.colors.muted;
+      g.textAlign = center ? "center" : "left";
+      g.textBaseline = "alphabetic";
+      d.detail.forEach((l, i) => g.fillText(l, x, box.y + d.detailTop + STAT_DETAIL_LH * (i + 1) - 5 + rise));
+    }
     g.globalAlpha = base;
   },
   paintLoading(box, ctx) {
@@ -390,22 +411,82 @@ export function statSizes(theme: Theme): number[] {
   const top = Math.min(STAT_SIZES[0]!, theme.text.display);
   return [top, ...STAT_SIZES.filter((s) => s < top)];
 }
+/**
+ * How a stat should match the stats beside it: no figure larger than size,
+ * and its figure placed as if its label had labelLines lines. Set by a
+ * container that lines its stats up (a slide), read at layout.
+ */
+export interface StatHint { size?: number; labelLines?: number }
+export const statHint = new WeakMap<SayShapeNode, StatHint>();
+
+// Inside a slide (theme.zoom) a stat's own sizes are too small beside slide-sized text: it's laid
+// out at its usual sizes in a narrower box and drawn scaled up about its top left, so every part
+// of it (label, figure, change, sparkline) grows together.
+const statZoom = (t: Theme): number => (t.zoom !== undefined && t.zoom > 1 ? t.zoom : 1);
+{
+  const layoutAt = stat.layout, paintAt = stat.paint, loadingAt = stat.paintLoading, minAt = stat.minWidth;
+  stat.layout = (box, ctx) => {
+    const z = statZoom(ctx.theme);
+    if (z === 1 || !layoutAt) { layoutAt?.(box, ctx); return; }
+    const inner: Box = { ...box, w: box.w / z };
+    layoutAt(inner, ctx);
+    box.data = inner.data;
+    box.h = inner.h * z;
+  };
+  const zoomed = (draw: typeof paintAt): typeof paintAt => draw && ((box, ctx) => {
+    const z = statZoom(ctx.theme);
+    if (z === 1) { draw(box, ctx); return; }
+    const g = ctx.g;
+    g.save();
+    g.translate(box.x, box.y);
+    g.scale(z, z);
+    g.translate(-box.x, -box.y);
+    draw({ ...box, w: box.w / z, h: box.h / z }, ctx);
+    g.restore();
+  });
+  stat.paint = zoomed(paintAt);
+  stat.paintLoading = zoomed(loadingAt);
+  if (typeof minAt === "function") stat.minWidth = (node, ctx) => minAt(node, ctx) * statZoom(ctx.theme);
+}
+
 /** Figures are semibold: confident without the heaviness of bold at display sizes. */
 const STAT_WEIGHT = 600;
 /** The label is a quiet sentence-case caption above the figure. */
 const STAT_LABEL = 13, STAT_LABEL_LH = 17;
 
-interface StatLayout { label: string[]; value: string[]; size: number; valueLH: number; valueTop: number; height: number }
+interface StatLayout { label: string[]; value: string[]; size: number; valueLH: number; valueTop: number; height: number; labelIndent: number; detail: string[]; detailTop: number }
+
+/** A stat's icon before its label, and its detail line under the figure. */
+const STAT_ICON = 14, STAT_ICON_GAP = 6, STAT_DETAIL_LH = 17, STAT_DETAIL_GAP = 5, STAT_DETAIL_SIZE = 12;
+interface StatExtra { icon: string; detail: string }
+const statExtra = (p: PropReader): StatExtra => ({ icon: p.str("icon"), detail: p.str("detail") });
+
+/** The shortest a figure may be before it's written short: a million. */
+const STAT_SHORT_FROM = 1_000_000;
+
+/** What a stat shows as its value: a plain number of a million or more is written short (1,250,000 as 1.25M); any other text as given. */
+function statValue(p: PropReader): string {
+  const raw = p.str("value");
+  if (!p.bool("short", true)) return raw;
+  const m = /^([+\-−]?)\s*([$€£¥]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?$/.exec(raw.trim());
+  if (!m) return raw;
+  const n = Number(m[3]!.replace(/,/g, "") + (m[4] ?? ""));
+  if (!Number.isFinite(n) || n < STAT_SHORT_FROM) return raw;
+  try { return m[1]! + m[2]! + new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(n); } catch { return raw; }
+}
 
 /**
  * A stat's lines: the label (at most two lines) and the value at
  * the largest size that fits on one line, or wrapped at the smallest (at most
  * three lines). With a one-line label and value at full size it's 54 px tall.
  */
-export function statLayout(label: string, value: string, width: number, theme: Theme, m: TextMeasurer): StatLayout {
+export function statLayout(label: string, value: string, width: number, theme: Theme, m: TextMeasurer, like?: StatHint, extra?: StatExtra): StatLayout {
   const w = Math.max(20, width);
-  const labelLines = label ? fitLines(label, w, themeFont(theme, 400, STAT_LABEL), m, 2) : [];
-  const sizes = statSizes(theme);
+  const labelIndent = extra && isIconName(extra.icon) ? STAT_ICON + STAT_ICON_GAP : 0;
+  const labelLines = label ? fitLines(label, Math.max(20, w - labelIndent), themeFont(theme, 400, STAT_LABEL), m, 2) : [];
+  const all = statSizes(theme);
+  const capped = like?.size ? all.filter((s) => s <= like.size!) : all;
+  const sizes = capped.length ? capped : [all[all.length - 1]!];
   let size = sizes[sizes.length - 1]!;
   let lines: string[] | null = null;
   for (const s of sizes) {
@@ -413,8 +494,10 @@ export function statLayout(label: string, value: string, width: number, theme: T
   }
   lines ??= fitLines(value, w, themeFont(theme, STAT_WEIGHT, size), m, 3);
   const valueLH = Math.round(size * 1.3);
-  const valueTop = 12 + Math.max(0, labelLines.length - 1) * STAT_LABEL_LH;
-  return { label: labelLines, value: lines, size, valueLH, valueTop, height: valueTop + lines.length * valueLH + 6 };
+  const valueTop = 12 + Math.max(0, Math.max(labelLines.length, like?.labelLines ?? 0) - 1) * STAT_LABEL_LH;
+  const detail = extra?.detail ? fitLines(extra.detail, w, themeFont(theme, 400, STAT_DETAIL_SIZE), m, 2) : [];
+  const detailTop = valueTop + lines.length * valueLH + STAT_DETAIL_GAP;
+  return { label: labelLines, value: lines, size, valueLH, valueTop, labelIndent, detail, detailTop, height: valueTop + lines.length * valueLH + (detail.length ? STAT_DETAIL_GAP + detail.length * STAT_DETAIL_LH : 0) + 6 };
 }
 
 /** Space between a value and a change beside it. */
@@ -472,7 +555,46 @@ export function changeDirection(text: string): Trend | null {
   if (!m) return null;
   const n = Number(m[2]!.replace(/,/g, ""));
   if (!Number.isFinite(n) || n === 0) return "flat";
-  return m[1] === "-" || m[1] === "−" ? "down" : "up";
+  if (m[1]) return m[1] === "+" ? "up" : "down";
+  // No sign, but words that say which way: "0.25 below target" went down.
+  if (/\b(below|under|down|behind|short|less|fewer|lower)\b/i.test(text)) return "down";
+  return "up";
+}
+
+/**
+ * Just the figure in a change, with its sign, currency and unit: "1.35h" from
+ * "1.35h over target", "98.1%" from "98.1% of opened". What a pill shows when
+ * the whole text doesn't fit: a whole figure reads better than words cut short.
+ * Null when it holds no number.
+ */
+export function changeFigure(text: string): string | null {
+  const m = /[+\-−]?\s*[$€£¥]?\s*(?:\d[\d,]*(?:\.\d+)?|\.\d+)\s?(?:%|(?:days?|hours?|hrs?|mins?|minutes?|weeks?|months?|years?|points?|pts)(?![A-Za-z])|[A-Za-z]{1,3}(?![A-Za-z]))?/i.exec(text);
+  return m ? m[0].trim() : null;
+}
+
+/** From here up, a number in a change is written short (1.2M), like the numbers on charts. */
+const CHANGE_SHORT_FROM = 100_000;
+
+/**
+ * A change as its pill shows it: a big number written short ("+$1,234,567 vs
+ * last year" reads "+$1.2M vs last year") and a long fraction kept to two
+ * places ("+12.3456%" reads "+12.35%"). A pill is a glance at how far it
+ * moved; screen readers and Copy text keep the number as written.
+ */
+export function roundChange(text: string): string {
+  const m = /(\d[\d,]*(?:\.\d+)?|\.\d+)/.exec(text);
+  if (!m) return text;
+  const n = Number(m[1]!.replace(/,/g, ""));
+  if (!Number.isFinite(n)) return text;
+  const after = text.slice(m.index + m[1]!.length);
+  let shown: string | null = null;
+  // Already short as written (1,200K): left alone.
+  if (n >= CHANGE_SHORT_FROM && !/^\s?(?:[KMBT]|k|bn|mn)(?![A-Za-z])/.test(after)) {
+    try { shown = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n); } catch { shown = null; }
+  } else if (/\.\d{3,}$/.test(m[1]!)) {
+    shown = String(Math.round(n * 100) / 100);
+  }
+  return shown === null ? text : text.slice(0, m.index) + shown + after;
 }
 
 /** The arrow shown before a change. */
@@ -495,13 +617,18 @@ function statExtras(box: Box, d: StatLayout, ctx: LayoutContext): StatExtras & {
   if (p.has("change") && (raw || loading)) {
     const font = themeFont(t, 600, STAT_PILL_TEXT);
     const arrow = dir ? ARROWS[dir] : "";
-    const full = raw ? (arrow ? `${arrow} ${raw}` : raw) : "";
+    const rounded = roundChange(raw);
+    const full = rounded ? (arrow ? `${arrow} ${rounded}` : rounded) : "";
     // While loading, the size the placeholders take.
     const valueW = loading ? Math.min(w, Math.max(56, d.size * 3.2)) : m.width(d.value[0] ?? "", themeFont(t, STAT_WEIGHT, d.size));
     // The change sits in a tinted pill, so it reads as one figure beside the value.
     const natural = loading ? 48 : m.width(full, font) + STAT_PILL_X * 2;
     const inline = d.value.length === 1 && w >= STAT_INLINE_MIN && valueW + STAT_CHANGE_GAP + natural <= w;
-    const text = inline ? full : ellipsize(full, w - STAT_PILL_X * 2, font, m);
+    // Too long for its pill: the figure alone, whole, before cutting anything short.
+    const room = w - STAT_PILL_X * 2;
+    const figure = !inline && raw && m.width(full, font) > room ? changeFigure(rounded) : null;
+    const short = figure ? (arrow ? `${arrow} ${figure}` : figure) : full;
+    const text = inline ? full : ellipsize(short, room, font, m);
     const width = loading ? natural : m.width(text, font) + STAT_PILL_X * 2;
     // y is the pill's middle. Beside the value it lines up with the middle of the value's capitals.
     if (inline) change = { text, width, valueW, inline, y: bottom - d.size * 0.36 };
@@ -521,7 +648,10 @@ function statExtras(box: Box, d: StatLayout, ctx: LayoutContext): StatExtras & {
     if (!loading) spark.points = sparkPoints(p.expr("spark"), spark, box.node.line, ctx);
     bottom = sy + SPARK_H;
   }
-  return { ...d, extras: true, change, spark, dir, tone, height: bottom + 6 };
+  // The detail line goes under everything else.
+  const detailTop = bottom + STAT_DETAIL_GAP + (spark ? t.space.xs : 0);
+  if (d.detail.length) bottom = detailTop + d.detail.length * STAT_DETAIL_LH;
+  return { ...d, extras: true, change, spark, dir, tone, detailTop, height: bottom + 6 };
 }
 
 /** Where a sparkline's numbers go in its area. Anything that isn't a number is left out, with a warning. */
@@ -634,6 +764,16 @@ function paintStatExtrasLoading(box: Box, ctx: PaintContext, e: StatExtras, v: {
 
 /** A slim track: it's a measure, not a control. */
 const PROGRESS_H = 6;
+const PROGRESS_SHOWS = ["percent", "value"] as const;
+
+/** A progress bar's readout: 60% or 3 / 5, rounded to at most two places. */
+function progressReadout(p: PropReader): string {
+  const show = p.has("show") ? p.oneOf("show", PROGRESS_SHOWS, "percent") : null;
+  if (!show) return "";
+  const max = p.num("max", 100) || 1, value = p.num("value", 0);
+  const short = (n: number) => String(Math.round(n * 100) / 100);
+  return show === "percent" ? `${Math.round(Math.max(0, Math.min(1, value / max)) * 100)}%` : `${short(value)} / ${short(max)}`;
+}
 
 export const progress: ComponentDef = {
   type: "progress",
@@ -645,6 +785,7 @@ export const progress: ComponentDef = {
     max: { type: "number", default: 100, description: "The full amount (default 100)." },
     label: { type: "string", description: "Optional caption above the bar." },
     tone: toneProp,
+    show: { type: "enum", values: PROGRESS_SHOWS, description: "A readout: percent (60%) or value (3 / 5)." },
   },
   example: `state done=3
 progress value={done} max=5 label="{done} of 5 steps"`,
@@ -654,19 +795,24 @@ progress value={done} max=5 label="{done} of 5 steps"`,
     return { role: "progressbar", name: p.str("label") || ctx.textBefore() || "Progress", value: { now: p.num("value", 0), min: 0, max } };
   },
   layout(box, ctx) {
-    box.h = ctx.props(box.node).has("label") ? 20 + PROGRESS_H : PROGRESS_H;
+    const p = ctx.props(box.node);
+    box.h = p.has("label") || p.has("show") ? 20 + PROGRESS_H : PROGRESS_H;
   },
   minWidth: () => 80,
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const g = ctx.g;
     let y = box.y;
-    if (p.has("label")) {
+    if (p.has("label") || p.has("show")) {
       g.font = ctx.font(400, 13);
-      g.textAlign = "left";
       g.textBaseline = "top";
       g.fillStyle = ctx.theme.colors.muted;
-      g.fillText(fitText(g, p.str("label"), box.w), box.x, y);
+      // The readout sits at the right end of the label's line; the label gives way to it.
+      const readout = progressReadout(p);
+      const readoutW = readout ? g.measureText(readout).width + 12 : 0;
+      g.textAlign = "left";
+      if (p.has("label")) g.fillText(fitText(g, p.str("label"), Math.max(0, box.w - readoutW)), box.x, y);
+      if (readout) { g.textAlign = "right"; g.fillText(readout, box.x + box.w, y); }
       y += 20;
     }
     const max = p.num("max", 100) || 1;
@@ -684,13 +830,13 @@ progress value={done} max=5 label="{done} of 5 steps"`,
         fill.addColorStop(0, c.accent);
         fill.addColorStop(1, c.accent2);
         g.fillStyle = fill;
-      } else g.fillStyle = tone === "default" ? c.accent : toneColor(ctx.theme, tone);
+      } else g.fillStyle = tone === "default" ? c.accent : tone === "warn" ? c.warnFill : toneColor(ctx.theme, tone);
       g.fill();
     }
   },
 };
 
-const BADGE_TONES = ["accent", "good", "warn", "bad", "muted"] as const;
+const BADGE_TONES = PILL_TONES;
 
 export const badge: ComponentDef = {
   type: "badge",
@@ -699,43 +845,38 @@ export const badge: ComponentDef = {
   text: { description: "The label, one or two words.", required: true },
   props: {
     tone: { type: "enum", values: BADGE_TONES, default: "accent", description: "Color role: accent, good, warn, bad or muted." },
+    variant: { type: "enum", values: PILL_VARIANTS, default: "soft", description: "soft (tint), solid or outline." },
+    icon: iconBefore("label"),
   },
   example: `badge "Shipped" tone=good`,
+  check: (props) => iconProblems(props.icon, "icon"),
   semantics(box, ctx) {
     return { role: "text", name: ctx.props(box.node).text() };
   },
   layout(box, ctx) {
     box.h = BADGE_H;
     // A badge takes its label's width, so rows keep tags together instead of spreading them out.
-    box.w = Math.min(box.w, badgeWidth(ctx.props(box.node).text(), ctx));
+    box.w = Math.min(box.w, badgeWidth(ctx.props(box.node), ctx));
   },
-  minWidth: (node, ctx) => Math.min(140, badgeWidth(ctx.props(node).text(), ctx)),
+  minWidth: (node, ctx) => Math.min(140, badgeWidth(ctx.props(node), ctx)),
   paint(box, ctx) {
     const p = ctx.props(box.node);
-    const { g, theme } = ctx;
     const tone = p.oneOf("tone", BADGE_TONES, "accent");
-    const color = toneColor(theme, tone);
-    g.font = ctx.font(600, 12);
-    const label = p.text();
     // Layout already sized the box to the label.
-    const w = box.w;
-    ctx.roundRect(box.x, box.y, w, box.h, theme.radius.sm);
-    fillTint(g, color, tone === "muted" ? 0.1 : 0.12);
-    // A status dot leads the label, so the color reads at a glance even where tints are faint.
-    g.beginPath();
-    g.arc(box.x + BADGE_PAD + 3, box.y + box.h / 2, 3, 0, Math.PI * 2);
-    g.fillStyle = color;
-    g.fill();
-    g.textAlign = "left";
-    g.textBaseline = "middle";
-    g.fillText(fitText(g, label, w - BADGE_PAD * 2 - BADGE_DOT_ROOM), box.x + BADGE_PAD + BADGE_DOT_ROOM, box.y + box.h / 2 + 1);
+    paintPill(ctx, box, p.text(), toneColor(ctx.theme, tone), p.oneOf("variant", PILL_VARIANTS, "soft"), badgeLead(p));
   },
 };
 
-const BADGE_H = 22, BADGE_PAD = 8, BADGE_DOT_ROOM = 12;
+const BADGE_H = 22;
 
-function badgeWidth(label: string, ctx: LayoutContext): number {
-  return Math.ceil(textWidth(ctx, label, 600, 12) + BADGE_PAD * 2 + BADGE_DOT_ROOM);
+/** What starts a badge: its icon, else the status dot. */
+function badgeLead(p: PropReader): "dot" | IconName {
+  const icon = p.str("icon");
+  return isIconName(icon) ? icon : "dot";
+}
+
+function badgeWidth(p: PropReader, ctx: LayoutContext): number {
+  return pillWidth(ctx, p.text(), badgeLead(p));
 }
 
 const ICON_SIZES = { sm: 16, md: 20, lg: 28 } as const;
@@ -846,32 +987,75 @@ export const avatar: ComponentDef = {
 };
 
 const CODE_SIZE = 13, CODE_LH = 20, CODE_PAD = 12;
+/** The copy button: a square at the block's top right, and the header line a title takes. */
+const CODE_COPY = 28, CODE_TITLE_SIZE = 12, CODE_TITLE_H = 22;
 
 export const code: ComponentDef = {
   type: "code",
   category: "content",
   description: "A short piece of code or a command, in a monospaced font on a tinted block.",
   text: { description: "The code. Long lines wrap.", required: true },
-  props: {},
+  props: {
+    title: { type: "string", description: "A header line, e.g. a file name." },
+    copy: { type: "boolean", default: false, description: "A copy button." },
+  },
   example: `code "npm install sayshape"`,
   semantics(box, ctx) {
-    return { role: "code", name: ctx.props(box.node).text() };
+    const p = ctx.props(box.node);
+    return {
+      role: "code",
+      name: p.text(),
+      description: p.str("title") || undefined,
+      parts: p.bool("copy") ? [{ detail: "copy", role: "button" as const, name: "Copy code" }] : undefined,
+    };
   },
   layout(box, ctx) {
+    const p = ctx.props(box.node);
     const font = themeFont(ctx.theme, 400, CODE_SIZE, "mono");
-    const lines = wrapText(ctx.props(box.node).text(), Math.max(20, box.w - CODE_PAD * 2), font, ctx.measure);
-    box.data = { lines, font };
-    box.h = lines.length * CODE_LH + CODE_PAD * 2;
+    const title = p.str("title");
+    // A title takes a header line, with the copy button at its end; with no title the button sits beside the first lines.
+    const reserve = p.bool("copy") && !title ? CODE_COPY : 0;
+    const lines = wrapText(p.text(), Math.max(20, box.w - CODE_PAD * 2 - reserve), font, ctx.measure);
+    const head = title ? CODE_TITLE_H : 0;
+    box.data = { lines, font, title, head };
+    box.h = head + lines.length * CODE_LH + CODE_PAD * 2;
   },
   paint(box, ctx) {
     const { g, theme } = ctx;
-    const { lines, font } = box.data as { lines: string[]; font: string };
+    const p = ctx.props(box.node);
+    const { lines, font, title, head } = box.data as { lines: string[]; font: string; title: string; head: number };
     ctx.roundRect(box.x, box.y, box.w, box.h, theme.radius.sm);
     fillTint(g, theme.colors.ink, 0.06);
+    const copy = p.bool("copy");
+    if (title) {
+      g.font = ctx.font(600, CODE_TITLE_SIZE);
+      g.fillStyle = theme.colors.muted;
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      const room = box.w - CODE_PAD * 2 - (copy ? CODE_COPY : 0);
+      g.fillText(fitText(g, title, Math.max(0, room)), box.x + CODE_PAD, box.y + CODE_PAD + CODE_TITLE_H / 2 - 4);
+    }
     g.font = font;
     g.fillStyle = theme.colors.ink;
     g.textAlign = "left";
     g.textBaseline = "middle";
-    lines.forEach((l, i) => g.fillText(l, box.x + CODE_PAD, box.y + CODE_PAD + CODE_LH * i + CODE_LH / 2));
+    lines.forEach((l, i) => g.fillText(l, box.x + CODE_PAD, box.y + CODE_PAD + head + CODE_LH * i + CODE_LH / 2));
+    if (!copy) return;
+    // A copy icon at the top right; the hit is the whole square, so it is easy to press.
+    const btn = partBox(box, box.x + box.w - CODE_COPY - 4, box.y + 4, CODE_COPY, CODE_COPY);
+    const hot = ctx.isHovered(box.node, "copy");
+    if (hot || ctx.isFocused(box.node, "copy")) {
+      ctx.roundRect(btn.x, btn.y, btn.w, btn.h, theme.radius.sm);
+      if (hot) fillTint(g, theme.colors.ink, 0.08);
+      if (ctx.isFocused(box.node, "copy")) { g.strokeStyle = theme.colors.focus; g.lineWidth = 2; g.stroke(); }
+    }
+    drawIcon(g, "copy", btn.x + (CODE_COPY - 16) / 2, btn.y + (CODE_COPY - 16) / 2, 16, hot ? theme.colors.ink : theme.colors.muted);
+    ctx.addHit(btn, { detail: "copy" });
+  },
+  press(ctx) {
+    // The host puts the text on the clipboard: a canvas can't, and a component never touches the page.
+    if (ctx.target.detail !== "copy") return;
+    const text = ctx.props(ctx.target.node).text();
+    ctx.run("emit:copy:{__code}", { scope: (n) => (n === "__code" ? text : undefined) });
   },
 };

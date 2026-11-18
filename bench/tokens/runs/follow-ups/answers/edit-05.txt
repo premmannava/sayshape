@@ -1,0 +1,2 @@
+@replace 26
+  select "Filter by status" items={['All', 'Open', 'In review', 'Closed', 'Denied']} bind=status

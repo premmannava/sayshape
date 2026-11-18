@@ -63,6 +63,15 @@ export interface BulletGeometry {
  */
 export function pairText(actual: number, target: number, format: Format): string {
   const a = valueText(actual, format), t = valueText(target, format);
+  // One short and one written out ($98,000 of $120K) reads as two different units: both go short.
+  const short = (v: number) => Math.abs(v) >= 100_000 && Math.abs(v) < 1e15;
+  if (short(actual) !== short(target) && Math.abs(actual) < 1e15 && Math.abs(target) < 1e15 && Math.min(Math.abs(actual), Math.abs(target)) >= 1000) {
+    try {
+      const nf = formatter(format, { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 });
+      const as = nf.format(actual), ts = nf.format(target);
+      if (as !== ts) return `${as} of ${ts}`;
+    } catch { /* fall through to the usual forms */ }
+  }
   if (a !== t || actual === target) return `${a} of ${t}`;
   const opts: Intl.NumberFormatOptions = { notation: "compact", maximumSignificantDigits: 3 };
   try {
@@ -167,7 +176,7 @@ export const bullet: ChartKindDef = {
     const hot = ctx.pointer && ctx.isHovered(box.node) ? ctx.pointer : null;
     const n = b.rows.length;
     b.rows.forEach((r, i) => {
-      const color = r.tone === "accent" ? c.accent : c[r.tone];
+      const color = r.tone === "accent" ? c.accent : r.tone === "warn" ? c.warnFill : c[r.tone];
       const tr = r.track;
       const row = d.slots[i]?.bars?.[0];
       const over = !!row && !!hot && hot.y - oy >= row.y && hot.y - oy < row.y + row.h;

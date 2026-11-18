@@ -1,0 +1,3 @@
+@insert 16
+  card pad=18 gap=10
+    stat label="Longest days open" value={max(claims, 'days')}

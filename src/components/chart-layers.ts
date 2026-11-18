@@ -5,9 +5,11 @@
  *     chart-line "Forecast" y=forecast
  *     chart-rule "Target" y=50000
  *     chart-note "Launch" at="Jun"
+ *     chart-band "Healthy" from=30000 to=45000
  *
  * chart-line draws another field of the same items as a line over the bars or
- * lines, chart-rule a level across the plot, chart-note a marker at one item.
+ * lines, chart-rule a level across the plot, chart-band a shaded range behind
+ * them, chart-note a marker at one item.
  * Like table-column, they have no box of their own: the chart reads them,
  * fits its scale to them and draws them. Colors come from the theme.
  */
@@ -17,16 +19,18 @@ import type { ChartGeometry, ChartLayers, Format, PaintCtx, SeriesData } from ".
 import { numberAt, traceSmoothLine, valueText } from "./chart-kit";
 import { isList } from "../data";
 import type { Value } from "../types";
+import { TONES, toneColor, toneProp, type Tone } from "./util";
 
 /** The most layers of each sort a chart draws; the rest are left out with a warning. */
 export const MAX_CHART_LAYERS = 4;
 
-export const LAYER_TYPES = ["chart-line", "chart-rule", "chart-note"] as const;
+export const LAYER_TYPES = ["chart-line", "chart-rule", "chart-band", "chart-note"] as const;
 
 const leaf = {
   category: "data",
   parents: ["chart"],
   // No box of its own: the chart draws it and describes it.
+  noBox: true,
   semantics: () => null,
   layout(box) { box.h = 0; },
 } satisfies Partial<ComponentDef>;
@@ -53,6 +57,19 @@ export const chartRule: ComponentDef = {
   example: `chart-rule "Target" y=16000`,
 };
 
+export const chartBand: ComponentDef = {
+  ...leaf,
+  type: "chart-band",
+  description: "Under a bar or line chart: a shaded range between two levels, drawn behind the data, such as a healthy range or a target zone.",
+  text: { description: "What the range is, shown at its edge, e.g. \"Healthy\"." },
+  props: {
+    from: { type: "expression", required: true, description: "One end of the range, a number or a formula." },
+    to: { type: "expression", required: true, description: "The other end, a number or a formula." },
+    tone: { ...toneProp, description: "Shading: default (neutral), muted, accent, good, warn or bad." },
+  },
+  example: `chart-band "Healthy" from=10000 to=16000`,
+};
+
 export const chartNote: ComponentDef = {
   ...leaf,
   type: "chart-note",
@@ -68,6 +85,7 @@ export const chartNote: ComponentDef = {
 export interface LayerInput {
   lines: Array<{ field: string; label: string; values: Array<number | null> }>;
   rules: Array<{ value: number; label: string }>;
+  bands: Array<{ from: number; to: number; label: string; tone: Tone }>;
   notes: Array<{ at: string; label: string }>;
 }
 
@@ -75,7 +93,7 @@ export interface LayerInput {
 export function readLayers(
   kids: readonly SayShapeNode[], items: Value | undefined, props: (n: SayShapeNode) => PropReader, line: number, warn?: LayoutContext["warn"],
 ): LayerInput | null {
-  const out: LayerInput = { lines: [], rules: [], notes: [] };
+  const out: LayerInput = { lines: [], rules: [], bands: [], notes: [] };
   const list = isList(items) ? items : [];
   const full = (what: string) => warn?.(`chart on line ${line}: at most ${MAX_CHART_LAYERS} ${what} are drawn; the rest were left out`);
   for (const k of kids) {
@@ -92,18 +110,25 @@ export function readLayers(
       const value = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
       if (!Number.isFinite(value)) { warn?.(`chart-rule on line ${k.line}: y isn't a number, so it isn't drawn. Write a number or a formula, like y=50000`); continue; }
       out.rules.push({ value, label: p.text() });
+    } else if (k.type === "chart-band") {
+      if (out.bands.length >= MAX_CHART_LAYERS) { full("chart-band lines"); continue; }
+      const num = (v: Value | undefined) => (typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN);
+      const a = num(p.expr("from")), b = num(p.expr("to"));
+      if (!Number.isFinite(a) || !Number.isFinite(b)) { warn?.(`chart-band on line ${k.line}: from and to must both be numbers, so it isn't drawn. Write numbers or formulas, like from=30000 to=45000`); continue; }
+      if (a === b) { warn?.(`chart-band on line ${k.line}: from and to are the same, so there's no range to shade. Use chart-rule for a single level`); continue; }
+      out.bands.push({ from: Math.min(a, b), to: Math.max(a, b), label: p.text(), tone: p.oneOf("tone", TONES, "default") });
     } else if (k.type === "chart-note") {
       if (out.notes.length >= MAX_CHART_LAYERS) { full("chart-note lines"); continue; }
       out.notes.push({ at: p.str("at"), label: p.text() });
     }
   }
-  return out.lines.length || out.rules.length || out.notes.length ? out : null;
+  return out.lines.length || out.rules.length || out.bands.length || out.notes.length ? out : null;
 }
 
 /** Every number the layers add, so the chart's scale makes room for them. */
 export function layerValues(l: LayerInput | null): number[] {
   if (!l) return [];
-  return [...l.lines.flatMap((x) => x.values.flatMap((v) => (v === null ? [] : [v]))), ...l.rules.map((r) => r.value)];
+  return [...l.lines.flatMap((x) => x.values.flatMap((v) => (v === null ? [] : [v]))), ...l.rules.map((r) => r.value), ...l.bands.flatMap((b) => [b.from, b.to])];
 }
 
 /** Place the layers on a chart's plot. `first` is the color index after the chart's own series. */
@@ -123,6 +148,10 @@ export function placeLayers(
     return { label: ln.label, field: ln.field, color: first + i, runs, values: ln.values };
   });
   const rules = l.rules.map((r) => ({ y: y(r.value), value: r.value, label: r.label, text: r.label ? `${r.label} ${valueText(r.value, format)}` : valueText(r.value, format) }));
+  const bands = l.bands.map((b) => {
+    const range = `${valueText(b.from, format)} to ${valueText(b.to, format)}`;
+    return { top: y(b.to), bottom: y(b.from), from: b.from, to: b.to, label: b.label, text: b.label ? `${b.label} ${range}` : range, tone: b.tone };
+  });
   const notes = l.notes.flatMap((n) => {
     const i = d.slots.findIndex((s) => s.label === n.at);
     if (i < 0) {
@@ -131,7 +160,42 @@ export function placeLayers(
     }
     return [{ x: slots[i]!.cx, index: i, label: n.label }];
   });
-  return { lines, rules, notes };
+  return { lines, rules, bands, notes };
+}
+
+/** Draw a chart's shaded ranges, behind its bars and lines. Their names go on later, with the other layers. */
+export function paintBands(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: number, reveal: number): void {
+  const L = d.layers;
+  if (!L?.bands.length) return;
+  const { g, theme } = ctx;
+  const left = ox + d.plot.x, w = d.plot.w;
+  const top = oy + d.plot.y, bottom = oy + d.plot.y + d.plot.h;
+  g.save();
+  g.globalAlpha *= Math.min(1, reveal * 2);
+  for (const b of L.bands) {
+    // The scale makes room for a band, so this only keeps rounding inside the plot.
+    const y1 = Math.max(top, oy + b.top), y2 = Math.min(bottom, oy + b.bottom);
+    if (y2 <= y1) continue;
+    const color = b.tone === "default" ? theme.colors.muted : toneColor(theme, b.tone as Tone);
+    g.fillStyle = color;
+    g.save();
+    g.globalAlpha *= 0.16;
+    g.fillRect(left, y1, w, y2 - y1);
+    g.restore();
+    // A hairline at each edge, so a narrow band still reads as a range.
+    g.strokeStyle = color;
+    g.lineWidth = 1;
+    g.save();
+    g.globalAlpha *= 0.45;
+    for (const y of [y1, y2]) {
+      g.beginPath();
+      g.moveTo(left, Math.round(y) + 0.5);
+      g.lineTo(left + w, Math.round(y) + 0.5);
+      g.stroke();
+    }
+    g.restore();
+  }
+  g.restore();
 }
 
 /** Draw a chart's layers over its bars or lines. */
@@ -232,20 +296,54 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
     });
   }
   const covers = (x: number, y: number, w: number) => linePoints.some(([px, py]) => px >= x - 4 && px <= x + w + 4 && py >= y - 4 && py <= y + plateH + 4);
-  for (const r of L.rules) {
-    const y = oy + r.y;
-    const w = g.measureText(r.text).width + padX * 2;
-    const up = y - 3 - plateH, down = y + 3;
+  // Names already placed, so a band's name and a level's don't land on each other.
+  const taken: Array<[number, number, number, number]> = [];
+  const clear = (x: number, y: number, w: number) => !taken.some(([tx, ty, tw, th]) => x < tx + tw && x + w > tx && y < ty + th && y + plateH > ty);
+  // Bars, as drawn: a band's name keeps off them as well as off lines.
+  const bars: Array<[number, number, number, number]> = [];
+  for (const sl of d.slots) for (const b of sl.bars ?? []) if (b) bars.push([ox + b.x, oy + b.y, b.w, b.h]);
+  const onBar = (x: number, y: number, w: number) => bars.some(([bx, by, bw, bh]) => x < bx + bw && x + w > bx && y < by + bh && y + plateH > by);
+  const tags = [
+    ...L.rules.map((r) => ({ y: oy + r.y, bottom: 0, text: r.text, alt: "", band: false, inside: false })),
+    // A band's name sits just inside its top edge.
+    ...L.bands.map((b) => ({ y: oy + b.top, bottom: oy + b.bottom, text: b.text, alt: b.label && b.label !== b.text ? b.label : "", band: true, inside: oy + b.bottom - (oy + b.top) >= plateH + 8 })),
+  ];
+  for (const r of tags) {
+    const y = r.y;
     const fits = (py: number) => py >= top && py + plateH <= bottom;
-    const spots: Array<[number, number]> = [[right - w, up], [right - w, down], [left, up], [left, down]];
-    const [px, py] = spots.find(([sx, sy]) => fits(sy) && !covers(sx, sy, w)) ?? spots.find(([, sy]) => fits(sy)) ?? spots[0]!;
+    const widthOf = (t: string) => g.measureText(t).width + padX * 2;
+    let text = r.text;
+    let w = widthOf(text);
+    const up = y - 3 - plateH, down = y + 3;
+    let spots: Array<[number, number]> = r.inside
+      ? [[right - w, down], [left, down], [right - w, up], [left, up]]
+      : [[right - w, up], [right - w, down], [left, up], [left, down]];
+    let found: [number, number] | undefined;
+    if (r.band) {
+      // Both ends at the top edge, then inside the bottom edge, then outside either edge; with the range, then the name alone.
+      const lowIn = r.bottom - 3 - plateH, lowOut = r.bottom + 3;
+      for (const t of r.alt ? [r.text, r.alt] : [r.text]) {
+        const tw = widthOf(t);
+        const tries: Array<[number, number]> = [
+          ...(r.inside ? [[right - tw, down], [left, down], [right - tw, lowIn], [left, lowIn]] as Array<[number, number]> : []),
+          [right - tw, up], [left, up], [right - tw, lowOut], [left, lowOut],
+        ];
+        found = tries.find(([sx, sy]) => fits(sy) && !covers(sx, sy, tw) && !onBar(sx, sy, tw) && clear(sx, sy, tw));
+        if (found) { text = t; w = tw; break; }
+      }
+      if (!found) { text = r.text; w = widthOf(text); spots = [[right - w, down], [left, down], [right - w, up], [left, up]]; }
+    }
+    const [px, py] = found
+      ?? spots.find(([sx, sy]) => fits(sy) && !covers(sx, sy, w) && clear(sx, sy, w))
+      ?? spots.find(([sx, sy]) => fits(sy) && clear(sx, sy, w)) ?? spots.find(([, sy]) => fits(sy)) ?? spots[0]!;
+    taken.push([px, py, w, plateH]);
     g.beginPath();
     ctx.roundRect(px, py, w, plateH, theme.radius.sm / 2);
     g.fillStyle = c.raised;
     g.fill();
     g.fillStyle = c.muted;
     g.textAlign = "left";
-    g.fillText(r.text, px + padX, py + plateH / 2);
+    g.fillText(text, px + padX, py + plateH / 2);
   }
   g.restore();
 }
@@ -255,6 +353,7 @@ export function layersSummary(L: ChartLayers | undefined, say: (n: number) => st
   if (!L) return "";
   const parts: string[] = [];
   for (const r of L.rules) parts.push(`${r.label || "Level"}: ${say(r.value)}.`);
+  for (const b of L.bands) parts.push(`${b.label || "Range"}: ${say(b.from)} to ${say(b.to)}.`);
   for (const n of L.notes) parts.push(`${n.label} at item ${n.index + 1}.`);
   return parts.length ? " " + parts.join(" ") : "";
 }

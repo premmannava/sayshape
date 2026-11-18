@@ -10,6 +10,10 @@ export const SAVE_ACTION = "save_image";
 export const COPY_ACTION = "copy_text";
 /** The action the toolbar's Pause/Resume button sends to the view (behavior on; never to the model). */
 export const MOTION_ACTION = "pause_motion";
+/** The action the toolbar's PowerPoint button sends to the view (a deck showing; never to the model). */
+export const DECK_ACTION = "save_powerpoint";
+/** The action the toolbar's Present button sends to the view (a deck showing, a chat app with a full-screen mode; never to the model). */
+export const PRESENT_ACTION = "present";
 
 /** Which tools the toolbar shows: decided by the server's flags and what the chat app can do. */
 export interface Tools {
@@ -26,6 +30,14 @@ export interface Tools {
    * has rules (toolbar state rules > 0): WCAG 2.2.2, whatever the spec says.
    */
   motion?: boolean;
+  /**
+   * Deck files (where the chat app can download). While a deck is
+   * showing (toolbar state deck), the download button saves a PDF and a
+   * second button saves a PowerPoint file.
+   */
+  deck?: boolean;
+  /** Present (where the chat app has a full-screen mode): shown while a deck is, it fills the screen and back (toolbar state full). */
+  present?: boolean;
 }
 
 /** Padding around the toolbar, in pixels: it's a slim strip, not a card. */
@@ -41,7 +53,7 @@ const GAP = 8;
  * minimum (120, or 140 on its own) and each icon button its square (30).
  */
 export function toolbarWidth(t: Tools): number {
-  const icons = (t.copy ? 1 : 0) + (t.save ? 1 : 0) + (t.motion ? 1 : 0);
+  const icons = (t.copy ? 1 : 0) + (t.save ? 1 : 0) + (t.motion ? 1 : 0) + (t.save && t.deck ? 1 : 0) + (t.deck && t.present ? 1 : 0);
   const widths = [...(t.picker ? [icons ? 120 : 140] : []), ...Array<number>(icons).fill(TOOL)];
   const inner = widths.length ? widths.reduce((a, b) => a + b, 0) + GAP * (widths.length - 1) : 0;
   return inner + 2 * TOOLBAR_PADDING;
@@ -59,9 +71,11 @@ export function toolbarSpec(t: Tools): string {
   if (t.picker) items.push(`select items=presets value=id label=label bind=preset placeholder="Theme" on="emit:theme:{preset}"`);
   if (t.motion) items.push(`tool-button "{paused ? 'Resume motion' : 'Pause motion'}" icon={paused ? 'play' : 'pause'} if={rules > 0} on=emit:${MOTION_ACTION}`);
   if (t.copy) items.push(`tool-button "Copy text" icon=copy on=emit:${COPY_ACTION}`);
-  if (t.save) items.push(`tool-button "Save image" icon=download on=emit:${SAVE_ACTION}`);
+  if (t.deck && t.present) items.push(`tool-button "{full ? 'Leave full screen' : 'Present'}" icon={full ? 'x' : 'play'} if={deck} on=emit:${PRESENT_ACTION}`);
+  if (t.save && t.deck) items.push(`tool-button "Save as PowerPoint" icon=file if={deck} on=emit:${DECK_ACTION}`);
+  if (t.save) items.push(`tool-button "${t.deck ? "{deck ? 'Save as PDF' : 'Save image'}" : "Save image"}" icon=download on=emit:${SAVE_ACTION}`);
   if (!items.length) return "";
-  const motion = t.motion ? " rules=0 paused=false" : "";
+  const motion = `${t.motion ? " rules=0 paused=false" : ""}${t.deck && (t.save || t.present) ? " deck=false" : ""}${t.deck && t.present ? " full=false" : ""}`;
   const state = t.picker
     ? `state preset="${t.theme}" presets=[${PRESETS.map(({ id, label }) => `{id:${JSON.stringify(id)},label:${JSON.stringify(label)}}`).join(",")}]${motion}\n`
     : motion ? `state${motion}\n` : "";
@@ -74,12 +88,14 @@ export function isPresetId(value: unknown): value is PresetId {
 }
 
 /**
- * A preset in the host's mode, with the server's --accent if it has one (made
- * readable on this scheme's surface; the first chart series follows it), then
- * the host's shared colors, fonts and radii. Hosts never send an accent.
+ * A preset in the host's mode, with brand colors if there are some (the server's
+ * --colors or --accent, or a chat app's brand color): the first is the accent and
+ * the first chart series, made readable on this scheme's surface, and the other
+ * series follow it. Then the host's shared colors, fonts and radii. Hosts never
+ * send an accent.
  */
-export function themeForPreset(preset: PresetId, scheme: Scheme, read?: ReadVar, accent?: string): Theme {
-  const theme = resolveTheme(preset, scheme, accent ?? null).theme;
+export function themeForPreset(preset: PresetId, scheme: Scheme, read?: ReadVar, colors?: readonly string[]): Theme {
+  const theme = resolveTheme(preset, scheme, colors ?? null).theme;
   return read ? hostTheme(theme, read) : theme;
 }
 

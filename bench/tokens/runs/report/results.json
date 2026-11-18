@@ -1,0 +1,754 @@
+{
+  "tokenizer": "o200k_base (gpt-tokenizer)",
+  "variant": "report",
+  "guideTokens": 491,
+  "results": [
+    {
+      "request": "r1-table",
+      "run": "1",
+      "outputTokens": 153,
+      "firstPaintTokens": 16,
+      "composition": {
+        "data": 130,
+        "structure": 13,
+        "words": 10,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r1-table",
+      "run": "2",
+      "outputTokens": 185,
+      "firstPaintTokens": 17,
+      "composition": {
+        "data": 160,
+        "structure": 14,
+        "words": 11,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r1-table",
+      "run": "3",
+      "outputTokens": 156,
+      "firstPaintTokens": 17,
+      "composition": {
+        "data": 132,
+        "structure": 13,
+        "words": 11,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a table",
+          "passed": true
+        },
+        {
+          "label": "Name, Department, Salary and YoY columns",
+          "passed": true
+        },
+        {
+          "label": "five employees",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "1",
+      "outputTokens": 106,
+      "firstPaintTokens": 16,
+      "composition": {
+        "data": 75,
+        "structure": 16,
+        "words": 18,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "2",
+      "outputTokens": 137,
+      "firstPaintTokens": 16,
+      "composition": {
+        "data": 105,
+        "structure": 16,
+        "words": 19,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r2-revenue",
+      "run": "3",
+      "outputTokens": 106,
+      "firstPaintTokens": 16,
+      "composition": {
+        "data": 75,
+        "structure": 16,
+        "words": 18,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a Total Revenue figure",
+          "passed": true
+        },
+        {
+          "label": "a bar chart",
+          "passed": true
+        },
+        {
+          "label": "six months of data",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r3-contact",
+      "run": "1",
+      "outputTokens": 1,
+      "composition": {
+        "data": 0,
+        "structure": 1,
+        "words": 0,
+        "formulas": 0
+      },
+      "errors": 1,
+      "warnings": 0,
+      "clean": false,
+      "parts": [
+        {
+          "label": "Name, Email and Phone fields",
+          "passed": false
+        },
+        {
+          "label": "a Subject dropdown",
+          "passed": false
+        },
+        {
+          "label": "a Message text area",
+          "passed": false
+        },
+        {
+          "label": "Submit and Cancel buttons",
+          "passed": false
+        }
+      ],
+      "complete": false,
+      "problems": [
+        "line 1 error: Unknown element \"FULL\". It was skipped, along with anything inside it"
+      ]
+    },
+    {
+      "request": "r4-analytics",
+      "run": "1",
+      "outputTokens": 408,
+      "firstPaintTokens": 19,
+      "composition": {
+        "data": 349,
+        "structure": 32,
+        "words": 32,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r4-analytics",
+      "run": "2",
+      "outputTokens": 429,
+      "firstPaintTokens": 19,
+      "composition": {
+        "data": 369,
+        "structure": 33,
+        "words": 32,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r4-analytics",
+      "run": "3",
+      "outputTokens": 56,
+      "firstPaintTokens": 19,
+      "composition": {
+        "data": 0,
+        "structure": 29,
+        "words": 32,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 5,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a header",
+          "passed": true
+        },
+        {
+          "label": "a bar chart of monthly active users",
+          "passed": true
+        },
+        {
+          "label": "a pie chart of user acquisition",
+          "passed": true
+        },
+        {
+          "label": "a table of top features",
+          "passed": true
+        },
+        {
+          "label": "a line chart of MRR and ARR",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": false
+        }
+      ],
+      "complete": false,
+      "problems": [
+        "line 1 warning: \"users\" isn't state or data from the app. Declare it, state users=[…], or use the name the app gave",
+        "line 2 warning: \"users\" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: 'users'. To use state, declare it: state users=…",
+        "line 3 warning: \"users\" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: 'users'. To use state, declare it: state users=…",
+        "line 4 warning: \"users\" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: 'users'. To use state, declare it: state users=…",
+        "line 5 warning: \"users\" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: 'users'. To use state, declare it: state users=…"
+      ]
+    },
+    {
+      "request": "r5-pricing",
+      "run": "1",
+      "outputTokens": 1,
+      "composition": {
+        "data": 0,
+        "structure": 1,
+        "words": 0,
+        "formulas": 0
+      },
+      "errors": 1,
+      "warnings": 0,
+      "clean": false,
+      "parts": [
+        {
+          "label": "three tiers",
+          "passed": false
+        },
+        {
+          "label": "a feature comparison table",
+          "passed": false
+        }
+      ],
+      "complete": false,
+      "problems": [
+        "line 1 error: Unknown element \"FULL\". It was skipped, along with anything inside it"
+      ]
+    },
+    {
+      "request": "r6-settings",
+      "run": "1",
+      "outputTokens": 1,
+      "composition": {
+        "data": 0,
+        "structure": 1,
+        "words": 0,
+        "formulas": 0
+      },
+      "errors": 1,
+      "warnings": 0,
+      "clean": false,
+      "parts": [
+        {
+          "label": "Profile, Security and Notifications tabs",
+          "passed": false
+        },
+        {
+          "label": "a name field and an avatar on Profile",
+          "passed": false
+        },
+        {
+          "label": "a 2FA toggle on Security",
+          "passed": false
+        }
+      ],
+      "complete": false,
+      "problems": [
+        "line 1 error: Unknown element \"FULL\". It was skipped, along with anything inside it"
+      ]
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "1",
+      "outputTokens": 2155,
+      "firstPaintTokens": 20,
+      "composition": {
+        "data": 2098,
+        "structure": 38,
+        "words": 12,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "2",
+      "outputTokens": 2156,
+      "firstPaintTokens": 23,
+      "composition": {
+        "data": 2098,
+        "structure": 36,
+        "words": 15,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-pasted",
+      "run": "3",
+      "outputTokens": 2154,
+      "firstPaintTokens": 21,
+      "composition": {
+        "data": 2098,
+        "structure": 36,
+        "words": 13,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "1",
+      "outputTokens": 56,
+      "firstPaintTokens": 16,
+      "composition": {
+        "data": 0,
+        "structure": 41,
+        "words": 8,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "2",
+      "outputTokens": 59,
+      "firstPaintTokens": 22,
+      "composition": {
+        "data": 0,
+        "structure": 38,
+        "words": 14,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    },
+    {
+      "request": "r7-claims-ref",
+      "run": "3",
+      "outputTokens": 59,
+      "firstPaintTokens": 19,
+      "composition": {
+        "data": 0,
+        "structure": 41,
+        "words": 11,
+        "formulas": 0
+      },
+      "errors": 0,
+      "warnings": 0,
+      "clean": true,
+      "parts": [
+        {
+          "label": "a title",
+          "passed": true
+        },
+        {
+          "label": "four headline figures",
+          "passed": true
+        },
+        {
+          "label": "a bar chart by month",
+          "passed": true
+        },
+        {
+          "label": "a line chart of opened and closed",
+          "passed": true
+        },
+        {
+          "label": "a donut by line",
+          "passed": true
+        },
+        {
+          "label": "a table of all 40 claims",
+          "passed": true
+        },
+        {
+          "label": "filters the claims by status",
+          "passed": true
+        },
+        {
+          "label": "every chart and table shows data",
+          "passed": true
+        }
+      ],
+      "complete": true,
+      "problems": []
+    }
+  ]
+}

@@ -25,8 +25,10 @@ card
 
 The first image is served by this site (it's the screenshot from the repository's README, `docs/images/playground.png`). The second names a host this site doesn't allow, so SayShape never requests it and shows its description instead.
 
+`COMMON_IMAGE_HOSTS` is a ready-made list of the sites models know image addresses on (reference pictures, photos, placeholders, flags, posters, covers). An app can pass it as `imageHosts: COMMON_IMAGE_HOSTS`, alone or with its own hosts. The engine's own default is still none. Only sites that serve their own files and send CORS headers are on it, never image proxies or storage anyone can rent.
+
 Tell the model which hosts work with the guide's `imageHosts` option ([The model guide](./model-guide)). With none, the guide tells it to use images only with URLs it was given, because a model will otherwise invent plausible-looking URLs that don't exist.
 
 ## On this site
 
-This website allows no image hosts, and its examples use no photographs, so nothing on it loads images from elsewhere. The development playground in the repository allows `images.unsplash.com` for two of its samples; those samples are left out of the public playground.
+The chat page allows the common hosts (`COMMON_IMAGE_HOSTS`), so an answer written there can show an image from one of them; each of those sites sees the visitor's IP address when it does. The examples allow none and use no photographs, so nothing in them loads images from elsewhere. The development playground in the repository allows `images.unsplash.com` for two of its samples; those samples are left out of the public playground.

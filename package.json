@@ -1,6 +1,6 @@
 {
   "name": "sayshape",
-  "version": "0.2.1",
+  "version": "0.4.0",
   "description": "A canvas UI engine and a UI language designed for AI models to write.",
   "type": "module",
   "license": "MIT",
@@ -43,6 +43,10 @@
       "types": "./dist/types/components/scene/index.d.ts",
       "import": "./dist/scene.js"
     },
+    "./slides": {
+      "types": "./dist/types/components/slides/index.d.ts",
+      "import": "./dist/slides.js"
+    },
     "./testing": {
       "types": "./dist/types/testing/index.d.ts",
       "import": "./dist/testing.js"
@@ -79,6 +83,7 @@
     "sessions": "vite-node scripts/sessions.ts --",
     "eval:answers": "vite-node scripts/eval-answers.ts --",
     "pick-eval": "vite-node scripts/pick-eval.ts --",
+    "colors-eval": "vite-node scripts/colors-eval.ts --",
     "guide:size": "vite-node scripts/guide-size.ts",
     "site:docs": "vite-node scripts/gen-site-docs.ts",
     "site:dev": "npm run site:docs && npm --prefix site run dev",
@@ -88,7 +93,8 @@
     "scene-eval": "vite-node scripts/scene-eval.ts --",
     "bench:scene-browser": "node bench/browser/run.mjs",
     "bench:behavior-browser": "node bench/browser/behavior.mjs",
-    "verify:pack": "node scripts/verify-pack.mjs"
+    "verify:pack": "node scripts/verify-pack.mjs",
+    "token-bench": "vite-node scripts/token-bench.ts --"
   },
   "devDependencies": {
     "@a2ui/lit": "0.15.0",
@@ -103,6 +109,7 @@
     "d3-geo": "^3.1.1",
     "fast-check": "4.3.0",
     "gifenc": "^1.0.3",
+    "gpt-tokenizer": "4.1.2",
     "jsdom": "25.0.1",
     "topojson-client": "^3.1.0",
     "topojson-server": "^3.0.1",

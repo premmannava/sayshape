@@ -37,7 +37,7 @@
     "content": [
       {
         "type": "text",
-        "text": "2 problems leave part of this interface wrong or missing, so the person sees a short \"being fixed\" note in its place. Fix them and call show_interface again with the whole corrected spec:\nline 2 (error): Unknown element \"txet\". It was skipped, along with anything inside it\nline 3 (warning): Unknown action \"nope\". Use inc, dec, toggle, set, emit, go, back, notify, add, remove, clear\n\nDocs for button:\n  button \"<text>\"  — A pressable button that runs actions. Use emit: to tell the app what the user chose.\n    \"<text>\" (required)  The button label.\n    on=<action>  What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ;\n    variant=<primary|secondary|danger>  primary (filled), secondary (outlined) or danger.\n    disabled=<condition>  Expression; when true the button is greyed out and can't be pressed.\n    example:\n      button \"Book now\" on=emit:book\n      button \"Back\" variant=secondary on=dec:step"
+        "text": "2 problems leave part of this interface wrong or missing, so the person sees a short \"being fixed\" note in its place. Fix them and call show_interface again with the whole corrected spec:\nline 2 (error): Unknown element \"txet\". It was skipped, along with anything inside it\nline 3 (warning): Unknown action \"nope\". Use inc, dec, toggle, set, emit, go, back, notify, add, remove, clear\n\nDocs for button:\n  button \"<text>\"  — A pressable button that runs actions. Use emit: to tell the app what the user chose.\n    \"<text>\" (required)  The button label.\n    on=<action>  What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ;\n    variant=<primary|secondary|danger>  primary (filled), secondary (outlined) or danger.\n    disabled=<condition>  Expression; when true the button is greyed out and can't be pressed.\n    icon=<string>  Icon name before the label.\n    size=<md|sm>  md or sm (smaller).\n    fit=<boolean>  Natural width, even on a phone.\n    example:\n      button \"Book now\" on=emit:book\n      button \"Back\" variant=secondary on=dec:step"
       }
     ],
     "structuredContent": {
@@ -121,6 +121,97 @@
       "toFix": 0,
       "repeat": false,
       "diagnostics": []
+    }
+  },
+  "colors": {
+    "content": [
+      {
+        "type": "text",
+        "text": "The interface is showing in the conversation, with no problems. Don't call show_interface again unless the person asks for a change.\nColors: #e4572e, #2e86ab. Pass the same colors on every later show_interface call in this conversation, unless the person asks to change them."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": "Hike",
+      "errors": 0,
+      "warnings": 0,
+      "toFix": 0,
+      "repeat": false,
+      "diagnostics": []
+    }
+  },
+  "colors repeat": {
+    "content": [
+      {
+        "type": "text",
+        "text": "This exact interface is already showing in the conversation, just above, so this copy is hidden. Don't call show_interface again unless the person asks for a change; answer them in text if they need more.\nColors: #e4572e, #2e86ab. Pass the same colors on every later show_interface call in this conversation, unless the person asks to change them."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": "Hike",
+      "errors": 0,
+      "warnings": 0,
+      "toFix": 0,
+      "repeat": true,
+      "diagnostics": []
+    }
+  },
+  "colors sloppy": {
+    "content": [
+      {
+        "type": "text",
+        "text": "The interface is showing in the conversation, with no problems. Don't call show_interface again unless the person asks for a change.\nColors: #ee4455, #2e86ab, #222222, #333333, #444444, #555555. Pass the same colors on every later show_interface call in this conversation, unless the person asks to change them."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": "Hike",
+      "errors": 0,
+      "warnings": 0,
+      "toFix": 0,
+      "repeat": false,
+      "diagnostics": []
+    }
+  },
+  "colors none usable": {
+    "content": [
+      {
+        "type": "text",
+        "text": "The interface is showing in the conversation, with no problems. Don't call show_interface again unless the person asks for a change."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": null,
+      "errors": 0,
+      "warnings": 0,
+      "toFix": 0,
+      "repeat": false,
+      "diagnostics": []
+    }
+  },
+  "colors to fix": {
+    "content": [
+      {
+        "type": "text",
+        "text": "1 problem leaves part of this interface wrong or missing, so the person sees a short \"being fixed\" note in its place. Fix it and call show_interface again with the whole corrected spec:\nline 2 (error): Unknown element \"txet\". It was skipped, along with anything inside it\nColors: #e4572e. Pass the same colors on every later show_interface call in this conversation, unless the person asks to change them."
+      }
+    ],
+    "structuredContent": {
+      "datasets": {},
+      "title": null,
+      "errors": 1,
+      "warnings": 0,
+      "toFix": 1,
+      "repeat": false,
+      "diagnostics": [
+        {
+          "line": 2,
+          "severity": "error",
+          "message": "Unknown element \"txet\". It was skipped, along with anything inside it"
+        }
+      ]
     }
   }
 }

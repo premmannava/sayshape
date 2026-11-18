@@ -42,7 +42,7 @@ describe("chart props", () => {
     expect(g).toContain(`kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap|scatter|treemap|sankey>`);
     expect(g).toContain(`y=revenue,last_year`);
     expect(g).toMatch(/shown as gaps, not zero/);
-    expect(languageGuide(registry, { mode: "compact" })).toMatch(/^- chart \["text"\] kind=bar\|hbar\|line\|area\|stacked\|pie\|donut\|funnel\|waterfall\|bullet\|heatmap\|scatter\|treemap\|sankey items=expr! x=name! y=name,name! labels=text label=name size=name group=name from=name to=name rows=name target=name good=up\|down total=text format=number\|money\|percent/m);
+    expect(languageGuide(registry, { mode: "compact" })).toMatch(/^- chart \["text"\] kind=bar\|hbar\|line\|area\|stacked\|pie\|donut\|funnel\|waterfall\|bullet\|heatmap\|scatter\|treemap\|sankey items=expr! x=name! y=name,name! labels=text label=name size=name group=name from=name to=name rows=name target=name good=up\|down total=text values=true\|false highlight=text format=number\|money\|percent/m);
   });
 });
 
@@ -281,10 +281,12 @@ describe("extreme values", () => {
 
 describe("chart layout", () => {
   const many = (n: number) => `[${Array.from({ length: n }, (_, i) => `{k: "Category ${i + 1}", v: ${(i * 37) % 11}}`).join(", ")}]`;
+  // Items in time order: bars stay vertical on a phone too (categories turn across, see chart-phone.test.ts).
+  const weeks = (n: number) => `[${Array.from({ length: n }, (_, i) => `{k: "Week ${i + 1}", v: ${(i * 37) % 11}}`).join(", ")}]`;
 
   it.each([320, 1000])("keeps every mark, tick and label inside its box at %i px", (width) => {
     for (const kind of ["bar", "line"]) {
-      const ui = chartOf(many(24), kind, width);
+      const ui = chartOf(weeks(24), kind, width);
       const { box } = ui.find("chart");
       const g = box!.data as ChartGeometry;
       expect(box!.w).toBeLessThanOrEqual(width);
@@ -309,7 +311,8 @@ describe("chart layout", () => {
   });
 
   it("keeps a long last label inside the box", () => {
-    const ui = chartOf(`[{k: "a", v: 1}, {k: "b", v: 3}, {k: "A rather long final label", v: 2}]`, "bar", 320);
+    // A line: bars of categories this narrow are drawn across, with their labels on the left.
+    const ui = chartOf(`[{k: "a", v: 1}, {k: "b", v: 3}, {k: "A rather long final label", v: 2}]`, "line", 320);
     const g = geo(ui);
     const last = g.slots[2]!;
     expect(last.shownLabel).not.toBeNull();
@@ -317,8 +320,8 @@ describe("chart layout", () => {
   });
 
   it("thins labels on a narrow screen but keeps every data point", () => {
-    const narrow = geo(chartOf(many(24), "bar", 320));
-    const wide = geo(chartOf(many(24), "bar", 2400));
+    const narrow = geo(chartOf(weeks(24), "bar", 320));
+    const wide = geo(chartOf(weeks(24), "bar", 2400));
     expect(narrow.slots.every((s) => s.bar)).toBe(true);
     expect(narrow.slots.filter((s) => s.shownLabel).length).toBeLessThan(24);
     expect(narrow.slots[0]!.shownLabel).not.toBeNull();
@@ -326,7 +329,7 @@ describe("chart layout", () => {
   });
 
   it("grows the plot with the width, within limits", () => {
-    const h = (w: number) => geo(chartOf(many(3), "bar", w)).plot.h;
+    const h = (w: number) => geo(chartOf(weeks(3), "bar", w)).plot.h;
     expect(h(320)).toBe(144);
     expect(h(500)).toBeGreaterThan(h(320));
     expect(h(2000)).toBe(238);

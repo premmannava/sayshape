@@ -34,7 +34,7 @@
  *   little width for them, shows a message instead of a chart: nothing is
  *   dropped silently.
  */
-import { LAYER_TYPES, layerValues, paintLayers, placeLayers, readLayers, type LayerInput } from "./chart-layers";
+import { LAYER_TYPES, layerValues, paintBands, paintLayers, placeLayers, readLayers, type LayerInput } from "./chart-layers";
 import { chartSemantics } from "./chart-a11y";
 import type { ComponentDef } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
@@ -46,8 +46,8 @@ import { themeFont } from "./util";
 import { statSizes } from "./content";
 import { CHART_KINDS, paintSankeyHover, sankeyLinkAt, type SankeyGeometry } from "./chart-kinds";
 import {
-  barPath, barText, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
-  plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
+  mutedBar, onFill, barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, labelRows, fieldTitle, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
+  legendValueTexts, plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
   formatter, type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
 } from "./chart-kit";
 
@@ -67,6 +67,15 @@ export const MAX_HBAR_HEIGHT = 1200;
 export const HBAR_LABEL_SHARE = 0.4;
 /** Horizontal bars: the narrowest the bars' own area gets before the chart says it's too narrow. */
 const MIN_HBAR_AREA = 40;
+/**
+ * kind=bar narrower than this (a phone) draws its bars across, as kind=hbar
+ * does, when it can (see barsAcross). Measured in a browser: below 480 px,
+ * five to eight category labels (regions, products, teams, channels) are
+ * thinned out or cut under vertical bars and the bars are 16 to 37 px wide;
+ * every phone (up to 430 px) is under it, and tablets and desktop chat
+ * columns are over it, so those stay vertical.
+ */
+export const BARS_ACROSS_WIDTH = 480;
 /** Grouped bars: the narrowest bar, and the surface gap between bars in a group. */
 const MIN_GROUP_BAR = 3;
 const BAR_GAP = 2;
@@ -294,8 +303,8 @@ function axisGeometry(
   const each = grouped ? (group - (ns - 1) * BAR_GAP) / ns : barW;
 
   const slots: ChartSlot[] = d.slots.map((s, i) => {
-    const { cx, shownLabel, labelX } = placed[i]!;
-    const slot: ChartSlot = { label: s.label, shownLabel, labelX, cx, value: s.values[0] ?? null, values: s.values };
+    const { cx, shownLabel, shownLabel2, labelX } = placed[i]!;
+    const slot: ChartSlot = { label: s.label, shownLabel, ...(shownLabel2 ? { shownLabel2 } : {}), labelX, cx, value: s.values[0] ?? null, values: s.values };
     if (kind === "bar") {
       const z = zeroY ?? y(scale.min);
       slot.bars = s.values.map((v, k) => {
@@ -332,7 +341,7 @@ function axisGeometry(
   });
 
   const labelY = plot.y + plot.h + t.space.xs;
-  let h = labelY + labelLH;
+  let h = labelY + labelLH * labelRows(placed);
   let legend: LegendItem[] = [];
   const layers = layerInput ? placeLayers(layerInput, d, slots, y, ns, format, line, ctx.warn) : undefined;
   // A line layer needs naming, so the legend shows with one series too.
@@ -367,6 +376,48 @@ export function hbarRows(t: Theme, ns: number): { rowH: number; barH: number; gr
   const barH = ns === 1 ? Math.round(t.text.caption * 1.25) : t.text.caption;
   const group = ns * barH + (ns - 1) * BAR_GAP;
   return { barH, group, rowH: Math.max(Math.round((t.control.height * 2) / 3), group + t.space.sm) };
+}
+
+const MONTH = "(jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|june?|july?|aug(ust)?|sep(t(ember)?)?|oct(ober)?|nov(ember)?|dec(ember)?)\\.?";
+const WEEKDAY = "(mon(day)?|tue(s(day)?)?|wed(nesday)?|thu(r(s(day)?)?)?|fri(day)?|sat(urday)?|sun(day)?)\\.?";
+/** x labels that name points in time: dates, months, weekdays, quarters, years, weeks, times of day. */
+const TIME_LABEL = new RegExp(`^(${[
+  "\\d{4}-\\d{2}(-\\d{2})?",
+  `${MONTH}( \\d{1,2})?(,? '?\\d{2,4})?`,
+  `\\d{1,2} ${MONTH}( '?\\d{2,4})?`,
+  WEEKDAY,
+  "(\\d{4} )?q[1-4]( '?\\d{2,4})?",
+  "fy ?'?\\d{2}(\\d{2})?",
+  "(19|20|21)\\d{2}",
+  "(week|wk|w) ?\\d{1,2}",
+  "\\d{1,2}(:\\d{2} ?(am|pm)?| ?(am|pm))",
+].map((p) => `(${p})`).join("|")})$`, "i");
+const isTimeLabel = (s: string) => TIME_LABEL.test(s.trim());
+
+/**
+ * Whether items run in order through time, so vertical bars show a trend
+ * left to right: every x label names a time (Jan, 2024-03, Q1, Mon), or
+ * every x is a number and they rise. These stay vertical on a phone.
+ */
+export function inTimeOrder(items: Value | undefined, x: string): boolean {
+  if (!isList(items) || items.length < 2) return false;
+  const raw = items.map((it) => (isRecord(it) ? fieldOf(it, x) : undefined));
+  const nums = raw.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  if (nums.length === raw.length) return nums.every((v, i) => i === 0 || v > nums[i - 1]!);
+  return raw.every((v) => typeof v === "string" && isTimeLabel(v));
+}
+
+/**
+ * Whether a kind=bar chart this wide draws its bars across: only when it's
+ * narrower than BARS_ACROSS_WIDTH, has no layers (chart-line, chart-rule and
+ * chart-note are drawn on vertical bars only), its items aren't in time
+ * order, and every row fits MAX_HBAR_HEIGHT. hbarGeometry has the last word:
+ * when it can't fit them either, the bars stay vertical.
+ */
+function barsAcross(w: number, d: SeriesData, ns: number, layers: number, items: Value | undefined, x: string, t: Theme): boolean {
+  if (w >= BARS_ACROSS_WIDTH || layers > 0 || d.problem) return false;
+  if (d.slots.length * hbarRows(t, ns).rowH > MAX_HBAR_HEIGHT) return false;
+  return !inTimeOrder(items, x);
 }
 
 /** Rows a loading horizontal bar chart keeps room for. */
@@ -502,9 +553,8 @@ function roundGeometry(box: { w: number }, d: PieData, kind: "pie" | "donut", fo
     center = { text: ellipsize(text, width, font, m), font, caption, captionFont, lh: Math.round(fontSize * 1.2) };
   }
 
-  // One style for every slice (all $87K or all $87,000), as for bar labels.
-  const compact = slices.some((s) => Math.abs(s.value) >= 10_000);
-  const entries = slices.map((s) => ({ label: s.label, detail: `${barText(s.value, format, compact)} · ${shareText(s.share)}`, color: s.color }));
+  const valueTexts = legendValueTexts(slices.map((s) => s.value), format);
+  const entries = slices.map((s, i) => ({ label: s.label, detail: `${valueTexts[i]} · ${shareText(s.share)}`, color: s.color }));
   let l: { items: LegendItem[]; bottom: number };
   if (beside) {
     // One column, centred on the ring's height.
@@ -713,8 +763,9 @@ function paintHbar(box: Box, ctx: PaintCtx, d: ChartGeometry, ox: number, oy: nu
       ctx.roundRect(ox + b.x, oy + b.y, b.w, b.h, Math.min(6, b.w / 2, b.h / 2));
       const hover = ctx.tween(box.node, `hbar:highlight:${i}:${k}`,
         hot?.kind === "slot" && hot.index === i ? 1 : 0, 165);
+      const fill = d.highlight && !d.highlight.includes(i) ? mutedBar(theme, colorOf(k)) : colorOf(k);
       paintPremiumBar(ctx, { x: ox + b.x, y: oy + b.y, w: b.w, h: b.h },
-        colorOf(k), right ? "right" : "left", hover);
+        fill, right ? "right" : "left", hover);
     });
   });
 
@@ -748,6 +799,9 @@ function check(props: Readonly<Record<string, string>>): string[] {
   }
   for (const prop of ["from", "to"] as const) {
     if (props[prop] !== undefined && kind !== "sankey") out.push(`${prop}= is for kind=sankey only, so it was ignored here; remove it, or use kind=sankey`);
+  }
+  for (const prop of ["values", "highlight"] as const) {
+    if (props[prop] !== undefined && kind !== "bar" && kind !== "hbar" && kind !== "stacked") out.push(`${prop}= is for kind=bar, kind=hbar and kind=stacked only, so it was ignored here; remove it, or use one of them`);
   }
   // Expressions are worked out later; only what's written can be checked here.
   if (y === undefined || y.startsWith("{")) return out;
@@ -826,6 +880,8 @@ export const chart: ComponentDef = {
     target: { type: "name", description: "Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal." },
     good: { type: "enum", values: ["up", "down"], default: "up", description: "Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time)." },
     total: { type: "string", description: "Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total=\"Net income\"." },
+    values: { type: "boolean", default: false, description: "bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits." },
+    highlight: { type: "string", description: "bar, hbar, stacked: one item's x value, e.g. highlight=\"Mar\"; its bar keeps full color, the others fade." },
     format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number." },
   },
   picks: [
@@ -872,6 +928,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       if (p.has("total")) extra.total = p.str("total");
       if (p.has("target")) extra.target = p.str("target");
       if (p.has("rows")) extra.rows = p.str("rows");
+      if (p.bool("values")) extra.values = "true";
       if (p.has("good")) extra.good = p.oneOf("good", ["up", "down"] as const, "up");
       for (const f of ["label", "size", "group", "from", "to"]) if (p.has(f)) extra[f] = p.str(f);
       out = own.layout(box, { items, x, y: fields[0] ?? "", fields, labels: labelsOf(p.str("labels")), format, title: p.text(), line, extra }, ctx);
@@ -885,13 +942,33 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     } else {
       const ys = fields.length ? fields : [""];
       const labels = labelsOf(p.str("labels"));
-      const series = ys.map((field, k) => ({ field, label: labels[k] || field, color: k }));
+      const series = ys.map((field, k) => ({ field, label: labels[k] || fieldTitle(field), color: k }));
       const data = chartSeries(items, x, ys);
+      // A bar chart on a phone tries its bars across first; its warnings wait until it's kept.
+      let across: { g: ChartGeometry; h: number } | null = null;
+      if (kind === "bar" && barsAcross(box.w, data, series.length, layerKids.length, items, x, ctx.theme)) {
+        const held: string[] = [];
+        const tried = hbarGeometry(box, data, series, format, p.text(), line, { theme: ctx.theme, measure: ctx.measure, warn: (w) => held.push(w) });
+        if (!tried.g.message) {
+          across = tried;
+          for (const w of held) ctx.warn?.(w);
+        }
+      }
       out = kind === "hbar" ? hbarGeometry(box, data, series, format, p.text(), line, ctx)
-        : axisGeometry(box, data, series, kind as AxisKind, format, p.text(), line, ctx, readLayers(layerKids, items, ctx.props, line, ctx.warn));
+        : across ?? axisGeometry(box, data, series, kind as AxisKind, format, p.text(), line, ctx, readLayers(layerKids, items, ctx.props, line, ctx.warn));
     }
     if (layerKids.length && kind !== "bar" && kind !== "line") {
       ctx.warn?.(`chart on line ${line}: chart-line, chart-rule and chart-note are drawn on kind=bar and kind=line only, so they were left out of this kind=${kind} chart`);
+    }
+    if (!out.g.message && (out.g.kind === "bar" || out.g.kind === "hbar" || out.g.kind === "stacked")) {
+      if (p.bool("values")) out.g.values = true;
+      const want = p.has("highlight") ? p.str("highlight").trim() : "";
+      if (want) {
+        const same = (a: string, b: string) => a === b || a.trim().toLowerCase() === b.toLowerCase();
+        const at = out.g.slots.flatMap((sl, i) => (same(sl.label, want) ? [i] : []));
+        if (at.length) out.g.highlight = at;
+        else ctx.warn?.(`chart on line ${line}: highlight="${want}" matches no item, so every bar is drawn the same. highlight= is an item's x value as shown, like highlight="${out.g.slots[0]?.label ?? "Jan"}"`);
+      }
     }
     box.data = out.g;
     box.h = out.h;
@@ -985,6 +1062,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const px = ox + d.plot.x, pw = d.plot.w;
     g.globalAlpha = base * fade;
     paintAxisGrid(ctx, d, ox, oy);
+    paintBands(ctx, d, ox, oy, reveal);
 
     g.globalAlpha = base;
     g.fillStyle = c.accent;
@@ -995,7 +1073,8 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
         ? chartHoverAt(d, ctx.pointer.x - ox, ctx.pointer.y - oy)
         : null;
       // A line layer runs across the tops of the bars, where their values would be written.
-      const showLabels = d.series.length === 1 && d.slots.length <= 7 && pw / d.slots.length >= 54 && !d.layers?.lines.length;
+      // values=true asks for them on every bar that has room, whatever the count or series.
+      const showLabels = d.values || (d.series.length === 1 && d.slots.length <= 7 && pw / d.slots.length >= 54 && !d.layers?.lines.length);
       const format = ctx.props(box.node).oneOf("format", FORMATS, "number");
       d.slots.forEach((s, i) => {
         // A wave from left to right: each bar grows out of the zero line.
@@ -1009,13 +1088,16 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           barPath(g, ox + b.x, oy + b.y, b.w, b.h, Math.min(7, b.w / 2, b.h), up);
           const hover = ctx.tween(box.node, `bar:highlight:${i}:${k}`,
             hot?.kind === "slot" && hot.index === i ? 1 : 0, 165);
+          const fill = d.highlight && !d.highlight.includes(i) ? mutedBar(theme, colorOf(k)) : colorOf(k);
           paintPremiumBar(ctx, { x: ox + b.x, y: oy + b.y, w: b.w, h: b.h },
-            colorOf(k), up ? "up" : "down", hover);
-          if (showLabels && k === 0 && s.values[0] !== null) {
-            let label = valueText(s.values[0]!, format);
+            fill, up ? "up" : "down", hover);
+          if (showLabels && (k === 0 || d.values) && s.values[k] != null) {
+            const value = s.values[k]!;
+            let label = valueText(value, format);
             g.save();
             g.font = ctx.font(600, 11);
-            const slotRoom = pw / d.slots.length - 8;
+            // With several series each label sits over its own bar, so the room is a bar and its gap.
+            const slotRoom = d.series.length > 1 ? full.w + BAR_GAP : pw / d.slots.length - 8;
             const outside = up ? b.y - 9 : b.y + b.h + 9;
             const roomOutside = outside >= d.plot.y + 8 && outside <= d.plot.y + d.plot.h - 8;
             // Near the plot edge, place the value inside a tall bar instead
@@ -1024,11 +1106,13 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
             const labelY = roomOutside ? outside : up ? b.y + 14 : b.y + b.h - 14;
             // Inside, the bar is the room, not the slot: try the short form ($24K) before giving up.
             const room = inside ? b.w - 6 : slotRoom;
-            if (inside && g.measureText(label).width >= room) label = shortValueText(s.values[0]!, format);
+            if ((inside || d.values) && g.measureText(label).width >= room) label = shortValueText(value, format);
+            // values=true on a crowded chart: round to whole thousands ($18K) before leaving the label out.
+            if (d.values && g.measureText(label).width >= room) label = shortValueText(value, format, 0);
             if ((roomOutside || inside) && g.measureText(label).width < room) {
               g.textAlign = "center";
               g.textBaseline = "middle";
-              g.fillStyle = inside ? c.onAccent : c.muted;
+              g.fillStyle = inside ? (fill === c.accent ? c.onAccent : onFill(theme, fill)) : c.muted;
               g.globalAlpha *= 0.9;
               g.fillText(label, ox + b.x + b.w / 2, oy + labelY);
             }
@@ -1374,8 +1458,8 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
 }
 
 /** A value in its shortest form, for a label that must fit inside a bar: $24K, 1.2M. */
-function shortValueText(v: number, format: Format): string {
-  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
+function shortValueText(v: number, format: Format, digits = 1): string {
+  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: digits };
   try {
     return formatter(format, opts).format(v);
   } catch {

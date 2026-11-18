@@ -3,7 +3,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { UI_CLIENT } from "./clients";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
-import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
+import { createServer, checkSpec, docsText, guideText, imageCsp, interfaceKey, NO_EMIT, quickStart, REPEAT_TEXT, REPEAT_WINDOW_MS, setImageHosts, UI_URI, MAX_SPEC_CHARS } from "../src/server";
+import { PRESSES_SAVED } from "../src/widget-file";
+import { lookGuide } from "../../src/look";
+import { motionGuide, picturesGuide } from "../../src/prompt";
 
 async function connect(now?: () => number) {
   const server = createServer({ uiHtml: () => "<!doctype html><title>view</title>", now });
@@ -44,11 +47,11 @@ describe("SayShape MCP server", () => {
     expect(show.description).toContain(quickStart());
     for (const element of ["card", "table", "chart", "button", "each", "stepper", "date-picker"]) expect(show.description).toMatch(new RegExp(`\\b${element}\\b`));
     expect(show.description).toMatch(/sayshape_docs/);
-    // Small enough to send with every call: about 1,250 tokens at most, against about 11,500 for the whole guide.
+    // Small enough to send with every call: about 1,350 tokens at most, against about 11,500 for the whole guide.
     // About half is the picks list, which is what lets a model choose kind=bullet or details unprompted.
-    expect(quickStart().length).toBeLessThan(5_000);
+    expect(quickStart().length).toBeLessThan(5_300);
     // The longest, with data and MCP tools, too.
-    expect(quickStart(true, true).length).toBeLessThan(5_000);
+    expect(quickStart(true, true).length).toBeLessThan(5_300);
     expect(show.description).toMatch(/PICK BY WHAT YOU'RE SHOWING[\s\S]*against their targets[^\n]*: chart kind=bullet target=goal/);
     expect(guideText().length).toBeGreaterThan(20_000);
   });
@@ -69,6 +72,19 @@ describe("SayShape MCP server", () => {
     const docs = text(await client.callTool({ name: "sayshape_docs", arguments: { elements: ["piechart"], topics: ["css"] } }));
     expect(docs).toMatch(/No element called piechart\. The elements are:/);
     expect(docs).toMatch(/No topic called css\. Topics: expressions, actions, lists/);
+  });
+
+  it("gives the look, motion and pictures topics on demand, from the guide's own generators", () => {
+    expect(docsText([], ["look"])).toBe(lookGuide("full"));
+    expect(docsText([], ["motion"])).toBe(motionGuide("full"));
+    expect(docsText([], ["pictures"])).toBe(picturesGuide("full"));
+    // The quick start only names them: their text costs nothing until a model asks.
+    expect(quickStart()).toMatch(/Topics: [^\n]*look, motion, pictures/);
+    expect(quickStart()).not.toContain("LOOK (optional)");
+    // A widget file carries this server's engine and draws them; the CDN page's older engine doesn't.
+    expect(docsText([], ["look"], false, false, true, true)).toBe(lookGuide("full"));
+    expect(docsText([], ["look"], false, false, true, false)).toMatch(/^No topic called look\./);
+    expect(quickStart(false, false, true)).not.toMatch(/\blook\b/);
   });
 
   it("returns the quick start when nothing is named", async () => {
@@ -187,8 +203,19 @@ map bind=selected
     expect((contents[0] as { text: string }).text).toContain('content="picker=1&theme=neutral&save=0&copy=0"');
   });
 
+  it("passes the view its brand colors: one as accent=, a list as colors=", async () => {
+    for (const [colors, tag] of [[["#e4572e"], "accent=e4572e"], [["#e4572e", "#2e86ab", "#f2c14e"], "colors=e4572e,2e86ab,f2c14e"]] as const) {
+      const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: false, theme: "teal", colors: [...colors], saveImage: true, copyText: true } });
+      const client = new Client({ name: "test", version: "1.0.0" }, UI_CLIENT);
+      const [a, b] = InMemoryTransport.createLinkedPair();
+      await Promise.all([server.connect(a), client.connect(b)]);
+      const { contents } = await client.readResource({ uri: UI_URI });
+      expect((contents[0] as { text: string }).text).toContain(`content="picker=0&theme=teal&${tag}&save=1&copy=1"`);
+    }
+  });
+
   describe("--image-hosts", () => {
-    const HOSTS = ["images.unsplash.com", "*.img.example.com"];
+    const HOSTS =["images.unsplash.com", "*.img.example.com"];
 
     it("asks the chat app to allow images from just those hosts, and tells the view", async () => {
       const server = createServer({ uiHtml: () => "<!doctype html><head></head>", view: { themePicker: false, theme: "teal", saveImage: true, copyText: true, imageHosts: HOSTS } });
@@ -276,5 +303,28 @@ map bind=selected
       expect(interfaceKey("table items=s\n", { s: "d1" })).not.toBe(interfaceKey("table items=s\n", { s: "d2" }));
       expect(interfaceKey("a\n\n  b  \n", {})).toBe(interfaceKey("a\n  b\n", {}));
     });
+  });
+});
+
+describe("the chat topic and emit:", () => {
+  const SENT_NOW = /you also receive the exact action name/;
+
+  it("says a press reaches the model, for clients that draw views", () => {
+    expect(docsText([], ["chat"])).toMatch(SENT_NOW);
+  });
+
+  it("says not to use emit: for a client that can't draw views", () => {
+    const chat = docsText([], ["chat"], false, false, true);
+    expect(chat).toContain(NO_EMIT);
+    expect(chat).not.toMatch(SENT_NOW);
+    // The rest of the topic is unchanged.
+    expect(chat).toContain("Output only the spec");
+  });
+
+  it("says a press is saved for the next turn, with a host adapter", () => {
+    const chat = docsText([], ["chat"], false, false, true, true, true);
+    expect(chat).toContain(PRESSES_SAVED);
+    expect(chat).not.toContain(NO_EMIT);
+    expect(chat).not.toMatch(SENT_NOW);
   });
 });

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { darkTheme, forcedColorsTheme, lightTheme, studioDarkTheme, studioLightTheme, type Theme } from "../../src";
 import { parseColor } from "../../src/theme";
+import { applyLook, LOOK_OPTIONS, LOOK_PROPS, type Look } from "../../src/look";
 import { render } from "../../src/testing";
 
 /** WCAG contrast ratio between two colors. */
@@ -14,7 +15,18 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-describe.each([["light", lightTheme], ["dark", darkTheme], ["studio-light", studioLightTheme], ["studio-dark", studioDarkTheme]] as Array<[string, Theme]>)("%s theme contrast (WCAG 2.1 AA)", (_name, theme) => {
+const BASE_THEMES = [["light", lightTheme], ["dark", darkTheme], ["studio-light", studioLightTheme], ["studio-dark", studioDarkTheme]] as Array<[string, Theme]>;
+/** Every look option on its own, and all the loudest together: a look line must keep every theme readable. */
+const LOOKS: Look[] = [
+  ...LOOK_PROPS.flatMap((p) => Object.keys(LOOK_OPTIONS[p]).map((o) => ({ [p]: o }) as Look)),
+  { mood: "bold", type: "editorial", shape: "round", density: "airy" },
+];
+const THEMES: Array<[string, Theme]> = [
+  ...BASE_THEMES,
+  ...BASE_THEMES.flatMap(([name, t]) => LOOKS.map((l) => [`${name} + look ${Object.entries(l).map(([k, v]) => `${k}=${v}`).join(" ")}`, applyLook(t, l)] as [string, Theme])),
+];
+
+describe.each(THEMES)("%s theme contrast (WCAG 2.1 AA)", (_name, theme) => {
   const c = theme.colors;
   for (const bg of ["surface", "raised"] as const) {
     it(`text reads at 4.5:1 on ${bg}: ink, muted, accent, good, warn and bad`, () => {
@@ -28,8 +40,12 @@ describe.each([["light", lightTheme], ["dark", darkTheme], ["studio-light", stud
       }
     });
   }
-  it("text on the accent reads at 4.5:1", () => {
+  it("text on the accent reads at 4.5:1, all along its gradient", () => {
     expect(contrast(c.onAccent, c.accent)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(c.onAccent, c.accent2), "on accent2").toBeGreaterThanOrEqual(4.5);
+  });
+  it("the accent's gradient end stands out at 3:1 on surface and raised", () => {
+    for (const bg of ["surface", "raised"] as const) expect(contrast(c.accent2, c[bg]), bg).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -45,6 +61,18 @@ describe("forced-colors mode", () => {
 
   it("keeps everything else about the theme", () => {
     expect([t.space, t.radius, t.font, t.text]).toEqual([lightTheme.space, lightTheme.radius, lightTheme.font, lightTheme.text]);
+  });
+
+  it.each(LOOKS.map((l) => [Object.entries(l).map(([k, v]) => `${k}=${v}`).join(" "), l] as const))("wins over a look line (%s)", (_n, look) => {
+    for (const [, base] of BASE_THEMES) {
+      const forced = forcedColorsTheme(applyLook(base, look), (name) => system[name]!);
+      expect(forced.colors).toEqual(forcedColorsTheme(base, (name) => system[name]!).colors);
+    }
+  });
+
+  it("a look line in a forced-colors theme draws in the system colors", () => {
+    const ui = render(`look mood=bold\nbutton "Go" variant=primary on=notify:Hi`, { theme: t });
+    expect(ui.sayshape.theme.colors).toEqual(t.colors);
   });
 
   it("still renders an interface without colors of its own", () => {
@@ -82,7 +110,7 @@ describe("target size (WCAG 2.2, 2.5.8)", () => {
   });
 });
 
-describe.each([["light", lightTheme], ["dark", darkTheme], ["studio-light", studioLightTheme], ["studio-dark", studioDarkTheme]] as Array<[string, Theme]>)("%s theme control outlines (WCAG 1.4.11)", (_name, theme) => {
+describe.each(THEMES)("%s theme control outlines (WCAG 1.4.11)", (_name, theme) => {
   it("show where a control is at 3:1 on surface and raised", () => {
     for (const bg of ["surface", "raised"] as const) expect(contrast(theme.colors.control, theme.colors[bg]), bg).toBeGreaterThanOrEqual(3);
   });

@@ -131,11 +131,11 @@ async function browserCheck() {
   const origin = `http://127.0.0.1:${server.address().port}`;
   const browser = await chromium.launch();
   const pages = html.filter((f) => !f.endsWith("404.html")).map((f) => BASE + relative(DIST, f).replace(/\\/g, "/"));
-  for (const scheme of ["light", "dark"]) {
-    const context = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 } });
-    for (const path of pages) {
-      const page = await context.newPage();
-      const errors = [];
+  // One page's checks, in its own tab. Pages don't share anything, so several run at once.
+  async function checkPage(context, scheme, path) {
+    const page = await context.newPage();
+    const errors = [];
+    try {
       page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
       page.on("pageerror", (e) => errors.push(e.message));
       page.on("request", (r) => {
@@ -156,11 +156,36 @@ async function browserCheck() {
         }).length,
       );
       if (blank) errors.push(`${blank} visible SayShape canvas(es) never drew`);
-      for (const e of errors) fail(`${path} (${scheme}): ${e}`);
-      await page.close();
+    } catch (e) {
+      // A page that can't be opened or checked is a problem, never a skipped page.
+      errors.push(`couldn't be checked: ${e instanceof Error ? e.message : e}`);
     }
-    await context.close();
+    for (const e of errors) fail(`${path} (${scheme}): ${e}`);
+    await page.close();
   }
+
+  // Most of a page's time is waiting (for the network to go quiet, for demos to start),
+  // so a few tabs at once finish far sooner. SITE_CHECK_TABS=1 goes back to one at a time.
+  const tabs = Math.max(1, Number(process.env.SITE_CHECK_TABS) || 4);
+  const jobs = [];
+  const contexts = [];
+  for (const scheme of ["light", "dark"]) {
+    const context = await browser.newContext({ colorScheme: scheme, viewport: { width: 1280, height: 900 } });
+    contexts.push(context);
+    for (const path of pages) jobs.push({ context, scheme, path });
+  }
+  let next = 0;
+  let opened = 0;
+  await Promise.all(Array.from({ length: tabs }, async () => {
+    while (next < jobs.length) {
+      const job = jobs[next++];
+      await checkPage(job.context, job.scheme, job.path);
+      opened++;
+    }
+  }));
+  for (const context of contexts) await context.close();
+  // Guards the loop above: every page, in both schemes, or the check fails.
+  if (opened !== pages.length * 2) fail(`opened ${opened} pages, expected ${pages.length * 2}`);
   await browser.close();
   server.close();
   console.log(`Opened ${pages.length} pages in Chromium, light and dark.`);

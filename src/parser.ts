@@ -13,7 +13,7 @@
  * mistake costs one element, not the whole screen.
  */
 import { actionExpressions, parseActions } from "./actions";
-import { COMMON_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
+import { COMMON_PROPS, propsFor, universalProp, type ComponentDef, type PropDef } from "./component";
 import { MAX_RULES, MAX_RULE_ACTIONS, MAX_RULE_INTERVAL, MIN_RULE_INTERVAL, RULE_OPS, SCREEN_STATE, type RuleDef } from "./behavior";
 import { RULE_FUNCTIONS } from "./math";
 import { dragAxis, readPaths } from "./drag-axis";
@@ -24,6 +24,8 @@ import { loopNames } from "./each";
 import { PATH } from "./paths";
 import { literal } from "./actions";
 import type { Registry } from "./registry";
+import { expandPresets } from "./presets/report";
+import { LOOK_DEFAULT, LOOK_OPTIONS, LOOK_PROPS, lookOptions, type Look, type LookProp } from "./look";
 import type { Diagnostic, SayShapeNode, Value } from "./types";
 
 /**
@@ -72,6 +74,12 @@ function defOf(type: string, registry: Registry): ComponentDef | undefined {
 export interface ParseOptions {
   /** Ignore the last line if it has no trailing newline (it may still be streaming). */
   partial?: boolean;
+  /**
+   * Used with partial: a name read before its state line (layout first, data
+   * last) isn't reported as unknown yet, since the line may still be on its
+   * way. Without partial, or off (default), nothing changes.
+   */
+  deferUnknownNames?: boolean;
   /** Props given to the invisible root column. */
   rootProps?: Record<string, string>;
   /**
@@ -85,7 +93,27 @@ export interface ParseOptions {
    * language and the result are exactly what they were.
    */
   behavior?: boolean;
+  /**
+   * Opt-in presets (src/presets/): `report` blocks are expanded into ordinary
+   * elements before the spec is read, and the result says what they became.
+   * Off (default), `report` is an unknown element, as it always was.
+   */
+  presets?: boolean;
+  /**
+   * With presets: the values of data the host supplies (sayshape.state.set),
+   * so a report can name a table's columns and choose number formats from them.
+   */
+  presetValue?: (name: string) => unknown;
+  /**
+   * Read a look line (`look mood=bold type=editorial`, src/look.ts), which
+   * chooses the look of the whole interface. Default true; false ignores
+   * look lines with a warning, for hosts that keep their own look.
+   */
+  look?: boolean;
 }
+
+/** A spec's look line: the choices it made, and its line. */
+export type LookLine = Look & { line: number };
 
 /** A derive line's value: a name, its expression, and the names that expression reads. */
 export interface DerivedDef {
@@ -110,6 +138,14 @@ export interface ParseResult {
   lines: number;
   /** Rules (`every 1s … do=…`) that can run. Present only when parsed with behavior on. */
   rules?: RuleDef[];
+  /**
+   * With presets on and a report in the spec: the spec as ordinary SayShape
+   * (what the reports became), and the data names reports read. Line numbers
+   * everywhere else in the result are the original spec's.
+   */
+  presets?: { expanded: string; reads: string[] };
+  /** The look line's choices, when the spec has one that chose something (and look lines are on). */
+  look?: LookLine;
 }
 
 interface LineTokens {
@@ -414,7 +450,7 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
   const template = (s: string) => { for (const p of splitTemplate(s)) if ("expr" in p) out.push(p.expr); };
   if (text !== undefined) template(text);
   for (const [name, raw] of Object.entries(props)) {
-    const def = defs[name] ?? COMMON_PROPS[name];
+    const def = defs[name] ?? universalProp(name);
     if (!def) continue;
     const whole = wholeExpression(raw);
     if (def.type === "action") {
@@ -426,6 +462,22 @@ function expressionsOf(text: string | undefined, props: Record<string, string>, 
     else if (def.type === "condition" || def.type === "expression") out.push(raw);
     else if (def.type === "number" && BARE_NAME.test(raw)) out.push(raw);
     else if (raw.includes("{")) template(raw);
+  }
+  return out;
+}
+
+/**
+ * enter= and stagger= where they can't play: on an element drawn by its
+ * parent or one that only stands for others (each, if), or stagger= on an
+ * element without children. Component props of the same name are its own.
+ */
+function motionProblems(type: string, props: Record<string, string>, def: ComponentDef): string[] {
+  const out: string[] = [];
+  for (const name of ["enter", "stagger"] as const) {
+    if (!(name in props) || def.props[name]) continue;
+    if (def.drawnByParent || def.noBox) out.push(`${name}= on a ${type} doesn't play, since its ${def.parents?.[0] ?? "parent"} draws it. Put ${name}= on the ${def.parents?.[0] ?? "parent"}`);
+    else if (type === "each" || type === "if") out.push(`${name}= on ${type} doesn't play: ${type} has no look of its own. Put ${name}= on the element around it (stagger=true there brings its items in one after another), or on the lines inside`);
+    else if (name === "stagger" && !def.children) out.push(`stagger= only works on an element with children, and "${type}" has none. Use enter= here, or put stagger=true on the element around it`);
   }
   return out;
 }
@@ -572,6 +624,42 @@ function providedTo(stack: readonly SayShapeNode[], registry: Registry): { names
 }
 
 export function parse(src: string, registry: Registry, opts: ParseOptions = {}): ParseResult {
+  if (!opts.presets || !HAS_PRESET.test(src)) return parseSpec(src, registry, opts);
+  if (opts.partial) {
+    const cut = src.lastIndexOf("\n");
+    src = cut < 0 ? "" : src.slice(0, cut + 1);
+  }
+  // What the spec itself declares, to name a report's columns from its data: read once without presets.
+  const plain = parseSpec(src, registry, { ...opts, presets: false, partial: false });
+  const values = new Map<string, unknown>(plain.state.map((s) => [s.key, s.value]));
+  const names = new Set<string>([...values.keys(), ...plain.derived.map((d) => d.name), ...(opts.knownNames ?? [])]);
+  const x = expandPresets(src, {
+    value: (n) => (values.has(n) ? values.get(n) : opts.presetValue?.(n)),
+    known: (n) => names.has(n) || opts.presetValue?.(n) !== undefined,
+  });
+  const result = parseSpec(x.text, registry, { ...opts, partial: false });
+  // Back to the original spec's lines; elements a report made get ids of their own from the report line.
+  const orig = (line: number) => x.lines[line - 1] ?? line;
+  const walk = (n: SayShapeNode) => {
+    if (n.id !== "root") {
+      const part = x.part[n.line - 1] ?? 0;
+      n.line = orig(n.line);
+      n.id = part ? `${n.line}.${part}:${n.type}` : `${n.line}:${n.type}`;
+    }
+    n.children.forEach(walk);
+  };
+  walk(result.root);
+  for (const st of result.state) st.line = orig(st.line);
+  for (const d of result.derived) d.line = orig(d.line);
+  for (const r of result.rules ?? []) r.line = orig(r.line);
+  if (result.look) result.look.line = orig(result.look.line);
+  const diagnostics = [...result.diagnostics.map((d) => ({ ...d, line: orig(d.line) })), ...x.diagnostics].sort((a, b) => a.line - b.line);
+  return { ...result, diagnostics, lines: (src.match(/\n/g) ?? []).length, presets: { expanded: x.text, reads: x.reads } };
+}
+
+const HAS_PRESET = /^\s*report(\s|$)/m;
+
+function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): ParseResult {
   if (opts.partial) {
     const cut = src.lastIndexOf("\n");
     src = cut < 0 ? "" : src.slice(0, cut + 1);
@@ -604,6 +692,10 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   const rules: RuleDef[] = [];
   const controls = new Set<string>();
   const dialogs = new Set<string>();
+  // The look line (the first one), and the first element, which a look should come before.
+  let look: LookLine | undefined;
+  let lookLine: number | null = null;
+  let firstElement: number | null = null;
 
   const lines = src.split("\n");
   if (lines.at(-1) === "") lines.pop();
@@ -633,6 +725,23 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
         const exprs = [...(rule.if === undefined ? [] : [rule.if]), ...actionExpressions(rule.actions)];
         const names = [...new Set(exprs.flatMap((e) => identifiers(e, RULE_FUNCTIONS)))];
         if (names.length) outsideUses.push({ line: lineNo, names });
+      }
+      return;
+    }
+
+    // A host's own element named look keeps its line.
+    if (/^look(\s|$)/.test(body) && !registry.has("look")) {
+      if (opts.look === false) {
+        diagnostics.push({ line: lineNo, severity: "warning", message: `This app keeps its own look, so the look line was ignored. Leave it out` });
+      } else if (indent > 0) {
+        diagnostics.push({ line: lineNo, severity: "warning", message: `look goes at the top level, unindented, as the first line: it chooses the look of the whole interface, not one element. This one was ignored` });
+      } else if (lookLine !== null) {
+        diagnostics.push({ line: lineNo, severity: "warning", message: `The look was already chosen on line ${lookLine}, so this line was ignored. Put every choice on that one line, like look mood=bold type=editorial` });
+      } else {
+        lookLine = lineNo;
+        if (firstElement !== null) diagnostics.push({ line: lineNo, severity: "warning", message: `look goes before the first element (line ${firstElement}), so the screen doesn't change its look while it draws. It still applies to the whole interface; move it to the top` });
+        const chosen = parseLookLine(body.slice(4), lineNo, diagnostics);
+        if (Object.keys(chosen).length) look = { ...chosen, line: lineNo };
       }
       return;
     }
@@ -813,7 +922,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       diagnostics.push({ line: lineNo, severity: "warning", message: `${w} is a weight, not a style, so it was used as weight=${w}` });
     }
     for (const [name, rawValue] of Object.entries(tok.props)) {
-      const pdef = def.props[name] ?? COMMON_PROPS[name];
+      const pdef = def.props[name] ?? universalProp(name);
       if (!pdef) {
         const known = [...Object.keys(def.props), ...Object.keys(COMMON_PROPS)];
         diagnostics.push({ line: lineNo, severity: "warning", message: `"${tok.type}" has no prop "${name}". Known props: ${known.join(", ")}` });
@@ -821,6 +930,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
       }
       checkProp(name, rawValue, pdef, lineNo, diagnostics, fns);
     }
+    for (const message of motionProblems(tok.type, tok.props, def)) diagnostics.push({ line: lineNo, severity: "warning", message });
     if ("tip" in tok.props && def.drawnByParent && !def.props.tip) {
       const parent = def.parents?.[0] ?? "its parent";
       diagnostics.push({ line: lineNo, severity: "warning", message: `tip= on a ${tok.type} isn't shown, since its ${parent} draws it. Put the tip on the ${parent}, or on a text or icon near it` });
@@ -857,7 +967,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     const names = [...new Set(exprs.flatMap((e) => identifiers(e, fns)))].filter((n) => !inScope.has(n));
     if (names.length && !provided.anyNames) outsideUses.push({ line: lineNo, names });
     for (const [name, raw] of Object.entries(tok.props)) {
-      const pdef = def.props[name] ?? COMMON_PROPS[name];
+      const pdef = def.props[name] ?? universalProp(name);
       const wrote = (n: string) => { written.add(n); controls.add(n); if (!inScope.has(n)) writes.push({ name: n, line: lineNo }); };
       if (pdef?.type === "state" && PATH.test(raw)) wrote(raw.split(".")[0]!);
       if (pdef?.type === "action") {
@@ -891,6 +1001,7 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
     else if (tok.props.if !== undefined) chains.set(node, [bareExpression(tok.props.if)]);
     pendingChain = null;
     nodeCount++;
+    firstElement ??= lineNo;
     if (tok.type === "each") eaches.push(node);
     if (tok.type === "dialog" && tok.props.bind !== undefined) dialogs.add(tok.props.bind.split(".")[0]!);
     if (def.children) stack.push(node);
@@ -901,11 +1012,45 @@ export function parse(src: string, registry: Registry, opts: ParseOptions = {}):
   for (const d of derivedLines) if (d.reads.length) outsideUses.push({ line: d.line, names: d.reads });
   const defined = new Set([...state.map((s) => s.key), ...derivedLines.map((d) => d.name)]);
   // A state value that couldn't be read is reported on its own line; saying again on every line that uses it hides that.
-  checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics);
+  checkNames(outsideUses, eaches, new Set([...defined, ...skippedState]), written, diagnostics, !!(opts.partial && opts.deferUnknownNames));
   // Stable sort keeps each line's diagnostics in the order they were found.
   const kept = opts.behavior ? checkRules(rules, controls, dialogs, diagnostics) : undefined;
   diagnostics.sort((a, b) => a.line - b.line);
-  return { root, state, derived, diagnostics, nodeCount, lines: lines.length, ...(kept ? { rules: kept } : {}) };
+  return { root, state, derived, diagnostics, nodeCount, lines: lines.length, ...(kept ? { rules: kept } : {}), ...(look ? { look } : {}) };
+}
+
+/** Words for what a look never sets, so a model reaching for one hears why. */
+const NOT_LOOK = /^(colou?rs?|accent|background|bg|fg|foreground|font|fonts|family|face|size|sizes|radius|corners|spacing|padding|gap|palette|brand|theme|dark|light)$/i;
+
+/**
+ * A look line's props: one named option each. An unknown prop or option is
+ * left out with a warning that lists what's there; the rest still apply.
+ */
+function parseLookLine(body: string, line: number, diags: Diagnostic[]): Look {
+  const t = tokenizeLine("look " + body);
+  const out: Record<string, string> = {};
+  const known = LOOK_PROPS.join(", ");
+  for (const m of t.problems) diags.push({ line, severity: "warning", message: `look: ${m}` });
+  if (t.text !== undefined) diags.push({ line, severity: "warning", message: `look takes named choices, not quoted text, so "${t.text}" was ignored. Write look ${LOOK_PROPS.map((p) => `${p}=…`).join(" ")}` });
+  for (const [name, raw] of Object.entries(t.props)) {
+    if (!(LOOK_PROPS as string[]).includes(name)) {
+      diags.push({ line, severity: "warning", message: NOT_LOOK.test(name)
+        ? `look never sets colors, fonts or sizes (the app chooses those), so ${name}= was ignored. look takes ${known}`
+        : `look has no "${name}", so it was ignored. look takes ${known}` });
+      continue;
+    }
+    const prop = name as LookProp;
+    const options = lookOptions(prop);
+    const value = raw.trim();
+    if (!options.includes(value)) {
+      diags.push({ line, severity: "warning", message: /^[{#]|\d/.test(value)
+        ? `look ${prop}= takes one of its names, never a value or an expression, so ${prop}=${value} was ignored. Use one of: ${options.join(", ")}`
+        : `look ${prop}=${value} isn't one of its choices, so it was ignored. Use one of: ${options.join(", ")}` });
+      continue;
+    }
+    if (value !== LOOK_DEFAULT && value in LOOK_OPTIONS[prop]) out[prop] = value;
+  }
+  return out as Look;
 }
 
 /**
@@ -953,7 +1098,7 @@ const ENGINE_STATE = ["screen"];
  * otherwise just show a dash: a loop variable outside its each, or a word
  * meant as text but left unquoted ({done ? Yes : No}).
  */
-function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayShapeNode[], stateKeys: Set<string>, written: Set<string>, diags: Diagnostic[]): void {
+function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayShapeNode[], stateKeys: Set<string>, written: Set<string>, diags: Diagnostic[], deferUnknown = false): void {
   const defined = new Map<string, { each: SayShapeNode; prop: string }>();
   for (const e of eaches) {
     const as = e.props.as ?? "item";
@@ -966,6 +1111,8 @@ function checkNames(uses: Array<{ line: number; names: string[] }>, eaches: SayS
       const d = defined.get(name);
       // Writing t.done outside its each doesn't make t exist there, so loop variables are checked first.
       if (!d && written.has(name)) continue;
+      // Layout first: the state line may still be streaming in; the last parse reports it.
+      if (!d && deferUnknown) continue;
       diags.push(d
         ? { line, severity: "warning", message: `"${name}" only exists inside the each on line ${d.each.line} (${d.prop}). Indent this line under it, or use a state name` }
         : { line, severity: "warning", message: `"${name}" isn't state or a loop variable, so it shows as nothing. To show it as text, quote it: '${name}'. To use state, declare it: state ${name}=…` });

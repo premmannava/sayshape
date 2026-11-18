@@ -20,6 +20,7 @@ npm run dev        # opens the playground
 | `npm run bench` | Benchmarks parse, layout and paint on 1,000- and 5,000-element specs |
 | `npm run eval` | Scores a real model on 60 requests ([Measure it](model.md#measure-it)) |
 | `npm run pick-eval` | Scores whether a model picks the representation that shows the data best ([Check the picks](model.md#check-the-picks)) |
+| `npm run colors-eval` | Scores whether models keep the colors a person named across a conversation, and invent none ([Check that models keep the colors](model.md#check-that-models-keep-the-colors)) |
 | `npm run guide:size` | Measures the model guide by section, per mode and profile |
 | `npm run typecheck` | Type-checks everything |
 | `npm run build` | Builds the library into `dist/`: ES modules, and `sayshape.global.js` and `sayshape-map.global.js` for a plain `<script src>` (they define the globals `sayshape` and `sayshapeMap`) |
@@ -57,6 +58,7 @@ expect(ui.text()).toContain("Clicked 1 times");
 | `set`, `setSpec`, `stream` | Change state, replace the spec, or stream one in chunks |
 | `state`, `emitted`, `focused`, `diagnostics`, `warnings` | Read the results |
 | `text`, `drawOps`, `hits` | What the last frame drew, and what is clickable |
+| `entrance(query)` | Where an element's `enter=` entrance was in the last frame: `{ role, progress }`, or null. Screens are still unless `render(spec, { animate: true, clock: true })`; `ui.clock.advance(ms)` moves time |
 
 Map clicks need a real canvas to tell countries apart, so they're covered by the visual tests rather than in Node.
 
@@ -136,8 +138,12 @@ What a `ComponentDef` can define:
 | `visible(node, scope)` | Hide the element beyond `if=` (only the active `screen` shows) |
 | `press(ctx)` | What happens on activation; by default it runs the `on` prop |
 | `cursor(target)` | Mouse cursor over it |
+| `noBox` | It has no box of its own: its parent draws it or reads it as data (a table-column, a chart layer). The parser then warns that `enter=` and `stagger=` on it don't play |
+| `quiet` | Props the parser accepts but the model guide leaves out until a guide option asks for them (image's `shape=` and `zoom=`, shown with `GuideOptions.pictures`) |
 
 Use `ctx.props(node)` to read props. It evaluates `{expressions}` and fills templates for you: `num`, `str`, `bool`, `cond`, `oneOf` and `text`.
+
+Every element with a box already takes `enter=` and `stagger=` ([Motion](language.md#motion)); the engine plays them around `paint`, so a component does nothing for them. For motion of its own that runs over time, such as the image's slow zoom, call `ctx.progress(box, key, ms)` while painting: it goes from 0 to 1 once, eased, and is 1 at once when motion is off (`animate: false` or reduced motion). Read sizes, radii and fonts from `ctx.theme` as usual, and a spec's look line ([Look](language.md#look)) reaches the component through the same tokens.
 
 ## Project structure
 

@@ -7,7 +7,9 @@
  * Save image and Copy text where they're seen. Under it: the spec the model
  * wrote, how long the answer took as one bar split by stage (waiting,
  * thinking, writing) with SayShape's own drawing time beside it, and the
- * actions the answer sent.
+ * actions the answer sent. A saved answer (the visitor chose to save them)
+ * also asks for a thumb up or down, and a note on what was wrong, and counts
+ * how much it's used once finished.
  * The engine is destroyed with the component, which is how "New chat" frees it.
  */
 import { computed, nextTick, ref, shallowRef, watch } from "vue";
@@ -16,7 +18,9 @@ import type { Theme } from "../sayshape/runtime";
 import { useSayShape } from "../sayshape/useSayShape";
 import { onHostEvents } from "../sayshape/events";
 import { highlightLine } from "../sayshape/highlight";
-import { duration, isBusy, PHASE_TEXT, stages, summary, type Turn } from "../sayshape/chat";
+import { countUse, duration, isBusy, PHASE_TEXT, stages, summary, type Turn } from "../sayshape/chat";
+import { sendFeedback } from "../sayshape/chatClient";
+import { MAX_NOTE_CHARS } from "../../../../worker/src/records";
 
 const props = defineProps<{ turn: Turn; theme: Theme; latest: boolean }>();
 const emit = defineEmits<{ retry: [] }>();
@@ -34,6 +38,19 @@ let counting = true;
 let pushed = 0;
 let resets = -1;
 let streaming = false;
+/** The note under a thumb down: open, what's typed, sent. */
+const noteOpen = ref(false);
+const note = ref("");
+const noteSent = ref(false);
+/**
+ * When the visitor last pressed or typed in the answer. The engine also changes state on its own
+ * (a spec's state lines are set on the first frame after it arrives), so only changes soon after
+ * the visitor's own input count as using it.
+ */
+let lastInput = -Infinity;
+const INPUT_WINDOW_MS = 2_000;
+const touched = () => { lastInput = performance.now(); };
+const used = (kind: "changes" | "actions" | "screens") => { if (performance.now() - lastInput < INPUT_WINDOW_MS) countUse(props.turn, kind); };
 
 const busy = computed(() => isBusy(props.turn));
 /** Something to draw: a line has arrived, or the answer is done. */
@@ -80,11 +97,17 @@ const { sayshape } = useSayShape(canvas, (l) => {
     }),
     // Nothing is listening for emit: actions on this page. Say what an app would receive, as the landing page does.
     onHostEvents(l, (e) => { if (e.kind === "emit") actions.value = [e.text, ...actions.value].slice(0, 2); }),
+    // How much a saved answer is used once it's finished, by the visitor (countUse ignores the rest).
+    l.on("change", () => used("changes")),
+    l.on("action", () => used("actions")),
+    l.on("navigate", () => used("screens")),
   ];
   sync();
   return () => offs.forEach((off) => off());
 // The elements the model proxy teaches for chat answers: the core set, drawings (scene) and the world map.
-}, { followSiteTheme: () => false, padding: 6, scene: true, map: true });
+// presets: the proxy may answer with a report. streamPlaceholders: its guide asks for the layout first and the data last.
+// images: the proxy's guide lists the common image hosts, so the engine here loads from them.
+}, { followSiteTheme: () => false, padding: 6, scene: true, map: true, presets: true, streamPlaceholders: true, images: true });
 
 /** Bring the engine up to date with the turn: a new attempt, new lines, the end. */
 function sync() {
@@ -113,6 +136,8 @@ function sync() {
 }
 watch(() => [props.turn.text, props.turn.resets, props.turn.status], sync, { flush: "sync" });
 watch(() => props.theme, (th) => sayshape.value?.setTheme(th));
+// Try again starts a new answer: its note starts closed and empty.
+watch(() => props.turn.record, () => { noteOpen.value = false; note.value = ""; noteSent.value = false; });
 
 const problemAt = (line: number) => diagnostics.value.filter((d) => d.line === line).map((d) => d.message).join("\n") || undefined;
 
@@ -137,6 +162,23 @@ async function saveImage() {
     copied.value = "Couldn't save the image";
   }
   setTimeout(() => { copied.value = ""; }, 2000);
+}
+
+function vote(v: "up" | "down") {
+  const id = props.turn.record;
+  if (!id || props.turn.vote === v) return;
+  props.turn.vote = v;
+  noteOpen.value = v === "down" && !noteSent.value;
+  void sendFeedback({ id, vote: v });
+}
+
+function sendNote() {
+  const id = props.turn.record;
+  const text = note.value.trim();
+  if (!id || !text) return;
+  noteSent.value = true;
+  noteOpen.value = false;
+  void sendFeedback({ id, note: text });
 }
 
 async function copy(what: "text" | "spec") {
@@ -182,7 +224,8 @@ async function copy(what: "text" | "spec") {
       <div v-if="showThought && turn.thought" :id="thoughtId" class="ca-think-text full" tabindex="0" aria-label="The model's thinking">{{ turn.thought }}</div>
     </div>
 
-    <div v-show="drawn" class="sayshape-canvas-wrap ca-canvas">
+    <!-- Input on the canvas, its text editor and its screen reader mirror (whose activations arrive as click and input) all reach this wrapper. -->
+    <div v-show="drawn" class="sayshape-canvas-wrap ca-canvas" @pointerdown.capture="touched" @keydown.capture="touched" @click.capture="touched" @input.capture="touched">
       <canvas ref="canvas" :aria-label="`Answer to “${turn.question}”, drawn by SayShape`"></canvas>
     </div>
 
@@ -217,6 +260,23 @@ async function copy(what: "text" | "spec") {
         {{ problems }} {{ problems === 1 ? "problem" : "problems" }} SayShape worked around
       </button>
       <span v-if="turn.status === 'done'" class="ca-meta">{{ summary(turn) }}</span>
+    </div>
+    <div v-if="turn.record && turn.status === 'done'" class="ca-rate">
+      <div class="ca-rate-row" role="group" aria-label="Was this answer useful?">
+        <span>Useful?</span>
+        <button type="button" class="ca-thumb" :aria-pressed="turn.vote === 'up'" aria-label="Yes, useful" @click="vote('up')">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M7 11v9H4v-9h3Zm0 0 4-7.5a2 2 0 0 1 3.4 1.7L13.5 10H19a2 2 0 0 1 2 2.3l-1.2 6.1A2 2 0 0 1 17.8 20H7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" /></svg>
+        </button>
+        <button type="button" class="ca-thumb" :aria-pressed="turn.vote === 'down'" aria-label="No, not useful" @click="vote('down')">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" style="transform: rotate(180deg)"><path d="M7 11v9H4v-9h3Zm0 0 4-7.5a2 2 0 0 1 3.4 1.7L13.5 10H19a2 2 0 0 1 2 2.3l-1.2 6.1A2 2 0 0 1 17.8 20H7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" /></svg>
+        </button>
+        <span v-if="turn.vote && !noteOpen" class="ca-rate-thanks" role="status">{{ noteSent ? "Thanks, that helps." : "Thanks." }}</span>
+      </div>
+      <form v-if="noteOpen" class="ca-note-form" @submit.prevent="sendNote">
+        <label :for="`ca-note-${turn.id}`" class="ca-sr">What was wrong? (optional)</label>
+        <input :id="`ca-note-${turn.id}`" v-model="note" type="text" :maxlength="MAX_NOTE_CHARS" placeholder="What was wrong? (optional)">
+        <button type="submit" class="sayshape-btn quiet small" :disabled="!note.trim()">Send</button>
+      </form>
     </div>
     <p v-for="(a, i) in actions" :key="i + a" class="ca-action">
       <span class="ca-action-label">Your app would receive</span> <code>{{ a }}</code>
@@ -325,6 +385,18 @@ async function copy(what: "text" | "spec") {
 .ca-time .wrote { background: var(--chat-fill) }
 .ca-copied { font-weight: 600; color: var(--vp-c-text-1) }
 .ca-copied:empty { display: none }
+.ca-rate { display: grid; gap: 8px }
+.ca-rate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--vp-c-text-2) }
+.ca-rate-row > span:first-child { margin-right: 2px }
+.ca-thumb { display: grid; place-items: center; width: 34px; height: 34px; border: 1.5px solid var(--vp-c-divider); border-radius: 50%; background: none; color: var(--vp-c-text-2); cursor: pointer }
+.ca-thumb:hover { border-color: var(--vp-c-text-1); color: var(--vp-c-text-1) }
+.ca-thumb[aria-pressed="true"] { border-color: var(--chat-fill); background: var(--chat-fill); color: var(--chat-on-fill) }
+.ca-thumb:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 2px }
+.ca-rate-thanks { margin-left: 4px; font-weight: 600; color: var(--vp-c-text-1) }
+.ca-note-form { display: flex; gap: 8px; max-width: 560px }
+.ca-note-form input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 1.5px solid var(--vp-c-border); border-radius: 10px; background: var(--ss-card); font: 14px var(--vp-font-family-base); color: var(--vp-c-text-1) }
+.ca-note-form input:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 1px }
+.ca-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
 .ca-action { margin: 0; font-size: 12.5px; color: var(--vp-c-text-2); overflow-wrap: anywhere }
 .ca-action-label::after { content: " →" }
 .ca-action code { font: 12px var(--vp-font-family-mono); color: var(--vp-c-text-1); background: none; padding: 0 }

@@ -1,0 +1,14 @@
+@insert 16
+card pad=18 gap=10
+  text "All claims" style=title
+  segmented bind=status label="Filter by status" options="All,Open,In review,Closed,Denied"
+  text "{len(shown)} of {len(claims)} claims" tone=muted
+  table "Claims" items={shown} key=id
+    table-column "ID" field=id
+    table-column "Opened" field=opened
+    table-column "Line" field=line
+    table-column "Site" field=site
+    table-column "Status" field=status
+    table-column "Incurred" field=incurred format=money align=right
+    table-column "Days" field=days format=number align=right
+@delete 24-35

@@ -1,14 +1,17 @@
 export { SayShape, roundRectPath, type SayShapeOptions, type SayShapeEvents, type Metrics } from "./engine";
-export { parse, tokenizeLine, MAX_DEPTH, type ParseOptions, type ParseResult } from "./parser";
+export { parse, tokenizeLine, MAX_DEPTH, type ParseOptions, type ParseResult, type LookLine } from "./parser";
 export { evaluate, interpolate, formatValue, checkSyntax, identifiers, type EvalResult, type Scope } from "./expr";
 export { parseActions, runActions, type Action } from "./actions";
 export { Registry } from "./registry";
 export { Store } from "./state";
 export { layoutTree, boxAt, walkBoxes, isVisible } from "./layout";
 export { Inspector, type DrawCall } from "./inspector";
-export { languageGuide, guideSections, describeGuide, componentExampleSpec, pickList, PICKS_HEADING, WORKED_EXAMPLES, COMPACT_EXAMPLE_ORDER, type GuideOptions, type GuideMode, type GuideSection, type GuideInfo, type WorkedExampleName, type AppAction } from "./prompt";
+export { expandPresets, humanize, REPORT_EXAMPLE, FIGURE_OPS, CHART_KINDS, type Expansion, type PresetData } from "./presets/report";
+export { languageGuide, guideSections, describeGuide, REPORT_FALLBACK, componentExampleSpec, pickList, PICKS_HEADING, WORKED_EXAMPLES, COMPACT_EXAMPLE_ORDER, type GuideOptions, type GuideMode, type GuideSection, type GuideInfo, type WorkedExampleName, type AppAction } from "./prompt";
 export { resolveProfile, PROFILES, ALWAYS_EXPOSED, type ComponentProfile, type ResolvedProfile } from "./profiles";
+export { COMMON_IMAGE_HOSTS } from "./images";
 export { lightTheme, darkTheme, studioLightTheme, studioDarkTheme, extendTheme, themeFromCSS, forcedColorsTheme, type Theme } from "./theme";
+export { applyLook, LOOK_OPTIONS, LOOK_PROPS, LOOK_FONTS, lookOptions, type Look, type LookProp } from "./look";
 export { CanvasMeasurer, MonoMeasurer, wrapText, type TextMeasurer } from "./text";
 export { PropReader, COMMON_PROPS, CATEGORIES, type ComponentDef, type ElementPick, type PropDef, type LayoutContext, type PaintContext, type PressContext, type DragContext, type Category } from "./component";
 export { coreComponents } from "./components";
@@ -17,3 +20,4 @@ export type { SayShapeNode, Box, Diagnostic, Value, HitTarget, Rect } from "./ty
 export { ROLES, accessibleKey, type Role, type Semantics, type ElementSemantics, type PartSemantics, type SemanticsResult, type SemanticsContext, type AccessibleNode, type RangeValue } from "./a11y/semantics";
 export { noAccessibility, type AccessibilityHost, type Politeness } from "./a11y/host";
 export { plainText } from "./a11y/text";
+export { noTextLayer, type TextLayerHost, type TextLayerInfo, type TextLine } from "./text-layer/host";

@@ -1,0 +1,8 @@
+@replace 1-2
+state status="All" lineFilter="All"
+derive byStatus={status == 'All' ? claims : filter(claims, 'status', status)}
+derive shown={lineFilter == 'All' ? byStatus : filter(byStatus, 'line', lineFilter)}
+@replace 26
+  row gap=12 align=bottom wrap=true
+    segmented bind=status label="Filter by status" options="All,Open,In review,Closed,Denied"
+    select "Filter by line" items={['All', 'Auto', 'Property', 'Liability', 'Workers comp', 'Marine', 'Cyber']} bind=lineFilter

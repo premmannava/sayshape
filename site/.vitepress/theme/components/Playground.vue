@@ -118,7 +118,7 @@ function applyTheme() {
   const l = sayshape.value;
   if (!l) return;
   const scheme = forcedScheme.value ?? (isSiteDark() ? "dark" : "light");
-  const theme = resolveTheme(preset.value, scheme, accent.value).theme;
+  const theme = resolveTheme(preset.value, scheme, accent.value ? [accent.value] : null).theme;
   l.setTheme(theme);
   loadThemeFonts(theme, () => l.setTheme(theme));
 }

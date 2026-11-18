@@ -88,7 +88,7 @@ describe("stat layout", () => {
   });
 
   it("wraps a change below the value when there isn't room, and cuts it to fit", () => {
-    const spec = `stat label="Revenue" value="$1,234,567.89" change="+12% on last quarter, the best since records began"\n`;
+    const spec = `stat label="Revenue" value="$1,234,567.89" short=false change="+12% on last quarter, the best since records began"\n`;
     for (const width of [240, 360]) {
       const ui = render(spec, { width });
       const box = ui.find("stat").box!;
@@ -246,5 +246,42 @@ describe("spark from a list of records", () => {
     expect(good.warnings).toEqual([]);
     const bad = render(spec("sales"));
     expect(bad.warnings.join()).toMatch(/spark is a list of records; it takes numbers\. Take one field of each with pluck\(\), like spark=\{pluck\(sales, 'revenue'\)\}/);
+  });
+});
+
+describe("a change too long for its pill", () => {
+  it("is shown as its figure alone, with its sign, currency and unit", async () => {
+    const { changeFigure, changeDirection } = await import("../src/components/content");
+    expect(changeFigure("98.1% of opened")).toBe("98.1%");
+    expect(changeFigure("1.35h over target")).toBe("1.35h");
+    expect(changeFigure("+$12K vs target")).toBe("+$12K");
+    expect(changeFigure("2 days behind plan")).toBe("2 days");
+    expect(changeFigure("up a lot")).toBeNull();
+    // Words say which way when there's no sign; a sign always wins.
+    expect(changeDirection("0.25 below target")).toBe("down");
+    expect(changeDirection("+3 below par")).toBe("up");
+    expect(changeDirection("1.35h over target")).toBe("up");
+  });
+});
+
+describe("a big number in a change", () => {
+  it("is written short in the pill, and a long fraction kept to two places", async () => {
+    const { roundChange, changeFigure } = await import("../src/components/content");
+    expect(roundChange("+$1,234,567 vs last year")).toBe("+$1.2M vs last year");
+    expect(roundChange("-480000")).toBe("-480K");
+    expect(roundChange("+12.3456%")).toBe("+12.35%");
+    // Left as written: small numbers, and ones already short.
+    expect(roundChange("+12,480")).toBe("+12,480");
+    expect(roundChange("+1,200K")).toBe("+1,200K");
+    expect(roundChange("+12%")).toBe("+12%");
+    expect(roundChange("up a lot")).toBe("up a lot");
+    expect(changeFigure(roundChange("+$1,234,567 vs last year"))).toBe("+$1.2M");
+  });
+
+  it("is still read out and copied as written", () => {
+    const ui = render(`stat label="Revenue" value="$9.8M" change="+$1,234,567"`);
+    expect(ui.text().join(" ")).toContain("+$1.2M");
+    expect(JSON.stringify(ui.accessibility())).toContain("+$1,234,567");
+    ui.destroy();
   });
 });

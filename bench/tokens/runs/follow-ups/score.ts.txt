@@ -1,0 +1,51 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { applyEdits, parseEdits, wholeSpecFrom, newProblems } from "/home/claude/wt-item3/src/model/edits";
+import { sayShapeLineTest } from "/home/claude/wt-item3/src/model/clean";
+import { parse } from "/home/claude/wt-item3/src/parser";
+import { tokens, BENCH_COMPONENTS } from "/home/claude/wt-bench/bench/tokens/measure";
+import { Registry } from "/home/claude/wt-item3/src/registry";
+import { FOLLOW_UPS } from "/home/claude/wt-bench/bench/tokens/requests";
+const reg = new Registry(BENCH_COMPONENTS as never);
+const names = ["claims", "monthly", "byLine"];
+const diag = (s: string) => parse(s, reg, { knownNames: names }).diagnostics;
+const isLine = sayShapeLineTest((n) => reg.has(n));
+const base = readFileSync("/home/claude/bw/runs/compact/r7-claims-ref__1.ss", "utf8");
+const idx = (s: string, re: RegExp) => s.split("\n").findIndex((l) => re.test(l));
+const done: Array<(s: string) => boolean> = [
+  (s) => (s.match(/kind=line/g) ?? []).length >= 2 && !/kind=bar/.test(s),
+  (s) => !/table-column "Opened"/.test(s),
+  (s) => !/kind=(donut|pie)/.test(s),
+  (s) => /"Claims review, 2025"/.test(s),
+  (s) => /select[^\n]*bind=status/.test(s) && !/segmented[^\n]*bind=status/.test(s),
+  (s) => (s.match(/^\s*stat /gm) ?? []).length === 5 && /max\([^)]*'days'/.test(s),
+  (s) => /sort\([^\n]*'incurred'[^\n]*'desc'/.test(s) || /sort=[^\n]*incurred/.test(s),
+  (s) => idx(s, /^\s*table /) < idx(s, /^\s*chart /),
+  (s) => /'line'/.test(s) && /(select|segmented)[^\n]*bind=\w*[lL]ine/.test(s),
+  (s) => /kind=line[^\n]*y=incurred/.test(s),
+];
+const rows: string[] = []; const out: unknown[] = [];
+let editTok = 0, fullTok = 0, effTok = 0, fallbacks = 0;
+FOLLOW_UPS.forEach((f, i) => {
+  const n = String(i + 1).padStart(2, "0");
+  const ed = readFileSync(`/home/claude/bw/fu/out/edit-${n}.txt`, "utf8");
+  const full = readFileSync(`/home/claude/bw/fu/out/full-${n}.txt`, "utf8");
+  const pe = parseEdits(ed);
+  let mode = "fallback", spec: string | undefined, reason = "";
+  if (!pe.ok) reason = pe.reason;
+  else if (pe.edits.length) {
+    const a = applyEdits(base, pe.edits);
+    if (!a.ok) reason = a.reason;
+    else { const fresh = newProblems(diag(base), diag(a.spec)); if (fresh.length) reason = fresh[0]!.message; else { spec = a.spec; mode = "edits"; } }
+  } else { spec = wholeSpecFrom(ed, isLine); if (spec) mode = "rewrite"; else reason = "neither"; }
+  const et = tokens(ed), ft = tokens(full);
+  const eff = mode === "fallback" ? et + ft : et;
+  if (mode === "fallback") fallbacks++;
+  editTok += et; fullTok += ft; effTok += eff;
+  const fullSpec = wholeSpecFrom(full, isLine) ?? full;
+  const r = { n, f, mode, reason, editTokens: et, fullTokens: ft, effective: eff, editDone: spec ? done[i]!(spec) : false, fullDone: done[i]!(fullSpec), editErrors: spec ? diag(spec).filter((d) => d.severity === "error").length : null, fullErrors: diag(fullSpec).filter((d) => d.severity === "error").length };
+  out.push(r);
+  rows.push(`| ${i + 1} | ${f} | ${ft} | ${et} | ${mode}${reason ? ` (${reason})` : ""} | ${r.fullDone ? "yes" : "no"} | ${r.editDone ? "yes" : "no"} |`);
+});
+writeFileSync("/home/claude/bw/fu/results.json", JSON.stringify({ tokenizer: "o200k_base", base: "runs/compact/r7-claims-ref__1.ss", baseTokens: tokens(base), results: out }, null, 2) + "\n");
+console.log(`| # | Follow-up | Full rewrite tokens | Edit tokens | Edit outcome | Change made (rewrite) | Change made (edits) |\n|---|---|---|---|---|---|---|\n${rows.join("\n")}`);
+console.log(`\nTotals: full ${fullTok}, edits ${editTok}, edits incl. fallback rewrites ${effTok}, fallbacks ${fallbacks}/10, base spec ${tokens(base)} tokens`);

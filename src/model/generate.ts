@@ -10,6 +10,7 @@ import { resolveProfile } from "../profiles";
 import type { Registry } from "../registry";
 import type { Diagnostic } from "../types";
 import { sayShapeLineTest, SpecFilter } from "./clean";
+import { applyEdits, newProblems, parseEdits, refineEditMessages, stripThinking, wholeSpecFrom } from "./edits";
 import { refineMessages, sumUsage, type ContextInfo, type ContextPolicy, type RefineContext, type UsageTotals } from "./context";
 import { streamChat, type ChatMessage, type ModelConfig, type Usage } from "./stream";
 
@@ -42,6 +43,24 @@ export interface Attempt {
   firstTokenMs?: number;
 }
 
+/** What happened to a request made with `edits: true`. */
+export interface EditReport {
+  /**
+   * "edits": the answer was line edits and they were applied. "rewrite": the
+   * model answered with a whole spec, accepted as it is. "fallback": the edits
+   * couldn't be used, so one full-rewrite request was made (`result.first`).
+   */
+  mode: "edits" | "rewrite" | "fallback";
+  /** Edits applied (0 unless mode is "edits"). */
+  applied: number;
+  /** Why the edits were not used (fallback only). */
+  reason?: string;
+  /** The edit-mode request's attempt (its `raw` is what the model wrote; `spec` is empty on a fallback). */
+  attempt: Attempt;
+  /** The exact messages sent for the edit-mode request. */
+  messages: ChatMessage[];
+}
+
 export interface GenerateResult {
   /** The final spec: the repaired one if a repair ran, otherwise the first. */
   spec: string;
@@ -67,6 +86,8 @@ export interface GenerateResult {
   usage: UsageTotals;
   /** The context sent with the request. */
   context: ContextInfo;
+  /** Present only when `edits` was on and used (refine with a non-empty spec). */
+  edit?: EditReport;
   /** The elements a spec was checked against: "renderer" (every registered one) or the profile's. */
   validatedAgainst: "renderer" | "profile";
 }
@@ -92,6 +113,15 @@ export interface GenerateOptions {
   /** Limits for refine. */
   contextPolicy?: ContextPolicy;
   /**
+   * Opt-in, with `refine`: ask for line edits to the current spec instead of a
+   * whole new one (see edits.ts and docs/model.md). Nothing is streamed while the
+   * edits arrive; once they are applied onText gets the whole patched spec,
+   * after onReset("edits"). Edits that fail, or leave errors the current spec
+   * didn't have, fall back to one normal full-rewrite request. Ignored without
+   * refine or when refine.spec is empty. Off by default; messages are then unchanged.
+   */
+  edits?: boolean;
+  /**
    * The guide for the repair attempt: "same" (default) or "full", which
    * switches a compact guide to the full one for the repair, with the same
    * profile. Only works when guide is options, not text.
@@ -102,6 +132,17 @@ export interface GenerateOptions {
    * so an element outside the profile is sent back for repair. Default false.
    */
   enforceProfile?: boolean;
+  /**
+   * Opt-in presets (`report`, src/presets/): specs are read with them expanded,
+   * so a report is checked as what it becomes. On by itself with the report
+   * guide (guide mode "report"). Default off.
+   */
+  presets?: boolean;
+  /**
+   * Pass false when the engine draws with look: false, so a look line the
+   * model writes is reported (and repaired away). Default: look lines are read.
+   */
+  look?: boolean;
   /** Appended to the user's request, e.g. "/no_think" to turn off Qwen3's thinking. */
   userSuffix?: string;
   /**
@@ -121,7 +162,7 @@ export interface GenerateOptions {
   /** Clean SayShape text as it streams. */
   onText?: (text: string) => void;
   /** Throw away what onText sent so far (a repair is starting, or it was thinking after all). */
-  onReset?: (reason: "repair" | "thinking") => void;
+  onReset?: (reason: "repair" | "thinking" | "edits") => void;
   onPhase?: (phase: Phase) => void;
   /**
    * Thinking the server sends in its own field (reasoning_content), as it
@@ -153,7 +194,8 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
   const firstGuide = guideInfo(guideOpts ? guideOpts.mode ?? "full" : "custom");
   const checkWith = o.enforceProfile ? profile.registry : o.registry;
   const behavior = !!guideOpts?.behavior;
-  const isSayShapeLine = sayShapeLineTest((name) => o.registry.has(name), { behavior });
+  const presets = !!o.presets || guideOpts?.mode === "report";
+  const isSayShapeLine = sayShapeLineTest((name) => o.registry.has(name), { behavior, presets });
   const timings: GenerateResult["timings"] = { totalMs: 0 };
 
   // The guide first, then the context, then the request: the guide is the
@@ -161,18 +203,31 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
   // prefix that servers with prefix caching can reuse.
   const suffix = o.userSuffix ? `\n\n${o.userSuffix}` : "";
   let context: ChatMessage[], request: ChatMessage, info: ContextInfo;
+  let editSent: ChatMessage[] | undefined;
   if (o.refine) {
     const r = refineMessages(o.refine, o.request, o.contextPolicy);
     context = r.messages.slice(0, -1);
     request = { ...r.messages[r.messages.length - 1]!, content: r.messages[r.messages.length - 1]!.content + suffix };
     info = r.info;
+    if (o.edits && o.refine.spec.trim()) {
+      const e = refineEditMessages(o.refine, o.request, o.contextPolicy);
+      const lastMsg = e.messages[e.messages.length - 1]!;
+      const editMsgs = [...e.messages.slice(0, -1), { ...lastMsg, content: lastMsg.content + suffix }];
+      editSent = [{ role: "system", content: guide }, ...editMsgs];
+      info = e.info;
+    }
   } else {
     context = o.history ?? [];
     request = { role: "user", content: o.request + suffix };
     info = { policy: context.length ? "history" : "none", messages: context.length, chars: 0 };
   }
-  info.chars = [...context, request].reduce((n, m) => n + m.content.length, 0);
+  info.chars = editSent ? editSent.slice(1).reduce((n, m) => n + m.content.length, 0) : [...context, request].reduce((n, m) => n + m.content.length, 0);
   const sent: ChatMessage[] = [{ role: "system", content: guide }, ...context, request];
+
+  const diagnose = (spec: string): Diagnostic[] => [
+    ...parse(spec, checkWith, { knownNames: o.stateNames, ...(behavior ? { behavior } : {}), ...(presets ? { presets } : {}), ...(o.look === false ? { look: false } : {}) }).diagnostics,
+    ...(spec.trim() ? o.check?.(spec) ?? [] : []),
+  ];
 
   const run = async (msgs: ChatMessage[], g: Attempt["guide"]): Promise<Attempt> => {
     const began = now();
@@ -208,7 +263,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
       const found = again.push(text).text + again.end().text;
       if (found.trim()) { recovered = true; emit({ text: found.trimEnd() + "\n", reset: false }); }
     }
-    const diagnostics = [...parse(spec, checkWith, { knownNames: o.stateNames, ...(behavior ? { behavior } : {}) }).diagnostics, ...(spec.trim() ? o.check?.(spec) ?? [] : [])];
+    const diagnostics = diagnose(spec);
     const inputChars = msgs.reduce((n, m) => n + m.content.length, 0);
     const thinkingChars = thinking.length + filter.thinkingChars;
     return {
@@ -218,7 +273,60 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
     };
   };
 
-  const first = await run(sent, firstGuide);
+  // Edit mode: one request for edits; on any trouble, fall back to the normal request below.
+  let first: Attempt | undefined;
+  let edit: EditReport | undefined;
+  if (editSent) {
+    const began = now();
+    const usage: Usage = {};
+    let raw = "", thinking = "", firstTokenMs: number | undefined, phase: Phase = "waiting";
+    const setPhase = (p: Phase) => { if (p !== phase) { phase = p; o.onPhase?.(p); } };
+    o.onPhase?.("waiting");
+    for await (const part of streamChat(o.config, editSent, { signal: o.signal, fetch: o.fetch, usage })) {
+      if (firstTokenMs === undefined) firstTokenMs = now() - began;
+      if (timings.firstTokenMs === undefined) timings.firstTokenMs = now() - start;
+      if (part.kind === "reasoning") { thinking += part.text; setPhase("thinking"); o.onThinking?.(part.text); continue; }
+      raw += part.text;
+      setPhase("writing");
+    }
+    const text = stripThinking(raw);
+    const thinkingChars = thinking.length + raw.length - text.length;
+    const inputChars = editSent.reduce((n, m) => n + m.content.length, 0);
+    const attemptOf = (spec: string, diagnostics: Diagnostic[]): Attempt => ({
+      spec, diagnostics, raw, usage, thinkingChars, thinking, recovered: false,
+      guide: firstGuide, inputChars, estimatedInputTokens: Math.round(inputChars / 4), estimatedThinkingTokens: Math.round(thinkingChars / 4),
+      ms: now() - began, firstTokenMs,
+    });
+    const current = o.refine!.spec;
+    let spec: string | undefined, mode: EditReport["mode"] = "edits", applied = 0, reason: string | undefined;
+    const parsed = parseEdits(text);
+    if (!parsed.ok) reason = parsed.reason;
+    else if (parsed.edits.length) {
+      const done = applyEdits(current, parsed.edits);
+      if (!done.ok) reason = done.reason;
+      else if (!done.spec.trim()) reason = "the edits left nothing";
+      else {
+        const fresh = newProblems(diagnose(current), diagnose(done.spec));
+        if (fresh.length) reason = `the edits caused ${fresh.length === 1 ? "an error" : `${fresh.length} errors`}: ${fresh[0]!.message}`;
+        else { spec = done.spec; applied = done.applied; }
+      }
+    } else {
+      spec = wholeSpecFrom(text, isSayShapeLine);
+      mode = "rewrite";
+      if (spec === undefined) reason = "the answer had neither edits nor a whole interface";
+    }
+    if (spec !== undefined) {
+      if (mode === "edits") o.onReset?.("edits");
+      if (timings.firstLineMs === undefined) timings.firstLineMs = now() - start;
+      setPhase("writing");
+      o.onText?.(spec);
+      first = attemptOf(spec, diagnose(spec));
+      edit = { mode, applied, attempt: first, messages: editSent };
+    } else {
+      edit = { mode: "fallback", applied: 0, reason, attempt: attemptOf("", []), messages: editSent };
+    }
+  }
+  if (!first) first = await run(sent, firstGuide);
   const transcript: ChatMessage[] = [...sent, { role: "assistant", content: first.spec }];
   const repairOn = o.repairOn ?? "any";
   const needsRepair =
@@ -254,8 +362,9 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
     timings,
     messages: [...sent, { role: "assistant", content: final.spec }],
     transcript,
-    usage: sumUsage(repair ? [first.usage, repair.usage] : [first.usage]),
+    usage: sumUsage([...(edit && edit.attempt !== first ? [edit.attempt.usage] : []), first.usage, ...(repair ? [repair.usage] : [])]),
     context: info,
+    ...(edit ? { edit } : {}),
     validatedAgainst: o.enforceProfile ? "profile" : "renderer",
   };
 }

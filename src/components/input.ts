@@ -1,11 +1,12 @@
 import { toNumber } from "../data";
-import type { ComponentDef, LayoutContext, PropReader } from "../component";
+import type { ComponentDef, LayoutContext, PaintContext, PropReader } from "../component";
 import type { Box, SayShapeNode } from "../types";
 import { INPUT_KINDS, valueStamp } from "../editor";
 import { isDark, isDarkTheme, mixColors, type Theme } from "../theme";
 import { MOTION } from "../design";
-import { fillTint, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
-import { wrapText } from "../text";
+import { detailProp, fillTint, iconBefore, iconProblems, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
+import { drawIcon, isIconName, type IconName } from "../icons";
+import { fitLines, wrapText } from "../text";
 
 const VARIANTS = ["primary", "secondary", "danger"] as const;
 
@@ -13,9 +14,27 @@ const VARIANTS = ["primary", "secondary", "danger"] as const;
 /** Screens this wide or narrower are phones, where a button takes the full width of its space. */
 export const BUTTON_FULL_UNDER = 480;
 
+const BUTTON_SIZES = ["md", "sm"] as const;
+/** A small button's height and label size, as shares of a regular one's. */
+const SMALL_HEIGHT = 0.8, SMALL_TEXT = 13 / 14;
+const BUTTON_ICON_GAP = 6;
+
+/** A button's height and label size, regular or small. */
+function buttonSize(p: PropReader, theme: Theme): { h: number; text: number; icon: number } {
+  const small = p.oneOf("size", BUTTON_SIZES, "md") === "sm";
+  return { h: small ? Math.round(theme.control.height * SMALL_HEIGHT) : theme.control.height, text: small ? Math.round(14 * SMALL_TEXT) : 14, icon: small ? 14 : 16 };
+}
+
+/** Room an icon takes before a button's label, if it has a real one. */
+function buttonIconW(p: PropReader, theme: Theme): number {
+  return isIconName(p.str("icon")) ? buttonSize(p, theme).icon + BUTTON_ICON_GAP : 0;
+}
+
 /** A button's own width: its label with room either side. */
 function buttonWidth(node: SayShapeNode, ctx: LayoutContext): number {
-  return Math.max(96, Math.ceil(textWidth(ctx, ctx.props(node).text(), 600, 14) + 44));
+  const p = ctx.props(node), s = buttonSize(p, ctx.theme);
+  const small = p.oneOf("size", BUTTON_SIZES, "md") === "sm";
+  return Math.max(small ? Math.round(96 * SMALL_HEIGHT) : 96, Math.ceil(textWidth(ctx, p.text(), 600, s.text) + buttonIconW(p, ctx.theme) + 44));
 }
 
 export const button: ComponentDef = {
@@ -27,7 +46,11 @@ export const button: ComponentDef = {
     on: { type: "action", description: "What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ;" },
     variant: { type: "enum", values: VARIANTS, default: "primary", description: "primary (filled), secondary (outlined) or danger." },
     disabled: { type: "condition", description: "Expression; when true the button is greyed out and can't be pressed." },
+    icon: iconBefore("label"),
+    size: { type: "enum", values: BUTTON_SIZES, default: "md", description: "md or sm (smaller)." },
+    fit: { type: "boolean", default: false, description: "Natural width, even on a phone." },
   },
+  check: (props) => iconProblems(props.icon, "icon"),
   example: `button "Book now" on=emit:book
 button "Back" variant=secondary on=dec:step`,
   semantics(box, ctx) {
@@ -35,15 +58,17 @@ button "Back" variant=secondary on=dec:step`,
     return { role: "button", name: p.text(), disabled: p.cond("disabled") || undefined };
   },
   layout(box, ctx) {
-    box.h = ctx.theme.control.height;
+    const p = ctx.props(box.node);
+    box.h = buttonSize(p, ctx.theme).h;
     // On a phone a button takes the full width, which is easy to tap. Anywhere wider it takes the
     // width of its label, like buttons in apps and on the web, instead of a long slab. It's the
     // screen that decides, not the button's slot: two buttons in a row inside a card on a laptop
     // each get a narrow slot, and stretching them across it made them look like slabs.
-    if (ctx.screenWidth() > BUTTON_FULL_UNDER) box.w = Math.min(box.w, buttonWidth(box.node, ctx));
+    if (p.bool("fit") || ctx.screenWidth() > BUTTON_FULL_UNDER) box.w = Math.min(box.w, buttonWidth(box.node, ctx));
   },
   minWidth(node, ctx) {
-    const w = textWidth(ctx, ctx.props(node).text(), 600, 14) + 24;
+    const p = ctx.props(node);
+    const w = textWidth(ctx, p.text(), 600, buttonSize(p, ctx.theme).text) + buttonIconW(p, ctx.theme) + 24;
     return Math.max(64, Math.min(160, w));
   },
   paint(box, ctx) {
@@ -118,15 +143,46 @@ button "Back" variant=secondary on=dec:step`,
       g.stroke();
       if (hoverProgress) { g.save(); g.globalAlpha *= 0.22 * hoverProgress; g.strokeStyle = c.ink; g.stroke(); g.restore(); }
     } else if (hoverProgress || pressProgress) fillTint(g, c.ink, 0.12 * hoverProgress + 0.08 * pressProgress);
-    g.font = ctx.font(600, 14);
-    g.textAlign = "center";
+    const size = buttonSize(p, theme);
+    g.font = ctx.font(600, size.text);
     g.textBaseline = "middle";
     g.fillStyle = disabled ? c.muted : secondary ? c.ink : c.onAccent;
-    g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
+    const iconW = buttonIconW(p, theme);
+    if (iconW) {
+      // The icon and the label are centred together.
+      const label = fitText(g, p.text(), box.w - 16 - iconW);
+      const left = box.x + (box.w - (iconW + g.measureText(label).width)) / 2;
+      drawIcon(g, p.str("icon") as IconName, left, box.y + (box.h - size.icon) / 2, size.icon, g.fillStyle as string);
+      g.textAlign = "left";
+      g.fillText(label, left + iconW, box.y + box.h / 2 + 1);
+    } else {
+      g.textAlign = "center";
+      g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
+    }
     g.restore();
     if (!disabled) ctx.addHit(box);
   },
 };
+
+const DETAIL_SIZE = 13, DETAIL_LH = 18;
+
+/** A muted line (at most two) under a label: its wrapped lines and the height it adds. */
+function detailLines(ctx: LayoutContext, text: string, width: number): { detail: string[]; detailH: number } {
+  if (!text) return { detail: [], detailH: 0 };
+  const detail = fitLines(text, Math.max(20, width), themeFont(ctx.theme, 400, DETAIL_SIZE), ctx.measure, 2);
+  return { detail, detailH: 2 + detail.length * DETAIL_LH };
+}
+
+/** Draw a label's detail lines from y (the bottom of the label's last line). */
+function paintDetail(ctx: PaintContext, d: { detail: string[] }, x: number, y: number): void {
+  if (!d.detail.length) return;
+  const g = ctx.g;
+  g.font = ctx.font(400, DETAIL_SIZE);
+  g.fillStyle = ctx.theme.colors.muted;
+  g.textAlign = "left";
+  g.textBaseline = "middle";
+  d.detail.forEach((line, i) => g.fillText(line, x, y + 2 + DETAIL_LH * i + DETAIL_LH / 2));
+}
 
 export const check: ComponentDef = {
   type: "check",
@@ -135,17 +191,19 @@ export const check: ComponentDef = {
   text: { description: "The label next to the box.", required: true },
   props: {
     bind: { type: "state", required: true, description: "The state name this checkbox reads and writes." },
+    detail: detailProp("label"),
   },
   example: `state agreed=false
 check "I agree to the terms" bind=agreed`,
   semantics(box, ctx) {
     const p = ctx.props(box.node);
-    return { role: "checkbox", name: p.text(), checked: !!p.bound() };
+    return { role: "checkbox", name: p.text(), checked: !!p.bound(), description: p.str("detail") || undefined };
   },
   layout(box, ctx) {
-    const l = labelLines(ctx, ctx.props(box.node).text(), box.w - 30, 3);
+    const p = ctx.props(box.node);
+    const l = { ...labelLines(ctx, p.text(), box.w - 30, 3), ...detailLines(ctx, p.str("detail"), box.w - 30) };
     box.data = l;
-    box.h = Math.max(26, l.lines.length * l.lh + 6);
+    box.h = Math.max(26, l.lines.length * l.lh + 6 + l.detailH);
   },
   minWidth: (node, ctx) => 30 + Math.min(100, textWidth(ctx, ctx.props(node).text(), 400, ctx.theme.text.body)),
   paint(box, ctx) {
@@ -186,8 +244,9 @@ check "I agree to the terms" bind=agreed`,
     g.textAlign = "left";
     g.textBaseline = "middle";
     g.fillStyle = c.ink;
-    const l = box.data as { lines: string[]; lh: number };
+    const l = box.data as { lines: string[]; lh: number; detail: string[] };
     l.lines.forEach((line, i) => g.fillText(line, box.x + 30, box.y + 14 + i * l.lh));
+    paintDetail(ctx, l, box.x + 30, box.y + 14 + (l.lines.length - 1) * l.lh + l.lh / 2);
     ctx.addHit(box);
   },
   press(ctx) {
@@ -204,17 +263,19 @@ export const switchToggle: ComponentDef = {
   props: {
     bind: { type: "state", required: true, description: "The true/false state name this switch reads and writes." },
     on: onProp("after it is switched"),
+    detail: detailProp("label"),
   },
   example: `state updates=true
 switch "Email me order updates" bind=updates`,
   semantics(box, ctx) {
     const p = ctx.props(box.node);
-    return { role: "switch", name: p.text(), checked: !!p.bound() };
+    return { role: "switch", name: p.text(), checked: !!p.bound(), description: p.str("detail") || undefined };
   },
   layout(box, ctx) {
-    const l = labelLines(ctx, ctx.props(box.node).text(), box.w - 52, 3);
+    const p = ctx.props(box.node);
+    const l = { ...labelLines(ctx, p.text(), box.w - 52, 3), ...detailLines(ctx, p.str("detail"), box.w - 52) };
     box.data = l;
-    box.h = Math.max(28, l.lines.length * l.lh + 8);
+    box.h = Math.max(28, l.lines.length * l.lh + 8 + l.detailH);
   },
   minWidth: (node, ctx) => 52 + Math.min(100, textWidth(ctx, ctx.props(node).text(), 400, ctx.theme.text.body)),
   paint(box, ctx) {
@@ -229,8 +290,9 @@ switch "Email me order updates" bind=updates`,
     g.fillStyle = c.ink;
     g.textAlign = "left";
     g.textBaseline = "middle";
-    const l = box.data as { lines: string[]; lh: number };
+    const l = box.data as { lines: string[]; lh: number; detail: string[] };
     l.lines.forEach((line, i) => g.fillText(line, box.x, box.y + 15 + i * l.lh));
+    paintDetail(ctx, l, box.x, box.y + 15 + (l.lines.length - 1) * l.lh + l.lh / 2);
     ctx.roundRect(tx, ty, tw, th, th / 2);
     // The track transitions with the knob instead of flipping abruptly.
     fillTint(g, c.ink, 0.16);
@@ -524,7 +586,7 @@ rating bind=stars`,
         g.rect(x, box.y, STAR * fill, box.h);
         g.clip();
         starPath(g, x + STAR / 2, cy, STAR / 2);
-        g.fillStyle = c.warn;
+        g.fillStyle = c.warnFill;
         g.fill();
         g.restore();
       }
@@ -539,6 +601,10 @@ rating bind=stars`,
   },
 };
 
+/** A link's icon is a little larger than its text, and takes room before it. */
+const linkIconSize = (theme: Theme) => Math.round(theme.text.body * 1.15);
+const linkIconW = (p: PropReader, theme: Theme) => (isIconName(p.str("icon")) ? linkIconSize(theme) + 6 : 0);
+
 export const link: ComponentDef = {
   type: "link",
   category: "input",
@@ -546,25 +612,32 @@ export const link: ComponentDef = {
   text: { description: "The link text.", required: true },
   props: {
     on: { type: "action", required: true, description: "What happens when pressed, e.g. emit:size_guide." },
+    icon: iconBefore("text"),
   },
   example: `link "Size guide" on=emit:size_guide`,
+  check: (props) => iconProblems(props.icon, "icon"),
   semantics(box, ctx) {
     return { role: "link", name: ctx.props(box.node).text() };
   },
   layout(box, ctx) {
     box.h = Math.round(ctx.theme.text.body * 1.35);
   },
-  minWidth: (node, ctx) => Math.min(120, textWidth(ctx, ctx.props(node).text(), 600, ctx.theme.text.body)),
+  minWidth: (node, ctx) => Math.min(120, textWidth(ctx, ctx.props(node).text(), 600, ctx.theme.text.body) + linkIconW(ctx.props(node), ctx.theme)),
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
     g.font = ctx.font(600, theme.text.body);
-    const label = fitText(g, p.text(), box.w);
-    const w = Math.min(box.w, g.measureText(label).width);
+    const lead = linkIconW(p, theme);
+    const label = fitText(g, p.text(), Math.max(0, box.w - lead));
+    const w = Math.min(box.w, lead + g.measureText(label).width);
     g.fillStyle = theme.colors.accent;
     g.textAlign = "left";
     g.textBaseline = "middle";
-    g.fillText(label, box.x, box.y + box.h / 2 + 1);
+    if (lead) {
+      const size = linkIconSize(theme);
+      drawIcon(g, p.str("icon") as IconName, box.x, box.y + (box.h - size) / 2, size, theme.colors.accent);
+    }
+    g.fillText(label, box.x + lead, box.y + box.h / 2 + 1);
     if (ctx.isHovered(box.node)) g.fillRect(box.x, box.y + box.h - 3, w, 1.5);
     ctx.addHit(partBox(box, box.x, box.y, w, box.h));
   },
@@ -775,6 +848,9 @@ export function fieldProblem(p: PropReader, unparsed: boolean): string {
 }
 
 export const FIELD_PAD = 12;
+/** An icon at the start of a field: its size, and the room it takes before the text. */
+const FIELD_ICON = 18, FIELD_ICON_ROOM = FIELD_ICON + 8;
+const fieldLead = (p: PropReader) => (isIconName(p.str("icon")) ? FIELD_ICON_ROOM : 0);
 export const LABEL_SIZE = 13;
 const LABEL_GAP = 6;
 
@@ -817,6 +893,7 @@ export const input: ComponentDef = {
     on: onProp("when Enter is pressed, after the value is written"),
     disabled: { type: "condition", description: "Expression; when true the field is greyed out and can't be typed in." },
     max: { type: "number", default: 500, description: "Longest value in characters (at most 10000; 2000 when lines= is more than 1)." },
+    icon: iconBefore("text, inside the field"),
   },
   picks: [{ for: "a form that says what's missing or wrong", write: "input required=true kind=email" }],
   example: `state task="" todos=[]
@@ -827,6 +904,7 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     const many = props.lines !== undefined && Number(props.lines) > 1;
     if (many && props.kind && props.kind !== "text") out.push(`lines= works only on a text field, so this ${props.kind} field stays one line. Remove lines=, or use kind=text`);
     if (many && props.on) out.push(`on= doesn't run from a field of several lines, since Enter starts a new line there. Run it from a button instead`);
+    out.push(...iconProblems(props.icon, "icon"));
     return out;
   },
   minWidth: () => 120,
@@ -894,6 +972,12 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       const lh = errorLineHeight(theme);
       d.lines.forEach((l, i) => g.fillText(l, box.x, field.y + field.h + ERROR_GAP + i * lh));
     }
+    // An icon at the start of the field, level with the first line of text.
+    const lead = fieldLead(p);
+    if (lead) {
+      const cy = linesOf(p) > 1 ? field.y + MULTI_PAD + multiLineHeight() / 2 : field.y + field.h / 2;
+      drawIcon(g, p.str("icon") as IconName, field.x + FIELD_PAD, cy - FIELD_ICON / 2, FIELD_ICON, c.muted);
+    }
     if (!editing) {
       const value = fieldValue(p);
       const kind = p.oneOf("kind", INPUT_KINDS, "text");
@@ -907,13 +991,13 @@ text "{plural(len(todos), 'item')}" tone=muted`,
         g.textBaseline = "middle";
         const lh = multiLineHeight();
         const measure = { width: (t: string) => g.measureText(t).width };
-        const wrapped = shown.split("\n").flatMap((para) => (para ? wrapText(para, field.w - FIELD_PAD * 2, g.font, measure) : [""]));
+        const wrapped = shown.split("\n").flatMap((para) => (para ? wrapText(para, field.w - FIELD_PAD * 2 - lead, g.font, measure) : [""]));
         const shownRows = wrapped.slice(0, rows);
-        if (wrapped.length > rows) shownRows[rows - 1] = fitText(g, shownRows[rows - 1]! + " …", field.w - FIELD_PAD * 2);
-        shownRows.forEach((l, i) => g.fillText(l, field.x + FIELD_PAD, field.y + MULTI_PAD + i * lh + lh / 2));
+        if (wrapped.length > rows) shownRows[rows - 1] = fitText(g, shownRows[rows - 1]! + " …", field.w - FIELD_PAD * 2 - lead);
+        shownRows.forEach((l, i) => g.fillText(l, field.x + FIELD_PAD + lead, field.y + MULTI_PAD + i * lh + lh / 2));
       } else {
         g.textBaseline = "middle";
-        g.fillText(fitText(g, shown, field.w - FIELD_PAD * 2), field.x + FIELD_PAD, field.y + field.h / 2 + 1);
+        g.fillText(fitText(g, shown, field.w - FIELD_PAD * 2 - lead), field.x + FIELD_PAD + lead, field.y + field.h / 2 + 1);
       }
     }
     g.restore();
@@ -921,11 +1005,12 @@ text "{plural(len(todos), 'item')}" tone=muted`,
   },
   editor(box, p, theme) {
     const rows = linesOf(p);
+    const lead = fieldLead(p);
     const field = fieldBox(box, p, fieldHeight(p, theme.control.height));
     const max = Math.min(10_000, Math.max(1, Math.round(p.num("max", rows > 1 ? 2000 : 500))));
     const rect = rows > 1
-      ? { x: field.x + FIELD_PAD, y: field.y + MULTI_PAD, w: Math.max(0, field.w - FIELD_PAD * 2), h: field.h - 2 * MULTI_PAD }
-      : { x: field.x + FIELD_PAD, y: field.y + 1, w: Math.max(0, field.w - FIELD_PAD * 2), h: field.h - 2 };
+      ? { x: field.x + FIELD_PAD + lead, y: field.y + MULTI_PAD, w: Math.max(0, field.w - FIELD_PAD * 2 - lead), h: field.h - 2 * MULTI_PAD }
+      : { x: field.x + FIELD_PAD + lead, y: field.y + 1, w: Math.max(0, field.w - FIELD_PAD * 2 - lead), h: field.h - 2 };
     return {
       rect,
       font: themeFont(theme, 400, FIELD_TEXT),

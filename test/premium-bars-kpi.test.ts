@@ -56,7 +56,8 @@ describe("premium vertical and horizontal bars", () => {
     expect(ui.text()).toContain("12");
     expect(ui.text()).toContain("20");
     const narrow = render(
-      'state rows=[{k:"A",v:12},{k:"B",v:20},{k:"C",v:16},{k:"D",v:9},{k:"E",v:17},{k:"F",v:13},{k:"G",v:12},{k:"H",v:19}]' +
+      // Months stay vertical on a phone (categories turn across).
+      'state rows=[{k:"Jan",v:12},{k:"Feb",v:20},{k:"Mar",v:16},{k:"Apr",v:9},{k:"May",v:17},{k:"Jun",v:13},{k:"Jul",v:12},{k:"Aug",v:19}]' +
       '\nchart kind=bar items=rows x=k y=v', { width: 375 },
     );
     expect(narrow.drawOps.filter((op) => op.op === "fillText" && op.args[0] === "12")).toHaveLength(0);

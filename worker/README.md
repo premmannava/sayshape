@@ -17,18 +17,24 @@ the engine draws the answer as it arrives
 
 While the model thinks, chat answers stream its thinking as `{"t":"thought"}` events, up to 12,000 characters an answer, which the page shows above the answer. Thinking is free text, not SayShape, so while it's on the key can be used to get prose back that way; set `SHOW_THINKING = "false"` in `wrangler.toml` to stop sending it.
 
-`GET /status` says whether answers are on, and the model's name, without calling the model or counting a question. The chat page asks it when someone starts to type.
+With `REPORT_FIRST = "true"`, a new chat question is first asked with the report guide (the report preset, about 500 tokens: figures, charts, a table and filters from a few lines), and with the chat guide only when the model answers that a report can't show it or draws nothing. Follow-ups and spreadsheet questions never use it; a follow-up to a report is sent as the ordinary elements it became. The chat page draws with the engine's `presets` and `streamPlaceholders` on, and the chat guide asks for the layout first and long lists last, so an answer starts drawing while its data is still being written. Set it to `"false"` in `wrangler.toml` and deploy to go back to the chat guide alone.
+
+`GET /status` says whether answers are on, the model's name and whether answers can be saved (`"recording": true`, below), without calling the model or counting a question. The chat page asks it when someone starts to type.
 
 A refusal before any answer is JSON with a `reason` the page words itself: `off`, `unconfigured`, `rate`, `daily`, `check`, `too-big` or `bad-request`.
+
+### Prompt caching
+
+The guide is about 5,500 tokens and the same on every request, so it is built once (`chatStable`, `dataStable` in `src/handler.ts`, with SayShape's `cachedPrompt`) and sent as the first, only system message; the visitor's words, a follow-up's earlier answer and a spreadsheet's columns all come after it. `test/worker-cache.test.ts` checks that it is identical for every visitor and question. The variable `PROMPT_CACHE` (`true` or `5m`, or `1h`) sends it as a text block marked with `cache_control`, as Anthropic models need (directly or through OpenRouter); empty (the default) sends plain text, which is right for providers that cache on their own, as the current one does. If a provider answers 400 or 422 to the marked form before anything streams, the request is sent again plain and the worker stops marking for that model until it restarts. The `done` event's `tokens` adds `cached` and `cacheWrite` when the provider reports them: that is how to see it working. See [docs/prompt-caching.md](../docs/prompt-caching.md).
 
 ### Spreadsheet questions
 
 The browser sends the question (at most 400 characters), the column names with a type and how many different values each has, three sample rows (cells cut to 100 characters) and a Turnstile token. The worker builds every message itself with SayShape's model client (`src/model`): a guide for data answers, the request with the sample rows fenced as data, and one repair if the parser had to skip lines or the answer doesn't read the data. It always calls the one model set in `wrangler.toml`, so the key can't be borrowed for anything else. An answer must read the spreadsheet by name (`data`) and may not declare it, so the model can't make up or copy rows.
 
-Protections, in `src/handler.ts`, `src/chat.ts` and `src/answer.ts`, tested in `test/worker.test.ts`:
+Protections, in `src/handler.ts`, `src/chat.ts`, `src/answer.ts` and `src/records.ts`, tested in `test/worker.test.ts` and `test/worker-records.test.ts`:
 
 - only origins in `ALLOWED_ORIGINS` may call it;
-- an optional [Turnstile](https://developers.cloudflare.com/turnstile/) check on every request;
+- an optional [Turnstile](https://developers.cloudflare.com/turnstile/) check on every question;
 - a per-IP rate limit (4 a minute, `[[ratelimits]]` in `wrangler.toml`);
 - a daily cap for the whole site (`DAILY_ANSWERS`, counted in a KV namespace);
 - request limits (40 KB for a chat message with its follow-up context; 16 KB for a spreadsheet question, far too small for a spreadsheet) and a cap on reply length;
@@ -36,6 +42,37 @@ Protections, in `src/handler.ts`, `src/chat.ts` and `src/answer.ts`, tested in `
 - spreadsheet cells reach the model only as quoted, fenced data;
 - provider errors become plain messages; the provider's raw reply is never forwarded;
 - `GENERATION_ENABLED = "false"` turns live answers off without touching the site.
+- nothing is saved unless the visitor asks and `RECORDS` is set up (below), and never a spreadsheet question or an IP address.
+
+### Saved answers (opt-in)
+
+To see how people really use the chat page, visitors can choose to save their questions and answers ([privacy page](../site/privacy.md)). Nothing is saved unless both are true: the worker has the `RECORDS` database (below), and the visitor turned on **Help improve SayShape** under the question box. The switch is off by default, shown only when `/status` says `"recording": true`, and remembered in the visitor's browser.
+
+```
+chat page                                   this worker                         D1 (RECORDS)
+   │ question + "record": {chat, turn, width}
+   └────────────────────────────────────────▶ answers as usual ─────────────────▶ one row, written after the answer ends
+   ◀── done event with "record": "<row id>" ──┘
+   │ POST /feedback {id, vote | note | used}
+   └────────────────────────────────────────▶ updates that row only ────────────▶
+```
+
+- **What a row holds** (`src/records.ts`, `migrations/0001_answers.sql`): the question, whether it was a follow-up, the final spec, done, empty or failed (with the message shown), problems, whether the repair ran, time, tokens, model, the answer's width rounded to 10 px, the page's random chat id and the turn. Then whatever feedback arrives: a thumb, a note of at most 500 characters, and usage counts (state changes, `emit:` actions and screens the visitor moved to, counted only after their own presses and keys).
+- **What it never holds:** the IP address, the browser, the model's thinking, a follow-up's earlier spec again, or anything from a spreadsheet question (`kind: "data"` is never saved).
+- **Feedback** (`POST /feedback`) needs no human check and counts nothing against the day, since it never calls the model. It can only change the row whose random id the page was given, while that row is kept; 404 otherwise.
+- **Saving never gets in the way:** the row is written after the stream has closed, and a failed write loses only the row.
+- **Kept 30 days** (`RETENTION_DAYS`): a daily cron (`[triggers]` in `wrangler.toml`) deletes older rows.
+
+Set it up once, from this folder:
+
+```bash
+npx wrangler d1 create sayshape-records       # prints a database_id
+# paste it into the [[d1_databases]] block in wrangler.toml and uncomment the block
+npx wrangler d1 migrations apply sayshape-records --remote
+npx wrangler deploy
+```
+
+Read the last 7 days (answers, how many drew, were used and got a thumb up; follow-ups; thumbs down with notes; failures) with `npm run report`, which runs each query in `reports.sql` on its own (`scripts/report.mjs`; extra arguments go to wrangler), or ask your own questions with `npx wrangler d1 execute sayshape-records --remote --command "SELECT …"`. To stop saving, comment the block out again and deploy: `/status` stops offering the switch. To delete a row someone asks about, `DELETE FROM answers WHERE …`.
 
 ## Deploy (one time)
 
@@ -80,6 +117,7 @@ Use Cloudflare's **Workers Paid** plan. The free plan allows 10 ms of processing
 - More or fewer questions a day: change `DAILY_ANSWERS` and deploy.
 - Faster or more careful answers: `REASONING_EFFORT` is how hard the model thinks before it writes (DeepSeek: `none`, `low`, `high`, `max`; `high` when it's empty). Thinking is most of the wait, and `none` leaves no thinking to show.
 - Turn live answers off: set `GENERATION_ENABLED = "false"` and deploy.
+- Stop saving answers: comment out the `[[d1_databases]]` block and deploy.
 - Rotate the key: create a new one at the provider, `npx wrangler secret put MODEL_API_KEY`, revoke the old one.
 - If answers fail with "didn't answer as expected" for every question, the model may refuse `stream_options`: set `STREAM_USAGE = "false"`.
 

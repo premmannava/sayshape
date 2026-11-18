@@ -42,6 +42,8 @@ const docsSidebar: DefaultTheme.SidebarItem[] = [
       { text: "Lists and iteration", link: "/docs/language/lists" },
       { text: "Conditional visibility", link: "/docs/language/conditions" },
       { text: "Actions and navigation", link: "/docs/language/actions" },
+      { text: "Slide decks", link: "/docs/language/slides" },
+      { text: "Look, motion and pictures", link: "/docs/language/look-and-motion" },
       { text: "Validation and diagnostics", link: "/docs/language/diagnostics" },
     ],
   },

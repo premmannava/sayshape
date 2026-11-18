@@ -186,7 +186,7 @@ describe("stacked", () => {
     expect(jan[1]!.rect.h / jan[0]!.rect.h).toBeCloseTo(8 / 12, 5);
     expect(jan.map((g) => g.end)).toEqual([false, false, true]);
     expect(d.slots[0]!.value).toBe(24000);
-    expect(d.legend.map((l) => l.label)).toEqual(["hw", "sw", "sv"]);
+    expect(d.legend.map((l) => l.label)).toEqual(["Hw", "Sw", "Sv"]);
   });
 
   it("shows each total above its bar, and every part in the tooltip", () => {
@@ -314,6 +314,10 @@ describe("bullet", () => {
     const ui = bullet(KPIS, "format=money");
     expect(texts(ui)).toEqual(expect.arrayContaining(["Revenue", "$1.24M of $1.15M", "$182 of $200", "$310K of $400K"]));
     expect(pairText(310000, 400000, "number")).toBe("310K of 400K");
+    // One short and one written out would read as two units: both go short.
+    expect(pairText(98000, 120000, "money")).toBe("$98K of $120K");
+    expect(pairText(120000, 98500, "money")).toBe("$120K of $98.5K");
+    expect(pairText(950, 120000, "money")).toBe("$950 of $120K");
     expect(pairText(1000, 1000, "number")).toBe("1,000 of 1,000");
     expect(pairText(1000001, 1000002, "number")).toBe("1,000,001 of 1,000,002");
   });

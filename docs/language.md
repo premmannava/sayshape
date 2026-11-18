@@ -56,6 +56,34 @@ stat label="Total" value={total}
 - **Problems the parser reports**, each skipping only that value: an expression not in braces or with a syntax error, a name used twice, a name that's already state, a name expressions can't read (`__proto__`, `constructor`, `prototype`) or the engine uses (`screen`), a name nothing defines, and cycles, direct (`derive x={x + 1}`) or through others (`p` → `q` → `p`), which are left out with the loop named. A spec can derive at most 200 values.
 - Lists that derived values hold are new, frozen lists: filtering or sorting never changes the list in state.
 
+## Look
+
+One line, written first, chooses how the whole interface looks, so two answers don't have to look the same:
+
+```
+look mood=bold type=editorial shape=soft density=airy
+card
+  text "Yosemite weekend" style=title
+  text "Two days, three hikers, one long trail." tone=muted
+  button "Plan it" on=emit:plan
+```
+
+Every prop takes one named option, and leaving a prop out (or writing `default`) keeps the app's own look:
+
+| Prop | Options | What changes |
+|---|---|---|
+| `mood` | `quiet`, `bold` | How the app's accent is used. `quiet`: the accent alone, flat, and no shadows. `bold`: the accent as a gradient toward a deeper (or, with dark text on the accent, lighter) mix with the theme's own ink or surface, and deeper shadows. A theme that already has a gradient keeps its own. |
+| `type` | `editorial`, `classic`, `technical` | The typefaces. `editorial`: serif headings (`text style=title` and `display`), a step larger, over the app's text face. `classic`: serif headings and text. `technical`: the app's monospaced face for headings. |
+| `shape` | `sharp`, `soft`, `round` | Corner radii: about a third, one and a half times, or a little over twice the app's. |
+| `density` | `compact`, `airy` | Spacing (three quarters, or 1.35 times the app's) and control height (0.9 or 1.1 times, never under 28 px). |
+
+- **Never colors, fonts or sizes.** The options are roles, like `tone=` and `variant=`. Colors still come only from the app (its theme, brand colors, the MCP `colors` argument); `mood` only changes how the theme's own accent and shadow are used. Fonts come from a fixed list of stacks of faces the app may already have loaded, each ending in a system face (`Georgia, serif`, the app's own monospaced stack), so nothing a spec says makes the engine fetch a font. Sizes are worked out from the app's own, so a compact app stays compact.
+- **Readable whatever is chosen.** Every option keeps the contrast checks the themes pass (`test/a11y/beyond.test.ts`), in light, dark and the Studio themes. In a forced-colors mode (Windows Contrast Themes) the person's system colors still win over any look.
+- **First, unindented, once.** Write it before the first element, so the screen draws in its look from the start; `state` and `derive` lines may come before it. A look line after an element still applies to the whole interface, from the next layout after it arrives, with a warning to move it up: while streaming, what was already drawn changes its look when it arrives. An indented look line is ignored with a warning, and so is a second one (the first is kept).
+- **Problems the parser reports**, each a warning that keeps the rest of the line: a prop that isn't one of these four (a color, font or size prop is told that a look never sets them), an option that isn't one of its choices, a value or an expression, and quoted text.
+- **Hosts can turn it off.** With the engine's `look: false` (`render(spec, { look: false })`, `parse(…, { look: false })`), a look line is ignored with a warning and the app's look stays. A host's own element named `look` keeps its line. The model guide explains the line only with `GuideOptions.look`.
+- **Inside slides**, `density`, `shape` and `type`'s sizes don't apply (a slide has its own design size); `mood` and `type`'s faces do. Slide headings keep the text face.
+
 ## Expressions
 
 Anything inside `{…}` is evaluated against state.
@@ -190,6 +218,8 @@ ui.setLoading([]);                      // whatever is still loading; [] when al
 
 `setAwaiting(true)` treats every name an element reads that has no value yet as loading. Use it while a spec streams in and you don't yet know which names you'll fill; turn it off when you do.
 
+With the engine option `streamPlaceholders: true`, the engine does this itself from `beginStream()` to `endStream()`, which suits a spec written layout first, data last ([Layout first while streaming](model.md#layout-first-while-streaming)): until the line that declares a name arrives, elements that read it draw placeholders, and the "isn't state" warning for it waits until the stream ends. Off by default.
+
 ### Charts
 
 `chart` draws a list of records as bars, lines, a pie or a donut, and redraws whenever the list changes, from state, the screen's own controls or the host:
@@ -204,8 +234,10 @@ chart "Revenue by month" kind=donut items=sales x=month y=revenue format=money
 `x=` and `y=` name fields, as `sum(list, 'price')` does, so they're written without quotes; `items=` is any expression that gives a list, like `items={filter(sales, 'open')}`. The props are in the [reference](components.md#chart). How it treats data:
 
 - Bar and line take up to 6 fields in `y=`, separated by commas with no spaces. Each is a series in the theme's series colors, all on one scale, with grouped bars side by side and a legend below (only for 2 or more). `labels=` names them in the legend; otherwise it shows the field names. One field draws exactly as it always has, in the accent, with no legend. More than 6 shows a message instead.
+- On a phone (a `kind=bar` chart narrower than 480 px), bars of categories are drawn across, as `kind=hbar` draws them, with each item's name on the left and its value at the end, since vertical bars that narrow get thin and lose their labels. They stay vertical when the items are in time order (dates, months, weekdays, quarters, years, or x numbers that rise), when the chart has `chart-line`, `chart-rule`, `chart-band` or `chart-note` under it, or when its rows wouldn't fit `kind=hbar`'s 1200 px. Screen readers and Copy text get the same either way.
 - Pie and donut take one field. Each item with a value above 0 is a slice, in list order, and the legend below shows each slice's label, value and share. More than 6 slices keeps the 5 largest and adds an "Other" slice holding the rest. A donut shows the total in its middle, formatted by `format=`. Zero values are left out; a negative value, or nothing above 0, shows a message instead. A comma list in `y=` is a warning, and only the first field is used.
 - Stacked (`kind=stacked`) takes up to 6 fields, like bar. Each item is one bar, and each field a segment in the series colors, from the bottom up in the order written, with a legend. Positive values stack up from 0 and negative ones down from it. A field without a number is left out of that bar, never counted as 0. The total sits above each bar when every bar has room.
+- `values=true` (bar, hbar, stacked) writes each bar's value, in the chart's `format=`, outside its end or inside when there's no room, and only where it fits; grouped bars get one label each, stacked bars a total on top and each tall enough part's value inside. Bar and stacked charts already label a few wide bars without it; hbar always labels. `highlight="Mar"` (the x value of one item) keeps that item's bars in full color and fades the others, with a warning, and an ordinary chart, if no item matches. Under a bar or line chart, `chart-band "Healthy" from=30000 to=45000` shades a range behind the data (`tone=` picks its color role), named at its edge; like `chart-rule` it widens the scale, and a chart takes at most 4 of each.
 - Area (`kind=area`) is a line with the space under it filled down to 0, for amounts over time. Unlike a line, its scale always includes 0. Up to 6 fields draw as overlapping areas with a legend; a missing number breaks the area there.
 - Funnel (`kind=funnel`) takes one field. Each item is a stage, top to bottom in list order, as wide as its value against the largest, narrowing to the next stage's width. Beside each band are its name, its value and its share of the stage before (`640 · 53%`). At most 12 stages; a negative value shows a message instead.
 - Waterfall (`kind=waterfall`) takes one field. Each item is a change: its bar starts where the running total stands and ends where the change takes it, rises in the good color and falls in the bad one, joined by thin lines. `total="Net income"` adds a last bar from 0 to where the changes end. An item without a number is a gap, and the total carries on without it.
@@ -310,9 +342,10 @@ table "Available equipment" items=equipment key=id bind=selected sort=sortField 
 Everything beyond showing rows is opt-in through state, so it can be read, shown and changed like any other state: `sort=` and `direction=` make the headers pressable (press to sort, press again to flip), and `bind=` with `key=` makes the rows pressable (`on=` runs after the selection is stored). The props are in the [reference](components.md#table). How it treats data:
 
 - **Cells.** Text columns show text as written, numbers like `1,200.5` and true/false as Yes/No. `number` and `money` columns (US dollars, as `money()`) show only numbers, right-aligned; text like `"12"` is never read as a number. Missing fields, `null`, lists, records and values a column can't show appear as `—`. `0` and `false` are values, not missing. Very large or small numbers use scientific form (`1E300`) instead of being cut short.
+- **More formats and cell styling.** `format=percent` (42 reads 42%, as in charts), `compact` (1,250,000 reads 1.25M) and `date` (YYYY-MM-DD text reads Mar 3, 2026; dates are text, never `Date`). `tone=sign` on a column colours negative numbers bad and positive good; `tone=status` (any field name) draws each cell as a badge in the tone (good, warn, bad, accent, muted) that row's `status` field holds. `bar=true` on a number column draws a theme-coloured bar behind each number, sized to the column's largest value (negatives run left of a zero line, in the bad colour). `total=true` on the table (or `total="Grand total"`, the text for its first cell) adds a pinned totals row summing number, money and compact columns, formatted like the column, and included in copied text and the screen reader tree. A table cut off sideways fades at the cut edge. The formats live in `src/components/formats.ts`.
 - **Sorting.** The list itself is never reordered: the table shows a sorted copy. Ascending puts numbers by value, then text alphabetically (ignoring case, with numbers in text compared as numbers, so "Item 2" comes before "Item 10"), then false and true; descending reverses that. Missing values always go last, and equal values keep their list order. A sort state naming no column leaves the list in order.
 - **Selection.** `bind=` holds the selected row's `key=` value, text or a number (0 included), so the selection stays with its record when the table is sorted or the list changes. Rows with no key, or a key an earlier row already has, can't be selected. A selected key no row has selects nothing; the state keeps its value until something changes it.
-- **Space.** Columns get their natural width, and spare room goes to text columns. When space is short, text columns are narrowed with an ellipsis, but never below a minimum, and numbers are never cut. If the columns still don't fit, the table scrolls sideways: every column keeps a readable width, the first column stays pinned at the left, and a scrollbar shows under the rows. It scrolls with a sideways swipe or Shift and the wheel, by dragging the rows or the scrollbar, and with the arrow keys, Home and End once the scrollbar has focus. More than 200 rows (or 64 columns) shows a message saying so instead of a cut-down table. Show a page of a long list with `take()` or `pagination`.
+- **Space.** Columns get their natural width, and spare room goes to text columns. When space is short, text columns are narrowed, but never below a minimum or their longest word, so words aren't split, and numbers are never cut. A text cell that no longer fits on one line wraps onto up to three lines (ending with an ellipsis past that), and its row grows to the tallest cell. Sortable headers (with `sort=`) always show a faint arrow, so it is clear they can be pressed without hovering. If the columns still don't fit, the table scrolls sideways: every column keeps a readable width, the first column stays pinned at the left, and a scrollbar shows under the rows. It scrolls with a sideways swipe or Shift and the wheel, by dragging the rows or the scrollbar, and with the arrow keys, Home and End once the scrollbar has focus. More than 200 rows (or 64 columns) shows a message saying so instead of a cut-down table. Show a page of a long list with `take()` or `pagination`.
 - **Keyboard.** Pressable headers and rows are each a Tab stop and work with Enter and Space. A table with no `sort=` or `bind=` adds no Tab stops.
 - Problems a model can fix (items that aren't a list, missing or repeated keys, cells their column can't show, too many rows or columns, too little room) are reported once through `onWarning`. While a spec streams in, a table whose columns haven't arrived shows "No columns yet".
 
@@ -331,6 +364,39 @@ screen name=cart title="Your cart"
 ```
 
 State is shared by every screen. Screens only go at the top level, and their names are plain words (letters, digits and `_`). `go:` to a screen that doesn't exist does nothing. A screen written without `name=` gets a warning but still shows when it's the first, so a lone `screen title="Team hours"` isn't left blank; it can't be the target of `go:`. Your app can move between screens too, with `ui.go("cart")` and `ui.back()`, and hears every move through the `navigate` event.
+
+## Slide decks
+
+`deck` shows its `slide`s one at a time, with arrows and a dot per slide under it. The slide shown is a number in state, starting at 0, named by `bind=` (the way a `carousel` keeps its page). Write a deck at the top level, not inside a card, and a slide per idea, with the slide's title as the point it makes:
+
+```
+state page=0
+deck bind=page footer="Northwind · Confidential"
+  slide "Q3 business review" layout=title eyebrow="Q3 2026"
+    text "Revenue is up 18% on last year" style=lead tone=muted
+  slide "Three numbers that sum up the quarter"
+    grid min=220
+      stat label="Revenue" value="$4.82M" change="+18%"
+      stat label="New customers" value="312" change="+9%"
+  slide "What we do next"
+    timeline
+      step "Hire two in support" time="Nov" status=current
+      step "Open the Denver warehouse" time="Dec" status=upcoming
+```
+
+The props are in the [reference](components.md#deck) and [for slides](components.md#slide), generated from the definitions. How decks behave:
+
+- **A slide is always 16:9.** It is as wide as its space and laid out at 960 by 540, then drawn scaled to fit, so it looks the same at every size. Its quoted text is its title, which it draws itself; everything indented under it goes below the title, centred in what is left. On a `layout=title` slide the title and what is under it sit together in the middle.
+- **Too much on a slide shrinks it, then cuts it off.** Content that is too tall is laid out wider and drawn smaller, down to 60% of its size. Past that it is cut off at the bottom, and a warning names the slide and says to split it in two. A `table` or `list` shows about five rows on a slide, so show the top few with `take()` and `sort()`, a total, or a chart.
+- **Props that fill in the slide.** `eyebrow=` is a few words above the title in the accent color, `subtitle=` a quieter line under it, `footer=` on the deck a short line at the bottom left of every slide, `numbers=false` takes away the number in the corner (2 / 4) and `progress=true` draws a thin bar along the bottom showing how far through the deck it is.
+- **Agenda and backup slides.** A `layout=agenda` slide lists the other slides' titles by itself (not the opening slide, itself or backup slides): up to six lines, then "and N more". `appendix=true` marks a backup slide after the main ones: it is left out of the count and the agenda and is numbered "Appendix 1 / 2".
+- **State is shared.** Every slide reads and writes the same state, so a `segmented` for the region can change what every slide shows, and a button with `on=set:page:3` jumps to the fourth slide. `on=` on the deck runs after the slide changes.
+- **Only the slide shown exists.** The others are neither drawn, pressed nor read out, and a slide still being written draws what has arrived so far, so a deck streams in a slide at a time.
+- **Moving.** The arrows, the dots, Left, Right, Home and End (while one of the deck's controls has focus) and a sideways swipe move between slides. `transition=fade` (the default) fades a new slide in, `none` doesn't; with reduced motion nothing fades.
+- **Screen readers** hear a region called a slide deck, named by the slide shown ("Slide 2 of 4"), with the arrows and dots as buttons, and each slide as a group named by its title. Copy text gives the slide shown.
+- **No colors or sizes.** A slide uses the theme's slide tokens ([Themes](engine.md#slides)), so the same deck matches every brand. A host can show a logo in every slide's corner (`theme.deck.logo`).
+
+A `slide` outside a `deck` is an error and is skipped, and so is anything but a `slide` written directly inside a `deck`. A `deck` without `bind=` gets a warning.
 
 ## Conditions
 
@@ -374,6 +440,44 @@ state open=14
 stat label="Open orders" value={open} tip="Paid, not yet handed to the carrier"
 button "Ship all" on=set:open:0 tip="Marks every open order shipped"
 ```
+
+## Motion
+
+Every element with a box of its own accepts `enter=`: how it comes in the first time it's drawn in sight. A container with `stagger=true` brings its children in one after another instead of all at once:
+
+```
+column enter=rise
+  text "Yosemite weekend" style=title
+row stagger=true enter=rise
+  stat label="Days" value="2"
+  stat label="Hikers" value="3"
+  stat label="Water (L)" value="18"
+button "Plan it" on=emit:plan enter=scale
+```
+
+- **Roles, not timings.** `fade` fades in; `rise` fades in moving up a little; `scale` fades in growing from a little smaller. The engine chooses the duration, the distance and the easing; a spec never names them.
+- **Once, when it comes into sight.** An element further down the page plays its entrance when it's scrolled to, and never again: not after scrolling away and back, not when state changes, not when a later line of a streamed spec arrives. A line that arrives while a spec streams in enters as it arrives. An edit to the spec keeps what was already shown at rest, even when lines above it were added or removed; a changed line plays as new.
+- **`stagger=true`.** Each child takes its turn with its own `enter=`, else the container's, else `fade`, a short step apart (children past the tenth go with the tenth). With `each` inside, every copy takes a turn. The container's own `enter=` then moves only its own frame, not its children.
+- **Only the drawing moves.** Layout, pressing, Tab and screen readers see every element where it will end up, from the first frame.
+- **Reduced motion wins.** With reduced motion (the person's setting) or the engine's `animate: false`, everything is drawn in its final state at once, as in a saved picture. This changed with entrance motion: reduced motion now wins even over a host's `animate: true`, and stills fades, gliding values and scenes too ([the engine](engine.md#options)).
+- **Problems the parser reports**, each a warning that keeps the element: a role that isn't one of the three, a `stagger=` that isn't `true` or `false`, either prop on `each` or `if` (put it on the element around it), on an element its parent draws (a `menu-item`, a `table-column`, a chart layer), and `stagger=` on an element without children. A component's own prop named `enter` or `stagger` keeps its meaning.
+- The model guide explains these only with `GuideOptions.motion`.
+
+## Pictures
+
+An `image` can be more than a picture in a column. These are kept out of the default model guide (like motion); the parser accepts them either way, and a guide option (`pictures: true`, [model.md](model.md)) tells the model about them:
+
+```
+image "Lake at dawn" src="/lake.jpg" ratio=16:9 zoom=slow
+  text "Quiet mornings" style=title
+  text "Cabins by the water"
+  button "Book" on=emit:book
+```
+
+- **Elements under an image** are laid over it. The picture is at least as tall as its `ratio=` and grows to hold them; short content sits in the middle. The engine darkens the photo only as much as the words need: most behind them, less above and below. Buttons and other controls over it work as anywhere. `caption=` isn't shown on such an image (a warning says so): write the words as a `text` line.
+- **Readable by construction.** The app, not the spec, darkens the photo and draws what is over it in light text, so it reads on any photo, light, dark or busy, at the same contrast as text anywhere else (4.5:1). Specs never choose an overlay, color or shade. In a forced-colors mode (Windows Contrast Themes) the photo is left out and the words sit on the person's own colors.
+- **`shape=rounded|square|circle`.** The outline (rounded is the default and follows the theme's corners; `circle` is fully rounded, so `ratio=1:1` gives a round avatar). `fit=cover` (default) crops the edges to fill the space and `fit=contain` shows the whole picture.
+- **`zoom=slow`.** The photo drifts about 10% closer over several seconds, once, when it comes into sight. It changes how the picture is painted, never where anything sits. With reduced motion or `animate: false` the picture stays still.
 
 ## Rules (experimental)
 

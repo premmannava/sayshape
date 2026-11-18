@@ -72,6 +72,23 @@ npm run pick-eval -- --answers kit/answers --out picks/  # put the report somewh
 
 An answer is read element by element: a multiple select is graded as a multiple select when the request lists one, not as a plain select. A request with no answer scores 0, so skipping doesn't help. Every answer is also rendered with the real engine; the report says whether it parsed without errors and drew without text spilling out of its box, and lists warnings separately. `--prompts` writes the quick start, the full guide, each element's docs and the requests to a folder, for running models by hand (it reads the MCP server's texts, so run `npm --prefix mcp install` first). Answers go back in as `answers/<model>-<setup>-r<run>/<id>.sayshape`, with no hyphen in the setup's name, or as `.jsonl` files of `{"id", "spec", "model", "setup", "run"}`. Reports go to `eval/results/picks-<date>/`, or to `--out`.
 
+## Check that models keep the colors
+
+In a chat app, a person can name colors for an interface (`show_interface`'s `colors` argument), and nothing remembers them but the conversation: the tool's result ends with a note telling the model to send the same colors again. `npm run colors-eval` asks whether models do. It gives a model the real `show_interface` and `sayshape_docs` tools, exactly as the MCP server advertises them to a chat app that draws views, runs multi-turn conversations with tool calls, and returns the server's own results. It scores only the `colors` argument of each `show_interface` call.
+
+```bash
+npm run colors-eval -- --models anthropic/claude-sonnet-5.5,openai/gpt-6.1-sol   # one endpoint, several models
+npm run colors-eval -- --models <id> --runs 5       # each conversation five times (default 3)
+npm run colors-eval -- --models <id> --sets coffee,purple --only A   # some prompt sets, one kind of conversation
+npm run colors-eval -- --dry-run                    # the plan and a cost estimate, no model called
+npm run colors-eval -- --stub mixed                 # a scripted model instead of a real one: no key, no cost
+npm run colors-eval -- --models <id> --note-variant explicit   # other wording for the result note, for an A/B run
+```
+
+Conversation A: the person names colors once, asks for three more interfaces without mentioning them, then asks to go back to the normal look and for one more. Per later call it counts colors sent, colors sent unchanged (the same list in the same order, however it was written), and each kind of change; the call made after "go back to normal" should send none. Conversation B: the person never mentions colors and asks for four interfaces; any colors sent are invented. Four prompt sets (`eval/colors/prompts.ts`) vary the colors (one to three, with and without `#`), the phrasing and the kinds of interface. The report shows a count beside every percentage, per model and per set, and the tokens and cost.
+
+The server's text is never changed. `--note-variant`, `--description-variant`, `--note-text` and `--description-text` swap the colors argument's description or the note at the end of a result in what the model sees, so two wordings can be compared on the same models. Each conversation stops at a cap (model requests per message, per conversation, and tokens per conversation: `--max-turn-requests`, `--max-requests`, `--max-tokens`) and says so in the report. `SAYSHAPE_MODEL_URL` must be set (a real run never quietly goes to a local server); `SAYSHAPE_API_KEY` and `SAYSHAPE_PROMPT_CACHE` work as for the other evaluations, a model on another endpoint takes `--endpoint <model>=<url>` and `--key-env <model>=<VARIABLE>`, and it needs the MCP server's packages (`npm install --prefix mcp`). Results go to `eval/results/colors-<date>/`: `report.md`, `results.json`, `tools.json` (the tools as the model saw them) and every conversation in full under `transcripts/`; no key is written.
+
 ## Compare it with HTML
 
 `npm run compare` asks each model for the same 30 requests twice, once in SayShape and once as an HTML fragment (markup, CSS and JavaScript, with Chart.js allowed for charts), and judges both the same way: by what's on screen and what happens when it's used.
@@ -150,6 +167,62 @@ Three sets of elements are involved, and they're separate:
 
 Examples are chosen explicitly: `examples` turns each element's own short example on or off (default on in full mode, off in compact), and `workedExamples` picks the larger ones by name (`["todo", "cart"]`, `["equipment"]` for a filterable order calculator, or `false` for none). With a profile, an example that uses an element outside it is never shown.
 
+### Layout first while streaming
+
+By default the guide says "state first", so a model writes its data (a 40-row list, say) before any element, and nothing draws until all of it has been written. `layoutFirst` tells it to write the elements first and the `state` lines last, with long lists at the very end; small values a control starts from (`state tab="All"`) may still go first. The first element then draws after a few dozen characters, not after the data.
+
+```ts
+guide: { layoutFirst: true }          // off by default: the guide is then exactly what it was
+const ui = new SayShape(canvas, { streamPlaceholders: true });
+```
+
+`streamPlaceholders` is the engine's half. While a spec streams in (`beginStream` to `endStream`), a name an element reads before its `state` or `derive` line has arrived draws as a loading placeholder (the same as [`setAwaiting`](language.md#lists)), and no warning is shown for it: not the "isn't state" diagnostic, and not a layout warning like a select's items not being a list yet. When the stream ends the screen is checked as usual, so a name that is still undeclared is reported then. With it off, a streamed spec behaves exactly as before. The MCP server's `--layout-first` changes its guide text the same way; its view already draws placeholders while a spec streams in.
+
+### The look line
+
+`look: true` adds a short LOOK section to the guide (full or compact, built from `LOOK_OPTIONS` in `src/look.ts`): the line `look mood=… type=… shape=… density=…`, its options, and that it goes first ([Look](language.md#look)). Off (default), the guide is exactly what it was. The engine reads look lines whatever the guide says (its `look` option, on by default), so pass `look: false` to `generateSpec` too when the engine has it off: a look line the model writes is then reported, and repaired away. The prose filter keeps a line like `look mood=bold` (`look` followed by `name=option` pairs) and drops a sentence starting with "Look".
+
+```ts
+guide: { look: true }                 // off by default: the guide is then exactly what it was
+```
+
+### Pictures
+
+`pictures: true` adds a short PICTURES section to the guide (built from `PICTURE_PROPS` in `src/component.ts`) and shows `image`'s `shape=`, `zoom=` and its children in its entry: `shape=rounded|square|circle`, `zoom=slow`, and elements indented under an image to lay them over it ([Pictures](language.md#pictures)). Off (default), the guide is exactly what it was (`ComponentDef.quiet` leaves them out); the parser accepts them either way. The model never chooses colors or an overlay: the engine makes the words over a photo readable. `elementGuide` takes the same `pictures` option.
+
+### Motion
+
+`motion: true` adds a short MOTION section to the guide (full or compact, built from `MOTION_PROPS` in `src/component.ts`): `enter=fade|rise|scale` on any element and `stagger=true` on a container ([Motion](language.md#motion)). Off (default), the guide is exactly what it was. The parser accepts the props whatever the guide says, and the engine plays them unless motion is off.
+
+```ts
+guide: { motion: true }               // off by default: the guide is then exactly what it was
+```
+
+The MCP server never turns these three on in its quick start or guide, so each call's input stays the same size. A model can still ask for them: `sayshape_docs` with `topics: ["look"]`, `["motion"]` or `["pictures"]` returns the full section from the same generators (`lookGuide`, `motionGuide`, `picturesGuide`), and the quick start's topic list names them, in clients that draw with the server's own engine.
+
+### Data answers with the report preset (opt-in)
+
+Most of what a model writes for a data answer is layout it doesn't need to choose: where the figures go, which cards hold which chart, a table's columns, headers and formats. The `report` preset lets it name the data and what to show, and the engine writes the layout:
+
+```text
+report "Claims review" subtitle="2025" data=claims filter=status
+  count
+  sum incurred
+  count status=Open
+  bar monthly month opened
+  line monthly month opened closed
+  donut line
+  table
+```
+
+- The first line takes a title, `subtitle=`, `data=` (the list the report shows) and `filter=` (one or more fields; each becomes a multiple-choice select, and the figures, grouped charts and table on `data=` show only the rows it leaves).
+- Each line under it is one part, in screen order: a figure (`count`, `sum`, `avg`, `min`, `max`, then a field; `field=value` on any figure uses only matching rows: `avg days status=Closed`), a chart (`bar`, `hbar`, `line`, `area`, `pie`, `donut`, `stacked`, then x, then y fields; with no y it counts rows per x with `group()`; a list named first is drawn as it is), or `table` (every field, or the ones listed). A quoted text at the end of a line names the part.
+- Labels, chart titles, column headers and money or number formats come from the field names and, when the data is known (in the spec's `state` lines or set by the host), from its values. A table waits as a placeholder until its data is known, and the spec is read again when the host's data arrives.
+
+It is a preset, not a component: the parser expands it into ordinary elements (`text`, `select`, `grid`, `card`, `stat`, `chart`, `table`) before reading the spec, so accessibility, Copy text, the inspector and everything else work as usual. Element ids, state, derived values and diagnostics keep the spec's own line numbers. `ui.expandedSpec` (and `ParseResult.presets.expanded`, or `expandPresets()` on its own) shows what a report became.
+
+Turn it on in the engine with `presets: true` (`render(spec, { presets: true })` in tests), and give the model the report guide, `guide: { mode: "report" }`: about 490 tokens (o200k_base) instead of about 5,500 for the compact guide, teaching only the report, how to write data, and to answer `FULL` alone (`REPORT_FALLBACK`) when the request needs anything else. `generateReport()` does both steps: it asks with the report guide and, if the answer is `FULL`, once more with the compact guide (or `fallbackGuide`), adding up the usage of both. `generateSpec` checks specs with presets on whenever the guide is in report mode (or with `presets: true`). Off, `report` is an unknown element, as it always was, and every other guide is unchanged.
+
 ### Repairs
 
 `generateSpec` asks once for a fix when the parser finds problems (`repairOn: "any" | "errors" | "never"`). With a compact guide, `repairGuide: "full"` sends the full guide for that one repair, still limited to the profile. Each attempt reports the guide it used (`result.first.guide`, `result.repair?.guide`); `npm run eval -- --guide compact --repair-guide same,full` measures whether it helps.
@@ -175,11 +248,62 @@ It sends the original task, the `requirements` that must always hold, the change
 
 `result.messages` is the conversation that produced the accepted spec: the guide, the context, the request and the final spec. A rejected repair isn't in it, and a kept repair replaces the first spec. (Before, it included the repair exchange.) `result.transcript` has everything that was sent and received. Passing `result.messages` as `history` still works for apps that want the whole conversation.
 
+### Follow-ups as edits (opt-in)
+
+A change to a long screen costs as many output tokens as the screen. With `edits: true` (and `refine`), the model answers with line edits to the current spec instead:
+
+```text
+@replace 4-5      the lines under it replace lines 4 to 5 (@replace 4 for one line)
+@insert 7         the lines under it go after line 7 (0 = at the top)
+@delete 9-10
+```
+
+The request shows the current spec as `N|line`, which the model is told are labels and never to copy (if it does copy them on every line of an edit, they are removed). Numbers always mean the spec as sent, not shifted by earlier edits in the same answer. `refineEditMessages(ctx, request, policy)` builds the exact messages, like `refineMessages`, to try the same text on a writer. `parseEdits`, `applyEdits`, `numberSpec` and `wholeSpecFrom` are exported too.
+
+- A whole spec instead of edits (no `@` lines, starts at the left edge with a SayShape line) is accepted as a rewrite: `result.edit.mode` is `"rewrite"`.
+- Edits that don't apply (bad line, out of range, overlapping, an insert inside a replaced range), edits that leave nothing, edits that cause error diagnostics the current spec didn't have (matched by message), or an answer that is neither, fall back to one normal full-rewrite request (`mode: "fallback"`, with `reason`). The repair flow then runs as usual, on whichever spec was accepted.
+- `result.edit = { mode, applied, reason?, attempt, messages }`; `attempt` is the edit request's attempt and `messages` what it sent. `result.usage` adds up every attempt, a fallback included. `result.messages` is the normal refine conversation ending in the final spec, so it can be reused as before.
+- Streaming: nothing is streamed while edit lines arrive. Once they are applied, `onReset("edits")` is called and `onText` gets the whole patched spec in one call; a whole-spec answer arrives the same way (without a reset). A fallback streams as a normal request does.
+- `edits` is ignored without `refine` or with an empty `refine.spec`. With it off, requests are byte-for-byte as before.
+
+### Parallel sections (experimental)
+
+`generateSections` is an opt-in alternative to `generateSpec` for long screens. It takes the same options plus `maxSections` (default 6, at most 12) and `onSection`. Nothing else changes: `generateSpec` doesn't know about it, and it can be deleted with one file (`src/model/sections.ts`) and one export line.
+
+```ts
+import { generateSections } from "sayshape/model";
+
+const r = await generateSections({
+  config, registry, request: "An orders dashboard", guide: { mode: "compact" },
+  maxSections: 4,
+  onText: (text) => ui.push(text),                // the assembled spec, in screen order
+  onSection: (index, text) => log(index, text),   // each section as it finishes, in any order
+});
+r.cost.overheadEstimatedTokens; // the extra input this cost compared with one call
+```
+
+How it works:
+
+1. **One call plans.** The model answers in a small plain-text format: `state` and `derive` lines for what several sections share (small starting values only), a `data` line naming the app's own state (only names you pass as `stateNames` are kept), and one `section:` line per section, top to bottom. Reading it is tolerant of fences, thinking, bullets, bold marks and numbering (`parsePlan`).
+2. **Several calls write the sections at once.** Each gets the same guide, the request and the plan (so they agree on names), then which section to write. The guide, request and plan are identical across these calls, with the section's own instruction last, so servers with prefix caching can reuse them.
+3. **The parts are put together in order.** The plan's shared lines come first (they are tiny and known the moment the plan is, so no prefix reads a name that isn't declared yet), then section 1, 2, and so on. `onText` gets the assembled spec in order: the section whose turn it is streams live, and a later section that finishes early is held and shown whole when its turn comes. `onSection` fires as each one finishes, whatever the order.
+4. **One repair, as before.** The assembled spec is checked with the parser (and `check`, `stateNames`, `enforceProfile`) and sent back once with `repairPrompt`, a full-spec call.
+
+If the plan can't be read, or has a single section, one ordinary `generateSpec` call writes the screen (`result.mode` is `"fallback"`, with `fallbackReason`); the planning call is still counted in the cost. `refine` and `history` always use one call, since changing a screen isn't split into sections.
+
+**Cost.** The guide and the request are sent once for the plan and once per section, so with `n` sections the input grows by about `n × (guide + request)` characters plus the plan and instructions in every call. `result.cost` lists the characters of every call (`perCall`, `inputChars`) and the overhead against one call (`overheadChars`, and `overheadEstimatedTokens` = characters / 4). With the compact guide (about 20,600 characters, 5,100 tokens, for `coreComponents`) and three short sections, four calls send about 84,900 characters against 20,600 for one call: about 64,300 characters, 16,000 tokens, more. Output tokens stay about the same, plus the plan. `result.usage` adds up what the server reported for every call (a total is `undefined` when any call didn't report it), `result.calls` has each call's attempt, and `result.timings` has `planMs`, `firstLineMs`, `firstSectionLineMs` and `totalMs`.
+
+**When it might help.** A long screen with sections that don't depend on each other, where writing time dominates; on a provider with prompt caching, where the repeated guide is read from the cache at a fraction of the price (set `config.cache`). It will not help a short screen: the plan call adds a wait before anything is shown, and the repair is still one slow, sequential call. Sections can't see each other's elements, so a screen where parts must line up is better written in one call.
+
+**Not measured.** No model is configured where this was built, so whether it saves wall-clock time is unmeasured: tests with a fake model prove only that the section calls run at the same time, in order, and what the extra input is. Try it against your model before relying on it. Thinking text isn't passed to `onThinking`, since several calls would interleave.
+
 ### Usage and timing
 
 `result.usage` adds up the server's token counts over the first try and the repair: `promptTokens`, `completionTokens`, and `reasoningTokens` (part of the completion tokens, not added again). A total is `undefined`, meaning unknown, when any attempt didn't report it; `usage.reported` says how many did. Each attempt also has `inputChars` and `estimatedInputTokens` (characters / 4), `estimatedThinkingTokens`, the guide it used and how long it took. A reasoning model's thinking is often most of the wait: `config.reasoningEffort` sends `reasoning_effort` in the server's own words (DeepSeek: `none`, `low`, `high`, `max`, and `high` when it's left out). Many servers only report usage while streaming when asked; set `config.streamUsage: true` for those that support `stream_options` (OpenAI, vLLM, recent LM Studio and llama.cpp).
 
 ### Prompt caching
+
+For a short guide to what to send first, which provider needs what and the mistakes that break it, see [Prompt caching](prompt-caching.md).
 
 The guide is the same on every request and comes first, so a provider's prompt cache can serve it: after the first request, those tokens cost a fraction of the input price. With the full guide at about 10,500 tokens of input per request, this is most of the cost of a request.
 

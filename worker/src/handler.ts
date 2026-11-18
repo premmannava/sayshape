@@ -18,24 +18,31 @@
  *       {"t":"phase","v":"writing"}   what the model is doing
  *       {"t":"text","v":"card\n"}     clean SayShape lines, to push into the engine
  *       {"t":"reset"}                 throw away what was shown: a repair is coming
- *       {"t":"done","spec":"…","problems":0,"repaired":false,"ms":1234,"model":"…","tokens":{"in":10900,"out":180}}
+ *       {"t":"done","spec":"…","problems":0,"repaired":false,"ms":1234,"model":"…","tokens":{"in":10900,"out":180,"cached":10500,"cacheWrite":0}}  (cached and cacheWrite only when the provider reports them)
  *       {"t":"thought","v":"…"}       the model's thinking, as it streams (chat only, up to MAX_THOUGHT_CHARS; SHOW_THINKING="false" turns it off)
  *       {"t":"error","message":"…"}   a message to show; the stream ends
  *   → or before streaming, a JSON error: {"error": "…", "reason": "off" | "unconfigured" | "rate" | "daily" | "check" | "too-big" | "bad-request"}
  *
- *   GET /status    → {"enabled": true, "model": "…"}: whether answers are on, without calling the model
+ *   A chat question may add "record": {"chat": "…", "turn": 1, "width": 720} when the visitor chose to
+ *   save it (records.ts); its done event then carries "record": "<id>", and the answer is saved.
+ *
+ *   POST /feedback {"id": "<record id>", "vote": "up" | "down", "note": "…", "used": {"changes": 2, "actions": 0, "screens": 0}}
+ *   → 204 when saved, 404 when there's no such answer (or answers aren't saved here)
+ *
+ *   GET /status    → {"enabled": true, "model": "…", "recording": true}: whether answers are on, and can be
+ *                  saved, without calling the model
  *
  * Plain functions with no Cloudflare types, so test/worker.test.ts can run
  * it in Node with a fake model.
  */
-import { generateSpec, ModelError, type GenerateOptions, type Phase } from "../../src/model";
+import { asksForFullGuide, cachedPrompt, generateSpec, ModelError, sumUsage, type GenerateOptions, type GenerateResult, type Phase } from "../../src/model";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { sceneComponents } from "../../src/components/scene";
 import { Registry } from "../../src/registry";
-import { languageGuide } from "../../src/prompt";
 import { answerGuide, answerRequest, checkAnswer, DATA, readQuestion } from "./answer";
-import { chatGuide, chatRequest, checkDrawing, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
+import { chatGuide, chatReportGuide, chatRequest, checkDrawing, MAX_CHAT_BODY_BYTES, readChat } from "./chat";
+import { applyFeedback, MAX_FEEDBACK_BYTES, readFeedback, readRecordRequest, saveAnswer, type AnswerRow, type RecordStore } from "./records";
 
 /** The part of a Workers KV namespace the daily count uses. */
 export interface Counter {
@@ -64,6 +71,15 @@ export interface Env {
   ALLOWED_ORIGINS?: string;
   /** Turnstile secret. When set, every request needs a valid token. */
   TURNSTILE_SECRET?: string;
+  /**
+   * Marks the guide for the provider's prompt cache (cache_control on the system message's one text
+   * block): "true" or "5m" for about 5 minutes, "1h" for an hour. Empty or anything else leaves it
+   * off, as plain text, which is also what providers that cache on their own (OpenAI, DeepSeek) need.
+   * Turn it on for Anthropic models, directly or through OpenRouter. If the provider rejects the
+   * marked form (a 400 or 422 before anything streams), that request is sent again unmarked and the
+   * worker stops marking for that model until it restarts.
+   */
+  PROMPT_CACHE?: string;
   /** "false" turns answers off without redeploying the site. */
   GENERATION_ENABLED?: string;
   /**
@@ -72,12 +88,24 @@ export interface Env {
    * back (up to MAX_THOUGHT_CHARS an answer).
    */
   SHOW_THINKING?: string;
+  /**
+   * "true": a new chat question is first asked with the small report guide (the
+   * report preset: figures, charts, a table and filters from a few lines), and
+   * only with the chat guide when the model says a report can't show it. The
+   * page must draw with the engine's presets on. Default: off.
+   */
+  REPORT_FIRST?: string;
   /** Workers rate limiting binding, keyed by IP. Optional. */
   RATE_LIMITER?: { limit(opts: { key: string }): Promise<{ success: boolean }> };
   /** Questions answered per day (UTC) for the whole site, counted in ANSWER_COUNT. Default 500. */
   DAILY_ANSWERS?: string;
   /** A KV namespace for the daily count. Without it there's no daily cap. */
   ANSWER_COUNT?: Counter;
+  /**
+   * A D1 database for answers visitors chose to save (records.ts). Without it nothing is saved,
+   * /status says so, and the page offers no switch.
+   */
+  RECORDS?: RecordStore;
 }
 
 export interface Deps {
@@ -86,6 +114,10 @@ export interface Deps {
   waitUntil?: (p: Promise<unknown>) => void;
   /** Today's date, for the daily count. */
   today?: () => string;
+  /** The time now, for saved answers. */
+  now?: () => Date;
+  /** A new saved answer's id. Default: crypto.randomUUID(). */
+  newId?: () => string;
 }
 
 /** A spreadsheet question's limit: big enough for 40 columns and 3 rows of 100-character cells; far too small for a spreadsheet. */
@@ -110,9 +142,29 @@ const registry = new Registry(coreComponents);
  * world map. Spreadsheet answers keep to the core elements, and to their smaller guide.
  */
 export const chatRegistry = new Registry([...coreComponents, ...sceneComponents, ...mapComponents]);
-/** The chat guide's text, built once per worker instance, not per question: it's the same every time. */
-let chatGuideText: string | undefined;
-const chatGuideOnce = () => (chatGuideText ??= languageGuide(chatRegistry, chatGuide(chatRegistry)));
+/**
+ * The system prompts, built once per worker instance, not per question: each is the same for every
+ * visitor and every question (the guide and this page's lasting notes, nothing per request), so it
+ * is the stable, cacheable part. cachedPrompt builds it with no per-request context: the visitor's
+ * words, a spreadsheet's columns and a follow-up's latest answer all go in the user messages after
+ * it. test/worker-cache.test.ts keeps it that way.
+ */
+let chatPrompt: string | undefined;
+let dataPrompt: string | undefined;
+export const chatStable = () => (chatPrompt ??= cachedPrompt(chatRegistry, { guide: chatGuide(chatRegistry) }).stable);
+export const dataStable = () => (dataPrompt ??= cachedPrompt(registry, { guide: answerGuide() }).stable);
+let reportPrompt: string | undefined;
+/** The report guide for chat answers (REPORT_FIRST), stable in the same way. */
+export const chatReportStable = () => (reportPrompt ??= cachedPrompt(chatRegistry, { guide: chatReportGuide() }).stable);
+
+/** PROMPT_CACHE as the model client's `cache` setting: undefined (off), true (5 minutes) or "1h". */
+export function cacheSetting(env: Env): true | "1h" | undefined {
+  const v = (env.PROMPT_CACHE ?? "").trim().toLowerCase();
+  if (v === "1h") return "1h";
+  return v === "true" || v === "5m" || v === "on" || v === "1" ? true : undefined;
+}
+/** Providers (url and model) that refused the marked form, so later requests don't try it again. */
+const cacheRefused = new Set<string>();
 
 const json = (status: number, body: unknown, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...headers } });
@@ -186,6 +238,10 @@ interface Job {
   registry: Registry;
   /** What the person sees when the model gives no usable answer. */
   unanswered: string;
+  /** For a chat question: what's saved if the visitor chose to save it. */
+  saved?: { question: string; followup: boolean };
+  /** A new chat question, which REPORT_FIRST asks with the report guide first. Never a follow-up or a spreadsheet question. */
+  reportFirst?: boolean;
 }
 
 function chatJob(body: Record<string, unknown>): Job | { error: string } {
@@ -195,8 +251,10 @@ function chatJob(body: Record<string, unknown>): Job | { error: string } {
   return {
     registry: chatRegistry,
     // A follow-up's request is the visitor's words; refineMessages frames them as a change to the latest answer.
-    options: c.refine ? { request: c.message, refine: c.refine, guide: chatGuideOnce(), check } : { request: chatRequest(c.message), guide: chatGuideOnce(), check },
+    options: c.refine ? { request: c.message, refine: c.refine, guide: chatStable(), check } : { request: chatRequest(c.message), guide: chatStable(), check },
     unanswered: "The model didn't draw anything for that. Try asking it another way.",
+    saved: { question: c.message, followup: !!c.refine },
+    reportFirst: !c.refine,
   };
 }
 
@@ -205,7 +263,7 @@ function dataJob(body: Record<string, unknown>): Job | { error: string } {
   if ("error" in q) return q;
   return {
     registry,
-    options: { request: answerRequest(q), guide: answerGuide(), stateNames: [DATA], check: checkAnswer },
+    options: { request: answerRequest(q), guide: dataStable(), stateNames: [DATA], check: checkAnswer },
     unanswered: "The model couldn't answer that one from the spreadsheet. Try asking it another way.",
   };
 }
@@ -216,7 +274,7 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   const origin = req.headers.get("Origin") ?? "";
   const allowed = allowedOrigins(env);
 
-  if (url.pathname !== "/answer" && url.pathname !== "/status") return json(404, { error: "Not found" });
+  if (url.pathname !== "/answer" && url.pathname !== "/status" && url.pathname !== "/feedback") return json(404, { error: "Not found" });
   // Only the site may call. (Origin can be forged outside a browser; Turnstile and rate limits cover that.)
   if (!allowed.includes(origin)) return json(403, { error: "This origin isn't allowed" });
   const cors = corsHeaders(origin);
@@ -228,9 +286,10 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
     if (req.method !== "GET") return json(405, { error: "Use GET" }, cors);
     // No model call and nothing counted: a page asks this before showing its question box.
     const enabled = !off && configured;
-    return json(200, { enabled, ...(enabled ? { model: env.MODEL_LABEL?.trim() || env.MODEL } : { reason: off ? "off" : "unconfigured" }) }, { ...cors, "Cache-Control": "no-store" });
+    return json(200, { enabled, ...(enabled ? { model: env.MODEL_LABEL?.trim() || env.MODEL, ...(env.RECORDS ? { recording: true } : {}) } : { reason: off ? "off" : "unconfigured" }) }, { ...cors, "Cache-Control": "no-store" });
   }
   if (req.method !== "POST") return json(405, { error: "Use POST" }, cors);
+  if (url.pathname === "/feedback") return feedback(req, env, cors, deps);
 
   if (off) return refuse(503, OFF_MESSAGE, "off", cors);
   if (!configured) return refuse(503, UNCONFIGURED_MESSAGE, "unconfigured", cors);
@@ -255,6 +314,8 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   }
   const job = kind === "chat" ? chatJob(body) : dataJob(body);
   if ("error" in job) return refuse(400, job.error, "bad-request", cors);
+  // Saved only when the visitor asked, and only chat questions: a spreadsheet's sample rows are never kept.
+  const rec = env.RECORDS && job.saved ? readRecordRequest(body.record) : null;
 
   const ip = req.headers.get("CF-Connecting-IP") ?? "";
   if (env.TURNSTILE_SECRET) {
@@ -281,53 +342,112 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
     // Only chat answers show thinking: the spreadsheet page never did.
     const showThinking = kind === "chat" && env.SHOW_THINKING !== "false";
     let thought = 0;
+    const label = env.MODEL_LABEL?.trim() || env.MODEL!;
+    const recordId = rec ? (deps.newId ?? (() => crypto.randomUUID()))() : undefined;
+    // Set by saveAs inside callbacks, so typed with `as` to keep TypeScript from narrowing it to null.
+    let row = null as AnswerRow | null;
+    const saveAs = (r: Pick<AnswerRow, "outcome" | "spec" | "problems" | "repaired" | "ms" | "tokensIn" | "tokensOut" | "error">) => {
+      if (!rec || !recordId || !job.saved) return;
+      row = { id: recordId, chat: rec.chat, turn: rec.turn, width: rec.width, at: (deps.now?.() ?? new Date()).toISOString(), followup: job.saved.followup, question: job.saved.question, model: label, ...r };
+    };
     try {
-      const result = await generateSpec({
+      const url = env.MODEL_URL ?? DEFAULT_URL;
+      const refusedKey = `${url}|${env.MODEL}`;
+      // Nothing has reached the page yet: set once the model has said anything, after which a failed call can't be retried quietly.
+      let started = false;
+      // Whether any of the answer's lines have reached the page, so a second try can tell it to start again.
+      let drawn = false;
+      const call = (cache: true | "1h" | undefined, over: Partial<GenerateOptions> = {}, more = false) => generateSpec({
         config: {
-          url: env.MODEL_URL ?? DEFAULT_URL,
+          url,
           model: env.MODEL!,
           apiKey: env.MODEL_API_KEY,
           maxTokens: MAX_TOKENS,
           streamUsage: env.STREAM_USAGE !== "false",
           ...(env.REASONING_EFFORT?.trim() ? { reasoningEffort: env.REASONING_EFFORT.trim() } : {}),
+          // The guide, the one stable system message, goes as its own marked text block, first.
+          ...(cache ? { cache } : {}),
         },
         registry: job.registry,
         ...job.options,
+        ...over,
         // One repair, only for errors: lines the parser had to skip, or (for data) an answer that doesn't read the data.
         repairOn: "errors",
         signal: req.signal,
         fetch: doFetch,
-        onText: (v) => void send({ t: "text", v }),
+        onText: (v) => { started = true; drawn = true; void send({ t: "text", v }); },
         onReset: () => void send({ t: "reset" }),
-        onPhase: (v: Phase) => void send({ t: "phase", v }),
-        onThinking: showThinking ? (v) => {
-          if (thought >= MAX_THOUGHT_CHARS) return;
+        // With another try to come, this one's end isn't the answer's.
+        onPhase: (v: Phase) => { if (!(more && v === "done")) void send({ t: "phase", v }); },
+        onThinking: (v) => {
+          started = true;
+          if (!showThinking || thought >= MAX_THOUGHT_CHARS) return;
           const part = v.slice(0, MAX_THOUGHT_CHARS - thought);
           thought += part.length;
           pending += part;
           if (pending.length >= THOUGHT_BATCH_CHARS) flush();
-        } : undefined,
+        },
       });
+      const wanted = cacheSetting(env);
+      const ask = async (over: Partial<GenerateOptions> = {}, more = false): Promise<GenerateResult> => {
+        const marked = wanted && !cacheRefused.has(refusedKey) ? wanted : undefined;
+        try {
+          return await call(marked, over, more);
+        } catch (e) {
+          // A provider that doesn't take cache markers must not break the page: say it once, send the request plain.
+          if (!marked || started || !(e instanceof ModelError) || (e.status !== 400 && e.status !== 422)) throw e;
+          cacheRefused.add(refusedKey);
+          return await call(undefined, over, more);
+        }
+      };
+      let result: GenerateResult;
+      if (job.reportFirst && env.REPORT_FIRST === "true") {
+        // The small report guide first. When the model says a report can't show it (or draws nothing), the chat guide answers.
+        const first = await ask({ guide: chatReportStable(), presets: true }, true);
+        if (first.spec.trim() && !asksForFullGuide(first.first.raw)) {
+          result = first;
+          await send({ t: "phase", v: "done" });
+        } else {
+          if (drawn) await send({ t: "reset" });
+          const second = await ask();
+          const attempts = [first.first, ...(first.repair ? [first.repair] : []), second.first, ...(second.repair ? [second.repair] : [])];
+          result = { ...second, usage: sumUsage(attempts.map((a) => a.usage)), timings: { ...second.timings, totalMs: first.timings.totalMs + second.timings.totalMs } };
+        }
+      } else result = await ask();
       const errors = result.diagnostics.filter((d) => d.severity === "error");
+      const { promptTokens, completionTokens, cachedTokens, cacheWriteTokens } = result.usage;
+      const ms = Math.round(result.timings.totalMs);
+      const how = { spec: result.spec, problems: result.diagnostics.length, repaired: !!result.repair, ms, tokensIn: promptTokens ?? null, tokensOut: completionTokens ?? null };
       if (!result.spec.trim() || errors.some((d) => /never reads data|Don't declare data/.test(d.message))) {
+        saveAs({ ...how, outcome: "empty", error: job.unanswered });
         await send({ t: "error", message: job.unanswered });
         return;
       }
-      const { promptTokens, completionTokens } = result.usage;
+      saveAs({ ...how, outcome: "done", error: null });
       await send({
         t: "done",
         spec: result.spec,
         problems: result.diagnostics.length,
         repaired: !!result.repair,
-        ms: Math.round(result.timings.totalMs),
-        model: env.MODEL_LABEL?.trim() || env.MODEL,
-        ...(promptTokens !== undefined && completionTokens !== undefined ? { tokens: { in: promptTokens, out: completionTokens } } : {}),
+        ms,
+        model: label,
+        ...(promptTokens !== undefined && completionTokens !== undefined
+          // cached and cacheWrite (parts of in) only when the provider reports them: how to tell the cache works.
+          ? { tokens: { in: promptTokens, out: completionTokens, ...(cachedTokens !== undefined ? { cached: cachedTokens } : {}), ...(cacheWriteTokens !== undefined ? { cacheWrite: cacheWriteTokens } : {}) } }
+          : {}),
+        ...(row ? { record: recordId } : {}),
       });
     } catch (e) {
-      if (!req.signal?.aborted) await send({ t: "error", message: friendlyError(e) });
+      if (!req.signal?.aborted) {
+        const message = friendlyError(e);
+        saveAs({ outcome: "failed", spec: "", problems: 0, repaired: false, ms: null, tokensIn: null, tokensOut: null, error: message });
+        await send({ t: "error", message });
+      }
     } finally {
       flush();
       await writer.close().catch(() => {});
+      // After the answer has ended, so saving never holds it up; a failed save loses only the row.
+      if (row && env.RECORDS) await saveAnswer(env.RECORDS, row).catch(() => {});
     }
   };
 
@@ -335,4 +455,26 @@ export async function handle(req: Request, env: Env, deps: Deps = {}): Promise<R
   const done = run();
   deps.waitUntil?.(done);
   return new Response(readable, { status: 200, headers: { ...cors, "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+/**
+ * Feedback on a saved answer: a thumb, a note, how much it was used. No human check or daily
+ * count, since it never calls the model; it can only change a row whose random id the page was
+ * given, while that row is kept.
+ */
+async function feedback(req: Request, env: Env, cors: Record<string, string>, deps: Deps): Promise<Response> {
+  if (!env.RECORDS) return json(404, { error: "Answers aren't saved here." }, cors);
+  const raw = await req.text();
+  if (new TextEncoder().encode(raw).length > MAX_FEEDBACK_BYTES) return json(413, { error: "That's more than feedback." }, cors);
+  let body: unknown;
+  try { body = JSON.parse(raw); } catch { return json(400, { error: "Send JSON" }, cors); }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return json(400, { error: "Send JSON" }, cors);
+  const f = readFeedback(body as Record<string, unknown>);
+  if ("error" in f) return json(400, { error: f.error }, cors);
+  try {
+    const found = await applyFeedback(env.RECORDS, f, deps.now?.() ?? new Date());
+    return found ? new Response(null, { status: 204, headers: cors }) : json(404, { error: "There's no saved answer with that id." }, cors);
+  } catch {
+    return json(503, { error: "Feedback couldn't be saved right now." }, cors);
+  }
 }

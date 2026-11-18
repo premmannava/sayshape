@@ -33,14 +33,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { getUiCapability, registerAppResource, registerAppTool, RESOURCE_MIME_TYPE } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
-import { DEFAULT_VIEW_OPTIONS, withViewOptions, type ViewOptions } from "./ui/view-options";
+import { colorEntries, DEFAULT_VIEW_OPTIONS, withViewOptions, type ViewOptions } from "./ui/view-options";
+import { colorList } from "../../playground/appearance/color";
 import { parse } from "../../src/parser";
 import { Registry } from "../../src/registry";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { sceneComponents, reviewScenes } from "../../src/components/scene";
 import type { ComponentDef } from "../../src/component";
-import { elementGuide, elementIndex, guideSections, languageGuide, pickList, PICKS_HEADING, PICKS_HEADING_SHORT } from "../../src/prompt";
+import { elementGuide, elementIndex, guideSections, languageGuide, motionGuide, picturesGuide, pickList, PICKS_HEADING, PICKS_HEADING_SHORT } from "../../src/prompt";
+import { lookGuide } from "../../src/look";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
@@ -49,8 +51,11 @@ import type { SayShapeNode } from "../../src/types";
 import { QueryError, summarize, type DataSource } from "./data";
 import { listMcpDatasets, type McpResultStore } from "./mcp-results";
 import { fallbackPage, fenced, PAGE_DATASETS_TEXT, PAGE_REPEAT_TEXT, PAGE_TEXT, pageFixLead } from "./fallback";
+import { PRESSES_SAVED, PRESSES_SAVED_RESULT, widgetFailedText, widgetFixLead, WIDGET_REPEAT_TEXT, widgetText, writeWidget } from "./widget-file";
+import { adapterSource, type WidgetHostName } from "./widget-hosts";
+import { loadPackedEngine, type PackedEngine } from "./widget-engine";
 
-export const VERSION = "0.2.1";
+export const VERSION = "0.4.0";
 export const UI_URI = "ui://sayshape/interface.html";
 /** Longer specs are refused: they're slow to stream and nobody reads them in a chat. */
 export const MAX_SPEC_CHARS = 20_000;
@@ -61,6 +66,7 @@ let components: ComponentDef[] = [...coreComponents, ...mapComponents];
 let registry = new Registry(components);
 let scenesOn = false;
 let behaviorOn = false;
+let layoutFirstOn = false;
 let imageHosts: readonly string[] = [];
 /**
  * The guide's sections, worked out once per mode. They depend only on the
@@ -75,11 +81,35 @@ const sectionsCache = new Map<"full" | "compact", ReturnType<typeof guideSection
  * before createServer; main.ts does, from the command line.
  */
 export function setScenes(on: boolean): void {
-  components = [...coreComponents, ...mapComponents, ...(on ? sceneComponents : [])];
-  registry = new Registry(components);
   scenesOn = on;
+  register();
+}
+
+/** The elements the flags leave on, for the parser, the docs and the quick start. */
+function register(): void {
+  components = [...coreComponents, ...mapComponents, ...(scenesOn ? sceneComponents : [])];
+  registry = new Registry(components);
   sectionsCache.clear();
 }
+
+/**
+ * Whether a client gets behavior (--behavior): the view always does; a text-only client's CDN page loads a
+ * pinned engine from before it existed, so it doesn't; a widget file carries this server's own engine, so
+ * it does (fileMode: --widget-dir).
+ */
+const behaviorFor = (textOnly: boolean, fileMode: boolean): boolean => behaviorOn && (!textOnly || fileMode);
+
+/**
+ * Whether a client draws with this server's own engine: the view and the widget file do; the CDN page for
+ * text-only clients loads an older pinned engine (fallback.ts PAGE_ENGINE_VERSION) that has no look line,
+ * entrance motion or content over images, so it isn't offered the topics for them.
+ */
+const ownEngine = (textOnly: boolean, fileMode: boolean): boolean => !textOnly || fileMode;
+
+/** What a text-only client is told in place of a page when the spec is a deck. */
+const PAGE_DECK_TEXT = "The deck is written correctly, but this app can't show slide decks yet, so there is no page to open. Tell the person it needs a chat app that draws SayShape views.";
+/** Whether a spec uses the deck element. */
+const usesDeck = (spec: string): boolean => /^\s*deck\b/m.test(spec);
 
 /**
  * --behavior: turn experimental behavior on (off by default): `every` rules
@@ -93,7 +123,20 @@ export function setBehavior(on: boolean): void {
 }
 
 /**
- * --image-hosts: the hosts images may load from (none by default). The model
+ * --layout-first: tell models to write the layout first and the data (state
+ * lines, long lists) last, so the view draws from the first element while the
+ * spec streams in (the view already shows placeholders for names not declared
+ * yet). Off by default: the guide, quick start and docs are then exactly what
+ * they were. Call before createServer; main.ts does.
+ */
+export function setLayoutFirst(on: boolean): void {
+  layoutFirstOn = on;
+  sectionsCache.clear();
+}
+
+/**
+ * The hosts images may load from: main.ts passes --image-hosts, else the common
+ * list, else none with --no-image-hosts (none until it's called). The model
  * is told them, and the view resource asks the chat app to allow them in its
  * CSP; the view's engine gets the same list through the view options. Call
  * before createServer; main.ts does, from the command line.
@@ -108,11 +151,15 @@ export function imageCsp(hosts: readonly string[]): { resourceDomains: string[] 
   return hosts.length ? { resourceDomains: hosts.map((h) => `https://${h}`) } : undefined;
 }
 
+/** What the chat notes say about emit: where the view sends it to the model as it happens (MCP Apps clients). */
+const CHAT_EMIT =
+  'When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.';
+
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
 const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
 Keep it to one focused screen: a title, any filters just under it, then the content. Use cards for panels, never a card inside a card or one card around everything. Prefer grid for side-by-side numbers; avoid more than three columns.
 Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption.
-When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.
+${CHAT_EMIT}
 Output only the spec in show_interface's spec argument, with no Markdown fences.`;
 
 /** How to show a database's rows, added to the guide when the server has one. */
@@ -130,27 +177,33 @@ const MCP_NOTES = `MCP RESULTS FROM A TRUSTED INTEGRATION
 
 /** The whole guide in one piece (the guide modes' full text plus these notes); kept for measuring and for clients that want it all. */
 export function guideText(withData = false): string {
-  return languageGuide(registry, { mode: "full", imageHosts, notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES, ...(behaviorOn ? { behavior: true } : {}) });
+  return languageGuide(registry, { mode: "full", imageHosts, notes: withData ? `${CHAT_NOTES}\n\n${DATA_NOTES}` : CHAT_NOTES, ...(behaviorOn ? { behavior: true } : {}), ...(layoutFirstOn ? { layoutFirst: true } : {}) });
 }
 
 function sectionsOf(mode: "full" | "compact"): ReturnType<typeof guideSections> {
   let sections = sectionsCache.get(mode);
-  if (!sections) sectionsCache.set(mode, (sections = guideSections(registry, { mode, imageHosts, ...(behaviorOn ? { behavior: true } : {}) })));
+  if (!sections) sectionsCache.set(mode, (sections = guideSections(registry, { mode, imageHosts, ...(behaviorOn ? { behavior: true } : {}), ...(layoutFirstOn ? { layoutFirst: true } : {}) })));
   return sections;
 }
 
 const sectionText = (mode: "full" | "compact", name: string) => sectionsOf(mode).find((sec) => sec.name === name)?.text ?? "";
 
 /** Parts of the guide a model can ask for by name, all generated (DATA_NOTES only with a database). */
-function topics(withData: boolean, withMcp = false, textOnly = false): Record<string, string> {
+function topics(withData: boolean, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): Record<string, string> {
+  // A client that can't draw views is told the truth about emit: here too, as in its quick start:
+  // it is saved for the next turn with a host adapter, and can't be used without one.
+  const emitLine = textOnly ? (pressesSaved ? PRESSES_SAVED : NO_EMIT) : CHAT_EMIT;
   return {
     expressions: sectionText("full", "expressions"),
     actions: sectionText("full", "actions"),
-    ...(behaviorOn && !textOnly ? { behavior: sectionText("full", "behavior") } : {}),
+    ...(behaviorFor(textOnly, fileMode) ? { behavior: sectionText("full", "behavior") } : {}),
     lists: sectionText("full", "data"),
     rules: sectionText("full", "rules"),
     examples: sectionText("full", "example"),
-    chat: CHAT_NOTES.split("\n").slice(1).join("\n"),
+    // On demand only, from the same generators as the guide's optional sections: the quick start and the
+    // default guide never carry them, so a call costs no more input tokens unless a model asks.
+    ...(ownEngine(textOnly, fileMode) ? { look: lookGuide("full"), motion: motionGuide("full"), pictures: picturesGuide("full") } : {}),
+    chat: CHAT_NOTES.split("\n").slice(1).map((line) => (line === CHAT_EMIT ? emitLine : line)).join("\n"),
     ...(withData ? { database: DATA_NOTES } : {}),
     ...(withMcp ? { datasets: MCP_NOTES } : {}),
   };
@@ -163,7 +216,7 @@ function topics(withData: boolean, withMcp = false, textOnly = false): Record<st
  * rules for writing into a chat, and how to ask for more. Simple interfaces
  * need nothing else.
  */
-export function quickStart(withData = false, withMcp = false, textOnly = false): string {
+export function quickStart(withData = false, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): string {
   return [
     "QUICK START",
     // The guide's "not JavaScript" line is left out to keep this short: show_interface returns
@@ -173,10 +226,10 @@ export function quickStart(withData = false, withMcp = false, textOnly = false):
     "- Text and props show state: text \"Total: {money(total)}\"; actions run on press: button \"Add\" on=inc:count",
     "- Any element takes tip=\"…\": a short explanation shown on hover, focus or a tap: for a term or a number some people won't know, instead of more words on screen.",
     textOnly
-      ? `- ${NO_EMIT}`
+      ? `- ${pressesSaved ? PRESSES_SAVED : NO_EMIT}`
       : "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue'); within a budget: filter(rows, 'price', {to: budget})`,
-    ...(behaviorOn && !textOnly ? [sectionText("compact", "behavior")] : []),
+    ...(behaviorFor(textOnly, fileMode) ? [sectionText("compact", "behavior")] : []),
     `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
     // The same heading as the guides', in fewer words: this text goes out with every call.
     // Picks without their "such as …" examples or their "(…)" notes, except notes that teach a
@@ -184,7 +237,10 @@ export function quickStart(withData = false, withMcp = false, textOnly = false):
     // every call, so each new element's pick fits.
     `${PICKS_HEADING_SHORT}\n${pickList(components).replace(/, such as [^:\n]*(?=: )/g, "").replace(/ \((?![^)\n]*=)[^)\n]*\)(?=: )/g, "")}`,
     "IN A CHAT: under 600px. Title, filters, a few KPIs in grid min=140, one main chart; no nested cards. Caption estimates.",
-    `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp, textOnly)).join(", ")}.`,
+    "A PRESENTATION: a deck at the top level, not inside a card; a slide per idea, its title in the slide's own text.",
+    // Only where those topics exist (ownEngine), so a model that reads this knows when to ask for them.
+    ...(ownEngine(textOnly, fileMode) ? ["Polished screens: sayshape_docs topics look (style), motion (entrances), pictures (over photos)."] : []),
+    `BEFORE YOU USE AN ELEMENT the first time, get its props and an example from sayshape_docs (elements: ["chart", "table"]). Topics: ${Object.keys(topics(withData, withMcp, textOnly, fileMode)).join(", ")}.`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),
   ].join("\n");
 }
@@ -202,11 +258,11 @@ function arrivesWithParent(c: ComponentDef): boolean {
 }
 
 /** Docs for exactly what was asked for, plus what it depends on. */
-export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false): string {
+export function docsText(elements: readonly string[], topicNames: readonly string[], withData = false, withMcp = false, textOnly = false, fileMode = false, pressesSaved = false): string {
   const parts: string[] = [];
-  const t = topics(withData, withMcp, textOnly);
+  const t = topics(withData, withMcp, textOnly, fileMode, pressesSaved);
   if (elements.length) {
-    const { text, unknown } = elementGuide(registry, elements, { behavior: behaviorOn && !textOnly });
+    const { text, unknown } = elementGuide(registry, elements, { behavior: behaviorFor(textOnly, fileMode) });
     if (text) parts.push(`ELEMENTS\n${text}`);
     // Which hosts work, so a model asking about image doesn't write URLs the view can't load.
     if (imageHosts.length && elements.includes("image")) parts.push(sectionText("compact", "images"));
@@ -216,7 +272,7 @@ export function docsText(elements: readonly string[], topicNames: readonly strin
     const body = t[name];
     parts.push(body ? body : `No topic called ${name}. Topics: ${Object.keys(t).join(", ")}.`);
   }
-  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp, textOnly);
+  return parts.length ? parts.join("\n\n") : quickStart(withData, withMcp, textOnly, fileMode, pressesSaved);
 }
 
 /** The elements on the lines that went wrong, so their docs can go back with the problems. */
@@ -274,8 +330,8 @@ export interface SpecCheck {
 }
 
 /** Parse a spec with the engine's own parser and components. Never throws. hostNames: state the interface fills in (datasets). */
-export function checkSpec(spec: string, hostNames: readonly string[] = [], textOnly = false): SpecCheck {
-  const behavior = behaviorOn && !textOnly;
+export function checkSpec(spec: string, hostNames: readonly string[] = [], textOnly = false, fileMode = false): SpecCheck {
+  const behavior = behaviorFor(textOnly, fileMode);
   const parsed = parse(spec, registry, { knownNames: hostNames, ...(behavior ? { behavior } : {}) });
   const { diagnostics } = parsed;
   return {
@@ -299,22 +355,23 @@ export const isHarmless = (d: Diagnostic) => d.severity !== "error" && HARMLESS.
  * is how the person sees it. Clients that draw views get the same text as
  * before the page existed (test/ui-results.test.ts).
  */
-function describeCheck(c: SpecCheck, textOnly = false): string {
+function describeCheck(c: SpecCheck, textOnly = false, fileMode = false, widget = ""): string {
   const all = [...c.errors, ...c.warnings];
   const drawing = c.drawing.map((d) => `line ${d.line}: ${d.message.replace(/^Drawing: /, "")}`);
   if (textOnly) {
+    // fileMode: the app shows a widget made from a file (--widget-dir); widget is what it's told about the file, in place of the page's text.
     const fix = all.filter((d) => !isHarmless(d));
     if (fix.length) {
       const listed = [...fix, ...all.filter(isHarmless)].slice(0, MAX_REPORTED).map((d) => `line ${d.line} (${isHarmless(d) ? "ignored" : d.severity}): ${d.message}`);
       if (all.length > MAX_REPORTED) listed.push(`…and ${all.length - MAX_REPORTED} more.`);
-      return `${pageFixLead(fix.length)}\n${listed.join("\n")}${drawing.length ? `\nAlso tidy the drawing:\n${drawing.join("\n")}` : ""}`;
+      return `${fileMode ? widgetFixLead(fix.length) : pageFixLead(fix.length)}\n${listed.join("\n")}${drawing.length ? `\nAlso tidy the drawing:\n${drawing.join("\n")}` : ""}`;
     }
     const minor = all.map((d) => `line ${d.line} (ignored): ${d.message}`);
     return [
-      PAGE_TEXT,
+      fileMode ? widget : PAGE_TEXT,
       ...(minor.length ? [`The parser ignored these small things, which change nothing on the page:\n${minor.join("\n")}`] : []),
       // A scene's drawing problems don't hold the page back: some, like small text on a phone, may not be worth another call.
-      ...(drawing.length ? [`Its drawing has problems the person can see. If you fix them, call show_interface again and use the new page instead:\n${drawing.join("\n")}`] : []),
+      ...(drawing.length ? [`Its drawing has problems the person can see. If you fix them, call show_interface again and use the new ${fileMode ? "file" : "page"} instead:\n${drawing.join("\n")}`] : []),
     ].join("\n");
   }
   if (!all.length && drawing.length) {
@@ -335,7 +392,7 @@ function describeCheck(c: SpecCheck, textOnly = false): string {
 export interface ServerOptions {
   /** The view's HTML: dist/ui.html, built by `npm run build`. */
   uiHtml: () => string | Promise<string>;
-  /** The view's own settings: --theme-picker, --theme, --accent, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
+  /** The view's own settings: --theme-picker, --theme, --accent, --colors, --no-model-colors, --no-save-image, --no-copy-text, --image-hosts (main.ts). Default: no picker, teal, Save image and Copy text on, no image hosts. */
   view?: ViewOptions;
   /** A read-only database the model may query (main.ts --data). */
   data?: DataSource;
@@ -343,17 +400,60 @@ export interface ServerOptions {
   mcpResults?: McpResultStore;
   /** The clock, for tests of how long a repeat counts as one. */
   now?: () => number;
+  /**
+   * A folder to write widget files into (main.ts --widget-dir; stdio only). Clients that can't draw MCP Apps
+   * views get a file there, made from the spec with this server's own engine, in place of the CDN page.
+   * Without it, nothing changes.
+   */
+  widgetDir?: string;
+  /** With widgetDir (main.ts --widget-inline): the engine as plain script text in each file, for apps that run no blob: script. */
+  widgetInline?: boolean;
+  /** The packed engine for those files; by default dist/widget-engine.json, read when first needed. */
+  widgetEngine?: () => Promise<PackedEngine>;
+  /**
+   * With widgetDir (main.ts --widget-host): the chat app's adapter to hook into every file. Its presses are
+   * saved for the model's next turn, so emit: is allowed there. ignoreAppColors: --theme, --accent or --colors was given.
+   * Without it, emit: is handled as before.
+   */
+  widgetHost?: { name: WidgetHostName; ignoreAppColors?: boolean };
 }
 
 /** How long after a good interface the same spec again counts as a repeat, not a new request. */
 export const REPEAT_WINDOW_MS = 10 * 60_000;
 
-/** What makes two calls the same interface: the spec without blank lines or trailing spaces, and the datasets it shows. */
-export function interfaceKey(spec: string, data: Record<string, string>): string {
+/**
+ * What makes two calls the same interface: the spec without blank lines or trailing spaces, the datasets it
+ * shows, and the colors it's drawn in (show_interface's colors argument, already made usable by colorList),
+ * so the same spec in new colors is a new interface.
+ */
+export function interfaceKey(spec: string, data: Record<string, string>, colors: readonly string[] = []): string {
   // trimEnd strips the same whitespace as /\s+$/, without its quadratic backtracking on a long run of spaces.
   const lines = spec.split("\n").map((l) => l.trimEnd()).filter((l) => l !== "");
   const sets = Object.keys(data).sort().map((k) => `${k}=${data[k]}`);
-  return `${lines.join("\n")}\n--\n${sets.join(",")}`;
+  return `${lines.join("\n")}\n--\n${sets.join(",")}${colors.length ? `\n--\n${colors.join(",")}` : ""}`;
+}
+
+/**
+ * show_interface's colors argument, as the model reads it: the one thing it's told about colors. Without
+ * --no-model-colors only; the quick start and sayshape_docs never mention it.
+ */
+export const COLORS_DESCRIPTION =
+  'Brand colors as hex, most important first, such as ["#e4572e", "#2e86ab"]: send them only when the person, or the instructions you were given, named colors to use.';
+
+/**
+ * The colors argument's schema. Advertised as a list of strings, but it never refuses a call: whatever
+ * arrives goes through colorEntries first (a string is read as comma-separated colors, anything else that
+ * isn't a list is none, entries that aren't strings are dropped), and colorList then keeps the hex colors.
+ * So a sloppy value is ignored, never a reason for the model to try again.
+ */
+const colorsArgument = z.preprocess((raw) => (raw === undefined ? undefined : colorEntries(raw)), z.array(z.string()).optional()).describe(COLORS_DESCRIPTION);
+
+/**
+ * The note that ends a result drawn in the conversation's colors, so the model keeps sending them: nothing
+ * remembers them but the conversation (the stateless HTTP mode has nowhere to keep them, and each call is a new view).
+ */
+export function colorsNote(colors: readonly string[]): string {
+  return `Colors: ${colors.join(", ")}. Pass the same colors on every later show_interface call in this conversation, unless the person asks to change them.`;
 }
 
 /** What the model is told when it sends an interface that is already showing. */
@@ -384,10 +484,19 @@ export function createServer(opts: ServerOptions): McpServer {
   const hasDatasets = !!data || !!mcpResults;
   const findDataset = (id: string) => id.startsWith("m") ? mcpResults?.get(id) : data?.get(id);
   const now = opts.now ?? Date.now;
+  const widgetDir = opts.widgetDir;
+  const widgetEngine = opts.widgetEngine ?? loadPackedEngine;
+  /** A client that can't draw views gets a file for a widget (--widget-dir) instead of the CDN page. HTTP never has one: main.ts refuses the pair. */
+  const fileModeFor = (textOnly: boolean) => textOnly && widgetDir !== undefined;
+  // A host adapter in the files saves presses (emit:) for the model's next turn, so they are no longer a problem.
+  const hostSource = widgetDir !== undefined && opts.widgetHost ? adapterSource(opts.widgetHost.name, { ignoreAppColors: opts.widgetHost.ignoreAppColors === true }) : undefined;
+  const pressesSavedFor = (textOnly: boolean) => fileModeFor(textOnly) && hostSource !== undefined;
   // The last interface shown with nothing to fix. Smaller models often send the same one again
   // to "confirm" it, which would leave a second copy in the chat. Kept per server, so per
   // conversation over stdio; the stateless HTTP mode makes a server per request and never repeats.
   let lastGood: { key: string; at: number } | null = null;
+  // --no-model-colors: no colors argument and no note, so the tool is exactly what it was before it existed.
+  const modelColors = opts.view?.modelColors !== false;
   const server = new McpServer(
     { name: "sayshape", title: "SayShape", version: VERSION },
     {
@@ -418,13 +527,18 @@ export function createServer(opts: ServerOptions): McpServer {
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    async ({ elements, topics: names }) => text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults, cannotDrawViews(server))),
+    async ({ elements, topics: names }) => {
+      const textOnly = cannotDrawViews(server);
+      return text(docsText(elements ?? [], names ?? [], !!data, !!mcpResults, textOnly, fileModeFor(textOnly), pressesSavedFor(textOnly)));
+    },
   );
 
   const showDescription = (textOnly: boolean) =>
     (textOnly
       ? "Draws an interactive interface from a spec you write, with the SayShape engine. This chat app can't show it in the conversation, " +
-        "so when the spec has nothing to fix the result gives you a small web page that draws it, to publish or save for the person. " +
+        (fileModeFor(textOnly)
+          ? "so when the spec has nothing to fix the result gives you the path of a file that draws it, to create a widget from for the person. "
+          : "so when the spec has nothing to fix the result gives you a small web page that draws it, to publish or save for the person. ") +
         "Use it for every visual or interactive answer (charts, tables, dashboards, stat cards, forms, calculators, trackers) " +
         "rather than writing HTML, React, SVG or chart code. Specs can't run code or choose colors. "
       : "Shows an interactive interface inside the conversation, drawn by the SayShape engine from a spec you write. " +
@@ -434,7 +548,7 @@ export function createServer(opts: ServerOptions): McpServer {
     (data ? " To show rows from the database, pass data={\"name\": \"d1\"} with a dataset id from query_data and use that name in the spec (items=name)." : "") +
     (mcpResults ? " For imported MCP results, call list_datasets then pass the selected id in data. The model never needs the full rows." : "") +
     "\n\n" +
-    quickStart(!!data, !!mcpResults, textOnly);
+    quickStart(!!data, !!mcpResults, textOnly, fileModeFor(textOnly), pressesSavedFor(textOnly));
 
   const showTool = registerAppTool(
     server,
@@ -443,6 +557,8 @@ export function createServer(opts: ServerOptions): McpServer {
       title: "Show an interface",
       description: showDescription(false),
       inputSchema: {
+        // Before spec, so a client streaming the arguments in order sends the colors first and the first lines already draw in them.
+        ...(modelColors ? { colors: colorsArgument } : {}),
         spec: z.string().min(1).max(MAX_SPEC_CHARS).describe("The SayShape spec: plain lines, no Markdown fences."),
         title: z.string().max(120).optional().describe("A short name for the interface, e.g. 'Paris 2024 medal table'."),
         ...(hasDatasets
@@ -471,9 +587,13 @@ export function createServer(opts: ServerOptions): McpServer {
       }
       const names = Object.keys(datasets);
       const textOnly = cannotDrawViews(server);
-      const parsed = checkSpec(spec, names, textOnly);
-      // On a page outside the chat emit: goes nowhere, so text-only clients fix it first. Clients that draw views never see this.
-      const check = textOnly ? { ...parsed, errors: [...parsed.errors, ...emitProblems(spec, names)].sort((a, b) => a.line - b.line) } : parsed;
+      const fileMode = fileModeFor(textOnly);
+      const parsed = checkSpec(spec, names, textOnly, fileMode);
+      // On a page outside the chat emit: goes nowhere, so text-only clients fix it first, unless a host adapter saves it.
+      // Clients that draw views never see this.
+      const saved = pressesSavedFor(textOnly);
+      const emits = textOnly ? emitProblems(spec, names) : [];
+      const check = textOnly && !saved ? { ...parsed, errors: [...parsed.errors, ...emits].sort((a, b) => a.line - b.line) } : parsed;
       // A state line would replace the rows the interface loads, so point it out.
       const declared = names.filter((n) => new RegExp(`^state\\b[^\\n]*\\b${n}=`, "m").test(spec));
       const notes = [
@@ -482,7 +602,9 @@ export function createServer(opts: ServerOptions): McpServer {
       ];
       // A wrong guess comes back with the docs it needed, instead of the model reading every element up front.
       const toFix = [...check.errors, ...check.warnings].filter((d) => !isHarmless(d)).length;
-      const key = interfaceKey(spec, wanted);
+      // Sloppy entries are dropped and nothing usable counts as none sent: bad colors are never a problem to fix.
+      const colors = modelColors ? colorList((args as { colors?: string[] }).colors) : [];
+      const key = interfaceKey(spec, wanted, colors);
       const repeat = toFix === 0 && lastGood !== null && lastGood.key === key && now() - lastGood.at < REPEAT_WINDOW_MS;
       if (toFix === 0) lastGood = { key, at: now() };
       // The structured part is for the view. A client that can't draw one has no view to read it, and some
@@ -491,23 +613,58 @@ export function createServer(opts: ServerOptions): McpServer {
       if (textOnly) {
         // Rows never go through the conversation, and a page outside the chat can't fetch them.
         if (names.length) return text(PAGE_DATASETS_TEXT);
-        if (repeat) return text(PAGE_REPEAT_TEXT);
       }
+      // The view and the page draw in the colors the conversation sent, so their results say so and the model keeps
+      // sending them. A widget file (--widget-dir) doesn't: it carries the operator's colors only, so no note there.
+      const colorLine = colors.length && !fileMode ? `\n${colorsNote(colors)}` : "";
+      if (textOnly && repeat) return text((fileMode ? WIDGET_REPEAT_TEXT : PAGE_REPEAT_TEXT) + colorLine);
       if (repeat) {
         return {
-          content: [{ type: "text", text: REPEAT_TEXT }],
+          content: [{ type: "text", text: REPEAT_TEXT + colorLine }],
           structuredContent: { datasets, title: title ?? null, errors: 0, warnings: check.warnings.length, toFix: 0, repeat: true, diagnostics: [] },
         };
       }
       // Docs for the lines that went wrong; an emit: line needs no element docs to fix.
       const failing = elementsOnLines(spec, [...parsed.errors, ...parsed.warnings].filter((d) => !isHarmless(d)));
       if (failing.length) notes.push(`\nDocs for ${failing.join(", ")}:\n${elementGuide(registry, failing).text}`);
-      const withPage = textOnly && toFix === 0;
-      if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn })));
-      const said = [describeCheck(check, textOnly), ...notes].join("\n");
-      if (textOnly) return text(said);
+      // The page's pinned engine (PAGE_ENGINE_VERSION, kept two weeks behind releases) has no slides, so a deck gets a plain
+      // sentence instead of a page that can't draw it. Once that version has slides, this goes.
+      // A widget file carries this server's own engine, slides included, so a deck is fine there.
+      const deckOnly = textOnly && !fileMode && toFix === 0 && usesDeck(spec);
+      const withPage = textOnly && !fileMode && toFix === 0 && !deckOnly;
+      if (deckOnly) notes.push(PAGE_DECK_TEXT);
+      // The conversation's colors, else the operator's (--colors, --accent); the page works out light and dark itself.
+      if (withPage) notes.push(fenced(fallbackPage({ spec, title, scenes: scenesOn, colors: colors.length ? colors : (opts.view?.colors ?? null), imageHosts })));
+      let widget = "";
+      if (fileMode && toFix === 0) {
+        try {
+          const written = await writeWidget(widgetDir!, {
+            spec,
+            engine: await widgetEngine(),
+            scenes: scenesOn,
+            behavior: behaviorOn,
+            ...(opts.view?.selectText === false ? { selectText: false } : {}),
+            ...(opts.view?.selectTouch !== undefined ? { selectTouch: opts.view.selectTouch } : {}),
+            imageHosts,
+            ...(opts.widgetInline ? { inline: true } : {}),
+            ...(hostSource !== undefined ? { host: hostSource } : {}),
+            ...(opts.view?.theme ? { theme: opts.view.theme } : {}),
+            ...(opts.view?.colors ? { colors: opts.view.colors } : {}),
+            ...(opts.view?.logo ? { logo: opts.view.logo } : {}),
+          });
+          widget = written.ok ? widgetText(written.path, written.bytes) + (saved && emits.length ? ` ${PRESSES_SAVED_RESULT}` : "") : widgetFailedText(written.reason);
+          // Nothing is showing, so a second call isn't a repeat.
+          if (!written.ok) lastGood = null;
+        } catch (e) {
+          widget = widgetFailedText(e instanceof Error ? e.message : String(e));
+          lastGood = null;
+        }
+      }
+      const said = [describeCheck(check, textOnly, fileMode, widget), ...notes].join("\n");
+      // A deck has no page to draw in colors, so there is nothing to keep up.
+      if (textOnly) return text(deckOnly ? said : said + colorLine);
       return {
-        content: [{ type: "text", text: said }],
+        content: [{ type: "text", text: said + colorLine }],
         structuredContent: {
           datasets,
           title: title ?? null,

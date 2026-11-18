@@ -1,0 +1,49 @@
+===== USER =====
+A claims review. The app supplies the data as state, by name; never write its rows:
+- claims: 40 rows {id, opened, line, site, status, incurred, days}. status is one of Open, In review, Closed, Denied. line is one of Auto, Property, Liability, Workers comp, Marine, Cyber. incurred is dollars, opened is YYYY-MM-DD.
+- monthly: 12 rows {month, opened, closed, incurred}, month is Jan to Dec.
+- byLine: 6 rows {line, count, incurred}.
+Show a title, four headline figures, a bar chart by month, a line chart of opened and closed, a donut by line, a table of all 40 claims, and a filter by status.
+
+===== ASSISTANT =====
+state status="All"
+derive shown={status == 'All' ? claims : filter(claims, 'status', status)}
+derive totalIncurred={sum(claims, 'incurred')}
+derive openCount={count(claims, 'status', 'Open')}
+derive reviewCount={count(claims, 'status', 'In review')}
+derive avgDays={avg(claims, 'days')}
+text "Claims review" style=title
+grid min=170 gap=12
+  card pad=18 gap=10
+    stat label="Total claims" value={len(claims)}
+  card pad=18 gap=10
+    stat label="Total incurred" value={compact(totalIncurred, 'USD')}
+  card pad=18 gap=10
+    stat label="Open claims" value={openCount} tone=accent change={reviewCount + ' in review'}
+  card pad=18 gap=10
+    stat label="Avg days open" value={round(avgDays)}
+grid min=300 gap=12
+  card pad=18 gap=10
+    chart "Incurred by month" kind=bar items={monthly} x=month y=incurred format=money
+  card pad=18 gap=10
+    chart "Claims opened and closed by month" kind=line items={monthly} x=month y=opened,closed
+  card pad=18 gap=10
+    chart "Incurred by line" kind=donut items={byLine} x=line y=incurred format=money
+card pad=18 gap=10
+  text "All claims" style=title
+  segmented bind=status label="Filter by status" options="All,Open,In review,Closed,Denied"
+  text "{len(shown)} of {len(claims)} claims" tone=muted
+  table "Claims" items={shown} key=id
+    table-column "ID" field=id
+    table-column "Opened" field=opened
+    table-column "Line" field=line
+    table-column "Site" field=site
+    table-column "Status" field=status
+    table-column "Incurred" field=incurred format=money align=right
+    table-column "Days" field=days format=number align=right
+
+
+===== USER =====
+Change the interface above: Add a fifth headline figure: the longest days open.
+
+Keep everything else as it is, including any edits made by hand, unless this change says otherwise. Write the whole interface.

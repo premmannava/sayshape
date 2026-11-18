@@ -19,11 +19,16 @@
  * guide never shows the model something it can't use.
  */
 import { ACTION_OPS, ACTION_SYNTAX } from "./actions";
-import { CATEGORIES, COMMON_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
+import { CATEGORIES, COMMON_PROPS, MOTION_PROPS, PICTURE_PROPS, propsFor, type ComponentDef, type PropDef } from "./component";
 import { EXPRESSION_FUNCTIONS } from "./expr";
 import { parse } from "./parser";
 import { resolveProfile, type ComponentProfile } from "./profiles";
 import type { Registry } from "./registry";
+import { reportGuide } from "./presets/report";
+import { lookGuide } from "./look";
+
+/** What a model answers, alone, when the report guide (mode "report") can't show what was asked. */
+export const REPORT_FALLBACK = "FULL";
 
 /** An emit: action the host app listens for. */
 export interface AppAction {
@@ -50,7 +55,12 @@ export interface GuideOptions {
   examples?: boolean;
   /** Extra instructions from the app, such as its domain, audience or tone. */
   notes?: string;
-  /** "full" (default) or "compact". */
+  /**
+   * "full" (default), "compact", or "report": only the report preset (data
+   * answers: figures, charts, a table and filters, see src/presets/report.ts),
+   * with the word to answer when a request needs more (REPORT_FALLBACK). The
+   * engine must have presets on to draw what it writes.
+   */
   mode?: GuideMode;
   /**
    * Which elements the model is told about: a profile name ("forms",
@@ -75,9 +85,57 @@ export interface GuideOptions {
    * Off (default), the guide is exactly what it was.
    */
   behavior?: boolean;
+  /**
+   * Tell the model to write the layout first and state last, with long lists
+   * at the very end, so the screen draws while the spec streams in (pair it
+   * with the engine's streamPlaceholders). Off (default), the guide is exactly
+   * what it was.
+   */
+  layoutFirst?: boolean;
+  /**
+   * Explain the look line (`look mood=bold type=editorial`, src/look.ts),
+   * for apps whose engine reads it (the engine's look option, on by
+   * default). Off (default), the guide is exactly what it was.
+   */
+  look?: boolean;
+  /**
+   * Explain entrance motion (enter=fade|rise|scale and stagger=true on any
+   * element, MOTION_PROPS), for apps that let it play. Off (default), the
+   * guide is exactly what it was; the parser accepts the props either way.
+   */
+  motion?: boolean;
+  /**
+   * Explain what an image can be besides a picture (PICTURE_PROPS: shape=,
+   * zoom=, and elements indented under it, laid over it on a scrim the engine
+   * makes readable). Off (default), the guide is exactly what it was; the
+   * parser accepts them either way.
+   */
+  pictures?: boolean;
 }
 
-export type GuideMode = "full" | "compact";
+/** What the guide says about pictures (GuideOptions.pictures), from PICTURE_PROPS. */
+export function picturesGuide(mode: "full" | "compact"): string {
+  if (mode === "compact") {
+    return `PICTURES (optional): image takes shape=${PICTURE_PROPS.shape!.values!.join("|")} and zoom=slow; indent elements under an image to lay them over it (a banner: image, then text and a button under it). The app darkens the picture so the words read. Never colors or overlays.`;
+  }
+  return `PICTURES (optional, on image)
+${Object.entries(PICTURE_PROPS).map(([n, d]) => propLine(n, d)).join("\n")}
+- Indent elements under an image to lay them over it: image "Mountain lake at dawn" src=... ratio=16:9, then text style=title and a button under it. The picture is at least as tall as its ratio and grows to hold them. A caption is not shown on such an image: put the words in a text line over it.
+- The app darkens the picture so the words stay readable on any photo, and draws them light. Never choose colors, overlays or shades.`;
+}
+
+/** What the guide says about entrance motion (GuideOptions.motion), from MOTION_PROPS. */
+export function motionGuide(mode: "full" | "compact"): string {
+  const roles = (MOTION_PROPS.enter!.values ?? []).join("|");
+  if (mode === "compact") {
+    return `MOTION (optional, any element): enter=${roles} plays once when it comes into sight; stagger=true on a container brings its children in one after another. Never durations or distances.`;
+  }
+  return `MOTION (optional)
+${Object.entries(MOTION_PROPS).map(([n, d]) => propLine(n, d)).join("\n")}
+- Use it for a page's main parts (a heading, a row of cards with stagger=true), not every line. It never changes where anything is, and the app chooses the timing.`;
+}
+
+export type GuideMode = "full" | "compact" | "report";
 export type WorkedExampleName = "todo" | "form" | "cart" | "orders" | "booking" | "equipment" | "calculator" | "shopping";
 
 function propLine(name: string, d: PropDef): string {
@@ -106,7 +164,7 @@ function componentBlock(c: ComponentDef, examples: boolean): string {
  * along: a table's table-column, a tab's tabs. Unknown names are returned so
  * the caller can say so.
  */
-export function elementGuide(registry: Registry, names: readonly string[], opts: { behavior?: boolean } = {}): { text: string; unknown: string[] } {
+export function elementGuide(registry: Registry, names: readonly string[], opts: { behavior?: boolean; pictures?: boolean } = {}): { text: string; unknown: string[] } {
   const wanted: ComponentDef[] = [];
   const unknown: string[] = [];
   const add = (name: string) => {
@@ -121,7 +179,7 @@ export function elementGuide(registry: Registry, names: readonly string[], opts:
     if (Array.isArray(def.children)) def.children.forEach(add);
     def.parents?.forEach(add);
   }
-  return { text: wanted.map((c) => componentBlock(withProps(c, !!opts.behavior), true)).join("\n\n"), unknown };
+  return { text: wanted.map((c) => componentBlock(withProps(c, !!opts.behavior, !!opts.pictures), true)).join("\n\n"), unknown };
 }
 
 /** The heading of the picks section, everywhere it's shown. */
@@ -302,7 +360,7 @@ function context(registry: Registry, opts: GuideOptions): GuideContext {
   const behavior = !!opts.behavior;
   return {
     // A feature that's off hides its props (a scene shape's drag=), as the parser does.
-    comps: exposed.all().map((c) => withProps(c, behavior)),
+    comps: exposed.all().map((c) => withProps(c, behavior, !!opts.pictures)),
     exposed,
     has: (type) => exposed.has(type),
     opts,
@@ -366,6 +424,10 @@ function dataSection(ctx: GuideContext): string {
   return [lines.join("\n"), ...examples].join("\n\n");
 }
 
+/** The state line of the format section with layoutFirst: elements draw as they arrive, data comes last. */
+const LAYOUT_FIRST_FULL = `- Write elements first so they draw as you write, then unindented state and derive lines at the end, long lists last of all: state count=0 name="Ada". Small values a control starts from (state tab="All") may go first.`;
+const LAYOUT_FIRST_COMPACT = `- Elements first (they draw as you write), then unindented state at the end, every value on one line, long lists last: state count=0 name="Ada" todos=[{text: "Water", done: false}]. Small control values (state tab="All") may go first.`;
+
 function fullSections(ctx: GuideContext): GuideSection[] {
   const { comps, has, opts } = ctx;
   const examples = opts.examples ?? true;
@@ -383,7 +445,7 @@ function fullSections(ctx: GuideContext): GuideSection[] {
   else
     text "Keep going" tone=muted
 - SayShape is not JavaScript: never write let, const, var, function, return, for, while, braces around blocks or // comments. A value worked out from state is derive name={…}; a choice is if={…} and else lines${has("each") ? "; repeating is each items=list as=x" : ""}; comments start with #
-- Declare state first, at the top, unindented: state count=0 done=false name="Ada"
+${opts.layoutFirst ? LAYOUT_FIRST_FULL : `- Declare state first, at the top, unindented: state count=0 done=false name="Ada"`}
 - Work a value out once with derive, unindented, one per line: derive total={sum(cart, 'price', 'qty')}. Read it like state ({total}), in text, props and other derive lines; it updates by itself. bind= and actions can't change it, and a derive can't read itself
 - Every element and every state value fits on one line, even a long list: state trails=[{name: "Camelback", miles: 2.5}, {name: "Piestewa", miles: 2.1}]
 - Lines starting with # are comments.`);
@@ -399,6 +461,9 @@ function fullSections(ctx: GuideContext): GuideSection[] {
 - ${ops.map((o) => ACTION_SYNTAX[o]).join("\n- ")}
 - Run several with ; e.g. on="set:step:2;emit:next"
 - Quote on= when it has spaces: on="inc:n;notify:'Saved {n}'"`);
+  if (opts.look) add("look", lookGuide("full"));
+  if (opts.motion) add("motion", motionGuide("full"));
+  if (opts.pictures && has("image")) add("pictures", picturesGuide("full"));
   if (has("each")) add("data", dataSection(ctx));
   if (opts.behavior) add("behavior", behaviorSection(has("scene")));
   if (opts.actions?.length) {
@@ -470,7 +535,7 @@ function compactSections(ctx: GuideContext): GuideSection[] {
 - One element per line: type "text" prop=value prop="quoted value" prop={expression}. Indent children 2 spaces.
 - Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true; else after it, otherwise.
 - Not JavaScript: no let, for or braces; use derive, if=/else${has("each") ? ", each" : ""}.
-- State first, unindented, every value on one line: state count=0 name="Ada" todos=[{text: "Water", done: false}]
+${opts.layoutFirst ? LAYOUT_FIRST_COMPACT : `- State first, unindented, every value on one line: state count=0 name="Ada" todos=[{text: "Water", done: false}]`}
 - derive name={expr}, unindented, one per line, keeps a value worked out from state: derive total={sum(cart, 'price', 'qty')}, then {total}. Read-only (no bind= or actions); no loops through itself
 - # starts a comment.`);
   add("expressions", `EXPRESSIONS
@@ -484,6 +549,9 @@ function compactSections(ctx: GuideContext): GuideSection[] {
 - Change the screen (runs here): ${local.join(", ")}
 - Tell the app (host event): emit:name[:value]. Use emit for anything the app must do, like book, pay or save
 ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty, set:t.text:'Done'\n" : ""}- A key can be a path into a record: set:form.email:'', toggle:settings.dark`);
+  if (opts.look) add("look", lookGuide("compact"));
+  if (opts.motion) add("motion", motionGuide("compact"));
+  if (opts.pictures && has("image")) add("pictures", picturesGuide("compact"));
   if (opts.behavior) add("behavior", `CHANGING BY ITSELF: every 1s if={running} do=dec:left (unindented; 16ms-60s; while if= holds)
 - do= only inc/dec/toggle/set/add/remove/clear, in order, each seeing the last; dec stops at 0; sin cos sqrt clamp lerp work. Add a pause: if={running}, button on=toggle:running. Never to show data`);
   if (has("each")) {
@@ -530,6 +598,7 @@ export interface GuideSection {
 /** The guide in sections, in order. languageGuide() joins them with blank lines. */
 export function guideSections(registry: Registry, opts: GuideOptions = {}): GuideSection[] {
   const ctx = context(registry, opts);
+  if (ctx.mode === "report") return [{ name: "report", text: reportGuide(REPORT_FALLBACK) }, ...(opts.notes?.trim() ? [{ name: "notes", text: `ABOUT THIS APP\n${opts.notes.trim()}` }] : [])];
   return ctx.mode === "compact" ? compactSections(ctx) : fullSections(ctx);
 }
 
@@ -554,9 +623,15 @@ export function describeGuide(registry: Registry, opts: GuideOptions = {}): Guid
 }
 
 /** A component as a host with these features on sees it: props of features that are off left out. */
-function withProps(c: ComponentDef, behavior: boolean): ComponentDef {
-  const props = propsFor(c.props, behavior);
-  return props === c.props ? c : { ...c, props };
+function withProps(c: ComponentDef, behavior: boolean, pictures = false): ComponentDef {
+  let props = propsFor(c.props, behavior);
+  // Props (and children) a component keeps quiet are left out until a guide asks for them.
+  const quiet = pictures ? [] : c.quiet ?? [];
+  if (quiet.length) props = Object.fromEntries(Object.entries(props).filter(([n]) => !quiet.includes(n)));
+  const hideKids = quiet.includes("children");
+  if (props === c.props && !hideKids) return c;
+  const { children: _kids, ...rest } = c;
+  return hideKids ? { ...rest, props } : { ...c, props };
 }
 
 /** What the full guide says about rules (behavior on). */

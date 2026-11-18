@@ -3,9 +3,9 @@
 <!-- CATEGORIES:START (generated from src/components) -->
 | Category | Components |
 |---|---|
-| Layout | [`column`](#column), [`row`](#row), [`overlap`](#overlap), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll) |
+| Layout | [`column`](#column), [`row`](#row), [`overlap`](#overlap), [`grid`](#grid), [`card`](#card), [`list`](#list), [`list-item`](#list-item), [`accordion`](#accordion), [`divider`](#divider), [`spacer`](#spacer), [`each`](#each), [`timeline`](#timeline), [`step`](#step), [`carousel`](#carousel), [`scroll`](#scroll), [`deck`](#deck), [`slide`](#slide) |
 | Content | [`text`](#text), [`image`](#image), [`code`](#code), [`badge`](#badge), [`avatar`](#avatar), [`callout`](#callout), [`icon`](#icon), [`tile`](#tile) |
-| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`chart-line`](#chart-line), [`chart-rule`](#chart-rule), [`chart-note`](#chart-note), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
+| Data | [`stat`](#stat), [`rating`](#rating), [`chart`](#chart), [`chart-line`](#chart-line), [`chart-rule`](#chart-rule), [`chart-band`](#chart-band), [`chart-note`](#chart-note), [`meter`](#meter), [`table`](#table), [`table-column`](#table-column), [`compare`](#compare), [`compare-row`](#compare-row), [`details`](#details), [`detail`](#detail), [`schedule`](#schedule), [`board`](#board), [`tree`](#tree), [`flow`](#flow), [`map`](#map), [`pin`](#pin) |
 | Input | [`button`](#button), [`link`](#link), [`check`](#check), [`switch`](#switch), [`radio`](#radio), [`select`](#select), [`date-picker`](#date-picker), [`stepper`](#stepper), [`slider`](#slider), [`input`](#input), [`segmented`](#segmented), [`menu`](#menu), [`menu-item`](#menu-item) |
 | Navigation | [`screen`](#screen), [`tabs`](#tabs), [`tab`](#tab), [`breadcrumb`](#breadcrumb), [`pagination`](#pagination) |
 | Feedback | [`progress`](#progress), [`skeleton`](#skeleton), [`empty`](#empty), [`dialog`](#dialog) |
@@ -41,6 +41,8 @@ Places children side by side, splitting the width equally. On narrow screens the
 | `pad` | number | Inner padding in pixels (default 0). |
 | `align` | `top` / `center` / `bottom` | Vertical alignment of children: top, center or bottom. |
 | `wrap` | boolean | Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line. |
+| `fit` | boolean | Keep children at their natural width. |
+| `justify` | `start` / `end` / `between` | Where children sit: start, end, or between (spread). Implies fit. |
 
 Children: any elements.
 
@@ -76,6 +78,7 @@ Places children in responsive equal columns. Cards in the same grid row automati
 | Prop | Type | Description |
 |---|---|---|
 | `min` | number | Narrowest a column may be, in pixels (default 200). |
+| `cols` | number | Most columns; fewer when min doesn't fit. |
 | `gap` | number | Space between children in pixels (default 14). |
 
 Children: any elements.
@@ -97,6 +100,7 @@ A surface that groups related content, stacked vertically. Give it on= to make t
 | `pad` | number | Inner padding in pixels (default 22). |
 | `variant` | `raised` / `hero` / `tinted` / `outline` | raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only). |
 | `on` | action | Actions to run when the card is pressed, e.g. emit:changed. Separate several with ; |
+| `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Color role of a left edge stripe. |
 
 Children: any elements.
 
@@ -130,6 +134,7 @@ One row of a list: a title, an optional detail line and value on the right, and 
 | `"text"` | text, required | The row's title. |
 | `detail` | string | A second, quieter line under the title. |
 | `trailing` | string | A short value on the right, like a price or a count. |
+| `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Draws trailing as a badge in this color role. |
 | `icon` | string | An icon before the text, by name from icon's list, e.g. icon=check-circle. |
 | `on` | action | Actions to run when the row is pressed, e.g. emit:changed. Separate several with ; |
 
@@ -151,6 +156,7 @@ A heading that shows or hides the content under it when pressed. Stack several f
 | `bind` | state, required | A true/false state name: true while open. |
 | `gap` | number | Space between children in pixels (default 10). |
 | `on` | action | Actions to run after it opens or closes, e.g. emit:changed. Separate several with ; |
+| `detail` | string | A muted line under the title. |
 
 Children: any elements.
 
@@ -165,6 +171,10 @@ accordion "Shipping" bind=shipping
 ### `divider`
 
 A thin horizontal line separating sections.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | A label centred on the line. |
 
 ```
 divider
@@ -231,7 +241,7 @@ One step of a timeline: a title, an optional detail line and time, and whether i
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text, required | The step's title, e.g. Shipped. |
-| `status` | `done` / `current` / `upcoming` | Only to show progress: done for finished steps, current for where the person is now, upcoming for what's left (muted). Leave it out on every step for a plan, itinerary or how-to that hasn't started. |
+| `status` | `done` / `current` / `upcoming` / `blocked` | Only to show progress: done for finished steps, current for where the person is now, upcoming for what's left (muted), blocked (red). Leave it out on every step for a plan, itinerary or how-to that hasn't started. |
 | `detail` | string | A quieter line under the title, like a place or a note. |
 | `time` | string | A short date or time on the right, e.g. Oct 18 or 9:12 AM. |
 | `icon` | string | An icon in the step's marker instead of the check or dot, by name from icon's list, e.g. icon=truck. |
@@ -303,6 +313,11 @@ A picture, such as a product photo. The quoted text says what it shows, and is d
 | `src` | string, required | The image URL. Only the app's own site and hosts it allows will load. |
 | `ratio` | `16:9` / `4:3` / `3:2` / `1:1` / `2:3` / `3:4` | Width to height: 16:9, 4:3, 3:2, 1:1, 2:3 or 3:4. The space is kept while the image loads. |
 | `fit` | `cover` / `contain` | cover fills the space and crops the edges; contain shows the whole image. |
+| `caption` | string | A muted line under the image. |
+| `shape` | `rounded` / `square` / `circle` | The picture's outline: rounded (default), square, or circle (fully rounded; use ratio=1:1 for a round avatar). |
+| `zoom` | `none` / `slow` | slow: the picture drifts slowly closer, once, when it comes into sight. The app sets the timing; with reduced motion it stays still. |
+
+Children: any elements.
 
 ```
 image "Ridgeline trail runners, side view" src="/images/ridgeline.jpg" ratio=4:3
@@ -315,6 +330,8 @@ A short piece of code or a command, in a monospaced font on a tinted block.
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text, required | The code. Long lines wrap. |
+| `title` | string | A header line, e.g. a file name. |
+| `copy` | boolean | A copy button. |
 
 ```
 code "npm install sayshape"
@@ -328,6 +345,8 @@ A small rounded label for a status or a short tag, like Shipped or New.
 |---|---|---|
 | `"text"` | text, required | The label, one or two words. |
 | `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Color role: accent, good, warn, bad or muted. |
+| `variant` | `soft` / `solid` / `outline` | soft (tint), solid or outline. |
+| `icon` | string | Icon name before the label. |
 
 ```
 badge "Shipped" tone=good
@@ -359,9 +378,11 @@ The one thing to notice in an answer: a key finding, a warning or a next step.
 | `detail` | string | An optional second line in muted text, e.g. what the finding is based on. |
 | `tone` | `info` / `accent` / `good` / `warn` / `bad` | info (default, the accent color) for a finding, good for good news, warn for something to watch, bad for a problem. accent is the same as info. |
 | `icon` | boolean | Show a small icon matching the tone: i, a tick, ! or ×. |
+| `action` | string | Label of a button inside it. |
+| `on` | action | Actions to run when the button is pressed, e.g. emit:changed. Separate several with ; |
 
 ```
-callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true
+callout "Rock is 47% of revenue" detail="Up from 41% last year" icon=true action="See breakdown" on=emit:open_breakdown
 ```
 
 ### `icon`
@@ -370,7 +391,7 @@ A small symbol on its own, like a status mark or a weather sign. To start a line
 
 | Prop | Type | Description |
 |---|---|---|
-| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, user, users, calendar, mail, phone, chat, star, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders. |
+| `name` | string, required | Which icon: check, check-circle, x, x-circle, warning, info, help, clock, arrow-up, arrow-down, arrow-left, arrow-right, trend-up, trend-down, plus, minus, refresh, sun, moon, cloud, rain, snow, storm, wind, thermometer, droplet, pin, globe, plane, car, truck, home, building, map, dollar, card, cart, package, bar-chart, pie-chart, percent, tag, briefcase, file, target, bolt, idea, lock, shield, key, wallet, bank, receipt, user, users, calendar, mail, phone, chat, star, sparkle, trophy, flag, heart, spade, club, diamond, bell, search, filter, download, copy, share, link, sliders, settings, edit, trash, eye, upload, external, folder, database, server, code, wrench, bug, play, pause, image, book. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
 | `size` | `sm` / `md` / `lg` | sm, md or lg. |
 | `label` | string | What the icon means, read by screen readers, when nothing beside it says so, e.g. label="Sunny". Leave it out for decoration. |
@@ -394,6 +415,9 @@ A labelled number, for key figures like totals or counts. Add change= to show ho
 | `trend` | `up` / `down` / `flat` | up, down or flat: which way the change went, for its arrow and color. Leave it out to take it from change's sign. |
 | `good` | `up` / `down` | Which way is good news: up (default, colored good) or down, for figures like costs or churn where falling is good. |
 | `spark` | expression | A list of numbers, oldest first, drawn as a small line under the value, e.g. spark={[12, 15, 14, 19]}, spark=weekly, or from a list of records spark={pluck(sales, 'revenue')}. |
+| `icon` | string | Icon name before the label. |
+| `detail` | string | A muted line under the figure. |
+| `short` | boolean | Shorten 1,250,000 to 1.25M; false keeps it as given. |
 
 ```
 state price=24 qty=2
@@ -439,9 +463,11 @@ A chart of a list of records: bar or line for one or more numbers per item, such
 | `target` | name | Bullet only: the field holding each item's goal, drawn as a dark tick across its bar, e.g. target=goal. |
 | `good` | `up` / `down` | Bullet only: up when reaching or passing the target is good (sales, signups), down when staying under it is (costs, churn, response time). |
 | `total` | string | Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income". |
+| `values` | boolean | bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits. |
+| `highlight` | string | bar, hbar, stacked: one item's x value, e.g. highlight="Mar"; its bar keeps full color, the others fade. |
 | `format` | `number` / `money` / `percent` | How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number. |
 
-Children: `chart-line`, `chart-rule`, `chart-note`.
+Children: `chart-line`, `chart-rule`, `chart-band`, `chart-note`.
 
 ```
 state sales=[{month: "Jan", revenue: 12000, last_year: 10000}, {month: "Feb", revenue: 18000, last_year: 14000}, {month: "Mar", revenue: 15000, last_year: 16000}]
@@ -476,6 +502,23 @@ Only inside: `chart`.
 
 ```
 chart-rule "Target" y=16000
+```
+
+### `chart-band`
+
+Under a bar or line chart: a shaded range between two levels, drawn behind the data, such as a healthy range or a target zone.
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | What the range is, shown at its edge, e.g. "Healthy". |
+| `from` | expression, required | One end of the range, a number or a formula. |
+| `to` | expression, required | The other end, a number or a formula. |
+| `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Shading: default (neutral), muted, accent, good, warn or bad. |
+
+Only inside: `chart`.
+
+```
+chart-band "Healthy" from=10000 to=16000
 ```
 
 ### `chart-note`
@@ -526,6 +569,7 @@ Rows of a list of records, one table-column per field, for things like inventory
 | `sort` | state | State that holds the field to sort by. Pressing a header sets it; missing values sort last. |
 | `direction` | state | State that holds asc or desc. Pressing the sorted header again flips it. |
 | `on` | action | Actions to run after a row is selected, with bind= already set, e.g. emit:changed. Separate several with ; |
+| `total` | string | Add a totals row summing number, money and compact columns: true, or text for its first cell. |
 
 Children: `table-column`.
 
@@ -544,8 +588,10 @@ One column of a table: its header and the field it shows.
 |---|---|---|
 | `"text"` | text | The header. Defaults to the field name. |
 | `field` | name, required | The field of each record to show, e.g. field=price. |
-| `format` | `text` / `number` / `money` | text, number (1,200.5) or money ($1,200, US dollars, with cents when an amount has them). number and money show only numbers; other values show —. |
-| `align` | `left` / `right` | left or right. Default: right for number and money, left for text. |
+| `format` | `text` / `number` / `money` / `percent` / `date` / `compact` | text, number (1,200.5), money ($1,200, with cents when an amount has them), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —. |
+| `align` | `left` / `right` | left or right. Default: right for numbers, left for text and date. |
+| `tone` | name | sign (negative bad, positive good) or a row field holding good, warn, bad, accent or muted to draw a badge. |
+| `bar` | boolean | A bar behind each number, sized to the column's largest. |
 
 Only inside: `table`.
 
@@ -636,6 +682,9 @@ A pressable button that runs actions. Use emit: to tell the app what the user ch
 | `on` | action | What happens when pressed, e.g. inc:count, set:done:true, emit:book. Separate several with ; |
 | `variant` | `primary` / `secondary` / `danger` | primary (filled), secondary (outlined) or danger. |
 | `disabled` | condition | Expression; when true the button is greyed out and can't be pressed. |
+| `icon` | string | Icon name before the label. |
+| `size` | `md` / `sm` | md or sm (smaller). |
+| `fit` | boolean | Natural width, even on a phone. |
 
 ```
 button "Book now" on=emit:book
@@ -650,6 +699,7 @@ Pressable text for a secondary action, lighter than a button.
 |---|---|---|
 | `"text"` | text, required | The link text. |
 | `on` | action, required | What happens when pressed, e.g. emit:size_guide. |
+| `icon` | string | Icon name before the text. |
 
 ```
 link "Size guide" on=emit:size_guide
@@ -663,6 +713,7 @@ A checkbox that toggles a true/false state value.
 |---|---|---|
 | `"text"` | text, required | The label next to the box. |
 | `bind` | state, required | The state name this checkbox reads and writes. |
+| `detail` | string | A muted line under the label. |
 
 ```
 state agreed=false
@@ -678,6 +729,7 @@ An on/off switch with a label, for settings that take effect right away.
 | `"text"` | text, required | The label for the setting. |
 | `bind` | state, required | The true/false state name this switch reads and writes. |
 | `on` | action | Actions to run after it is switched, e.g. emit:changed. Separate several with ; |
+| `detail` | string | A muted line under the label. |
 
 ```
 state updates=true
@@ -797,6 +849,7 @@ A text field people type into, such as a name, an email, a search, a new item, o
 | `on` | action | Actions to run when Enter is pressed, after the value is written, e.g. emit:changed. Separate several with ; |
 | `disabled` | condition | Expression; when true the field is greyed out and can't be typed in. |
 | `max` | number | Longest value in characters (at most 10000; 2000 when lines= is more than 1). |
+| `icon` | string | Icon name before the text, inside the field. |
 
 ```
 state task="" todos=[]
@@ -872,6 +925,7 @@ One tab inside tabs: its label, and the content shown while it is selected.
 |---|---|---|
 | `"text"` | text, required | The tab's label. |
 | `value` | string | What the tabs' bind= holds while this tab is selected (default: the label). |
+| `badge` | string | A small count after the label. |
 | `gap` | number | Space between children in pixels (default 12). |
 
 Children: any elements.
@@ -923,6 +977,7 @@ A horizontal bar showing how far a value is toward a maximum.
 | `max` | number | The full amount (default 100). |
 | `label` | string | Optional caption above the bar. |
 | `tone` | `default` / `muted` / `accent` / `good` / `warn` / `bad` | Color role: default, muted, accent, good, warn or bad. |
+| `show` | `percent` / `value` | A readout: percent (60%) or value (3 / 5). |
 
 ```
 state done=3
@@ -954,6 +1009,7 @@ A friendly message for when there is nothing to show, with an optional button to
 | `detail` | string | A line explaining what to do next. |
 | `action` | string | Label for a button under the message. |
 | `on` | action | Actions to run when the button is pressed, e.g. emit:changed. Separate several with ; |
+| `icon` | string | Icon name instead of the tray. |
 
 ```
 empty "No results" detail="Try a wider price range." action="Clear filters" on=emit:clear_filters
@@ -1163,6 +1219,55 @@ Only inside: `menu`.
 
 ```
 menu-item "Duplicate" icon=copy on=emit:duplicate
+```
+
+### `deck`
+
+A slide deck: slides shown one at a time, with arrows and dots to move between them (and a sideways swipe on a touch screen), for presenting a story in a few steps, like a business review; put a slide per step inside it. State is shared by every slide, so one control, such as a segmented for the region, can change what all of them show, and a button with on=set:page:3 jumps to the fourth slide.
+
+| Prop | Type | Description |
+|---|---|---|
+| `bind` | state, required | The state name holding the slide shown, starting at 0. |
+| `numbers` | boolean | Show the slide's number, like 2 / 4, in its corner. |
+| `footer` | string | A short line in the bottom left of every slide, e.g. footer="Northwind · Confidential". |
+| `progress` | boolean | true draws a thin bar along the bottom of each slide showing how far through the deck it is. |
+| `transition` | `fade` / `none` | fade (a slide fades in when moved to) or none. |
+| `on` | action | Actions to run after the slide changes, e.g. emit:changed. Separate several with ; |
+
+Children: `slide`.
+
+```
+state page=0
+deck bind=page
+  slide "Q3 business review" layout=title
+    text "Revenue is up 18% on last year" style=lead tone=muted
+  slide "Three numbers that sum up the quarter"
+    grid min=220
+      stat label="Revenue" value="$4.82M" change="+18%"
+      stat label="New customers" value="312" change="+9%"
+```
+
+### `slide`
+
+One 16:9 slide in a deck, with its title drawn large at the top and the slide's content under it: keep each to one idea, and write the title as the point it makes, not a label. What doesn't fit is shrunk, then cut off, and a table or list shows about five rows, so show the top few with take() and sort(), a total or a chart in place of every row; write money one way through the deck, and a stat's change= as a short signed figure such as change="+1.4 h", with good=down where lower is better (costs, reply time).
+
+| Prop | Type | Description |
+|---|---|---|
+| `"text"` | text | The slide's title, e.g. Three numbers that sum up the quarter. |
+| `layout` | `title` / `content` / `agenda` | title for the opening slide (a large title with its children under it, centred on the slide), content for the rest (title at the top, children below), agenda for a slide that lists the other slides' titles by itself. |
+| `eyebrow` | string | A few words above the title, in the accent color, e.g. eyebrow="Q3 2026" or the section's name. |
+| `subtitle` | string | A quieter line under the title, e.g. subtitle="Prepared for the board". |
+| `appendix` | boolean | true for a backup slide after the main ones: it's left out of the slide count and the agenda, and numbered as Appendix. |
+
+Children: any elements.
+
+Only inside: `deck`.
+
+```
+slide "What we do next"
+  list
+    list-item "Hire two in support"
+    list-item "Open the Denver office"
 ```
 
 ### `map`

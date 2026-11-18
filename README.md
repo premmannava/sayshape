@@ -56,7 +56,7 @@ card
 
 - **One element per line, indentation for nesting.** Every finished line can be drawn at once, and a half-finished answer is still a valid, smaller screen.
 - **State and values worked out from it.** `state` holds the data, `derive` keeps a value up to date, `bind=` connects a control to state, and `{…}` reads it. Pressing Month changes `view`; the total and the chart follow.
-- **No colors, fonts or pixel sizes.** The model picks roles such as `style=title`. The engine and your theme decide how they look, so every screen matches.
+- **No colors, fonts or pixel sizes.** The model picks roles such as `style=title`. The engine and your theme decide how they look, so every screen matches. A model can still give a screen its own character with roles: a [look line](docs/language.md#look) (`look mood=bold type=editorial`), [entrances](docs/language.md#motion) (`enter=rise`) and [words over a photo](docs/language.md#pictures), made readable by the engine.
 - **No code.** `{…}` can read state, do arithmetic and call a fixed list of functions. There is no route from a spec to JavaScript, so there is nothing to sandbox.
 
 ## Try it
@@ -101,6 +101,8 @@ ui.on("action", ({ name, value }) => console.log(name, value));
 ```
 
 To have a model write the spec, `sayshape/model` streams it from any OpenAI-compatible endpoint into `ui.push()`, checks it with the parser and asks once for a fix. See [Connecting a model](docs/model.md).
+
+A spec can also be a presentation: `deck` and `slide` show 16:9 slides one at a time, in every theme, with no flag to turn on ([slide decks](docs/language.md#slide-decks)).
 
 ## Experimental: drawing and behavior
 
@@ -177,7 +179,7 @@ The experimental features ask more of a model. Drawing a scene means placing eve
 - **Errors that don't break the screen.** A bad line is skipped and reported with its line number and how to fix it; the rest still draws.
 - **A model guide that can't go stale.** Each component is defined once, and that definition drives validation, the docs and the prompt that teaches a model the language.
 - **Accessibility.** A hidden mirror gives screen readers, keyboards and phones a role, a name and a state for everything drawn.
-- **Themes.** Light and dark, your own tokens in code or CSS variables, or one brand color (`--accent` on the MCP server).
+- **Themes.** Light and dark, your own tokens in code or CSS variables, or your brand colors (`--accent` or `--colors` on the MCP server).
 - **Testing tools.** `sayshape/testing` runs the real engine in Node, so a generated screen can be pressed and checked without a browser.
 - **Any model, anywhere.** It works with any OpenAI-compatible endpoint, including one on your own servers.
 

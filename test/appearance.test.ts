@@ -1,6 +1,6 @@
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { contrast, effectiveAccent, luminance, mix, normalizeHex, onColor, over } from "../playground/appearance/color";
+import { colorDistance, contrast, DARK_MAX_LIGHTNESS, deriveSeries, effectiveAccent, GREY_CHROMA, hexToOklab, hexToOklch, hueGap, LIGHT_MIN_LIGHTNESS, luminance, MAX_DERIVED_CHROMA, MIN_SERIES_DISTANCE, mix, normalizeHex, oklabToHex, oklchToHex, onColor, over, STATUS_HUE_GAP, WARM_HUES, WARM_LIGHT_CHROMA } from "../playground/appearance/color";
 import { exportPlan, themeCode } from "../playground/appearance/export";
 import { auditTheme, lineContrast, PRESETS, resolveTheme, type PresetId, type Scheme } from "../playground/appearance/presets";
 import { DEFAULT_PREFS, loadPrefs, parsePrefs, savePrefs, STORAGE_KEY, type AppearancePrefs, type PrefStore } from "../playground/appearance/prefs";
@@ -72,6 +72,241 @@ describe("effective accent", () => {
   });
 });
 
+describe("OKLab and OKLCH", () => {
+  it("match the published figures", () => {
+    expect(hexToOklab("#ffffff").L).toBeCloseTo(1, 4);
+    expect(hexToOklab("#000000").L).toBeCloseTo(0, 6);
+    const red = hexToOklch("#ff0000");
+    expect(red.L).toBeCloseTo(0.628, 3);
+    expect(red.C).toBeCloseTo(0.2577, 3);
+    expect(red.h).toBeCloseTo(29.23, 1);
+  });
+
+  it("go there and back to the same hex", () => {
+    for (const hex of ["#0e7c76", "#ff0000", "#123456", "#fedcba", "#808080", "#000000", "#ffffff"]) {
+      expect(oklabToHex(hexToOklab(hex)), hex).toBe(hex);
+      expect(oklchToHex(hexToOklch(hex)), hex).toBe(hex);
+    }
+  });
+
+  it("bring a color sRGB can't show into range by lowering its chroma, keeping lightness and hue", () => {
+    const out = hexToOklch(oklchToHex({ L: 0.7, C: 0.4, h: 200 }));
+    expect(out.L).toBeCloseTo(0.7, 2);
+    expect(Math.abs(out.h - 200)).toBeLessThan(2);
+    expect(out.C).toBeLessThan(0.4);
+  });
+
+  it("measure how different two colors look, and the angle between hues", () => {
+    expect(colorDistance("#176f69", "#176f69")).toBe(0);
+    expect(colorDistance("#000000", "#ffffff")).toBeCloseTo(1, 3);
+    expect(hueGap(350, 10)).toBe(20);
+    expect(hueGap(10, 190)).toBe(180);
+  });
+});
+
+describe("chart series from brand colors", () => {
+  const themeOf = (s: Scheme) => (s === "dark" ? darkTheme : lightTheme);
+  const surfaceOf = (s: Scheme) => themeOf(s).colors.surface;
+  const companions = (s: Scheme) => { const c = themeOf(s).colors; return [c.series2, c.series3, c.series4, c.series5, c.series6].map((x) => x.toLowerCase()); };
+
+  // A small seeded generator (mulberry32), so every run checks the same colors.
+  function colorsFrom(seed: number, count: number): string[] {
+    let a = seed;
+    const next = () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    return Array.from({ length: count }, () => "#" + [0, 0, 0].map(() => Math.floor(next() * 256).toString(16).padStart(2, "0")).join(""));
+  }
+  const generated = colorsFrom(2026, 300);
+
+  function expectApart(out: string[], label: string) {
+    for (let i = 0; i < out.length; i++) for (let j = i + 1; j < out.length; j++) {
+      expect(colorDistance(out[i]!, out[j]!), `${label}: series${i + 1} and series${j + 1}`).toBeGreaterThanOrEqual(MIN_SERIES_DISTANCE);
+    }
+  }
+
+  function expectDerivedRules(out: string[], from: number, s: Scheme, label: string) {
+    const first = hexToOklch(out[0]!);
+    const status = [themeOf(s).colors.good, themeOf(s).colors.bad].map((c) => hexToOklch(c).h);
+    for (let i = from; i < out.length; i++) {
+      const d = hexToOklch(out[i]!);
+      expect(d.C, `${label}: series${i + 1} is no stronger than the first`).toBeLessThanOrEqual(Math.min(first.C, MAX_DERIVED_CHROMA + 0.005));
+      // Rounding to whole channels moves a hue a little; a nearly grey one, a lot, but then it has no hue to mistake.
+      if (d.C > 0.03) for (const h of status) expect(hueGap(d.h, h), `${label}: series${i + 1} keeps off good and bad`).toBeGreaterThanOrEqual(STATUS_HUE_GAP - 3);
+      expectWithinLimits(d, s, `${label}: series${i + 1}`);
+    }
+  }
+
+  // Never near black on a light surface or pastel on a dark one, and no brown or olive yellows and oranges on light.
+  function expectWithinLimits(d: { L: number; C: number; h: number }, s: Scheme, label: string) {
+    if (s === "light") {
+      expect(d.L, `${label} lightness`).toBeGreaterThanOrEqual(LIGHT_MIN_LIGHTNESS - 0.005);
+      if (d.h >= WARM_HUES[0] + 3 && d.h <= WARM_HUES[1] - 3) expect(d.C, `${label} warm chroma`).toBeLessThanOrEqual(WARM_LIGHT_CHROMA + 0.005);
+    } else {
+      expect(d.L, `${label} lightness`).toBeLessThanOrEqual(DARK_MAX_LIGHTNESS + 0.005);
+    }
+  }
+
+  it.each(SCHEMES)("hold every rule for a few hundred first colors in %s", (s) => {
+    const surface = surfaceOf(s);
+    let derivedPairs = 0, alternating = 0;
+    for (const hex of generated) {
+      const out = deriveSeries([hex], surface, s);
+      expect(out, hex).toHaveLength(6);
+      for (const c of out) expect(normalizeHex(c), hex).toBe(c);
+      expect(out[0], `${hex}: series1 is the accent`).toBe(effectiveAccent(hex, surface).accent);
+      for (const c of out) expect(contrast(c, surface), `${hex}: ${c} on the surface`).toBeGreaterThanOrEqual(3);
+      expect(deriveSeries([hex], surface, s), `${hex} again`).toEqual(out);
+      if (hexToOklch(out[0]!).C < GREY_CHROMA) {
+        expect(out.slice(1), `${hex}: grey falls back`).toEqual(companions(s));
+        continue;
+      }
+      expectApart(out, hex);
+      expectDerivedRules(out, 1, s, hex);
+      // Neighbouring derived series take turns being lighter and darker.
+      for (let i = 1; i + 2 < out.length; i++) {
+        const [a, b, c] = [out[i]!, out[i + 1]!, out[i + 2]!].map((x) => hexToOklch(x).L) as [number, number, number];
+        derivedPairs++;
+        if ((b - a) * (c - b) < 0) alternating++;
+      }
+    }
+    expect(alternating / derivedPairs).toBeGreaterThan(0.9);
+  });
+
+  it("hold every rule for a few hundred lists of two or three colors", () => {
+    const pool = colorsFrom(7, 600);
+    for (const s of SCHEMES) {
+      for (let i = 0; i < 200; i++) {
+        const list = i % 2 ? [pool[i]!, pool[i + 200]!] : [pool[i]!, pool[i + 200]!, pool[i + 400]!];
+        const out = deriveSeries(list, surfaceOf(s), s);
+        expect(out).toHaveLength(6);
+        for (const c of out) expect(contrast(c, surfaceOf(s))).toBeGreaterThanOrEqual(3);
+        if (hexToOklch(out[0]!).C >= GREY_CHROMA) expectApart(out, `${list.join(",")} ${s}`);
+      }
+    }
+  });
+
+  it("keep light first colors in dark mode from loud pastels, deep ones in light mode from near black, and light-mode yellows from brown", () => {
+    for (const hex of ["#ff9900", "#ffda1a", "#ff7900"]) {
+      const out = deriveSeries([hex], darkTheme.colors.surface, "dark");
+      for (const c of out.slice(1)) expect(hexToOklch(c).L, `${hex} ${c}`).toBeLessThanOrEqual(DARK_MAX_LIGHTNESS + 0.005);
+    }
+    const cadbury = deriveSeries(["#4b0082"], "#ffffff", "light");
+    for (const c of cadbury.slice(1)) expect(hexToOklch(c).L, c).toBeGreaterThanOrEqual(LIGHT_MIN_LIGHTNESS - 0.005);
+    for (const hex of ["#1877f2", "#e50914", "#00704a", "#9146ff"]) {
+      const warm = deriveSeries([hex], "#ffffff", "light").slice(1).map(hexToOklch).filter((d) => d.h >= WARM_HUES[0] && d.h <= WARM_HUES[1]);
+      expect(warm.length, hex).toBeGreaterThan(0);
+      for (const d of warm) expect(d.C, `${hex} warm series`).toBeLessThanOrEqual(WARM_LIGHT_CHROMA + 0.005);
+    }
+  });
+
+  it("fall back to SayShape's own companions for pure grey", () => {
+    for (const s of SCHEMES) {
+      const out = deriveSeries(["#808080"], surfaceOf(s), s);
+      expect(out).toEqual([effectiveAccent("#808080", surfaceOf(s)).accent, ...companions(s)]);
+    }
+  });
+
+  it("keep a red brand first and every derived series off the hues of good and bad", () => {
+    for (const s of SCHEMES) {
+      const out = deriveSeries(["#e50914"], surfaceOf(s), s);
+      expect(hueGap(hexToOklch(out[0]!).h, hexToOklch("#e50914").h)).toBeLessThan(6);
+      expectApart(out, `red ${s}`);
+      expectDerivedRules(out, 1, s, `red ${s}`);
+    }
+  });
+
+  it("keep a green brand first, its derived series away from good's green", () => {
+    for (const s of SCHEMES) {
+      const out = deriveSeries(["#1db954"], surfaceOf(s), s);
+      const good = hexToOklch(themeOf(s).colors.good).h;
+      for (const c of out.slice(1)) expect(hueGap(hexToOklch(c).h, good)).toBeGreaterThanOrEqual(STATUS_HUE_GAP - 3);
+      expectApart(out, `green ${s}`);
+    }
+  });
+
+  // Changed from "drop a supplied color that looks like an earlier one, and derive in its place":
+  // a near copy now keeps its slot as a lighter or darker shade of the same color.
+  it("turn a supplied color that looks like an earlier one into a lighter or darker shade of itself", () => {
+    for (const s of SCHEMES) {
+      const out = deriveSeries(["#0066ff", "#0067fe", "#e8a33d"], surfaceOf(s), s);
+      expect(out).toHaveLength(6);
+      expect(out[0]).toBe(effectiveAccent("#0066ff", surfaceOf(s)).accent);
+      // The near copy keeps series2, in the same hue; the third color given stays series3.
+      expect(hueGap(hexToOklch(out[1]!).h, hexToOklch("#0067fe").h), `${s} ${out[1]}`).toBeLessThan(6);
+      expect(out[1]).not.toBe("#0067fe");
+      expect(colorDistance(out[2]!, "#e8a33d")).toBeLessThan(0.2);
+      expectApart(out, `near copies ${s}`);
+    }
+  });
+
+  it("make a navy's near-duplicate a lighter or darker navy, apart from the first and readable at 3:1", () => {
+    const navy = hexToOklch("#1f3a93").h;
+    for (const s of SCHEMES) {
+      const out = deriveSeries(["#1f3a93", "#22409a"], surfaceOf(s), s);
+      expect(hueGap(hexToOklch(out[1]!).h, navy), `${s} ${out[1]}`).toBeLessThan(5);
+      expect(colorDistance(out[0]!, out[1]!)).toBeGreaterThanOrEqual(MIN_SERIES_DISTANCE);
+      expect(contrast(out[1]!, surfaceOf(s))).toBeGreaterThanOrEqual(3);
+      expect(deriveSeries(["#1f3a93", "#22409a"], surfaceOf(s), s)).toEqual(out);
+      expectApart(out, `navy ${s}`);
+    }
+  });
+
+  it("derive in its place when no shade of a near-duplicate stands apart", () => {
+    const navies = ["#1f3a93", "#22409a", "#2040a0", "#1e3c98", "#213f9c", "#20399a"];
+    for (const s of SCHEMES) {
+      const out = deriveSeries(navies, surfaceOf(s), s);
+      expect(out).toHaveLength(6);
+      // Shades fill the navy's room; the last copy has none left, so it is a derived color of another hue.
+      expect(hueGap(hexToOklch(out[5]!).h, hexToOklch("#1f3a93").h), `${s} ${out[5]}`).toBeGreaterThan(30);
+      for (const c of out) expect(contrast(c, surfaceOf(s))).toBeGreaterThanOrEqual(3);
+      expectApart(out, `navies ${s}`);
+    }
+  });
+
+  it("use six supplied colors as they are, in order, made readable", () => {
+    const six = ["#4f46e5", "#0e87a8", "#d63a7a", "#c2690a", "#0f8c63", "#8b5cf6"];
+    const out = deriveSeries(six, "#ffffff", "light");
+    expect(out).toEqual(six);
+    // In dark mode the indigo is lightened to be the accent, which brings it close to the violet: that one is derived instead.
+    const dark = deriveSeries(six, darkTheme.colors.surface, "dark");
+    expect(dark).toHaveLength(6);
+    dark.forEach((c, i) => expect(contrast(c, darkTheme.colors.surface)).toBeGreaterThanOrEqual(i === 0 ? 4.5 : 3));
+    dark.slice(0, 5).forEach((c, i) => expect(hueGap(hexToOklch(c).h, hexToOklch(six[i]!).h), c).toBeLessThan(15));
+    expect(colorDistance(effectiveAccent(six[0]!, darkTheme.colors.surface).accent, six[5]!)).toBeLessThan(MIN_SERIES_DISTANCE);
+    expect(dark[5]).not.toBe(six[5]);
+    expectApart(dark, "six in dark");
+  });
+
+  it("make a supplied color readable at 3:1, the first at 4.5:1 as the accent", () => {
+    const out = deriveSeries(["#ffcc00", "#7fffd4"], "#ffffff", "light");
+    expect(contrast(out[0]!, "#ffffff")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(out[1]!, "#ffffff")).toBeGreaterThanOrEqual(3);
+    expect(contrast(out[1]!, "#ffffff")).toBeLessThan(3.3);
+  });
+
+  it("make the first color readable on its own surface when one is given, and the rest on the surface", () => {
+    const raised = darkTheme.colors.raised, surface = darkTheme.colors.surface;
+    const out = deriveSeries(["#2e86ab", "#f2c14e"], raised, "dark", surface);
+    expect(out[0]).toBe(effectiveAccent("#2e86ab", surface).accent);
+    expect(contrast(out[1]!, raised)).toBeGreaterThanOrEqual(3);
+    // Not given, the first color is made readable on the same surface as the rest.
+    expect(deriveSeries(["#2e86ab", "#f2c14e"], raised, "dark")[0]).toBe(effectiveAccent("#2e86ab", raised).accent);
+  });
+
+  it("ignore entries that aren't hex colors and anything past six", () => {
+    expect(deriveSeries(["nope", "#0066ff"], "#ffffff", "light")).toEqual(deriveSeries(["#0066ff"], "#ffffff", "light"));
+    const seven = ["#4f46e5", "#0e87a8", "#d63a7a", "#c2690a", "#0f8c63", "#8b5cf6", "#000000"];
+    expect(deriveSeries(seven, "#ffffff", "light")).toEqual(seven.slice(0, 6));
+  });
+
+  it("give SayShape's own series when nothing usable was given", () => {
+    for (const s of SCHEMES) {
+      const c = themeOf(s).colors;
+      expect(deriveSeries([], c.surface, s)).toEqual([c.series1, c.series2, c.series3, c.series4, c.series5, c.series6].map((x) => x.toLowerCase()));
+      expect(deriveSeries(["red"], c.surface, s)).toEqual(deriveSeries([], c.surface, s));
+    }
+  });
+});
+
 describe("presets", () => {
   it("leave SayShape's default theme as it is for Teal", () => {
     expect(resolveTheme("teal", "light", null).theme).toEqual(lightTheme);
@@ -97,8 +332,8 @@ describe("presets", () => {
   });
 
   it("resolve a custom accent per mode from the same request", () => {
-    const light = resolveTheme("purple", "light", "#ffff00");
-    const dark = resolveTheme("purple", "dark", "#ffff00");
+    const light = resolveTheme("purple", "light", ["#ffff00"]);
+    const dark = resolveTheme("purple", "dark", ["#ffff00"]);
     expect(light.accentAdjusted).toBe(true);
     expect(dark.accentAdjusted).toBe(false);
     expect(dark.theme.colors.accent).toBe("#ffff00");
@@ -107,7 +342,7 @@ describe("presets", () => {
   });
 
   it("only change colors, so sizes and fonts stay SayShape's", () => {
-    const t = resolveTheme("blue", "dark", "#123456").theme;
+    const t = resolveTheme("blue", "dark", ["#123456"]).theme;
     expect({ ...t, colors: undefined }).toEqual({ ...darkTheme, colors: undefined });
   });
 
@@ -115,10 +350,114 @@ describe("presets", () => {
     expect(resolveTheme("studio", "light", null).theme).toEqual(studioLightTheme);
     expect(resolveTheme("studio", "dark", null).theme).toEqual(studioDarkTheme);
     expect(resolveTheme("studio", "light", null).changes).toEqual({});
-    const t = resolveTheme("studio", "dark", "#0ea5e9").theme;
+    const t = resolveTheme("studio", "dark", ["#0ea5e9"]).theme;
     expect({ ...t, colors: undefined }).toEqual({ ...studioDarkTheme, colors: undefined });
     // A custom accent replaces the gradient with a flat accent rather than half of Studio's.
     expect(t.colors.accent2).toBe(t.colors.accent);
+  });
+});
+
+describe("presets with a list of brand colors", () => {
+  const SERIES = ["series1", "series2", "series3", "series4", "series5", "series6"] as const;
+  const seriesOf = (t: { colors: Record<(typeof SERIES)[number], string> }) => SERIES.map((k) => t.colors[k].toLowerCase());
+  const LISTS: string[][] = [["#e4572e"], ["#e4572e", "#2e86ab", "#f2c14e"], ["#0066ff", "#0067fe", "#e8a33d"], ["#4f46e5", "#0e87a8", "#d63a7a", "#c2690a", "#0f8c63", "#8b5cf6"], ["#ffe066", "#7fffd4"], ["#808080"]];
+
+  it("leave every preset as it is with no list, an empty one or one with nothing usable", () => {
+    for (const p of PRESETS) for (const s of SCHEMES) {
+      const plain = resolveTheme(p.id, s, null);
+      for (const none of [[], ["red"], ["", "rgb(1,2,3)", "#12"]]) {
+        expect(resolveTheme(p.id, s, none), `${p.id} ${s} ${JSON.stringify(none)}`).toEqual(plain);
+      }
+      expect(plain.requestedAccent).toBeNull();
+    }
+    expect(resolveTheme("teal", "light", []).theme).toEqual(lightTheme);
+    expect(resolveTheme("teal", "dark", []).changes).toEqual({});
+  });
+
+  it("make the first color do what an accent does: the accent, the text on it and the map's highlight", () => {
+    for (const p of PRESETS) for (const s of SCHEMES) for (const list of LISTS) {
+      const base = s === "dark" ? (p.id === "studio" ? studioDarkTheme : darkTheme) : p.id === "studio" ? studioLightTheme : lightTheme;
+      const r = resolveTheme(p.id, s, list);
+      const e = effectiveAccent(list[0]!, base.colors.surface);
+      const c = r.theme.colors;
+      const where = `${p.id} ${s} ${list.join(",")}`;
+      expect(c.accent.toLowerCase(), where).toBe(e.accent);
+      expect(c.onAccent.toLowerCase(), where).toBe(e.onAccent);
+      expect(c.landHighlight.toLowerCase(), where).toBe(mix(e.accent, base.colors.surface, s === "dark" ? 0.6 : 0.65));
+      // The first series is the accent, as it has always been for a rebranded theme.
+      expect(c.series1.toLowerCase(), where).toBe(e.accent);
+      expect(r.accentAdjusted, where).toBe(e.adjusted);
+      expect(r.requestedAccent, where).toBe(list[0]);
+    }
+  });
+
+  it("take the series from deriveSeries: the colors given, in order, then ones worked out from the first", () => {
+    for (const s of SCHEMES) {
+      const t = resolveTheme("teal", s, ["#e4572e", "#2e86ab", "#f2c14e"]).theme;
+      const series = seriesOf(t);
+      expect(series).toHaveLength(6);
+      expect(series).toEqual(deriveSeries(["#e4572e", "#2e86ab", "#f2c14e"], t.colors.raised === t.colors.surface ? t.colors.surface : t.colors.raised, s, t.colors.surface));
+      // The second and third are the blue and the yellow (made readable); the rest are not from the list.
+      expect(hueGap(hexToOklch(series[1]!).h, hexToOklch("#2e86ab").h)).toBeLessThan(10);
+      expect(hueGap(hexToOklch(series[2]!).h, hexToOklch("#f2c14e").h)).toBeLessThan(15);
+      expect(new Set(series).size).toBe(6);
+    }
+  });
+
+  it("keep the series readable at 3:1 on the surface and on raised cards, in light and dark, for every preset", () => {
+    for (const p of PRESETS) for (const s of SCHEMES) for (const list of LISTS) {
+      const t = resolveTheme(p.id, s, list).theme;
+      for (const bg of [t.colors.surface, t.colors.raised]) {
+        seriesOf(t).forEach((c, i) => expect(contrast(c, bg), `${p.id} ${s} ${list.join(",")} series${i + 1} on ${bg}`).toBeGreaterThanOrEqual(3));
+        // The accent is text and strokes, so it holds 4.5:1 on the surface.
+      }
+      expect(contrast(t.colors.accent, t.colors.surface)).toBeGreaterThanOrEqual(4.5);
+      // (A few accents land just under 4.5:1 for their button label, as they did before lists: effectiveAccent is unchanged and not what this checks.)
+      expect(auditTheme(t).filter((c) => !c.pass && c.name !== "Button label on the accent"), `${p.id} ${s} ${list.join(",")}`).toEqual([]);
+    }
+  });
+
+  it("hold the contrast on raised cards for a few hundred generated first colors in dark mode, where raised is lighter", () => {
+    let seed = 99;
+    const rnd = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    for (let i = 0; i < 300; i++) {
+      const hex = "#" + [0, 0, 0].map(() => Math.floor(rnd() * 256).toString(16).padStart(2, "0")).join("");
+      for (const preset of ["teal", "studio"] as const) {
+        const t = resolveTheme(preset, "dark", [hex]).theme;
+        for (const c of seriesOf(t)) expect(contrast(c, t.colors.raised), `${preset} ${hex} ${c}`).toBeGreaterThanOrEqual(3);
+      }
+    }
+  });
+
+  it("change only the accent, the text on it, the map's highlight and the series", () => {
+    for (const p of PRESETS) for (const s of SCHEMES) {
+      const plain = resolveTheme(p.id, s, null).theme;
+      const branded = resolveTheme(p.id, s, ["#e4572e", "#2e86ab"]).theme;
+      const touched = (Object.keys(plain.colors) as Array<keyof typeof plain.colors>).filter((k) => plain.colors[k] !== branded.colors[k]);
+      const allowed = new Set(["accent", "accent2", "onAccent", "landHighlight", ...SERIES]);
+      expect(touched.filter((k) => !allowed.has(k)), `${p.id} ${s}`).toEqual([]);
+      expect({ ...branded, colors: undefined }).toEqual({ ...plain, colors: undefined });
+    }
+  });
+
+  it("ignore entries that aren't hex colors and anything past six, as a model's sloppy list should be", () => {
+    for (const s of SCHEMES) {
+      const clean = resolveTheme("teal", s, ["#e4572e", "#2e86ab"]);
+      expect(resolveTheme("teal", s, ["nope", "#E4572E", "", "#2e86ab"])).toEqual(clean);
+      const six = ["#4f46e5", "#0e87a8", "#d63a7a", "#c2690a", "#0f8c63", "#8b5cf6"];
+      expect(resolveTheme("teal", s, [...six, "#000000", "#ffffff"])).toEqual(resolveTheme("teal", s, six));
+    }
+  });
+
+  it("make a list of one the same as an accent: the same accent, text on it and highlight as before lists existed", () => {
+    // These are the values the one-accent version of resolveTheme gave (the accent adjusted per mode).
+    const light = resolveTheme("teal", "light", ["#d93025"]).theme.colors;
+    const dark = resolveTheme("teal", "dark", ["#d93025"]).theme.colors;
+    expect([light.accent, light.onAccent.toLowerCase()]).toEqual(["#d93025", "#ffffff"]);
+    expect(dark.accent).toBe("#df4f45");
+    expect(light.series1).toBe(light.accent);
+    // What a list of one adds is series 2 to 6 worked out from the color, where there used to be the preset's own.
+    expect(light.series2.toLowerCase()).not.toBe(lightTheme.colors.series2.toLowerCase());
   });
 });
 
@@ -163,7 +502,7 @@ describe("theme code", () => {
   it("describes exactly the themes the playground shows", () => {
     for (const p of combos) {
       const plan = exportPlan(p);
-      const shown = (s: Scheme) => resolveTheme(p.preset, s, p.accent).theme;
+      const shown = (s: Scheme) => resolveTheme(p.preset, s, p.accent ? [p.accent] : null).theme;
       const studio = p.preset === "studio";
       const built = (s: Scheme, changes: object) => extendTheme(s === "dark" ? (studio ? studioDarkTheme : darkTheme) : (studio ? studioLightTheme : lightTheme), { colors: changes });
       if (plan.mode === "system") {
@@ -177,7 +516,7 @@ describe("theme code", () => {
 
   it("writes the adjusted colors, not the ones asked for", () => {
     const code = themeCode({ preset: "teal", mode: "light", accent: "#ffff00" });
-    const effective = resolveTheme("teal", "light", "#ffff00").theme.colors.accent;
+    const effective = resolveTheme("teal", "light", ["#ffff00"]).theme.colors.accent;
     expect(code).toContain(`accent: "${effective}"`);
     expect(code).not.toContain(`accent: "#ffff00"`);
   });

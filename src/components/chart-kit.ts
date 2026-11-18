@@ -10,7 +10,7 @@
 import type { ComponentDef, LayoutContext } from "../component";
 import { fitLines, wrapText, type TextMeasurer } from "../text";
 import { fieldOf, isList, isRecord } from "../data";
-import { mixColors, type Theme } from "../theme";
+import { isDark, isDarkTheme, mixColors, type Theme } from "../theme";
 import type { Value } from "../types";
 import { fillTint, themeFont } from "./util";
 
@@ -31,6 +31,8 @@ export interface ChartSlot {
   label: string;
   /** The label as drawn, cut to fit, or null when thinned out to make room. */
   shownLabel: string | null;
+  /** A long label's second line, when it wrapped onto two instead of being cut. */
+  shownLabel2?: string;
   /** Where the label's centre is drawn: the slot's centre, moved in if it would stick out of the box. */
   labelX: number;
   /** Centre of the slot along x. */
@@ -95,10 +97,16 @@ export interface ChartLayers {
   rules: Array<{ y: number; value: number; label: string; text: string }>;
   /** A marker at one item. */
   notes: Array<{ x: number; index: number; label: string }>;
+  /** A shaded range; top and bottom are where it's drawn, text its name and range as drawn, tone the color role. */
+  bands: Array<{ top: number; bottom: number; from: number; to: number; label: string; text: string; tone: string }>;
 }
 
 /** Everything paint needs, relative to the chart's box. */
 export type ChartGeometry = {
+  /** values=true on bar, hbar and stacked: write a value on every bar that has room. */
+  values?: boolean;
+  /** highlight= on bar, hbar and stacked: the slots kept in full color while the others are muted. */
+  highlight?: number[];
   /** Bar and line: what the chart-line, chart-rule and chart-note lines under it add. */
   layers?: ChartLayers;
   kind: Kind;
@@ -288,6 +296,25 @@ export function valueText(v: number, format: Format): string {
     return formatter(format, opts).format(v);
   } catch {
     return plainText(v, format);
+  }
+}
+
+/**
+ * The values of a pie or donut legend in one style, chosen from the whole set:
+ * the same decimals for every entry (none when all are whole, else up to 2),
+ * never a mix of 1.2K and 950. Plain numbers, unless some are too large to
+ * write out, where each falls back to valueText.
+ */
+export function legendValueTexts(values: readonly number[], format: Format): string[] {
+  const biggest = Math.max(0, ...values.map(Math.abs));
+  if (biggest >= 1e15) return values.map((v) => valueText(v, format));
+  const decimals = values.reduce((d, v) => (Number.isInteger(v) ? d : Math.max(d, Math.min(2, decimalsOf(v)))), 0);
+  const digits = format === "money" && decimals > 0 ? 2 : decimals;
+  try {
+    const nf = formatter(format, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    return values.map((v) => nf.format(v));
+  } catch {
+    return values.map((v) => plainText(v, format));
   }
 }
 
@@ -500,18 +527,59 @@ export function paintSlotLabels(ctx: PaintCtx, d: ChartGeometry, ox: number, oy:
   g.fillStyle = theme.colors.muted;
   g.textAlign = "center";
   g.textBaseline = "top";
-  for (const s of d.slots) if (s.shownLabel) g.fillText(s.shownLabel, ox + s.labelX, oy + d.labelY);
+  const lh = Math.round(theme.text.caption * 1.4);
+  for (const s of d.slots) {
+    if (!s.shownLabel) continue;
+    g.fillText(s.shownLabel, ox + s.labelX, oy + d.labelY);
+    if (s.shownLabel2) g.fillText(s.shownLabel2, ox + s.labelX, oy + d.labelY + lh);
+  }
   g.textBaseline = "middle";
 }
 
 /**
- * Category slots evenly across a plot, each with its label as drawn.
- * Prefer showing every category, shortened to its slot if necessary. Only thin
- * labels when slots are too small to show a useful name; a single long label
- * should not hide its neighbours (North America should not hide EMEA in a
- * five-bar chart). A label near an edge moves in so it stays inside the box.
+ * A field name as a person would write it when no labels= gave one: words split
+ * at _, - and camelCase, the first capitalized and the rest lowercase, except
+ * all-caps words (ARR, ID). revenue is Revenue, unit_price is Unit price,
+ * unitPrice is Unit price. Names given through labels= are never passed through this.
  */
-export function slotLabels(labels: readonly string[], plot: Rect, boxW: number, font: string, ctx: Ctx): Array<{ cx: number; shownLabel: string | null; labelX: number }> {
+export function fieldTitle(field: string): string {
+  const words = field.replace(/([a-z0-9])([A-Z])/g, "$1 $2").split(/[\s_-]+/).filter(Boolean);
+  if (!words.length) return field;
+  return words.map((w, i) => {
+    const word = w.length > 1 && w === w.toUpperCase() && /[A-Z]/.test(w) ? w : w.toLowerCase();
+    return i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word;
+  }).join(" ");
+}
+
+/**
+ * Split a label that's too wide for one line into two at a space, the second
+ * line cut with an ellipsis if it's still too long. A label with no space to
+ * break at (or whose first word is already too wide) is cut on one line.
+ */
+export function wrapLabel(label: string, room: number, font: string, m: TextMeasurer): [string, string?] {
+  if (m.width(label, font) <= room) return [label];
+  const words = label.split(/\s+/).filter(Boolean);
+  let first = "";
+  let used = 0;
+  for (let i = 0; i < words.length; i++) {
+    const next = first ? `${first} ${words[i]}` : words[i]!;
+    if (m.width(next, font) > room) break;
+    first = next;
+    used = i + 1;
+  }
+  if (!first || used >= words.length) return [fit(label, room, font, m)];
+  return [first, fit(words.slice(used).join(" "), room, font, m)];
+}
+
+/**
+ * Category slots evenly across a plot, each with its label as drawn.
+ * Prefer showing every category, wrapped onto a second line and then shortened
+ * to its slot if necessary. Only thin labels when slots are too small to show
+ * a useful name; a single long label should not hide its neighbours (North
+ * America should not hide EMEA in a five-bar chart). A label near an edge
+ * moves in so it stays inside the box.
+ */
+export function slotLabels(labels: readonly string[], plot: Rect, boxW: number, font: string, ctx: Ctx): Array<{ cx: number; shownLabel: string | null; shownLabel2?: string; labelX: number }> {
   const t = ctx.theme, m = ctx.measure;
   const slotW = plot.w / Math.max(1, labels.length);
   const widest = Math.min(Math.max(0, ...labels.map((l) => m.width(l, font))), 120);
@@ -519,11 +587,15 @@ export function slotLabels(labels: readonly string[], plot: Rect, boxW: number, 
   const room = Math.max(0, slotW * every - t.space.sm);
   return labels.map((label, i) => {
     const cx = plot.x + slotW * (i + 0.5);
-    const shownLabel = i % every === 0 ? fit(label, room, font, m) : null;
-    const half = shownLabel ? m.width(shownLabel, font) / 2 : 0;
-    return { cx, shownLabel, labelX: Math.min(Math.max(cx, half), boxW - half) };
+    if (i % every !== 0) return { cx, shownLabel: null, labelX: cx };
+    const [shownLabel, shownLabel2] = wrapLabel(label, room, font, m);
+    const half = Math.max(m.width(shownLabel, font), shownLabel2 ? m.width(shownLabel2, font) : 0) / 2;
+    return { cx, shownLabel, ...(shownLabel2 ? { shownLabel2 } : {}), labelX: Math.min(Math.max(cx, half), boxW - half) };
   });
 }
+
+/** How many lines of slot labels the chart needs under its plot: 2 when any wrapped. */
+export const labelRows = (placed: ReadonlyArray<{ shownLabel2?: string }>): number => (placed.some((p) => p.shownLabel2) ? 2 : 1);
 
 // ---------------------------------------------------------------- data
 
@@ -647,9 +719,9 @@ export function traceSmoothLine(
  * A value by its bar. One style for the whole chart: compact ($480K, $45K)
  * once any value reaches 10,000, so neighbouring labels read alike.
  */
-export function barText(v: number, format: Format, compact: boolean): string {
+export function barText(v: number, format: Format, compact: boolean, digits = 1): string {
   if (!compact || Math.abs(v) >= 1e15) return valueText(v, format);
-  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 };
+  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: digits };
   try {
     return formatter(format, opts).format(v);
   } catch {
@@ -657,3 +729,15 @@ export function barText(v: number, format: Format, compact: boolean): string {
   }
 }
 
+
+/** A bar's color when another item is highlighted: tinted toward the surface, still the same hue. */
+export function mutedBar(theme: Theme, color: string): string {
+  return mixColors(color, theme.colors.raised, isDarkTheme(theme) ? 0.62 : 0.68) ?? color;
+}
+
+/** Text that reads on a bar of this color: the theme's light or dark text, whichever contrasts. */
+export function onFill(theme: Theme, fill: string): string {
+  const { ink, raised } = theme.colors;
+  const [light, dark] = isDark(ink) ? [raised, ink] : [ink, raised];
+  return isDark(fill) ? light : dark;
+}

@@ -256,6 +256,47 @@ try {
   await branded.screenshot({ path: out + "9-accent-dark.png" });
   check(await colorPixels(brandedFrame, "#sayshape", [223, 79, 69]) > 500, "--accent is lightened to stay readable in dark mode");
   await branded.close();
+  // show_interface's colors argument, streamed before the spec (it's declared first): the first lines
+  // already draw in it, over the operator's --accent "#2e86ab". With --no-model-colors (model=0) the
+  // view ignores colors a chat app passes on anyway, and the operator's accent stays.
+  const colorsPage = async (meta) => {
+    const p = await browser.newPage({ viewport: { width: 680, height: 700 }, deviceScaleFactor: 2 });
+    p.on("pageerror", (e) => errors.push(e.message));
+    p.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+    await p.setContent(`<!doctype html><body><script>${hostJs}</script></body>`);
+    await p.evaluate((html) => window.TestHost.mount(html, "light"), uiHtml.replace(/<head>/i, `<head><meta name="sayshape-view" content="${meta}">`));
+    await p.evaluate(() => window.host.ready);
+    const f = p.frames().find((x) => x !== p.mainFrame());
+    // A tool call whose colors arrive whole before any of the spec, then the spec a line at a time.
+    await p.evaluate(() => window.host.bridge.sendToolInputPartial({ arguments: { colors: ["#d93025"] } }));
+    const lines = SPEC.split("\n");
+    // Up to the stat in tone=accent, the first line drawn in the accent.
+    const upTo = lines.findIndex((l) => l.includes("tone=accent")) + 1;
+    for (let n = 1; n <= upTo; n++) {
+      await p.evaluate((spec) => window.host.bridge.sendToolInputPartial({ arguments: { colors: ["#d93025"], spec } }), lines.slice(0, n).join("\n") + "\n");
+      await p.waitForTimeout(40);
+    }
+    // Streamed lines draw in over a short animation and paint on the next frame, so how long that takes
+    // depends on the machine: wait for the pixels (still before the call is complete), not a fixed time.
+    // A page that ignores the colors never reaches the threshold, so it just waits out the time.
+    const settle = async (atLeast) => {
+      const until = Date.now() + 4000;
+      let n = await colorPixels(f, "#sayshape", [217, 48, 37]);
+      while (n <= atLeast && Date.now() < until) { await p.waitForTimeout(50); n = await colorPixels(f, "#sayshape", [217, 48, 37]); }
+      return n;
+    };
+    const early = await settle(50);
+    await p.evaluate((spec) => window.host.bridge.sendToolInput({ arguments: { colors: ["#d93025"], spec } }), SPEC);
+    return { p, early, final: await settle(500) };
+  };
+  const conversation = await colorsPage("picker=0&theme=teal&accent=2e86ab&save=1&copy=1");
+  await conversation.p.screenshot({ path: out + "10-colors-argument.png" });
+  check(conversation.early > 50, `the colors argument colors the first streamed lines, over the operator's --accent (${conversation.early} pixels)`);
+  check(conversation.final > 500, `and the whole interface once the call is complete (${conversation.final} pixels)`);
+  await conversation.p.close();
+  const lockedPage = await colorsPage("picker=0&theme=teal&accent=2e86ab&save=1&copy=1&model=0");
+  check(lockedPage.early === 0 && lockedPage.final === 0, `with --no-model-colors the view ignores colors sent anyway (${lockedPage.final} pixels)`);
+  await lockedPage.p.close();
   // A pixel at a point in CSS pixels, read from the canvas bitmap.
   const pixelAt = (frame, x, y) => frame.evaluate(({ x, y }) => {
     const c = document.querySelector("#sayshape");
@@ -296,21 +337,10 @@ try {
   };
   const fixing = await foldPage({ toFix: 2, repeat: false });
   await fixing.p.screenshot({ path: out + "7-fixing.png" });
-  check(fixing.folded < 200 && fixing.full > 300, `a view whose spec needs fixing folds into a short note (${fixing.full}px → ${fixing.folded}px)`);
-  const foldedFrame = fixing.p.frames().find((f) => f !== fixing.p.mainFrame());
-  await foldedFrame.locator("#sayshape").focus();
-  let restored = fixing.folded;
-  for (let i = 0; i < 4 && restored < 300; i++) {
-    await fixing.p.keyboard.press("Tab");
-    await fixing.p.keyboard.press("Enter");
-    await fixing.p.waitForTimeout(300);
-    restored = await fixing.p.evaluate(() => window.host.sizes.at(-1));
-  }
-  check(restored > 300, `"Show this version" brings it back (${restored}px)`);
-  check((await fixing.p.evaluate(() => window.host.messages)).length === 0, "and sends nothing to the model");
+  check(fixing.folded < 20 && fixing.full > 300, `a view whose spec needs fixing hides completely (${fixing.full}px → ${fixing.folded}px)`);
   const repeat = await foldPage({ toFix: 0, repeat: true });
   await repeat.p.screenshot({ path: out + "8-repeat.png" });
-  check(repeat.folded < 180, `a repeat of the interface above folds into one line (${repeat.folded}px)`);
+  check(repeat.folded < 20, `a repeat of the interface above hides completely (${repeat.folded}px)`);
   const kept = await foldPage({ toFix: 0, repeat: false });
   check(kept.folded > 300, `a good interface stays as it is (${kept.folded}px)`);
 

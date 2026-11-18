@@ -32,17 +32,22 @@ The canvas fills its parent's width and grows to fit its content.
 | `width` | parent width | A fixed width in CSS pixels |
 | `minHeight` | `0` | Minimum canvas height |
 | `padding` | `20` | Space around the whole screen |
-| `animate` | `true` | Fade new elements in (off when the user prefers reduced motion) |
-| `imageHosts` | `[]` | Hosts images may load from besides your own site ([Images](#images)) |
+| `animate` | `true` | Motion: new elements fade in, `enter=` entrances play ([Motion](language.md#motion)), values glide. `false`, or reduced motion (`reducedMotion`, else the system setting, which wins even over `true`), draws everything in its final state at once |
+| `imageHosts` | `[]` | Hosts images may load from besides your own site; `COMMON_IMAGE_HOSTS` is a ready-made list ([Images](#images)) |
 | `loadImage` | an `<img>` with CORS | Custom image loading, for tests, server rendering or signed URLs |
 | `onWarning` | `console.warn` | Receives problems found while running, like a blocked image |
 | `editor` | an `<input>` over the field | How text fields are typed into ([Typing](#typing)); `sayshape/testing` passes a fake one |
 | `today` | the device's local day | Today's date as `() => "YYYY-MM-DD"`, for date pickers; fix it in tests and screenshots |
 | `viewport` | from the window | The part of the canvas people can see, `() => ({ top, bottom })` in canvas pixels, for placing a select's list ([Popups](#popups)) |
 | `pixelRatio` | the window's `devicePixelRatio` | Device pixels per CSS pixel in the canvas bitmap |
+| `streamPlaceholders` | `false` | For specs written layout first, data last: while a spec streams in, names an element reads before their `state` line arrives draw as placeholders and aren't reported until `endStream()` ([Layout first while streaming](model.md#layout-first-while-streaming)) |
+| `presets` | `false` | Expand `report` blocks into ordinary elements when the spec is read; `expandedSpec` shows the result ([the report preset](model.md#data-answers-with-the-report-preset-opt-in)) |
+| `look` | `true` | Read a spec's look line (`look mood=bold type=editorial`), which lays look tokens over this theme, never colors of its own; `false` keeps the theme as it is and reports the line with a warning ([Look](language.md#look)). `sayshape.look` holds the choices in use |
 | `behavior` | `false` | Experimental: `every` rules and dragging in scenes ([Behavior](#behavior-experimental-off-by-default)) |
 | `clock` | the real clock | Where time comes from (`now`, `setTimeout`, `clearTimeout`): scene motion, fade-ins and rules. `sayshape/testing` passes one a test advances |
-| `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it, rules wait for a first press or key |
+| `reducedMotion` | the system setting | Whether the person prefers reduced motion; with it nothing animates (as with `animate: false`), and rules wait for a first press or key |
+
+**Changed with entrance motion:** reduced motion used to count only when `animate` was left out, and the `reducedMotion` option only held rules back. Now it wins over `animate: true`, and with it (or `animate: false`) nothing moves: fade-ins, gliding values, `enter=` entrances, an image's `zoom=slow` and scene motion are all drawn at rest. A host that passed `animate: true` to force motion for everyone no longer can; pass `reducedMotion: false` if you truly mean to ignore the person's setting.
 
 ## Methods
 
@@ -61,6 +66,7 @@ The canvas fills its parent's width and grows to fit its content.
 | `imagesLoaded()` | A promise that resolves once every requested image has loaded or failed |
 | `picture({ pixelRatio?, background?, widen? })` | A promise of a new canvas with the screen as it is now (current state and screen), at 2× by default, on the theme's surface, without hover, focus, popups or messages. When a table scrolls sideways, the picture is drawn wider (up to 2,400 px) so every column shows; `widen: false` keeps the screen's width. Save it with `toBlob()` for a "Save image" button |
 | `copyText()` | The screen as plain text, for a "Copy text" button, since nothing on a canvas can be selected: headings and text as lines, fields as `Label: value`, checkboxes as `[x]`, and tables and chart data as tab-separated rows that paste into a spreadsheet as cells. Buttons are left out, and a password is never included |
+| `entranceOf(id)` | Where an element's entrance (`enter=`, or its turn under `stagger=true`) was in the last frame: `{ role, progress }`, progress 0 before it starts or while out of sight and 1 at rest; null without one. `sayshape/testing` has it as `ui.entrance(query)` |
 | `hiddenWidth()` | How much wider the screen would need to be for nothing to scroll sideways; 0 when nothing does |
 | `setTheme(theme)` | Switch themes |
 | `find(type)` | All nodes of a type, e.g. `ui.find("button")` |
@@ -139,6 +145,21 @@ With `behavior: true`, a spec can have things that change by themselves, and (wi
 
 The playground's behavior samples (`?behavior=1`, and `&scene=1` for the last two): a countdown, stock running down with Play and Pause, a falling ball, and a point on a curve. Design and limits: [docs/plans/behavior.md](plans/behavior.md); validation: [docs/plans/behavior-validation.md](plans/behavior-validation.md).
 
+## Slides
+
+`deck` and `slide` are ordinary elements, in `coreComponents` like `carousel` or `dialog`, with no flag to turn on ([the language](language.md#slide-decks)). `sayshape/slides` exports the same two as `slideComponents`, for hosts that import them on their own; registering them twice does no harm, since a registry keeps one definition per type.
+
+A slide is the first element whose height doesn't come from what's in it, and the first that draws its children at a size of its own. Two optional hooks on `ComponentDef` make that possible, and any element may use them:
+
+- **`childTransform(box)`** says how an element's children are drawn: the engine lays them out where they are, then paints them through `screen = point * scale + (dx, dy)`. The same map carries their hit regions, the focus ring, the accessibility mirror's rectangles and the inspector's boxes to the screen, and press, drag, wheel and `hitTest` handlers are given the child's own laid-out box with the pointer in the same space. Return `null` (or leave the hook out) and children are drawn as laid out. A slide lays its children out 960 px wide and 540 px tall (`DESIGN_W`, `DESIGN_H`), shrinks tall content to fit (to 60% at the least, `MIN_FIT`) and returns the transform that scales it all to the slide's real width.
+- **`theme(theme)`** returns the theme the element and everything inside it is laid out and painted with, made from the screen's. A slide returns a theme with its larger type, spacing, corners and control height (below). Return the same theme to change nothing; the engine remembers the result per theme, so layout reuses its context.
+
+Both hooks are free for every other element: the engine does nothing extra when they're missing.
+
+**The theme's slide tokens.** `Theme.slide` holds `space`, `radius`, `text` and `control` (the same shapes as the theme's own, but larger, because a slide is laid out 960 px wide and then scaled), and `heading`, the size of the opening slide's title (`cover`) and of every other slide's (`slide`). A theme without `slide` isn't broken: `slideTokens(theme)` (from `sayshape/slides`) scales the theme's own tokens up by 1.6 (headings 2.0 and 1.36 times the display size). `lightTheme` and `darkTheme` (which share the base tokens: body 24, display 52) and the Studio themes (display 54) all set their own; the website's Themes page lists them. Inside a slide the theme also carries `zoom` (how much larger than the screen's its type is), which elements with sizes of their own, such as a stat's figure, scale by; hosts never set it.
+
+**Host options for decks.** `theme.deck` is for hosts: `logo` is an image address (from the page's origin or `imageHosts`) drawn small at the bottom left of every slide, and `square: true` draws slides without their rounded frame, for pictures that fill a page. To save a deck as pages, `picture({ width, state, frame, theme })` draws a copy of the screen at another width, with other state (`{ page: 3 }`) and cut down to the first element `frame` accepts, in another theme: the MCP view saves a PDF or a PowerPoint file this way, a picture of each slide. The options are described in the comment on `picture()` in `src/engine.ts`.
+
 ## Images
 
 A spec can name any image URL, and a model writes specs, so SayShape only loads images from your own site (the page's origin) and from hosts you list. Anything else, including `data:` and `javascript:` URLs, is blocked: the `image` shows its description instead, and the console says which host to allow.
@@ -150,7 +171,9 @@ const ui = new SayShape(canvas, {
 });
 ```
 
-Images load with CORS (`crossOrigin="anonymous"`), so their server must send `Access-Control-Allow-Origin` (most image CDNs do). The playground allows `images.unsplash.com`, and its "Trail gear" and "Gear finder" samples use real photos from there. The space for each image is kept from its `ratio=` while it loads, so the screen doesn't jump.
+An image can also hold elements laid over the photo, with `shape=` and `zoom=slow` ([Pictures](language.md#pictures)); the engine draws the overlay that keeps them readable, so there is nothing to set up.
+
+Images load with CORS (`crossOrigin="anonymous"`), so their server must send `Access-Control-Allow-Origin` (most image CDNs do). `COMMON_IMAGE_HOSTS` (from `src/images.ts`) lists the sites models know image addresses on, each one serving its own files with CORS headers: pass it as `imageHosts` where a model writes the specs (the engine's own default stays none, and so does `languageGuide`'s). The MCP server and the website's chat page use it; `--image-hosts` replaces it there and `--no-image-hosts` allows none. The playground uses it too, and its "Trail gear" and "Gear finder" samples use real photos from there. The space for each image is kept from its `ratio=` while it loads, so the screen doesn't jump.
 
 ## Keyboard
 
@@ -220,6 +243,8 @@ To find a bug, first decide which stage it's in:
 
 Components never use literal colors or sizes. They read design tokens from the theme: `colors`, `space`, `radius`, `font`, `text` sizes and `control` height. SayShape ships `lightTheme` and `darkTheme`, and with `theme: "auto"` it follows the page's light or dark mode.
 
+A spec's look line (`look mood=bold type=editorial shape=soft density=airy`, [Look](language.md#look)) lays its choices over whatever theme you pass: it scales your spacing, corners, control height and heading sizes, picks a heading face from a fixed list of font stacks that fall back to system faces (or your own mono), and touches only the accent's gradient end and the shadow. It never brings colors of its own, and Windows Contrast Themes still win over it. `look: false` keeps your theme exactly as it is; `sayshape.look` holds the choices in use.
+
 With `theme: "auto"`, you can override colors from CSS with `--sayshape-*` variables on the canvas or any ancestor:
 
 ```css
@@ -257,6 +282,10 @@ The playground's **Appearance** button opens a small panel for previewing the cu
 
 The styles change colors only, through the same theme tokens every component reads; they're a playground feature, not part of the SayShape language, so models still can't choose colors. Teal, Purple and Blue keep SayShape's default field and divider lines, which are lighter than the 3:1 that WCAG asks of control boundaries; Neutral meets it.
 
+### Brand colors
+
+A host can give a brand color, or a list of up to six, instead of picking colors by hand: the first becomes the accent and the first chart series, the others the next series, series the list doesn't cover are worked out from the first, and every color is adjusted for light and dark so it stays readable. It is a host setting, never part of a spec, so models still can't choose colors (scenes are the one exception). The MCP server takes `--accent` or `--colors`, and a `colors` argument on `show_interface` when the person names colors; the code that works the colors out (`resolveTheme`, `deriveSeries`, in `playground/appearance/`) isn't exported from `sayshape`, so an app that embeds the engine sets the same tokens with `extendTheme`. The website's [Themes](https://premmannava.github.io/sayshape/docs/integration/themes#brand-colors) page explains what each color becomes, with an example, [`mcp/README.md`](../mcp/README.md) lists the options, and [Check that models keep the colors](model.md#check-that-models-keep-the-colors) describes `npm run colors-eval`.
+
 ## Accessibility
 
 A canvas is one picture to assistive technology, so SayShape keeps a hidden **accessibility mirror** beside it: an invisible DOM element over each element it draws, with a role, a name and a state, kept in step as the screen changes. Screen readers, keyboards and phones' touch exploration work through it. The plan and its design are in [`docs/plans/accessibility.md`](plans/accessibility.md).
@@ -275,3 +304,21 @@ const sayshape = new SayShape(canvas, { components: coreComponents });   // the 
 ```
 
 In tests, `render(spec).accessibility()` shows the screen as a screen reader gets it, `ui.announcements` what it was told, and `ui.mirror` sends a screen reader's actions; the visual suite runs [axe](https://github.com/dequelabs/axe-core) on every sample. Automated checks can't prove WCAG conformance on their own: [`docs/accessibility-testing.md`](accessibility-testing.md) is a short manual pass with VoiceOver and NVDA to run before claiming it. Still to do: reaching the map by keyboard.
+
+## Selectable text
+
+A canvas has no text to select, so the engine keeps a second invisible layer beside the accessibility mirror: one transparent real text node per drawn line of `text`, `stat` and `table`, at the same position, font and size. Dragging with a mouse or pen selects those words, Ctrl/Cmd+C copies them (a table selection copies one row per line, cells separated by tabs), and the browser's find (Ctrl/Cmd+F) reaches them. With nothing selected, Ctrl/Cmd+C still copies the whole screen through `copyText()`. The layer is marked `aria-hidden` (screen readers use the mirror), is rebuilt only once drawing has been still for a moment and only when the lines changed, holds only what is in view (a long table creates nodes for visible rows), and leaves out hidden, inactive and covered text. A plain click on selectable text still presses the card, row or link under it; only a drag selects. Double-click selects the word under the pointer, triple-click the whole drawn block (a paragraph's wrapped lines, or one table cell), and Shift+click moves the end of the current selection to the click. On text inside something pressable (a card with `on=`, a table that selects rows, a link) the click stays a click: it runs its action each time and never selects a word; dragging still selects there. The canvas stays the only thing that draws.
+
+```js
+const sayshape = new SayShape(canvas, { components: coreComponents });   // the layer is on by default
+// new SayShape(canvas, { components: coreComponents, selectText: false }) leaves it out: no extra DOM
+// new SayShape(canvas, { components: coreComponents, selectTouch: true }) lets a long press select on touch screens
+```
+
+`sayshape-mcp --no-select-text` does the same for the MCP view. In tests, `render(spec).textLayer` lists the lines (`lines`, `builds`, `selection`), `settle()` builds it now and `dragText(from, to)` selects. ### Touch
+
+Touch selection is **off by default for now** (`TOUCH_SELECT_DEFAULT` in `src/text-layer/host.ts`, one line to change) because the browser's own long-press selection can't be reproduced by emulation and has not yet been checked on real phones (the checklist is `docs/plans/selectable-text/touch-checklist.md`). Turn it on with `selectTouch: true` (`sayshape-mcp --select-touch`; `--no-select-touch` says off explicitly). Mouse and pen selection are not affected either way.
+
+On, and only where touch is the main pointer (`(pointer: coarse)`), the words of the layer take touches, so the platform's own long press works on them: it selects the word, shows its handles and Copy menu, and the person drags the handles. The layer replays what the canvas would have got: a tap becomes one press and release on the canvas (so a pressable card, row or link runs once; a tap on plain text clears a selection and does nothing else); a long press (500 ms) is the platform's and presses nothing; a swipe that starts on words is replayed from where the finger went down, so the page and scrolling elements scroll and table drags work as before; a second finger (pinch) presses nothing. The layer's words use the canvas's `touch-action`, and the engine's own touch handling is attached to the layer too. Copying a table selection gives tab-separated cells on touch, as with the mouse.
+
+Not covered: chart labels, scenes and slides.

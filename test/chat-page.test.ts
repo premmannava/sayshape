@@ -7,9 +7,14 @@
 import { describe, expect, it } from "vitest";
 import {
   advance, applyEvent, canAsk, chatTheme, duration, failure, frameColors, isBusy, MAX_ANSWERS, newTurn, readableOn, readEvents, refusal, requestBody,
-  restart, stages, suggestionsIn, SUGGESTIONS, summary, type ChatEvent,
+  restart, stages, suggestionsIn, SUGGESTIONS, summary, countUse, loadSaveChoice, newChatId, storeSaveChoice, takeUsage, type ChatEvent,
 } from "../site/.vitepress/theme/sayshape/chat";
 import { readChat } from "../worker/src/chat";
+import { readFeedback, readRecordRequest } from "../worker/src/records";
+import { webcrypto } from "node:crypto";
+
+// Node 18 has no global crypto; browsers (where newChatId runs) and Node 19+ do.
+if (!(globalThis as { crypto?: unknown }).crypto) Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
 import { contrast } from "../playground/appearance/color";
 import { coreComponents } from "../src/components";
 import { Registry } from "../src/registry";
@@ -221,5 +226,73 @@ describe("the empty thread", () => {
     expect(SUGGESTIONS.slice(-2).map((s) => s.group)).toEqual(["drawing", "drawing"]);
     // A spec in this file's own tests parses, so the fixtures above are real answers.
     expect(parse(FIRST, new Registry(coreComponents)).diagnostics).toEqual([]);
+  });
+});
+
+describe("saving answers, for visitors who choose to", () => {
+  const ID = "6f1c2a9e-3b4d-4e5f-8a6b-7c8d9e0f1a2b";
+  const done = (record?: string): ChatEvent => ({ t: "done", spec: FIRST, problems: 0, repaired: false, ms: 900, ...(record ? { record } : {}) });
+
+  it("adds the chat and turn only when saving, in a shape the worker reads", () => {
+    expect(requestBody(null, "Plans")).not.toHaveProperty("record");
+    const chat = newChatId();
+    const first = requestBody(null, "Plans", { chat, turn: 1, width: 724 });
+    expect(first).toEqual({ kind: "chat", message: "Plans", record: { chat, turn: 1, width: 724 } });
+    expect(readRecordRequest(first.record)).toEqual({ chat, turn: 1, width: 720 });
+    const followup = requestBody(advance(null, "Plans", FIRST), "As a donut", { chat, turn: 2 });
+    expect(followup.refine?.spec).toBe(FIRST);
+    expect(readRecordRequest(followup.record)).toEqual({ chat, turn: 2, width: null });
+    // The worker's chat check doesn't mind the extra field.
+    expect("error" in readChat(followup as unknown as Record<string, unknown>, new Registry(coreComponents))).toBe(false);
+    expect(newChatId()).not.toBe(chat);
+  });
+
+  it("keeps the saved answer's id, and forgets it on Try again", () => {
+    const t = newTurn("Plans");
+    applyEvent(t, done(ID));
+    expect(t.record).toBe(ID);
+    restart(t);
+    expect(t.record).toBeUndefined();
+    applyEvent(t, done());
+    expect(t.record).toBeUndefined();
+  });
+
+  it("counts uses of a finished, saved answer only, and sends usage only when it grew", () => {
+    const unsaved = newTurn("Plans");
+    applyEvent(unsaved, done());
+    countUse(unsaved, "changes");
+    expect(takeUsage(unsaved)).toBeNull();
+
+    const t = newTurn("Plans");
+    countUse(t, "changes"); // still arriving: the engine loading it, not the visitor
+    applyEvent(t, done(ID));
+    expect(takeUsage(t)).toBeNull();
+    countUse(t, "changes");
+    countUse(t, "changes");
+    countUse(t, "actions");
+    const sent = takeUsage(t);
+    expect(sent).toEqual({ id: ID, used: { changes: 2, actions: 1, screens: 0 } });
+    expect(readFeedback(sent as unknown as Record<string, unknown>)).toEqual(sent);
+    expect(takeUsage(t)).toBeNull();
+    countUse(t, "screens");
+    expect(takeUsage(t)).toEqual({ id: ID, used: { changes: 2, actions: 1, screens: 1 } });
+  });
+
+  it("is off unless the visitor turns it on, even where the browser keeps nothing", () => {
+    // Node has no localStorage: like a private window that refuses storage.
+    expect(loadSaveChoice()).toBe(false);
+    expect(() => storeSaveChoice(true)).not.toThrow();
+    const kept = new Map<string, string>();
+    const fake = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v), removeItem: (k: string) => void kept.delete(k) };
+    (globalThis as { localStorage?: unknown }).localStorage = fake;
+    try {
+      expect(loadSaveChoice()).toBe(false);
+      storeSaveChoice(true);
+      expect(loadSaveChoice()).toBe(true);
+      storeSaveChoice(false);
+      expect(loadSaveChoice()).toBe(false);
+    } finally {
+      delete (globalThis as { localStorage?: unknown }).localStorage;
+    }
   });
 });

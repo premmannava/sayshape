@@ -47,7 +47,15 @@ Chat apps keep the tool description they read when the connector was added, so r
 
 At each release, before step 1: set `PAGE_ENGINE_VERSION` to the newest `sayshape` version that has been on npm for at least 14 days (`npm view sayshape time`), never later than the version being released. If none is old enough yet, leave it. `verify:pack -- --registry <version>` checks that the pinned version is on npm with `dist/sayshape.global.js` and says how old it is. The first version with that file is 0.1.1, so until 0.1.1 has been out for two weeks the page works in browsers (once 0.1.1 is published) but not in chat apps with that rule.
 
+The page also needs `extendTheme` from that build: with brand colors it lays the accent and chart series the server worked out over `lightTheme` and `darkTheme` (`mcp/src/fallback.ts`), and falls back to the plain themes without it. 0.1.1 has it.
+
+Slide decks are the visible case of that trade-off. The pinned build predates `deck` and `slide`, so for a deck `show_interface` writes a plain sentence in place of a page (`deckOnly` and `PAGE_DECK_TEXT` in `mcp/src/server.ts`). Once `PAGE_ENGINE_VERSION` is a release that includes slides, delete `deckOnly` and the sentence, so decks get a page like any other interface.
+
 The trade-off: the page can draw with an engine one release older than the server that checked the spec, so an element added in the newest release may not draw on the page yet.
+
+### The engine inside the widget file
+
+With `--widget-dir`, the file `show_interface` writes carries its own engine, so nothing is pinned or fetched and there is no version to move at a release. `npm --prefix mcp run build` builds it from this repository's `src/` (`mcp/scripts/pack-widget-engine.mjs`, which runs between the view and the server bundle), gzips it with Node's zlib and writes `mcp/dist/widget-engine.json`, which ships in the `sayshape-mcp` package (`files` is `dist`) and which `verify:pack` requires next to `server.js` and `ui.html`. It is built from the same source as the server's parser, so the file always matches the version that checked the spec. The step needs only `src/` and the MCP package's own `vite`. The package grows by about 470 KB. `verify:pack` also runs `mcp/scripts/e2e-widget.mjs` against the installed copy.
 
 If one package publishes and the other fails, don't unpublish: fix the cause, bump the version for both and release again. npm never accepts the same version twice.
 

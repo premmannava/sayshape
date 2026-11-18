@@ -19,6 +19,7 @@ import { parse } from "../../src/parser";
 import type { Diagnostic } from "../../src/types";
 import type { GuideOptions } from "../../src/prompt";
 import type { Registry } from "../../src/registry";
+import { COMMON_IMAGE_HOSTS } from "../../src/images";
 
 export const MAX_MESSAGE_CHARS = 400;
 /** Follow-ups sent as text before the current one. The page stops a chat well before this. */
@@ -61,7 +62,8 @@ export function readSpec(v: unknown, registry: Registry): string | null {
   if (!v.trim() || v.length > MAX_SPEC_CHARS) return null;
   const lines = v.replace(/\r\n?/g, "\n").split("\n");
   if (lines.length > MAX_SPEC_LINES) return null;
-  const isSayShape = sayShapeLineTest((name) => registry.has(name));
+  // A report (the preset, when REPORT_FIRST is on) is taken back too; readChat turns it into ordinary elements.
+  const isSayShape = sayShapeLineTest((name) => registry.has(name), { presets: true });
   const kept: string[] = [];
   for (const line of lines) {
     const t = line.trim();
@@ -95,7 +97,9 @@ export function readChat(body: Record<string, unknown>, registry: Registry): Cha
   }
   const latest = readSpec(spec, registry);
   if (!latest) return { error: "The latest answer couldn't be sent back. Start a new chat." };
-  return { message, refine: { task: chatRequest(first), changes: earlier, spec: latest } };
+  // A follow-up is written with the chat guide, which doesn't teach the report preset: send what the report became.
+  const expanded = /^report(\s|$)/m.test(latest) ? parse(latest, registry, { presets: true }).presets?.expanded : undefined;
+  return { message, refine: { task: chatRequest(first), changes: earlier, spec: expanded ?? latest } };
 }
 
 /** The person's first message, as the model gets it. A follow-up is framed by refineMessages instead. */
@@ -111,15 +115,31 @@ export function chatRequest(message: string): string {
 export function chatGuide(registry: Registry): GuideOptions {
   const leftOut = new Set<string>(CHAT_LEFT_OUT);
   return {
-    imageHosts: [],
+    // The same list the chat page's engine loads from (ChatAnswer.vue), so the model is told what really draws.
+    imageHosts: COMMON_IMAGE_HOSTS,
     mode: "compact",
     workedExamples: false,
+    // The layout first and long lists last, so the answer starts drawing at once (the page draws placeholders meanwhile).
+    layoutFirst: true,
     profile: registry.all().map((c) => c.type).filter((t) => !leftOut.has(t)),
     notes: `A demo chat on SayShape's website: people ask anything, as if this were their company's assistant.
 Answer with one screen: the direct answer first (a stat, callout or title), then the detail in whatever shows it best, with controls that change what's shown.
 A thing with parts and a layout (a production line, network, floor plan, route, machine): draw it with scene, its parts pressable with on=, the pressed part's detail beside it. Where something moves, flows or happens over time (a flight, a trip, parts on a belt, a pulse on a fault), it must move: duration=8 on the scene and props as formulas of t (seconds), with ease(t, start, end) (0 to 1 between those seconds), wave(t, seconds) (0 to 1 and back) and lerp(a, b, u), like x={lerp(80, 560, ease(t, 1, 7))} or r={8 + 3*wave(t, 1.5)}. Numbers to compare are a chart, never a drawing.
 You have no data or tools. When a question needs figures, make up realistic ones in state and add text "Example figures" style=caption. Never present them as real.
 Output only the finished SayShape spec.`,
+  };
+}
+
+/**
+ * The guide tried first for a new question when REPORT_FIRST is on: only the
+ * report preset (about 500 tokens instead of the chat guide's thousands). A
+ * question a report can't show is answered with the chat guide instead.
+ */
+export function chatReportGuide(): GuideOptions {
+  return {
+    mode: "report",
+    notes: `A demo chat on SayShape's website: people ask anything, as if this were their company's assistant.
+You have no data or tools. When a question needs figures, make up realistic ones in state lines and put subtitle="Example figures" on the report. Never present them as real.`,
   };
 }
 

@@ -9,6 +9,12 @@
  * key and writes every message. A follow-up sends the first question, the
  * follow-ups since and the latest answer's spec (chat.ts); older answers'
  * specs never leave the page. Chats stop at MAX_ANSWERS answers.
+ *
+ * When the proxy can save answers, the dock offers a switch, off unless the
+ * visitor turns it on (and remembered in this browser). On, each question
+ * carries its chat's random id and turn, the worker saves the answer, and the
+ * answer offers a thumb up or down; how much it was used is sent on the next
+ * question, on New chat and as the page closes.
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from "vue";
 import { withBase } from "vitepress";
@@ -17,10 +23,11 @@ import { normalizeHex } from "../../../../playground/appearance/color";
 import ChatAnswer from "./ChatAnswer.vue";
 import { isSiteDark } from "../sayshape/runtime";
 import {
-  advance, applyEvent, canAsk, chatTheme, failure, frameColors, isBusy, MAX_ANSWERS, MAX_MESSAGE_CHARS, newTurn, requestBody, restart,
-  suggestionsIn, type Failure, type PageColors, type SuggestionGroup, type Turn,
+  advance, applyEvent, canAsk, chatTheme, failure, frameColors, isBusy, loadSaveChoice, MAX_ANSWERS, MAX_MESSAGE_CHARS, newChatId, newTurn, requestBody, restart,
+  storeSaveChoice, suggestionsIn, takeUsage, type Failure, type PageColors, type SuggestionGroup, type Turn,
 } from "../sayshape/chat";
-import { configured, fetchStatus, humanCheck, MODEL_LABEL, needsHumanCheck, send } from "../sayshape/chatClient";
+import { RETENTION_DAYS } from "../../../../worker/src/records";
+import { configured, fetchStatus, humanCheck, MODEL_LABEL, needsHumanCheck, send, sendFeedback } from "../sayshape/chatClient";
 
 const turns = ref<Turn[]>([]);
 const draft = ref("");
@@ -33,12 +40,20 @@ const page = shallowRef<PageColors>({ bg: "#f9f7f2", card: "#ffffff" });
 /** Why nothing can be asked right now (answers off, today's used up, no proxy), if anything. */
 const blocked = ref<Failure | null>(configured ? null : failure("unconfigured"));
 const model = ref(MODEL_LABEL);
+/** Whether the proxy can save answers (it says so in /status), and whether the visitor chose to. */
+const recording = ref(false);
+const save = ref(false);
+/** This chat's random id for saved answers, made at its first saved question. */
+let chatId = "";
 
 let context: RefineContext | null = null;
 /** Whether a good answer exists to follow up on (the context is plain data, so this mirrors it for the template). */
 const following = ref(false);
 let controller: AbortController | null = null;
 let statusAsked = false;
+/** The status request, once made: a question waits for it (briefly), so a remembered choice to save applies from the first one. */
+let statusReady: Promise<void> | null = null;
+const STATUS_WAIT_MS = 3_000;
 let check: ReturnType<typeof humanCheck> | null = null;
 
 const last = computed(() => turns.value[turns.value.length - 1]);
@@ -101,8 +116,25 @@ function onKeyScroll(e: KeyboardEvent) {
 
 let observer: MutationObserver | null = null;
 let resize: ResizeObserver | null = null;
+/** Send how much each saved answer was used, where it grew since last sent. */
+function sendUsage() {
+  for (const t of turns.value) {
+    const u = takeUsage(t);
+    if (u) void sendFeedback(u);
+  }
+}
+const onHide = () => { if (document.visibilityState === "hidden") sendUsage(); };
+
+function setSave(e: Event) {
+  save.value = (e.target as HTMLInputElement).checked;
+  storeSaveChoice(save.value);
+}
+
 onMounted(() => {
   readPage();
+  save.value = loadSaveChoice();
+  document.addEventListener("visibilitychange", onHide);
+  window.addEventListener("pagehide", sendUsage);
   observer = new MutationObserver(readPage);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
   // The canvas grows a frame after each line arrives, so follow the thread's size, not the text.
@@ -117,6 +149,9 @@ onBeforeUnmount(() => {
   window.removeEventListener("wheel", stopFollowing);
   window.removeEventListener("touchmove", stopFollowing);
   window.removeEventListener("keydown", onKeyScroll);
+  document.removeEventListener("visibilitychange", onHide);
+  window.removeEventListener("pagehide", sendUsage);
+  sendUsage();
   observer?.disconnect();
   controller?.abort();
   check?.destroy();
@@ -131,9 +166,9 @@ onBeforeUnmount(() => {
 function getReady() {
   if (!configured || statusAsked) return;
   statusAsked = true;
-  void fetchStatus().then((s) => {
+  statusReady = fetchStatus().then((s) => {
     if (!s) return;
-    if (s.enabled) { if (s.model) model.value = s.model; }
+    if (s.enabled) { if (s.model) model.value = s.model; recording.value = s.recording; }
     else blocked.value = s.failure;
   });
   if (needsHumanCheck && checkEl.value) {
@@ -149,6 +184,7 @@ async function ask(question: string, existing?: Turn) {
   if (!message || blocked.value || busy.value) return;
   if (!existing && full.value) return;
   getReady();
+  sendUsage();
   const turn = existing ?? reactive(newTurn(message)) as Turn;
   if (!existing) {
     turns.value.push(turn);
@@ -160,7 +196,12 @@ async function ask(question: string, existing?: Turn) {
   controller?.abort();
   controller = new AbortController();
   const signal = controller.signal;
-  const body = requestBody(context, message);
+  // The question is already in the thread (and the chat busy); wait for the status so a remembered choice to save applies.
+  if (statusReady) await Promise.race([statusReady, new Promise((r) => setTimeout(r, STATUS_WAIT_MS))]);
+  if (signal.aborted) { if (isBusy(turn)) turn.status = "stopped"; return; }
+  const saving = recording.value && save.value;
+  const width = threadEl.value?.clientWidth;
+  const body = requestBody(context, message, saving ? { chat: (chatId ||= newChatId()), turn: turns.value.indexOf(turn) + 1, ...(width ? { width } : {}) } : undefined);
 
   try {
     const token = needsHumanCheck && check ? await check.take() : undefined;
@@ -216,6 +257,8 @@ function retry(turn: Turn) {
 function newChat() {
   controller?.abort();
   controller = null;
+  sendUsage();
+  chatId = "";
   // Unmounting the answers destroys their engines.
   turns.value = [];
   context = null;
@@ -240,6 +283,7 @@ const shownGroup = ref<Exclude<SuggestionGroup, "drawing">>("personal");
 const shownName = computed(() => GROUPS.find((g) => g.id === shownGroup.value)!.name);
 
 const playground = withBase("/playground");
+const privacy = withBase("/privacy#the-chat-page");
 const examples = withBase("/examples/");
 </script>
 
@@ -323,6 +367,10 @@ const examples = withBase("/examples/");
         </button>
       </form>
       <div ref="checkEl" class="chat-check"></div>
+      <label v-if="recording && !blocked" class="chat-save">
+        <input type="checkbox" :checked="save" @change="setSave">
+        <span>Help improve SayShape: save my questions and answers for {{ RETENTION_DAYS }} days. Nothing about you is saved: no name, account or IP address. <a :href="privacy">What's kept</a></span>
+      </label>
       <p class="chat-fine">
         <template v-if="model && !blocked">Answered by {{ model }} through SayShape's server. </template>
         Don't share anything private.<span class="chat-keys"> Enter sends; Shift+Enter starts a new line.</span>
@@ -475,6 +523,10 @@ const examples = withBase("/examples/");
 .chat-send[disabled] { background: var(--vp-c-divider); color: var(--vp-c-text-2); cursor: default }
 .chat-send.stop { background: var(--vp-c-text-1); color: var(--vp-c-bg) }
 .chat-check:empty { display: none }
+.chat-save { display: flex; align-items: flex-start; justify-content: center; gap: 8px; font-size: 12.5px; line-height: 1.5; color: var(--vp-c-text-2); cursor: pointer }
+.chat-save input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--chat-fill); cursor: pointer }
+.chat-save input:focus-visible { outline: 2px solid var(--chat-focus); outline-offset: 2px }
+.chat-save a { color: var(--vp-c-text-1); font-weight: 600; text-underline-offset: 3px }
 .chat-fine { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--vp-c-text-2); text-align: center }
 .chat-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
 
@@ -485,6 +537,7 @@ const examples = withBase("/examples/");
   .chat-suggest { grid-template-columns: 1fr }
   .chat-thread { gap: 28px }
   .chat-fine { text-align: left }
+  .chat-save { justify-content: flex-start }
   .chat-keys { display: none }
 }
 </style>

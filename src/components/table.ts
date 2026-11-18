@@ -27,7 +27,11 @@
  *   be selected. A selected key no row has selects nothing; state is left as
  *   it is.
  * - Width: columns get their natural widths, and text columns narrow (never
- *   below MIN_TEXT_COLUMN) to fit. When even that doesn't fit, the table
+ *   below MIN_TEXT_COLUMN, nor below their longest word up to
+ *   MAX_SCROLL_TEXT_COLUMN, so words aren't split) to fit. Text cells that no longer fit on one line
+ *   wrap to at most MAX_CELL_LINES lines, ending with "…" past that; a row is
+ *   as tall as its tallest cell (never shorter than one line), and numbers
+ *   stay on one line. When even the narrowest columns don't fit, the table
  *   scrolls sideways instead: every column keeps a readable width, the first
  *   column stays pinned at the left, and a scrollbar shows under the rows.
  *   It scrolls with a sideways swipe or Shift and the wheel, by dragging the
@@ -40,10 +44,11 @@ import type { PartSemantics } from "../a11y/semantics";
 import type { ComponentDef, ElementView, LayoutContext, PaintContext, PressContext, PropReader } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
 import type { TextMeasurer } from "../text";
-import { wrapText } from "../text";
+import { fitLines, wrapText } from "../text";
 import type { Theme } from "../theme";
 import type { Box, SayShapeNode, Value } from "../types";
-import { chevron, fillTint, onProp, partBox, runOn, themeFont } from "./util";
+import { chevron, fillTint, onProp, partBox, runOn, themeFont, toneColor, type Tone } from "./util";
+import { EMPTY_CELL, FORMAT_NAMES, formatValue, isNumericFormat, needsCents, type FormatName } from "./formats";
 import { paintGhost, staggered } from "../ghost";
 import { MOTION } from "../design";
 
@@ -54,18 +59,32 @@ export const MAX_TABLE_ROWS = 200;
  * only a safety bound (a whole property schedule of values has about 56).
  */
 export const MAX_TABLE_COLUMNS = 64;
-/** The placeholder for a missing or unusable value. */
-export const EMPTY_CELL = "—";
+export { EMPTY_CELL, needsCents };
 
-const FORMATS = ["text", "number", "money"] as const;
+const FORMATS = FORMAT_NAMES;
 const ALIGNS = ["left", "right"] as const;
-type Format = (typeof FORMATS)[number];
+type Format = FormatName;
+/** Tones a row's field can name to draw a cell as a badge. */
+const BADGE_TONES = ["good", "warn", "bad", "accent", "muted"] as const;
+/** Padding either side of a badge's text, and extra room a bar needs in its column. */
+const BADGE_PAD = 10;
+const BAR_ROOM = 48;
+/** Gap between a bar's track and the numbers, and the narrowest track worth drawing. */
+const BAR_GAP = 8;
+const MIN_BAR_TRACK = 24;
+/** How far a scroll fade reaches, in pixels. */
+const FADE_W = 28;
 type Align = (typeof ALIGNS)[number];
 const LOCALE = "en-US";
 /** Text columns shrink to this before the table scrolls instead (numbers never shrink): enough for a short name, not "Ac…". */
 const MIN_TEXT_COLUMN = 96;
 /** Room for the sort arrow beside a header. */
 const ARROW = 14;
+/** A text cell wraps onto at most this many lines; past that it ends with an ellipsis. */
+export const MAX_CELL_LINES = 3;
+/** How visible a sortable header's neutral arrow is at rest, and under the pointer or focus. */
+const ARROW_REST = 0.4;
+const ARROW_HOVER = 0.8;
 /** When the table scrolls, text columns are at most this wide, so one long value doesn't take the screen. */
 const MAX_SCROLL_TEXT_COLUMN = 260;
 /** The pinned first column takes at most this share of the width, so there's room left to scroll. */
@@ -93,6 +112,23 @@ export interface TableColumn {
   /** Its table-column, and that column's tip= (shown from its header). */
   node: SayShapeNode;
   tip?: string;
+  /** tone=: "sign" colours by sign, otherwise the row field whose value names a badge tone. */
+  tone?: string;
+  /** bar=true: an in-cell bar; the largest positive and negative values it is scaled to. */
+  bar?: { pos: number; neg: number; /** The track's left edge and width inside the column, clear of the numbers. */ x: number; w: number };
+}
+
+export interface TableCell {
+  lines: string[];
+  full: string;
+  /** The number behind a numeric cell. */
+  n?: number;
+  /** Drawn as a badge in this tone (tone= naming a field). */
+  badge?: Tone;
+  /** tone=sign: good for positive, bad for negative. */
+  sign?: "good" | "bad";
+  /** The bar's length as a fraction of its scale, negative to the left of zero. */
+  bar?: number;
 }
 
 export interface TableRow {
@@ -106,9 +142,12 @@ export interface TableRow {
   selected: boolean;
   /** The hit-region detail for a selectable row. */
   detail: string | null;
-  /** Each cell's text as drawn (cut to fit), and in full. */
-  cells: Array<{ text: string; full: string }>;
+  /** Each cell's lines as drawn (wrapped or cut to fit its column), and its text in full. */
+  cells: TableCell[];
 }
+
+/** The pinned totals row under the rows. */
+export interface TableTotals { y: number; h: number; cells: Array<{ lines: string[]; full: string }> }
 
 /** Everything paint and press need, relative to the table's box. */
 export type TableGeometry = {
@@ -117,6 +156,9 @@ export type TableGeometry = {
   titleLH: number;
   headerFont: string;
   cellFont: string;
+  badgeFont: string;
+  /** Height of one line of cell text. */
+  cellLH: number;
   /** Shown instead of rows and columns: too many, too narrow, no columns. */
   message?: string;
   /** The bordered area: header, rows and any empty message. */
@@ -124,6 +166,8 @@ export type TableGeometry = {
   headerH: number;
   columns: TableColumn[];
   rows: TableRow[];
+  /** total=: a row of sums under the rows. */
+  totals?: TableTotals;
   /** Shown under the header when there are no rows. */
   empty?: string;
   sortable: boolean;
@@ -157,37 +201,9 @@ const GHOST_ROWS = 5;
 
 // ---------------------------------------------------------------- cells
 
-function formatNumber(v: number, money: boolean, cents = true): string {
-  const huge = Math.abs(v) >= 1e15, tiny = !money && v !== 0 && Math.abs(v) < 0.01;
-  // Very large or small numbers in scientific form, so they're never cut or shown as 0.
-  const opts: Intl.NumberFormatOptions = huge || tiny ? { notation: "scientific", maximumFractionDigits: 3 } : money ? (cents ? {} : { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : { maximumFractionDigits: 2 };
-  if (money) Object.assign(opts, { style: "currency", currency: "USD" });
-  // Say how many decimals money keeps in scientific form: engines resolve the
-  // default differently (Node 22 gives -$1.00E300, Node 24 -$1E300).
-  if (money && (huge || tiny)) opts.minimumFractionDigits = 2;
-  return new Intl.NumberFormat(LOCALE, opts).format(v);
-}
-
-/**
- * Whether a money column needs cents: only when one of its values has them.
- * Whole amounts ($48,200) read faster without a column of .00, and nothing is rounded.
- */
-export function needsCents(values: ReadonlyArray<Value | undefined>): boolean {
-  return values.some((v) => typeof v === "number" && Number.isFinite(v) && Math.round(v * 100) % 100 !== 0);
-}
-
 /** A cell's text, and whether the value didn't suit its column (for one warning). cents: false drops .00 from whole money amounts. */
 export function cellText(v: Value | undefined, format: Format, cents = true): { text: string; incompatible: boolean } {
-  if (v === undefined || v === null) return { text: EMPTY_CELL, incompatible: false };
-  if (format === "text") {
-    if (typeof v === "string") return { text: v, incompatible: false };
-    if (typeof v === "number") return { text: formatNumber(v, false), incompatible: false };
-    if (typeof v === "boolean") return { text: v ? "Yes" : "No", incompatible: false };
-    return { text: EMPTY_CELL, incompatible: true };
-  }
-  // A number column never reads text like "12" as a number.
-  if (typeof v === "number") return { text: formatNumber(v, format === "money", cents), incompatible: false };
-  return { text: EMPTY_CELL, incompatible: true };
+  return formatValue(v, format, cents);
 }
 
 // ---------------------------------------------------------------- sorting
@@ -233,6 +249,25 @@ export function keyOf(item: Value, field: string): string | number | null {
 
 const rowDetail = (key: string | number) => `row:${typeof key === "number" ? "n" : "s"}:${key}`;
 const sortDetail = (field: string) => `sort:${field}`;
+
+/**
+ * The field the table is sorted by. sort= names state that holds it; while
+ * that state is unset, a sort= that is itself one of the fields is the
+ * starting sort, since models often write sort=open meaning "by open".
+ */
+function sortedBy(p: PropReader, isField: (name: string) => boolean): string | null {
+  const v = p.bound("sort");
+  if (typeof v === "string") return isField(v) ? v : null;
+  const raw = p.raw("sort");
+  return v === undefined && raw !== undefined && isField(raw) ? raw : null;
+}
+
+/** The sort direction: direction= state's asc or desc, or, while that state is unset, direction=asc or direction=desc as written. */
+function sortDirection(p: PropReader): "asc" | "desc" {
+  const v = p.bound("direction");
+  const word = v === undefined ? p.raw("direction") : v;
+  return word === "desc" ? "desc" : "asc";
+}
 
 /** The key a row detail stands for. */
 function keyFromDetail(detail: string): string | number | null {
@@ -286,7 +321,22 @@ export function fitColumns(natural: readonly number[], minimum: readonly number[
   return n && left > 0 ? w.map((x, i) => x + (cut[i] ? left / n : 0)) : w;
 }
 
-interface ColumnSpec { field: string; label: string; format: Format; align: Align; node: SayShapeNode; tip?: string }
+/**
+ * The width of the longest word in column ci. A cell with no space is one word, already
+ * measured; a cell no wider than the longest so far can't hold a longer word, so it's skipped.
+ */
+function longestWord(texts: readonly string[][], textW: readonly number[][], ci: number, font: string, m: TextMeasurer): number {
+  let best = 0;
+  texts.forEach((row, r) => {
+    const s = row[ci]!, w = textW[r]![ci]!;
+    if (w <= best) return;
+    if (!/\s/.test(s)) { best = w; return; }
+    for (const word of s.split(/\s+/)) if (word) best = Math.max(best, m.width(word, font));
+  });
+  return best;
+}
+
+interface ColumnSpec { field: string; label: string; format: Format; align: Align; node: SayShapeNode; tip?: string; tone?: string; bar: boolean }
 
 function readColumns(node: SayShapeNode, ctx: Pick<LayoutContext, "visibleChildren" | "props">): ColumnSpec[] {
   return ctx.visibleChildren(node).filter((c) => c.type === "table-column").map((c) => {
@@ -294,7 +344,9 @@ function readColumns(node: SayShapeNode, ctx: Pick<LayoutContext, "visibleChildr
     const field = p.str("field");
     const format = p.oneOf("format", FORMATS, "text");
     const tip = p.str("tip", "").trim();
-    return { field, label: p.text(field), format, align: p.oneOf("align", ALIGNS, format === "text" ? "left" : "right"), node: c, ...(tip ? { tip } : {}) };
+    const tone = p.str("tone", "").trim();
+    const leftAligned = format === "text" || format === "date";
+    return { field, label: p.text(field), format, align: p.oneOf("align", ALIGNS, leftAligned ? "left" : "right"), node: c, bar: p.bool("bar") && isNumericFormat(format), ...(tone ? { tone } : {}), ...(tip ? { tip } : {}) };
   });
 }
 
@@ -309,7 +361,8 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
   const rowH = Math.round(t.text.body * 1.4) + 2 * t.space.sm;
   const title = p.text() ? wrapText(p.text(), box.w, titleFont, m) : [];
   const top = title.length ? title.length * titleLH + t.space.sm : 0;
-  const base: TableGeometry = { title, titleFont, titleLH, headerFont, cellFont, frame: { x: 0, y: top, w: box.w, h: 0 }, headerH, columns: [], rows: [], sortable: false };
+  const cellLH = Math.round(t.text.body * 1.4);
+  const base: TableGeometry = { title, titleFont, titleLH, headerFont, cellFont, badgeFont: themeFont(t, 600, t.text.caption), cellLH, frame: { x: 0, y: top, w: box.w, h: 0 }, headerH, columns: [], rows: [], sortable: false };
   const say = (message: string): TableGeometry => ({ ...base, message, frame: { x: 0, y: top, w: box.w, h: Math.max(rowH * 2, 64) } });
 
   const specs = readColumns(box.node, ctx);
@@ -330,9 +383,8 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
 
   // Sorting: only by a field one of the columns shows.
   const sortable = p.has("sort");
-  const sortValue = p.bound("sort");
-  const sortField = typeof sortValue === "string" && specs.some((c) => c.field === sortValue) ? sortValue : null;
-  const direction = p.bound("direction") === "desc" ? "desc" : "asc";
+  const sortField = sortedBy(p, (name) => specs.some((c) => c.field === name));
+  const direction = sortDirection(p);
   const order = sortedOrder(items, sortField, direction);
 
   // Keys, in list order, so the first of two rows with one key keeps it however they're sorted.
@@ -357,24 +409,57 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
   let malformed = 0, incompatible = 0;
   const valueAt = (item: Value | undefined, field: string) => (isRecord(item) ? fieldOf(item, field) : undefined);
   const cents = specs.map((c) => c.format === "money" && needsCents(order.map((i) => valueAt(items[i], c.field))));
+  const numbers: Array<Array<number | undefined>> = [];
+  const badges: Array<Array<Tone | undefined>> = [];
   const texts = order.map((i) => {
     const item = items[i]!;
     if (!isRecord(item)) malformed++;
+    const nums: Array<number | undefined> = [], tones: Array<Tone | undefined> = [];
+    numbers.push(nums);
+    badges.push(tones);
     return specs.map((c, ci) => {
-      const r = cellText(valueAt(item, c.field), c.format, cents[ci]);
+      const v = valueAt(item, c.field);
+      const r = cellText(v, c.format, cents[ci]);
       if (r.incompatible && isRecord(item)) incompatible++;
+      nums.push(isNumericFormat(c.format) && typeof v === "number" ? v : undefined);
+      const t = isRecord(item) && c.tone && c.tone !== "sign" ? fieldOf(item, c.tone) : undefined;
+      tones.push(typeof t === "string" && (BADGE_TONES as readonly string[]).includes(t) && r.text !== EMPTY_CELL ? (t as Tone) : undefined);
       return r.text;
     });
   });
   if (malformed) warn(`${malformed} items aren't records, so their cells show ${EMPTY_CELL}`);
   if (incompatible) warn(`${incompatible} cells hold a value their column can't show (number and money columns need numbers), so they show ${EMPTY_CELL}`);
 
+  // bar=true: each column's largest positive and negative values, so bars share one scale.
+  const bars = specs.map((c, ci) => {
+    if (!c.bar) return undefined;
+    let pos = 0, neg = 0;
+    numbers.forEach((row) => { const n = row[ci]; if (n !== undefined) { if (n > pos) pos = n; if (-n > neg) neg = -n; } });
+    return { pos, neg };
+  });
+
+  // total=: sums of the numeric columns (percent can't be summed), the first cell the label.
+  const totalRaw = p.has("total") ? p.str("total").trim() : "";
+  const totalLabel = totalRaw === "" || totalRaw === "false" ? null : totalRaw === "true" ? "Total" : totalRaw;
+  const totalTexts = totalLabel === null ? null : specs.map((c, ci) => {
+    if (ci === 0) return totalLabel;
+    if (!isNumericFormat(c.format) || c.format === "percent") return "";
+    const vals = numbers.map((row) => row[ci]).filter((n): n is number => n !== undefined);
+    return vals.length ? cellText(vals.reduce((a, b) => a + b, 0), c.format, cents[ci]).text : "";
+  });
+
   // Column widths from what they hold.
   const headerW = specs.map((c) => m.width(c.label, headerFont) + (sortable ? ARROW : 0) + 2 * pad);
-  const cellW = specs.map((_, ci) => Math.max(0, ...texts.map((row) => m.width(row[ci]!, cellFont))) + 2 * pad);
+  const badgeFont = themeFont(t, 600, t.text.caption);
+  const textW = texts.map((row, r) => row.map((s, ci) => (badges[r]![ci] ? m.width(s, badgeFont) + 2 * BADGE_PAD : m.width(s, cellFont))));
+  const totalW = totalTexts ? totalTexts.map((s) => m.width(s, themeFont(t, 600, t.text.body))) : [];
+  const cellW = specs.map((c, ci) => Math.max(0, totalW[ci] ?? 0, ...textW.map((row) => row[ci]!)) + 2 * pad + (c.bar ? BAR_ROOM : 0));
   const natural = specs.map((_, ci) => Math.max(headerW[ci]!, cellW[ci]!));
-  // Numbers are never cut short; text and headers can be.
-  const minimum = specs.map((c, ci) => (c.format === "text" ? Math.min(natural[ci]!, MIN_TEXT_COLUMN) : Math.max(cellW[ci]!, Math.min(headerW[ci]!, MIN_TEXT_COLUMN))));
+  // A text column is never narrower than its longest word (up to MAX_SCROLL_TEXT_COLUMN), so
+  // wrapping happens between words; when that can't fit, the table scrolls instead of splitting
+  // "Healthy" into "Healt / hy". Numbers are never cut short; headers can be.
+  const wordW = specs.map((c, ci) => (c.format === "text" ? Math.min(MAX_SCROLL_TEXT_COLUMN, Math.max(longestWord(texts, textW, ci, cellFont, m), totalW[ci] ?? 0) + 2 * pad) : 0));
+  const minimum = specs.map((c, ci) => (c.format === "text" ? Math.max(Math.min(natural[ci]!, MIN_TEXT_COLUMN), wordW[ci]!) : Math.max(cellW[ci]!, Math.min(headerW[ci]!, MIN_TEXT_COLUMN))));
   let widths = fitColumns(natural, minimum, box.w, specs.map((c) => c.format === "text"));
   let scrollParts: Omit<TableScroll, "bar"> | undefined;
   if (!widths) {
@@ -392,33 +477,70 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     scrollParts = { pinned, view, content, max: Math.max(0, content - view) };
   }
 
+  // A bar has its own track beside the widest value, so it never runs under a number.
+  const barTrack = (b: { pos: number; neg: number } | undefined, w: number, ci: number): NonNullable<TableColumn["bar"]> | undefined => {
+    if (!b) return undefined;
+    const widest = Math.max(totalW[ci] ?? 0, ...textW.map((row) => row[ci]!));
+    const right = specs[ci]!.align === "right";
+    const x = right ? pad : pad + widest + BAR_GAP;
+    const room = w - 2 * pad - widest - BAR_GAP;
+    return room >= MIN_BAR_TRACK ? { ...b, x, w: room } : undefined;
+  };
   let x = 0;
   const columns: TableColumn[] = specs.map((c, ci) => {
     const w = widths[ci]!;
+    const { bar: _wanted, ...spec } = c;
     const col: TableColumn = {
-      ...c, x, w,
+      ...spec, x, w,
       shownLabel: fit(c.label, w - 2 * pad - (sortable ? ARROW : 0), headerFont, m),
+      ...(barTrack(bars[ci], w, ci) ? { bar: barTrack(bars[ci], w, ci)! } : {}),
       sorted: sortField === c.field ? direction : null,
     };
     x += w;
     return col;
   });
 
-  const rowsTop = top + headerH;
+  // Each row is as tall as its tallest cell, and never shorter than one line.
+  let rowY = top + headerH;
   const rows: TableRow[] = order.map((i, r) => {
     const key = usable[i] ? keys[i]! : null;
     const selectable = bindable && key !== null;
+    const cells = texts[r]!.map((full, ci) => {
+      const room = columns[ci]!.w - 2 * pad;
+      // Only text wraps; numbers keep to one line (their column is never narrower than they are).
+      const badge = badges[r]![ci], n = numbers[r]![ci], col = columns[ci]!;
+      const lines = badge ? [fit(full, room - 2 * BADGE_PAD, badgeFont, m)] : col.format === "text" ? fitLines(full, room, cellFont, m, MAX_CELL_LINES) : [fit(full, room, cellFont, m)];
+      const cell: TableCell = { full, lines };
+      if (n !== undefined) cell.n = n;
+      if (badge) cell.badge = badge;
+      if (col.tone === "sign" && n !== undefined && n !== 0) cell.sign = n > 0 ? "good" : "bad";
+      if (col.bar && n !== undefined) {
+        const scale = Math.max(col.bar.pos, col.bar.neg);
+        cell.bar = scale > 0 ? n / scale : 0;
+      }
+      return cell;
+    });
+    const h = Math.max(rowH, Math.max(1, ...cells.map((c) => c.lines.length)) * cellLH + 2 * t.space.sm);
+    const y = rowY;
+    rowY += h;
     return {
       index: i,
-      y: rowsTop + r * rowH,
-      h: rowH,
+      y,
+      h,
       key,
       selectable,
       selected: selectable && selectedValue === key,
       detail: selectable ? rowDetail(key) : null,
-      cells: texts[r]!.map((full, ci) => ({ full, text: fit(full, columns[ci]!.w - 2 * pad, cellFont, m) })),
+      cells,
     };
   });
+  let totals: TableTotals | undefined;
+  if (totalTexts) {
+    const th = rowH;
+    totals = { y: rowY, h: th, cells: totalTexts.map((full, ci) => ({ full, lines: [fit(full, columns[ci]!.w - 2 * pad, themeFont(t, 600, t.text.body), m)] })) };
+    rowY += th;
+  }
+  const rowsH = rowY - top - headerH;
   const strip = scrollParts ? SCROLLBAR_STRIP : 0;
   const withBar = (frame: Rect): TableScroll | undefined =>
     scrollParts && { ...scrollParts, bar: { x: frame.x + scrollParts.pinned, y: frame.y + frame.h - strip, w: scrollParts.view, h: strip } };
@@ -427,12 +549,13 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     return { ...base, frame, columns, rows: [], sortable: false, loading: { rows: GHOST_ROWS, h: rowH }, scroll: withBar(frame) };
   }
   const emptyH = items.length ? 0 : rowH * 1.5;
-  const frame = { x: 0, y: top, w: box.w, h: headerH + rows.length * rowH + emptyH + strip };
+  const frame = { x: 0, y: top, w: box.w, h: headerH + rowsH + emptyH + strip };
   return {
     ...base,
     frame,
     columns,
     rows,
+    ...(totals ? { totals } : {}),
     empty: items.length ? undefined : isList(raw) ? "Nothing to show" : "No data",
     sortable,
     scroll: withBar(frame),
@@ -488,8 +611,8 @@ const scrolls = (s: TableScroll | undefined, ci: number) => !!s && (s.pinned ===
 // ---------------------------------------------------------------- paint
 
 /** Explicitly signed numeric values get semantic ink; unsigned data stays neutral. */
-export function tableValueTone(value: string, format: "text" | "number" | "money"): "positive" | "negative" | null {
-  if (format === "text" || value === EMPTY_CELL) return null;
+export function tableValueTone(value: string, format: Format): "positive" | "negative" | null {
+  if (format === "text" || format === "date" || value === EMPTY_CELL) return null;
   if (/^[−-]\s*(?:[$€£¥])?\d/.test(value)) return "negative";
   if (/^\+\s*(?:[$€£¥])?\d/.test(value)) return "positive";
   return null;
@@ -611,7 +734,8 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const hovered = d!.sortable && ctx.isHovered(box.node, detail);
     if (d!.sortable || col.tip) ctx.addHit(cell, { detail });
     // A sorted column says so quietly: its label in ink with a small arrow, no box
-    // or underline. Hover previews the same, with the arrow faint.
+    // or underline. Every other sortable header keeps a faint up-and-down arrow,
+    // since a phone has no hover to reveal that it can be pressed.
     const shown = ctx.tween(box.node, "table:header:" + col.field, hovered || !!col.sorted ? 1 : 0, MOTION.hover);
     g.font = d!.headerFont;
     g.fillStyle = col.sorted || hovered ? c.ink : c.muted;
@@ -626,11 +750,18 @@ function paintTable(box: Box, ctx: PaintContext): void {
       const lx = right ? tx - labelW : tx, ly = hy + d!.headerH / 2 + Math.round(d!.headerH / 4);
       for (let x = 0; x < labelW; x += 4) g.fillRect(lx + x, ly, 2, 1);
     }
-    if (shown > 0) {
+    if (d!.sortable) {
       const ax = right ? tx - labelW - 8 : tx + labelW + 8;
+      const ay = hy + d!.headerH / 2;
       g.save();
-      g.globalAlpha *= col.sorted ? shown : 0.45 * shown;
-      chevron(g, ax, hy + d!.headerH / 2, 7, col.sorted === "desc" ? "down" : "up", col.sorted ? c.ink : c.muted);
+      if (col.sorted) {
+        g.globalAlpha *= shown;
+        chevron(g, ax, ay, 7, col.sorted === "desc" ? "down" : "up", c.ink);
+      } else {
+        g.globalAlpha *= ARROW_REST + (ARROW_HOVER - ARROW_REST) * shown;
+        chevron(g, ax, ay - 3, 5, "up", c.muted);
+        chevron(g, ax, ay + 3, 5, "down", c.muted);
+      }
       g.restore();
     }
     if ((d!.sortable || col.tip) && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
@@ -699,16 +830,36 @@ function paintTable(box: Box, ctx: PaintContext): void {
       const tone = tableValueTone(cell.full, col.format);
       const x = ox + colX(ci);
       clipped(ci, () => {
-        g.fillStyle = cell.full === EMPTY_CELL ? c.muted : tone === "negative" ? c.bad : tone === "positive" ? c.good : c.ink;
         const right = col.align === "right";
         g.textAlign = right ? "right" : "left";
-        g.fillText(cell.text, right ? x + col.w - pad : x + pad, ry + row.h / 2);
+        // Lines sit centred in the row, so a short cell next to a tall one lines up with its middle.
+        const top = ry + (row.h - cell.lines.length * d.cellLH) / 2;
+        if (cell.bar !== undefined && col.bar) paintBar(ctx, col, cell.bar, x, ry, row.h);
+        if (cell.badge) {
+          // A badge: the tone's own color at low opacity behind its text, like details.
+          const color = toneColor(theme, cell.badge);
+          g.font = d.badgeFont;
+          const text = cell.lines[0] ?? "";
+          const bw = g.measureText(text).width + 2 * BADGE_PAD, bh = Math.round(d.cellLH * 0.95);
+          const bx = right ? x + col.w - pad - bw : x + pad;
+          ctx.roundRect(bx, ry + row.h / 2 - bh / 2, bw, bh, bh / 2);
+          fillTint(g, color, 0.14);
+          g.fillStyle = color;
+          g.textAlign = "left";
+          g.fillText(text, bx + BADGE_PAD, ry + row.h / 2 + 0.5);
+          g.font = d.cellFont;
+          return;
+        }
+        g.fillStyle = cell.full === EMPTY_CELL ? c.muted : cell.sign ? c[cell.sign] : col.tone === "sign" ? c.ink : tone === "negative" ? c.bad : tone === "positive" ? c.good : c.ink;
+        cell.lines.forEach((line, li) => g.fillText(line, right ? x + col.w - pad : x + pad, top + li * d.cellLH + d.cellLH / 2));
       });
     });
     if (!last || s) rule(row.y + row.h);
     if (row.detail && ctx.isFocused(box.node, row.detail)) focusRing(ox + f.x, ry, f.w, row.h);
   });
   g.globalAlpha = base;
+
+  if (d.totals) paintTotals(box, ctx, d, colX, clipped, visiblePart, !!s);
 
   if (d.empty) {
     g.fillStyle = c.muted;
@@ -719,6 +870,65 @@ function paintTable(box: Box, ctx: PaintContext): void {
   if (s) paintScroll(box, ctx, d, s, sx);
 }
 
+/** An in-cell bar, behind the number: from the left edge, or from a zero line when some values are negative. */
+function paintBar(ctx: PaintContext, col: TableColumn, frac: number, x: number, ry: number, rowH: number): void {
+  const { g, theme } = ctx;
+  const bar = col.bar;
+  if (!bar) return;
+  const hasNeg = bar.neg > 0;
+  const h = Math.max(6, Math.round(rowH * 0.5));
+  // With negatives, zero sits where the two sides' scales meet; otherwise at the track's left.
+  const total = bar.pos + bar.neg;
+  const scale = Math.max(bar.pos, bar.neg);
+  const zero = x + bar.x + (hasNeg && total > 0 ? (bar.w * bar.neg) / total : 0);
+  // Pixels per unit of value: both sides share one scale.
+  const unit = scale > 0 ? (hasNeg ? bar.w / total : bar.w / scale) : 0;
+  const len = Math.abs(frac) * scale * unit;
+  if (len < 0.5) return;
+  const bx = frac < 0 ? zero - len : zero;
+  ctx.roundRect(bx, ry + (rowH - h) / 2, len, h, Math.min(theme.radius.sm, h / 2));
+  fillTint(g, frac < 0 ? theme.colors.bad : theme.colors.accent, 0.2);
+}
+
+/** The totals row: a firmer rule above it, a faint band and bold sums, pinned under the rows. */
+function paintTotals(
+  box: Box, ctx: PaintContext, d: TableGeometry,
+  colX: (ci: number) => number, clipped: (ci: number, draw: () => void) => void,
+  visiblePart: (ci: number) => { x: number; w: number } | null, scrolls: boolean,
+): void {
+  const tot = d.totals!;
+  const { g, theme } = ctx;
+  const c = theme.colors, pad = theme.space.md;
+  const ox = box.x, oy = box.y, f = d.frame;
+  const y = oy + tot.y;
+  // The band stays inside the frame's rounded corners when nothing sits under it.
+  g.save();
+  if (scrolls) { g.beginPath(); g.rect(ox + f.x + 1, y, f.w - 2, tot.h); }
+  else ctx.roundRect(ox + f.x + 1, y, f.w - 2, tot.h - 1, theme.radius.md - 1);
+  fillTint(g, c.ink, 0.04);
+  g.restore();
+  g.beginPath();
+  g.moveTo(ox + f.x + 1, Math.round(y) + 0.5);
+  g.lineTo(ox + f.x + f.w - 1, Math.round(y) + 0.5);
+  g.strokeStyle = c.line;
+  g.lineWidth = 1;
+  g.stroke();
+  g.font = themeFont(theme, 600, theme.text.body);
+  g.textBaseline = "middle";
+  d.columns.forEach((col, ci) => {
+    if (!visiblePart(ci)) return;
+    const cell = tot.cells[ci]!;
+    const x = ox + colX(ci);
+    clipped(ci, () => {
+      const right = col.align === "right";
+      g.textAlign = right ? "right" : "left";
+      g.fillStyle = c.ink;
+      g.fillText(cell.lines[0] ?? "", right ? x + col.w - pad : x + pad, y + tot.h / 2);
+    });
+  });
+  g.font = d.cellFont;
+}
+
 /** The pinned column's edge and the scrollbar of a table that scrolls sideways. */
 function paintScroll(box: Box, ctx: PaintContext, d: TableGeometry, s: TableScroll, sx: number): void {
   const { g, theme } = ctx;
@@ -727,14 +937,14 @@ function paintScroll(box: Box, ctx: PaintContext, d: TableGeometry, s: TableScro
   // Soft fades where columns run out of sight, so it's clear there's more to scroll to.
   const top = oy + f.y + 1, bottom = oy + f.y + f.h - s.bar.h;
   const fade = (edge: number, inward: 1 | -1) => {
-    const steps = 8, step = 2;
+    // From the surface colour at the cut edge to nothing, in 1px steps eased so no band shows.
     g.save();
     ctx.roundRect(ox + f.x + 1, oy + f.y + 1, f.w - 2, f.h - 2, theme.radius.md - 1);
     g.clip();
-    for (let i = 0; i < steps; i++) {
+    for (let i = 0; i < FADE_W; i++) {
       g.beginPath();
-      g.rect(inward > 0 ? edge + i * step : edge - (i + 1) * step, top, step, bottom - top);
-      fillTint(g, c.raised, 1 - i / steps);
+      g.rect(inward > 0 ? edge + i : edge - i - 1, top, 1, bottom - top);
+      fillTint(g, c.raised, (1 - i / FADE_W) ** 2);
     }
     g.restore();
   };
@@ -797,6 +1007,7 @@ export const table: ComponentDef = {
     sort: { type: "state", description: "State that holds the field to sort by. Pressing a header sets it; missing values sort last." },
     direction: { type: "state", description: "State that holds asc or desc. Pressing the sorted header again flips it." },
     on: onProp("after a row is selected, with bind= already set"),
+    total: { type: "string", description: "Add a totals row summing number, money and compact columns: true, or text for its first cell." },
   },
   children: ["table-column"],
   picks: [
@@ -846,6 +1057,10 @@ table items=gear key=id bind=picked sort=by direction=dir
       });
       row.cells.forEach((cell, ci) => parts.push({ detail: `cell:${row.index}:${ci}`, within: rowDetail, role: ci === 0 ? "rowheader" : "cell", name: cell.full }));
     });
+    if (d.totals) {
+      parts.push({ detail: "total", role: "row", rect: { x: box.x + d.frame.x, y: box.y + d.totals.y, w: d.frame.w, h: d.totals.h } });
+      d.totals.cells.forEach((cell, ci) => parts.push({ detail: `total:${ci}`, within: "total", role: ci === 0 ? "rowheader" : "cell", name: cell.full }));
+    }
     return { role: "table", name, detail: "table", parts };
   },
   layout(box, ctx) {
@@ -921,8 +1136,8 @@ function pressTable(ctx: PressContext): void {
     const field = detail.slice(5);
     const sortPath = p.raw("sort"), dirPath = p.raw("direction");
     if (!sortPath) return;
-    if (p.bound("sort") === field && dirPath) {
-      ctx.set(dirPath, p.bound("direction") === "desc" ? "asc" : "desc");
+    if (sortedBy(p, (name) => name === field) === field && dirPath) {
+      ctx.set(dirPath, sortDirection(p) === "desc" ? "asc" : "desc");
     } else {
       ctx.set(sortPath, field);
       if (dirPath) ctx.set(dirPath, "asc");
@@ -938,13 +1153,16 @@ function pressTable(ctx: PressContext): void {
 
 export const tableColumn: ComponentDef = {
   type: "table-column",
+  noBox: true,
   category: "data",
   description: "One column of a table: its header and the field it shows.",
   text: { description: "The header. Defaults to the field name." },
   props: {
     field: { type: "name", required: true, description: "The field of each record to show, e.g. field=price." },
-    format: { type: "enum", values: FORMATS, default: "text", description: "text, number (1,200.5) or money ($1,200, US dollars, with cents when an amount has them). number and money show only numbers; other values show —." },
-    align: { type: "enum", values: ALIGNS, description: "left or right. Default: right for number and money, left for text." },
+    format: { type: "enum", values: FORMATS, default: "text", description: "text, number (1,200.5), money ($1,200, with cents when an amount has them), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —." },
+    align: { type: "enum", values: ALIGNS, description: "left or right. Default: right for numbers, left for text and date." },
+    tone: { type: "name", description: "sign (negative bad, positive good) or a row field holding good, warn, bad, accent or muted to draw a badge." },
+    bar: { type: "boolean", default: false, description: "A bar behind each number, sized to the column's largest." },
   },
   parents: ["table"],
   example: `table-column "Price" field=price format=money`,

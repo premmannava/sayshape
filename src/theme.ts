@@ -33,6 +33,8 @@ export interface Theme {
     onAccent: string;
     good: string;
     warn: string;
+    /** A brighter warn for fills only (rating stars, meter and progress bars); warn stays the color for text. */
+    warnFill: string;
     bad: string;
     focus: string;
     land: string;
@@ -44,11 +46,12 @@ export interface Theme {
     /** The dimming over the screen behind an open dialog: dark in every theme, so the dialog stands out. */
     scrim: string;
     /**
-     * Series for lines and bars: the first is the accent; amber, blue, rose,
-     * violet and slate follow, ordered so neighbours differ most in hue and
-     * every pair stays apart for common color-vision differences. Muted
-     * enough to sit together, never neon. Pie and donut charts soften these
-     * same families for broader segments.
+     * Series for lines and bars. The first uses the accent; then blue, ochre,
+     * violet, rose and olive in the default themes: calm, but clearly different
+     * hues, each at least 3:1 against surface and raised, away from the good and
+     * bad hues, and apart from one another for color-blind viewers too
+     * (test/theme.test.ts checks all of it). Pie and donut charts soften
+     * these same colors for broader segments.
      */
     series1: string;
     series2: string;
@@ -59,9 +62,41 @@ export interface Theme {
   };
   space: { xs: number; sm: number; md: number; lg: number; xl: number };
   radius: { sm: number; md: number; lg: number };
-  font: { family: string; mono: string };
+  /**
+   * family: everything's face; mono: code. display: headings (text
+   * style=title and display), when a look's type= gives them a face of their
+   * own (src/look.ts). Missing: headings use family.
+   */
+  font: { family: string; mono: string; display?: string };
   text: { caption: number; body: number; lead: number; title: number; display: number };
   control: { height: number };
+  /**
+   * For slides: the type, spacing, corners and control
+   * height inside a slide, which is laid out 960 px wide and then scaled to
+   * fit its space, so these are larger than the screen's. Missing: slides
+   * scale the screen's own tokens up.
+   */
+  slide?: {
+    space: { xs: number; sm: number; md: number; lg: number; xl: number };
+    radius: { sm: number; md: number; lg: number };
+    text: { caption: number; body: number; lead: number; title: number; display: number };
+    control: { height: number };
+    /** A slide's own title: the opening slide's (layout=title), and every other slide's. */
+    heading: { cover: number; slide: number };
+  };
+  /**
+   * For slides: what a host sets for every deck. logo is
+   * an image address (from the page's own origin or imageHosts) drawn small in
+   * each slide's bottom left corner; square draws slides without their rounded
+   * frame, for pictures that fill a page.
+   */
+  deck?: { logo?: string; square?: boolean };
+  /**
+   * For slides: set on the theme inside a slide, never by
+   * a host: how much larger than the screen's its type is. Elements with sizes
+   * of their own (a stat's figure) draw that much larger there.
+   */
+  zoom?: number;
 }
 
 const base = {
@@ -73,6 +108,13 @@ const base = {
   },
   text: { caption: 12, body: 14, lead: 16, title: 20, display: 30 },
   control: { height: 40 },
+  slide: {
+    space: { xs: 6, sm: 12, md: 22, lg: 34, xl: 48 },
+    radius: { sm: 10, md: 12, lg: 18 },
+    text: { caption: 18, body: 24, lead: 28, title: 34, display: 52 },
+    control: { height: 56 },
+    heading: { cover: 64, slide: 44 },
+  },
 };
 
 export const lightTheme: Theme = {
@@ -90,6 +132,7 @@ export const lightTheme: Theme = {
     onAccent: "#FFFFFF",
     good: "#277253",
     warn: "#9A641D",
+    warnFill: "#C77D0A",
     bad: "#B14E50",
     focus: "#277E79",
     land: "#DEE5E3",
@@ -99,11 +142,11 @@ export const lightTheme: Theme = {
     shadow: "rgba(25, 43, 45, 0.065)",
     scrim: "rgba(16, 26, 29, 0.45)",
     series1: "#176F69",
-    series2: "#B8692B",
-    series3: "#4467B8",
-    series4: "#B0506B",
-    series5: "#7A5BB0",
-    series6: "#5F6E78",
+    series2: "#6991DC",
+    series3: "#865812",
+    series4: "#5F3389",
+    series5: "#B7739B",
+    series6: "#798A00",
   },
 };
 
@@ -122,6 +165,7 @@ export const darkTheme: Theme = {
     onAccent: "#112825",
     good: "#88CEAA",
     warn: "#E5B77A",
+    warnFill: "#F5B83D",
     bad: "#EB9393",
     focus: "#82C9C0",
     land: "#29373B",
@@ -131,11 +175,11 @@ export const darkTheme: Theme = {
     shadow: "rgba(0, 0, 0, 0.38)",
     scrim: "rgba(0, 0, 0, 0.62)",
     series1: "#72C6BB",
-    series2: "#E8A46B",
-    series3: "#8FA8EE",
-    series4: "#EC93A9",
-    series5: "#BBA3EA",
-    series6: "#A7B4BD",
+    series2: "#6D8DE8",
+    series3: "#F5AE4B",
+    series4: "#D0AEF8",
+    series5: "#CC6CA7",
+    series6: "#85971C",
   },
 };
 
@@ -155,6 +199,13 @@ const studioBase = {
   },
   text: { caption: 12, body: 14, lead: 16, title: 20, display: 32 },
   control: { height: 40 },
+  slide: {
+    space: { xs: 6, sm: 12, md: 22, lg: 36, xl: 48 },
+    radius: { sm: 12, md: 14, lg: 22 },
+    text: { caption: 18, body: 24, lead: 28, title: 34, display: 54 },
+    control: { height: 56 },
+    heading: { cover: 66, slide: 44 },
+  },
 };
 
 export const studioLightTheme: Theme = {
@@ -172,6 +223,7 @@ export const studioLightTheme: Theme = {
     onAccent: "#FFFFFF",
     good: "#15803D",
     warn: "#B45309",
+    warnFill: "#D27406",
     bad: "#D42020",
     focus: "#5B54E8",
     land: "#E4E7F0",
@@ -204,6 +256,7 @@ export const studioDarkTheme: Theme = {
     onAccent: "#0B0D14",
     good: "#5ED394",
     warn: "#F5BE4F",
+    warnFill: "#FBBF24",
     bad: "#FB8282",
     focus: "#A5A3FF",
     land: "#1D2131",
@@ -231,30 +284,20 @@ export function seriesColors(theme: Theme): string[] {
 export const SERIES_COUNT = 6;
 
 /**
- * A little color, not a rainbow: the accent and supporting amber, blue,
- * rose, violet and slate. The same six configurable series tokens
- * feed every chart; broad pie slices are softer than thin line-chart strokes.
- * Hover still uses the unmuted accent, and custom host series colors follow.
+ * The six series tokens feed every chart. Pie slices are a little different
+ * from line strokes so the accent stays reserved for hover: the first slice
+ * is the accent nudged toward the ink; in light themes the rest are softened
+ * a touch toward the surface (dark themes and vivid ones, Studio, use their
+ * series colors as they are). Custom host series colors follow.
  */
 export function sliceColors(theme: Theme): string[] {
-  const [accent, amber, blue, rose, violet, slate] = seriesColors(theme);
+  const [accent, ...rest] = seriesColors(theme) as [string, ...string[]];
   const { raised, ink } = theme.colors;
+  const dark = isDarkTheme(theme);
+  const first = mixColors(accent, ink, dark ? 0.12 : 0.15) ?? accent;
   // A theme with an accent gradient (Studio) is a vivid one: its slices are its series colors.
   if (theme.colors.accent2 !== theme.colors.accent) return seriesColors(theme);
-  if (isDarkTheme(theme)) {
-    return [
-      mixColors(raised, accent!, 0.77) ?? accent!,
-      amber!, blue!, rose!, violet!, slate!,
-    ];
-  }
-  return [
-    mixColors(accent!, ink, 0.12) ?? accent!,
-    mixColors(amber!, raised, 0.18) ?? amber!,
-    mixColors(blue!, raised, 0.2) ?? blue!,
-    mixColors(rose!, raised, 0.22) ?? rose!,
-    mixColors(violet!, raised, 0.22) ?? violet!,
-    mixColors(slate!, raised, 0.2) ?? slate!,
-  ];
+  return [first, ...rest.map((c) => (dark ? c : mixColors(c, raised, 0.12) ?? c))];
 }
 
 /**
@@ -318,7 +361,8 @@ export function extendTheme(from: Theme, patch: DeepPartial<Theme>): Theme {
   const out = structuredClone(from) as Theme;
   for (const [k, v] of Object.entries(patch)) {
     const key = k as keyof Theme;
-    if (v && typeof v === "object") Object.assign(out[key] as object, v);
+    // A group the theme doesn't have yet (slide, deck) is added whole.
+    if (v && typeof v === "object") (out as unknown as Record<string, unknown>)[key] = Object.assign((out[key] as object | undefined) ?? {}, v);
     else (out as unknown as Record<string, unknown>)[key] = v;
   }
   if (patch.colors) {
@@ -372,7 +416,7 @@ export function forcedColorsTheme(base: Theme, resolve: (systemColor: string) =>
       surface: canvas, raised: canvas,
       ink: text, muted: text, line: text, control: text,
       accent: highlight, accent2: highlight, onAccent: resolve("HighlightText"), focus: highlight,
-      good: text, warn: text, bad: text,
+      good: text, warn: text, warnFill: text, bad: text,
       land: canvas, landHighlight: highlight, landHover: resolve("GrayText"),
       debug: text, shadow: "transparent",
       // Series are told apart by their legend and labels here, not by color.

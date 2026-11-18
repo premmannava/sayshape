@@ -1,11 +1,18 @@
-import type { ComponentDef, PaintContext } from "../component";
+import { PICTURE_PROPS, PICTURE_SHAPES, type ComponentDef, type PaintContext } from "../component";
 import type { Box } from "../types";
-import { fillTint } from "./util";
+import { isForcedColors, overImageTheme, scrimAlpha, scrimProfile } from "../scrim";
+import { parseColor } from "../theme";
+import { fillTint, themeFont } from "./util";
+import { fitLines } from "../text";
 import { fitText } from "./input";
 
 const RATIOS = ["16:9", "4:3", "3:2", "1:1", "2:3", "3:4"] as const;
 const FITS = ["cover", "contain"] as const;
+const ZOOMS = ["none", "slow"] as const;
 const FADE_MS = 200;
+/** How long a slow zoom takes, and how close it ends: a drift you feel rather than see. */
+export const ZOOM_MS = 14000;
+export const ZOOM_TO = 1.1;
 
 /** Width over height, from a ratio like "4:3". */
 export function ratioValue(r: (typeof RATIOS)[number]): number {
@@ -21,6 +28,11 @@ export function fitRect(imgW: number, imgH: number, boxW: number, boxH: number, 
   // Cover: crop the overflow equally from both sides.
   const sw = boxW / scale, sh = boxH / scale;
   return { sx: (imgW - sw) / 2, sy: (imgH - sh) / 2, sw, sh, dx: 0, dy: 0, dw: boxW, dh: boxH };
+}
+
+/** The corner radius of a picture's outline: the theme's, none, or half the shorter side. */
+export function pictureRadius(shape: (typeof PICTURE_SHAPES)[number], w: number, h: number, rounded: number): number {
+  return shape === "circle" ? Math.min(w, h) / 2 : shape === "square" ? 0 : rounded;
 }
 
 /** A small picture glyph (a frame with a hill and a sun) for images that can't show. */
@@ -68,23 +80,72 @@ export const image: ComponentDef = {
     src: { type: "string", required: true, description: "The image URL. Only the app's own site and hosts it allows will load." },
     ratio: { type: "enum", values: RATIOS, default: "16:9", description: "Width to height: 16:9, 4:3, 3:2, 1:1, 2:3 or 3:4. The space is kept while the image loads." },
     fit: { type: "enum", values: FITS, default: "cover", description: "cover fills the space and crops the edges; contain shows the whole image." },
+    caption: { type: "string", description: "A muted line under the image." },
+    ...PICTURE_PROPS,
   },
+  // Elements indented under an image are laid over it, on a scrim the engine makes readable.
+  children: "any",
+  quiet: [...Object.keys(PICTURE_PROPS), "children"],
+  theme: (theme, node) => (node.children.length ? overImageTheme(theme) : theme),
   example: `image "Ridgeline trail runners, side view" src="/images/ridgeline.jpg" ratio=4:3`,
   semantics(box, ctx) {
-    return { role: "img", name: ctx.props(box.node).text() };
+    const caption = ctx.props(box.node).str("caption");
+    // With elements laid over it the picture is a backdrop: a group named by what it shows, holding them.
+    if (box.node.children.length) return { role: "group", name: ctx.props(box.node).text() };
+    return { role: "img", name: ctx.props(box.node).text(), description: caption || undefined };
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    box.h = Math.round(box.w / ratioValue(p.oneOf("ratio", RATIOS, "16:9")));
+    const pictureH = Math.round(box.w / ratioValue(p.oneOf("ratio", RATIOS, "16:9")));
+    // A caption goes under the picture: its lines (at most two) add to the height.
+    const t = ctx.theme;
+    if (box.node.children.length) {
+      // Elements laid over the picture: it is at least as tall as its ratio, and grows to hold them, centred.
+      if (p.has("caption")) ctx.warn?.("A caption is not shown under an image that has elements laid over it. Put the words in a text line over the image");
+      const pad = t.space.lg, gap = t.space.md;
+      const kids = ctx.visibleChildren(box.node);
+      let y = box.y + pad;
+      kids.forEach((k, i) => {
+        if (i) y += gap;
+        const kb = ctx.layout(k, box.x + pad, y, Math.max(0, box.w - pad * 2));
+        box.children.push(kb);
+        y += kb.h;
+      });
+      const contentH = y - box.y + pad;
+      box.h = Math.max(pictureH, contentH);
+      const spare = Math.floor((box.h - contentH) / 2);
+      if (spare > 0) for (const kb of box.children) ctx.shift(kb, 0, spare);
+      box.data = { pictureH: box.h, caption: [], lh: 0 };
+      return;
+    }
+    const caption = p.has("caption") ? fitLines(p.str("caption"), Math.max(20, box.w), themeFont(t, 400, t.text.caption), ctx.measure, 2) : [];
+    const lh = Math.round(t.text.caption * 1.4);
+    box.data = { pictureH, caption, lh };
+    box.h = pictureH + (caption.length ? t.space.sm + caption.length * lh : 0);
   },
-  paint(box, ctx) {
-    const p = ctx.props(box.node);
+  paint(whole, ctx) {
+    const p = ctx.props(whole.node);
     const { g, theme } = ctx;
+    const d = whole.data as { pictureH: number; caption: string[]; lh: number };
+    // The picture is the top of the box; a caption, if any, is under it.
+    const box = { ...whole, h: d.pictureH };
+    if (d.caption.length) {
+      g.font = ctx.font(400, theme.text.caption);
+      g.fillStyle = theme.colors.muted;
+      g.textAlign = "left";
+      g.textBaseline = "middle";
+      d.caption.forEach((l, i) => g.fillText(l, whole.x, whole.y + d.pictureH + theme.space.sm + d.lh * i + d.lh / 2 + 1));
+    }
     const state = ctx.image(p.str("src"));
+    const shape = p.oneOf("shape", PICTURE_SHAPES, "rounded");
+    const radius = pictureRadius(shape, box.w, box.h, theme.radius.md);
+    const over = whole.node.children.length > 0;
     g.save();
-    ctx.roundRect(box.x, box.y, box.w, box.h, theme.radius.md);
+    ctx.roundRect(box.x, box.y, box.w, box.h, radius);
     g.clip();
-    if (state.status === "ready" && state.image) {
+    // Under words the picture's place is the (dark) surface first, so they read while it loads, fails or is blocked.
+    if (over) { g.beginPath(); g.rect(box.x, box.y, box.w, box.h); fillTint(g, theme.colors.surface, 1); }
+    if (state.status === "ready" && state.image && !(over && isForcedColors(theme))) {
       const img = state.image;
       const fit = p.oneOf("fit", FITS, "cover");
       if (fit === "contain") fillTint(g, theme.colors.line, 0.4);
@@ -94,11 +155,40 @@ export const image: ComponentDef = {
         ctx.requestFrame();
       }
       const r = fitRect(img.width || 1, img.height || 1, box.w, box.h, fit);
-      g.drawImage(img.source, r.sx, r.sy, r.sw, r.sh, box.x + r.dx, box.y + r.dy, r.dw, r.dh);
+      // A slow zoom grows the picture about its centre inside the clip; it rests unzoomed when motion is off.
+      const grow = p.oneOf("zoom", ZOOMS, "none") === "slow" && ctx.motion ? 1 + (ZOOM_TO - 1) * ctx.progress(box, "zoom", ZOOM_MS, "inOut") : 1;
+      const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+      const dx = box.x + r.dx, dy = box.y + r.dy;
+      g.drawImage(img.source, r.sx, r.sy, r.sw, r.sh, cx + (dx - cx) * grow, cy + (dy - cy) * grow, r.dw * grow, r.dh * grow);
     } else if (state.status === "loading") {
-      fillTint(g, theme.colors.line, 0.6);
-    } else {
+      if (!over) fillTint(g, theme.colors.line, 0.6);
+    } else if (!over) {
       placeholder(box, ctx, p.text());
+    }
+    if (over && !isForcedColors(theme)) {
+      // The scrim: the surface color at the weakest strength that keeps every text color readable over any photo,
+      // across the band the content sits in, and lighter above and below it where there are no words.
+      const alpha = scrimAlpha(theme);
+      const kids = whole.children;
+      g.beginPath();
+      g.rect(box.x, box.y, box.w, box.h);
+      if (!kids.length) {
+        fillTint(g, theme.colors.surface, alpha);
+      } else {
+        const top = Math.min(...kids.map((k) => k.y)), bottom = Math.max(...kids.map((k) => k.y + k.h));
+        const stops = scrimProfile(alpha, box.y, box.h, top, bottom, theme.space.lg);
+        if (stops.every((s) => s.alpha === alpha)) {
+          fillTint(g, theme.colors.surface, alpha);
+        } else {
+          const [r, gr, b] = parseColor(theme.colors.surface) ?? [0, 0, 0];
+          const gradient = g.createLinearGradient(0, box.y, 0, box.y + box.h);
+          for (const s of stops) gradient.addColorStop(s.offset, `rgba(${r}, ${gr}, ${b}, ${s.alpha})`);
+          g.save();
+          g.fillStyle = gradient;
+          g.fill();
+          g.restore();
+        }
+      }
     }
     g.restore();
   },

@@ -11,17 +11,17 @@
 import { parseActions, runActions } from "./actions";
 import { MAX_RULE_LIST, realClock, RULE_OPS, RuleRunner, type Clock, type RuleDef } from "./behavior";
 import { RULE_FUNCTIONS } from "./math";
-import { PropReader, type ComponentDef, type DragContext, type ElementView, type LayoutContext, type PaintContext, type PopupContext, type PressContext } from "./component";
+import { PropReader, type ChildTransform, type ComponentDef, type DragContext, type ElementView, type LayoutContext, type PaintContext, type PopupContext, type PressContext } from "./component";
 import { Emitter } from "./emitter";
 import { locateOf, scopeOf } from "./each";
 import { domEditorHost } from "./dom-editor";
 import { noEditor, valueStamp, type EditorHost, type EditorSpec } from "./editor";
 import { isList, makeList } from "./data";
 import { findItem, getIn, PATH, placeOf, setIn, type Locate, type Place } from "./paths";
-import { createLayoutContext, isVisible, walkBoxes } from "./layout";
+import { applyTransform, composeTransform, createLayoutContext, isVisible, screenBoxes, walkBoxes } from "./layout";
 import { Loading, type LoadingView } from "./loading";
-import { MotionValues } from "./motion";
-import { easeOut, paintGenericGhost } from "./ghost";
+import { APPEAR_MS, ENTER_MS, ENTER_ROLES, enterPose, lineShift, MAX_STAGGER_STEPS, MotionStarts, MotionValues, SIGHT_PX, STAGGER_MS, type EnterPose, type EnterRole } from "./motion";
+import { easeInOut, easeOut, paintGenericGhost } from "./ghost";
 import { placePopup, POPUP_MARGIN, type PopupState, type Viewport } from "./popup";
 import { localToday, parseDate } from "./dates";
 import { parse, type ParseResult } from "./parser";
@@ -29,6 +29,7 @@ import { Registry } from "./registry";
 import { Store } from "./state";
 import { CanvasMeasurer, ellipsize, font as fontString, wrapText } from "./text";
 import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
+import { applyLook, lookKey, type Look } from "./look";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
 import { domAccessibilityHost } from "./a11y/dom";
@@ -36,6 +37,9 @@ import { noAccessibility, type AccessibilityHost, type MirrorEvents, type Mirror
 import { accessibleKey, type AccessibleNode } from "./a11y/semantics";
 import { buildAccessibilityTree } from "./a11y/tree";
 import { plainText } from "./a11y/text";
+import { TextCollector } from "./text-layer/collect";
+import { domTextLayer } from "./text-layer/dom";
+import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, TEXT_MAX_WAIT_MS, TOUCH_SELECT_DEFAULT, type TextLayerHost } from "./text-layer/host";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
 import type { ExpressionFunctions, Scope } from "./expr";
 
@@ -88,7 +92,11 @@ export interface SayShapeOptions {
   minHeight?: number;
   /** Padding around the whole screen. */
   padding?: number;
-  /** Fade new elements in. Default true, off when the user prefers reduced motion. */
+  /**
+   * Motion: new elements fade in, enter= entrances play, values glide. Default
+   * true. Reduced motion (the reducedMotion option, else the system setting)
+   * turns it off whatever this says: everything is drawn in its final state.
+   */
   animate?: boolean;
   /**
    * Hosts images may load from, besides the page's own origin, e.g.
@@ -130,16 +138,43 @@ export interface SayShapeOptions {
    */
   accessibility?: AccessibilityHost | "off";
   /**
+   * Make the text on the canvas selectable, copyable and findable (Ctrl/Cmd+F):
+   * an invisible layer of real text over the canvas, for text, stat and table
+   * elements. The canvas stays the only thing that draws. Default true; false
+   * adds nothing to the page. sayshape/testing passes a recording layer.
+   */
+  selectText?: boolean | TextLayerHost;
+  /**
+   * With the text layer on: whether a long press on touch screens selects the word under the finger,
+   * with the platform's own handles and Copy menu (default off for now, see TOUCH_SELECT_DEFAULT; false keeps mouse and pen selection only).
+   */
+  selectTouch?: boolean;
+  /**
    * Experimental, opt-in behavior (docs/plans/behavior.md): `every` rules that
    * change state on an interval, and dragging in scenes. Default off: the
    * language is exactly what it was.
    */
   behavior?: boolean;
+  /**
+   * For specs written layout first, data last. While a spec streams in
+   * (beginStream to endStream), a name an element reads that isn't declared
+   * yet draws as a loading placeholder (the same as setAwaiting(true)), and
+   * the "isn't state" warning for it waits until the stream ends. Default
+   * off: a streamed spec then behaves exactly as before.
+   */
+  streamPlaceholders?: boolean;
+  /**
+   * Opt-in presets: `report` blocks (src/presets/report.ts) are expanded into
+   * ordinary elements when the spec is read. `expandedSpec` shows what they
+   * became. Off (default), `report` is an unknown element, as before.
+   */
+  presets?: boolean;
   /** Where time comes from: scene motion, fade-ins and rules. Default the real clock; sayshape/testing passes one a test advances. */
   clock?: Clock;
   /**
    * Whether the person prefers reduced motion. Default: the system setting.
-   * With it, rules don't start until the person first presses or types something here.
+   * With it, nothing animates (as with animate: false), and rules don't start
+   * until the person first presses or types something here.
    */
   reducedMotion?: boolean;
   /**
@@ -148,6 +183,12 @@ export interface SayShapeOptions {
    * Nested cards keep their frame. Default false.
    */
   bareRootCard?: boolean;
+  /**
+   * Whether a spec's look line (`look mood=bold type=editorial`, src/look.ts)
+   * changes the look: tokens laid over this theme, never colors of its own.
+   * Default true; false keeps the host's look and reports the line with a warning.
+   */
+  look?: boolean;
 }
 
 /** The widest picture() draws, in CSS pixels, so a very wide table can't make a huge image. */
@@ -165,6 +206,8 @@ export class SayShape {
   private measurer: CanvasMeasurer;
   private opts: SayShapeOptions;
   theme: Theme;
+  /** The spec's look line's choices, laid over the host's theme (null: none). */
+  private lookChoice: Look | null = null;
 
   private source = "";
   private streaming = false;
@@ -173,6 +216,10 @@ export class SayShape {
   private hits: HitRegion[] = [];
   /** While painting the children of elements that scroll: what each shows, innermost last. */
   private clips: Array<{ rect: Rect; owner: Box }> = [];
+  /** While painting inside an element that draws its children scaled (a slide): from there to the screen. */
+  private xform: ChildTransform | null = null;
+  /** The box trees as they sit on the screen (screenBoxes), worked out once per layout. */
+  private screen: { root: Box | null; modal: Box | null; at: { root: Box | null; modal: Box | null } } | null = null;
   /** The open overlay (a dialog), laid out on its own over the screen, or null. */
   private modal: Box | null = null;
   /** Where the open overlay's hit regions start in this.hits (only those take presses and Tab). */
@@ -186,7 +233,14 @@ export class SayShape {
   private lastPressY: number | null = null;
   /** The focused region last scrolled into sight, so a person's own scrolling isn't undone. */
   private revealed = "";
-  private seen = new Map<string, number>();
+  /** When each element's fade-in, entrance or long-running motion began, by id; see MotionStarts. */
+  private starts = new MotionStarts();
+  /** This frame: some entrance is waiting to be scrolled into sight (scrolling then repaints). */
+  private waitingForSight = false;
+  /** The part of the canvas in sight, read at most once per frame, when an entrance first asks. */
+  private sightArea: Viewport | null = null;
+  /** Where each element's entrance was in the last frame, by id, for tools and tests. */
+  private entrances = new Map<string, { role: EnterRole; progress: number }>();
   private transitions = new MotionValues();
   /** Per-element view state (a table's scroll offset), by element id; see ElementView. */
   private views = new Map<string, ElementView>();
@@ -215,6 +269,14 @@ export class SayShape {
   private ruleDriven = false;
   private lastQuietUpdate = -Infinity;
   private a11yTimer: unknown = null;
+  /** The text layer and what feeds it, or null when the selectText option is off (nothing is recorded or created then). */
+  private text: { host: TextLayerHost; collector: TextCollector } | null = null;
+  private textTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The hash of the last frame seen, and when the layer first fell behind it (null while it is up to date). */
+  private textSeen = -1;
+  private textSince: number | null = null;
+  /** What the layer was last built from: the frame's lines (hash) and the part of the page they were kept for. */
+  private textBuilt: { hash: number; from: number; to: number } | null = null;
   /** Whether the person has pressed or typed anything here (reduced motion: rules wait for it). */
   private interacted = false;
   private behaviorBound = false;
@@ -300,12 +362,16 @@ export class SayShape {
     this.state.onDerivedError = (d, error) => this.loadingView().waitsFor(d.name) || this.warnOnce(`derive ${d.name} on line ${d.line} couldn't be worked out, so it shows as nothing: ${error}`);
     this.state.subscribe((key, value) => {
       this.events.emit("change", { key, value });
+      // A report names its table's columns from its data: read the spec again when the host's data for it arrives.
+      const p = this.parsed;
+      if (p?.presets?.reads.includes(key) && !p.state.some((s) => s.key === key)) this.invalidate("parse");
       this.invalidate("layout");
       this.rules?.check();
     });
     this.bindInput();
     this.bindEnvironment();
     this.a11y.connect?.(this.mirrorEvents());
+    this.bindTextLayer();
   }
 
   // ---------------------------------------------------------------- spec
@@ -313,11 +379,15 @@ export class SayShape {
   /** Replace the whole spec. State is kept unless resetState is true. */
   setSpec(src: string, opts: { resetState?: boolean } = {}): void {
     if (opts.resetState) this.resetState();
+    // An edit moves lines: what was already shown keeps its place in motion and doesn't play again.
+    else if (src !== this.source) this.starts.remap(lineShift(this.source, src));
     this.closePopup(false);
     // A new spec starts with no tip pinned or hidden (its elements may share ids with the old one's).
     this.tipPinned = null;
     this.tipHidden = null;
     this.source = src;
+    // A stream cut short by a whole new spec stops waiting for names too.
+    if (this.streaming && this.opts.streamPlaceholders) this.setAwaiting(false);
     this.streaming = false;
     this.invalidate("parse");
   }
@@ -326,12 +396,18 @@ export class SayShape {
     return this.source;
   }
 
+  /** With presets on, the spec as ordinary SayShape, what its reports became; otherwise the spec as written. */
+  get expandedSpec(): string {
+    return this.parsed?.presets?.expanded ?? this.source;
+  }
+
   /** Start a new streamed spec (e.g. a model response). Clears state by default. */
   beginStream(opts: { keepState?: boolean } = {}): void {
     if (!opts.keepState) this.resetState();
     this.closePopup(false);
     this.source = "";
     this.streaming = true;
+    if (this.opts.streamPlaceholders) this.setAwaiting(true);
     this.invalidate("parse");
   }
 
@@ -342,6 +418,7 @@ export class SayShape {
   }
 
   endStream(): void {
+    if (this.opts.streamPlaceholders) this.setAwaiting(false);
     this.streaming = false;
     this.invalidate("parse");
   }
@@ -356,7 +433,7 @@ export class SayShape {
 
   /** The laid-out boxes; while an overlay is open, it's the root's last child (drawn on top). */
   get boxes(): Box | null {
-    const root = this.rootBox, m = this.modal;
+    const { root, modal: m } = this.screenTree();
     if (!root || !m) return root;
     return { ...root, h: Math.max(root.h, m.y + m.h), children: [...root.children, m] };
   }
@@ -375,9 +452,10 @@ export class SayShape {
    * name and state, in reading order (src/a11y). Null before the first frame.
    */
   accessibilityTree(): AccessibleNode | null {
-    if (!this.rootBox) return null;
+    const screen = this.screenTree();
+    if (!screen.root) return null;
     // While an overlay is open, it's all a screen reader (and Copy text) gets: what's behind is inert.
-    const root = this.modal ? { ...this.rootBox, children: [this.modal] } : this.rootBox;
+    const root = screen.modal ? { ...screen.root, children: [screen.modal] } : screen.root;
     return buildAccessibilityTree({
       root,
       hits: this.hits,
@@ -486,11 +564,21 @@ export class SayShape {
     const s = this.theme.space;
     this.parsed = parse(this.source, this.registry, {
       partial: this.streaming,
+      ...(this.opts.streamPlaceholders ? { deferUnknownNames: true } : {}),
       rootProps: { pad: String(this.opts.padding ?? 20), gap: String(s.md) },
       // State the app set itself counts as known, so reading it isn't flagged.
       knownNames: Object.keys(this.state.snapshot()),
       ...(this.opts.behavior ? { behavior: true } : {}),
+      ...(this.opts.presets ? { presets: true, presetValue: (n: string) => this.state.get(n) } : {}),
+      ...(this.opts.look === false ? { look: false } : {}),
     });
+    // A look line that arrived or changed: from the next layout on, the screen draws in it.
+    const look = this.parsed.look ?? null;
+    if (lookKey(look) !== lookKey(this.lookChoice)) {
+      this.lookChoice = look;
+      this.theme = this.resolveTheme();
+    }
+    this.parsed.root.props.gap = String(this.theme.space.md);
     for (const { key, value } of this.parsed.state) this.state.declare(key, value);
     this.warned.clear();
     this.state.derive(this.parsed.derived);
@@ -510,7 +598,7 @@ export class SayShape {
     this.width = width;
     const lv = this.loadingView();
     const scope = this.state.scope;
-    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.warnOnce(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
+    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.layoutWarning(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
     if (this.opts.bareRootCard) {
       const root = this.parsed.root;
       const top = ctx.visibleChildren(root).filter((n) => !this.registry.get(n.type)?.overlay);
@@ -594,12 +682,24 @@ export class SayShape {
     for (const target of targets) {
       const wheel = this.registry.get(target.node.type)?.wheel;
       if (!wheel) continue;
-      if (wheel({ ...this.pressContext(target), x, y, deltaY, deltaX, ...mods })) {
+      const [lx, ly] = this.toLocal(target, x, y);
+      if (wheel({ ...this.pressContext(target), x: lx, y: ly, deltaY, deltaX, ...mods })) {
         this.invalidate("layout");
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * A problem layout ran into. With streamPlaceholders, while the spec is still
+   * streaming it may be a list or field that's on its way (a select's items, a
+   * chart's data), so it waits: layout runs again when the stream ends, and
+   * reports whatever is still wrong then.
+   */
+  private layoutWarning(m: string): void {
+    if (this.streaming && this.opts.streamPlaceholders) return;
+    this.warnOnce(m);
   }
 
   /** Report a problem once per spec, however often layout runs into it. */
@@ -628,10 +728,16 @@ export class SayShape {
     g.clearRect(0, 0, this.metrics.width, this.metrics.height);
     this.hits = [];
     this.clips = [];
+    this.waitingForSight = false;
+    this.entrances.clear();
+    this.sightArea = null;
+    this.text?.collector.begin();
     const ctx = this.paintContext(g);
     this.paintBox(this.rootBox, ctx, 1);
     this.modalFrom = -1;
     if (this.modal) {
+      // What's behind an open dialog isn't reachable, so its words aren't in the layer either.
+      this.text?.collector.discardFrame();
       // The screen behind is dimmed and inert; only the overlay's regions count from here on.
       g.fillStyle = this.theme.colors.scrim;
       g.fillRect(0, 0, this.metrics.width, this.metrics.height);
@@ -659,6 +765,7 @@ export class SayShape {
     this.inspector.endCapture();
     this.metrics.paintMs = this.clock.now() - t;
     this.noteRegionChanges(t);
+    this.syncText();
     this.syncAccessibility();
     this.events.emit("render", { ...this.metrics });
   }
@@ -682,6 +789,83 @@ export class SayShape {
     if (!was || this.a11yDirty) { this.regionsMovedAt = t; return; }
     if (was.keys !== keys) { this.a11yDirty = true; this.regionsMovedAt = t; }
     else if (was.spot !== spot && t - this.regionsMovedAt > REGION_REFRESH_MS) { this.a11yDirty = true; this.regionsMovedAt = t; }
+  }
+
+  // ---------------------------------------------------------------- text layer
+
+  /** Attaches the engine's touch handling to another surface (set by bindInput). */
+  private bindTouchSurface: ((el: EventTarget) => void) | null = null;
+
+  /** Set up the text layer from the selectText option: a real one in browsers, none when off or with no document. */
+  private bindTextLayer(): void {
+    const opt = this.opts.selectText;
+    const host = opt === false ? noTextLayer : typeof opt === "object" ? opt : typeof document !== "undefined" ? domTextLayer(this.canvas, { touch: this.opts.selectTouch ?? TOUCH_SELECT_DEFAULT }) : noTextLayer;
+    if (host === noTextLayer) return;
+    if (host.surface) this.bindTouchSurface?.(host.surface);
+    const collector = new TextCollector(this.g, (t, f) => this.measurer.width(t, f), () => this.clips[this.clips.length - 1]?.rect ?? null);
+    this.text = { host, collector };
+  }
+
+  /**
+   * After a frame: when what the canvas drew as text changed, rebuild the layer
+   * once drawing has settled (a streamed spec, a number counting up and a
+   * table sliding in all keep changing it), never once per frame or per line.
+   */
+  private syncText(): void {
+    const t = this.text;
+    if (!t) return;
+    t.collector.finish(this.popup?.area ?? null);
+    if (this.textBuilt && this.textBuilt.hash === t.collector.hash && this.textInView()) {
+      // Nothing changed: a hover or a focus ring repainted. A pending rebuild is for a change that was undone.
+      if (this.textTimer !== null) { clearTimeout(this.textTimer); this.textTimer = null; }
+      this.textSeen = t.collector.hash;
+      return;
+    }
+    // Drawing that keeps repainting the same words must not keep the timer from running out.
+    if (t.collector.hash !== this.textSeen || this.textTimer === null) { this.textSeen = t.collector.hash; this.scheduleText(); }
+  }
+
+  /** Wait for drawing to settle, but never longer than TEXT_MAX_WAIT_MS (a ticker that never stops changing). */
+  private scheduleText(): void {
+    if (!this.text || this.destroyed) return;
+    if (this.textTimer !== null) clearTimeout(this.textTimer);
+    const now = Date.now();
+    if (this.textSince === null) this.textSince = now;
+    const wait = Math.max(0, Math.min(SETTLE_MS, this.textSince + TEXT_MAX_WAIT_MS - now));
+    this.textTimer = setTimeout(() => { this.textTimer = null; this.buildText(); }, wait);
+  }
+
+  /** Build the layer now, if it's out of date, instead of waiting for drawing to settle (for hosts and tests that can't wait). */
+  settleText(): void {
+    if (this.textTimer !== null) { clearTimeout(this.textTimer); this.textTimer = null; }
+    if (this.text && this.textBuilt && this.textBuilt.hash === this.text.collector.hash && this.textInView()) return;
+    this.buildText();
+  }
+
+  /** Whether the part of the page in sight is still inside what the layer was built for. */
+  private textInView(): boolean {
+    const b = this.textBuilt;
+    if (!b) return false;
+    const vp = this.viewport();
+    return (b.from <= 0 || vp.top >= b.from + OVERSCAN / 2) && (b.to >= this.metrics.height || vp.bottom <= b.to - OVERSCAN / 2);
+  }
+
+  private buildText(): void {
+    const t = this.text;
+    if (!t || this.destroyed || !this.rootBox) return;
+    if (this.dirty.parse || this.dirty.layout) return; // the next frame ends in syncText again
+    const vp = this.viewport();
+    // Long tables get lines only for rows near what's in sight; scrolling the page brings the rest.
+    const from = vp.top - OVERSCAN, to = vp.bottom + OVERSCAN;
+    const lines = t.collector.lines.filter((l) => l.y + l.h >= from && l.y <= to);
+    t.host.update(lines, {
+      width: this.metrics.width,
+      height: this.metrics.height,
+      accent: this.theme.colors.accent,
+      forcedColors: typeof matchMedia !== "undefined" && matchMedia("(forced-colors: active)").matches,
+    });
+    this.textBuilt = { hash: t.collector.hash, from, to };
+    this.textSince = null;
   }
 
   /**
@@ -796,7 +980,7 @@ export class SayShape {
     const theme = this.theme;
     const readers = new WeakMap<SayShapeNode, PropReader>();
     const scope = this.state.scope;
-    const animate = this.opts.animate ?? !(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const animate = this.motionOn();
     const t = this.clock.now();
     const lv = this.loadingView();
     const same = (a: HitTarget | null, n: SayShapeNode, detail?: unknown) =>
@@ -817,10 +1001,12 @@ export class SayShape {
       },
       font: (w, s) => fontString(w, s, theme.font.family),
       roundRect: (x, y, w, h, r) => roundRectPath(g, x, y, w, h, r),
-      addHit: (box, o = {}) => {
+      addHit: (laid, o = {}) => {
         const focusable = o.focusable ?? true;
         const clip = this.clips[this.clips.length - 1];
-        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
+        const xf = this.xform;
+        const box = xf ? applyTransform(laid, xf) : laid;
+        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(xf ? { local: { box: laid, transform: xf } } : {}), ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
       },
       isHovered: (n, d) => same(this.hover, n, d),
       isFocused: (n, d) => this.keyboardMode && same(this.focus, n, d),
@@ -832,11 +1018,23 @@ export class SayShape {
       ...(this.opts.behavior ? { behavior: true } : {}),
       appear: (n) => {
         if (!animate || n.id === "root") return 1;
-        let first = this.seen.get(n.id);
-        if (first === undefined) this.seen.set(n.id, (first = t));
-        const a = Math.min(1, (t - first) / 240);
+        let first = this.starts.get(n.id, "appear");
+        if (first === undefined) this.starts.set(n.id, "appear", (first = t));
+        const a = Math.min(1, (t - first) / APPEAR_MS);
         if (a < 1) this.invalidate("paint");
         return a;
+      },
+      progress: (box, key, ms, ease = "inOut") => {
+        if (!animate || !(ms > 0)) return 1;
+        const name = `progress:${key}`;
+        let start = this.starts.get(box.node.id, name);
+        if (start === undefined) {
+          if (!this.inSight(box)) { this.waitingForSight = true; return 0; }
+          this.starts.set(box.node.id, name, (start = t));
+        }
+        const p = Math.max(0, Math.min(1, (t - start) / ms));
+        if (p < 1) this.invalidate("paint");
+        return ease === "linear" ? p : ease === "out" ? easeOut(p) : easeInOut(p);
       },
       requestFrame: () => this.invalidate("paint"),
       tween: (node, key, target, duration = 220) =>
@@ -853,50 +1051,149 @@ export class SayShape {
     };
   }
 
-  private paintBox(box: Box, ctx: PaintContext, parentAlpha: number): void {
+  private paintBox(box: Box, outerCtx: PaintContext, parentAlpha: number, cue?: StaggerCue): void {
     const def = this.registry.get(box.node.type);
+    const own = def?.theme?.(outerCtx.theme, box.node);
+    const ctx = own && own !== outerCtx.theme ? { ...outerCtx, theme: own } : outerCtx;
     // A leaf without its own draw-in fades in when its data arrives; containers leave it to their children.
-    const own = !def?.paintLoading && !box.children.length;
-    const alpha = parentAlpha * ctx.appear(box.node) * (own ? easeOut(ctx.reveal(box.node) * 2) : 1);
+    const leaf = !def?.paintLoading && !box.children.length;
+    const drawIn = leaf ? easeOut(ctx.reveal(box.node) * 2) : 1;
+    // An entrance (enter=, or a staggering parent's turn) takes the place of the plain fade-in.
+    const role = this.enterRole(box.node, def, ctx) ?? cue?.role ?? null;
+    const entrance = role ? this.entrancePose(box, role, ctx, cue) : null;
+    const alpha = parentAlpha * (entrance ? entrance.pose.alpha : ctx.appear(box.node)) * drawIn;
+    // stagger=true: the children come in by turns, so the element's own entrance moves only itself.
+    const staggers = box.node.props.stagger !== undefined && !!def && !def.props.stagger && box.children.length > 0 && ctx.props(box.node).bool("stagger");
+    const kids: StaggerCue | undefined = staggers ? { role: role ?? "fade", base: entrance?.start ?? ctx.now, slot: 0 } : undefined;
+    const pose = entrance && (entrance.pose.dy !== 0 || entrance.pose.scale !== 1) ? entrance.pose : null;
+    // Motion changes only the drawing: boxes, hit regions, clips and the text layer stay where layout put them.
+    if (pose && !staggers) { ctx.g.save(); applyPose(ctx.g, box, pose); }
     ctx.g.save();
+    if (pose && staggers) applyPose(ctx.g, box, pose);
     ctx.g.globalAlpha = alpha;
     const loading = !!def && ctx.isLoading(box.node);
     const before = this.hits.length;
+    // The words a selectable element draws go to the text layer (never inside a scaled slide, which it can't follow).
+    const collector = this.text && !this.xform && SELECTABLE.has(box.node.type) ? this.text.collector : null;
+    const outer = collector?.enter(box);
     // Data on its way: the element's own placeholder, or a plain one for a leaf.
     if (loading && def.paintLoading) def.paintLoading(box, ctx);
     else if (loading && !box.children.length) paintGenericGhost(ctx, box);
     else def?.paint?.(box, ctx);
+    collector?.enter(outer ?? null);
     ctx.g.restore();
     const clipHere = this.clips[this.clips.length - 1];
     const under = def?.surface?.(box, ctx);
-    const inner = under && under !== ctx.theme.colors.raised ? { ...ctx, theme: { ...ctx.theme, colors: { ...ctx.theme.colors, raised: under } } } : ctx;
+    let inner = under && under !== ctx.theme.colors.raised ? { ...ctx, theme: { ...ctx.theme, colors: { ...ctx.theme.colors, raised: under } } } : ctx;
     // An element that scrolls its children shows them through its own box only.
     const clip = def?.clipChildren?.(box) ?? null;
+    const xf = this.xform;
     if (clip) {
+      // Clips are kept in screen pixels, for the pointer; drawn in the space being painted.
       const outer = this.clips[this.clips.length - 1]?.rect;
-      const rect = outer ? intersectRect(clip, outer) : clip;
+      const onScreen = xf ? applyTransform(clip, xf) : clip;
+      const rect = outer ? intersectRect(onScreen, outer) : onScreen;
+      const drawn = xf ? { x: (rect.x - xf.dx) / xf.scale, y: (rect.y - xf.dy) / xf.scale, w: rect.w / xf.scale, h: rect.h / xf.scale } : rect;
       ctx.g.save();
       ctx.g.beginPath();
-      ctx.g.rect(rect.x, rect.y, rect.w, rect.h);
+      ctx.g.rect(drawn.x, drawn.y, drawn.w, drawn.h);
       ctx.g.clip();
       this.clips.push({ rect, owner: box });
     }
-    for (const k of box.children) this.paintBox(k, inner, alpha);
+    // An element that draws its children scaled (a slide): paint them through its transform.
+    const tr = box.children.length ? def?.childTransform?.(box) ?? null : null;
+    if (tr) {
+      ctx.g.save();
+      ctx.g.transform(tr.scale, 0, 0, tr.scale, tr.dx, tr.dy);
+      this.xform = xf ? composeTransform(xf, tr) : tr;
+      const p = inner.pointer;
+      if (p) inner = { ...inner, pointer: { x: (p.x - tr.dx) / tr.scale, y: (p.y - tr.dy) / tr.scale } };
+    }
+    const kidsAlpha = staggers ? parentAlpha * drawIn : alpha;
+    for (const k of box.children) this.paintBox(k, inner, kidsAlpha, kids);
+    if (tr) { this.xform = xf; ctx.g.restore(); }
     if (clip) { this.clips.pop(); ctx.g.restore(); }
     if (def?.paintOver && !(loading && (def.paintLoading || !box.children.length))) {
       ctx.g.save();
+      if (pose && staggers) applyPose(ctx.g, box, pose);
       ctx.g.globalAlpha = alpha;
+      const over = collector?.enter(box);
       def.paintOver(box, ctx);
+      collector?.enter(over ?? null);
       ctx.g.restore();
     }
+    if (pose && !staggers) ctx.g.restore();
     // An element with a tip gets a region for it under its children's and its own parts, so the
     // pointer shows the tip anywhere on it. When it isn't pressable on its own, the region is a
     // Tab stop too, so the keyboard and a tap reach it. (A scene draws its shapes' tips itself.)
     if (box.node.props.tip !== undefined && !loading && !def?.provides && this.tipOf(box.node)) {
       // Parts there only for a child's tip ("tip:…") don't count: the element's own tip still needs its stop.
       const own = this.hits.slice(before).some((h) => h.box.node.id === box.node.id && !isTipPart(h.detail));
-      this.hits.splice(before, 0, { box: own ? box : atLeastTarget(box), detail: TIP, focusable: !own, ...(clipHere ? { clip: clipHere.rect, clipOwner: clipHere.owner } : {}) });
+      const placed = xf ? applyTransform(box, xf) : box;
+      this.hits.splice(before, 0, { box: own ? placed : atLeastTarget(placed), detail: TIP, focusable: !own, ...(xf ? { local: { box, transform: xf } } : {}), ...(clipHere ? { clip: clipHere.rect, clipOwner: clipHere.owner } : {}) });
     }
+  }
+
+  /** An element's own enter= role, or null (none, a component's own enter prop, or the root). */
+  private enterRole(node: SayShapeNode, def: ComponentDef | undefined, ctx: PaintContext): EnterRole | null {
+    if (node.props.enter === undefined || node.id === "root" || !def || def.props.enter) return null;
+    const v = ctx.props(node).str("enter");
+    return (ENTER_ROLES as readonly string[]).includes(v) ? (v as EnterRole) : null;
+  }
+
+  /**
+   * Where an element's entrance is this frame. It starts the first time the
+   * element is painted in sight (a staggering parent's children a step apart),
+   * and is remembered by id, so it plays once. Until then the element is drawn
+   * at its starting pose, invisible. With motion off it's at rest.
+   */
+  private entrancePose(box: Box, role: EnterRole, ctx: PaintContext, cue?: StaggerCue): { pose: EnterPose; start: number } | null {
+    const id = box.node.id;
+    const rise = ctx.theme.space.md;
+    if (!ctx.motion) { this.entrances.set(id, { role, progress: 1 }); return null; }
+    const t = ctx.now;
+    let start = this.starts.get(id, "enter");
+    if (start === undefined) {
+      if (!this.inSight(box)) {
+        this.waitingForSight = true;
+        this.entrances.set(id, { role, progress: 0 });
+        return { pose: enterPose(role, 0, rise), start: t };
+      }
+      start = cue ? Math.max(t, cue.base) + Math.min(cue.slot++, MAX_STAGGER_STEPS) * STAGGER_MS : t;
+      this.starts.set(id, "enter", start);
+    }
+    const p = Math.max(0, Math.min(1, (t - start) / ENTER_MS));
+    if (p < 1) this.invalidate("paint");
+    this.entrances.set(id, { role, progress: p });
+    return { pose: enterPose(role, p, rise), start };
+  }
+
+  /**
+   * Whether enough of a box is in sight to play its entrance: inside the part
+   * of the canvas people can see and the scrolling element around it, if any.
+   * Where that isn't known (Node, a host without a window), everything is.
+   */
+  private inSight(laid: Box): boolean {
+    const r = this.xform ? applyTransform(laid, this.xform) : laid;
+    const area = (this.sightArea ??= this.viewport());
+    const clip = this.clips[this.clips.length - 1]?.rect;
+    const top = Math.max(area.top, clip ? clip.y : -Infinity), bottom = Math.min(area.bottom, clip ? clip.y + clip.h : Infinity);
+    const left = clip ? clip.x : -Infinity, right = clip ? clip.x + clip.w : Infinity;
+    if (r.w <= 0 || r.h <= 0) return r.y >= top && r.y <= bottom && r.x >= left && r.x <= right;
+    const seenH = Math.min(r.y + r.h, bottom) - Math.max(r.y, top);
+    const seenW = Math.min(r.x + r.w, right) - Math.max(r.x, left);
+    // Half a pixel of slack: an element wholly in sight works out a hair short in floating point.
+    return seenW > 0 && seenH > 0 && seenH >= Math.min(r.h, SIGHT_PX) - 0.5;
+  }
+
+  /** Motion is on: the animate option isn't false and the person doesn't prefer reduced motion. */
+  private motionOn(): boolean {
+    return this.opts.animate !== false && !(this.opts.reducedMotion ?? prefersReducedMotion());
+  }
+
+  /** Where an element's entrance was in the last frame (role, and progress 0..1), or null when it has no enter= and no staggering parent. */
+  entranceOf(id: string): { role: EnterRole; progress: number } | null {
+    return this.entrances.get(id) ?? null;
   }
 
   // ---------------------------------------------------------------- images
@@ -925,25 +1222,35 @@ export class SayShape {
    * screen's width (a wide table), the picture is drawn wider, up to
    * MAX_PICTURE_WIDTH, until everything shows. widen: false keeps the
    * screen's width. Browsers only: it needs a document to make the canvas.
+   *
+   * For saving part of a screen in another state (each slide of a deck):
+   * width draws at that width instead of the screen's, state sets values on
+   * the copy only, and frame cuts the picture down to the first element it
+   * accepts (the whole screen when it accepts none). theme draws the copy
+   * in another theme (a deck's slides without their rounded frame).
    */
-  async picture(opts: { pixelRatio?: number; background?: boolean; widen?: boolean } = {}): Promise<HTMLCanvasElement> {
-    let width = this.metrics.width || this.opts.width || 600;
+  async picture(opts: { pixelRatio?: number; background?: boolean; widen?: boolean; width?: number; state?: Record<string, Value>; frame?: (box: Box) => boolean; theme?: Theme } = {}): Promise<HTMLCanvasElement> {
+    const theme = opts.theme ? applyLook(opts.theme, this.lookChoice) : this.theme;
+    let width = opts.width ?? (this.metrics.width || this.opts.width || 600);
+    let cut: Rect | null = null;
     let out!: HTMLCanvasElement;
     let copy!: SayShape;
     for (let attempt = 0; ; attempt++) {
       out = document.createElement("canvas");
       copy = new SayShape(out, {
         ...this.opts,
-        theme: this.theme,
+        theme,
         width,
         pixelRatio: opts.pixelRatio ?? 2,
         animate: false,
         editor: noEditor,
+        selectText: false,
         onWarning: () => {},
       });
       copy.setSpec(this.source);
       // Every value, including which screen is showing, before the copy's first frame.
       for (const [key, value] of Object.entries(this.state.snapshot())) copy.state.set(key, value);
+      for (const [key, value] of Object.entries(opts.state ?? {})) copy.state.set(key, value);
       // The first frame lays everything out and asks for the images it shows.
       copy.renderNow();
       const more = opts.widen === false ? 0 : copy.hiddenWidth();
@@ -955,6 +1262,10 @@ export class SayShape {
     try {
       // The second frame draws the images once they've settled.
       await copy.imagesLoaded();
+      const frame = opts.frame;
+      if (frame && copy.rootBox) {
+        walkBoxes(copy.rootBox, (b) => { if (!cut && frame(b)) cut = { x: b.x, y: b.y, w: b.w, h: b.h }; });
+      }
     } finally {
       copy.destroy();
     }
@@ -965,10 +1276,19 @@ export class SayShape {
         g.setTransform(1, 0, 0, 1, 0, 0);
         // Under what's drawn, so the transparent gutter and gaps take the surface color.
         g.globalCompositeOperation = "destination-over";
-        g.fillStyle = this.theme.colors.surface;
+        g.fillStyle = theme.colors.surface;
         g.fillRect(0, 0, out.width, out.height);
         g.restore();
       }
+    }
+    const part = cut as Rect | null;
+    if (part) {
+      const k = opts.pixelRatio ?? 2;
+      const only = document.createElement("canvas");
+      only.width = Math.max(1, Math.round(part.w * k));
+      only.height = Math.max(1, Math.round(part.h * k));
+      only.getContext("2d")?.drawImage(out, Math.round(part.x * k), Math.round(part.y * k), only.width, only.height, 0, 0, only.width, only.height);
+      return only;
     }
     return out;
   }
@@ -1009,7 +1329,7 @@ export class SayShape {
     const age = this.clock.now() - this.toast.shownAt;
     const ms = this.toast.ms;
     if (age >= ms) { this.toast = null; return; }
-    const animate = this.opts.animate ?? !(typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches);
+    const animate = this.motionOn();
     let alpha = 1;
     if (animate) {
       alpha = Math.min(1, age / TOAST_FADE, (ms - age) / TOAST_FADE);
@@ -1084,7 +1404,8 @@ export class SayShape {
       if (h.clip && (x < h.clip.x || x > h.clip.x + h.clip.w || y < h.clip.y || y > h.clip.y + h.clip.h)) continue;
       const def = this.registry.get(b.node.type);
       if (def?.hitTest) {
-        const r = def.hitTest(b, x, y, h.detail);
+        const l = h.local;
+        const r = l ? def.hitTest(l.box, (x - l.transform.dx) / l.transform.scale, (y - l.transform.dy) / l.transform.scale, h.detail) : def.hitTest(b, x, y, h.detail);
         if (!r) continue;
         return { node: b.node, box: b, detail: r.detail };
       }
@@ -1093,8 +1414,11 @@ export class SayShape {
     return null;
   }
 
-  private pressContext(target: HitTarget): PressContext {
+  private pressContext(screenTarget: HitTarget): PressContext {
     const readers = new WeakMap<SayShapeNode, PropReader>();
+    // Inside a scaled slide, handlers work with the box as it was laid out.
+    const local = screenTarget.layer ? undefined : this.hits.find((h) => sameRegion(h, screenTarget))?.local;
+    const target = local ? { ...screenTarget, box: local.box } : screenTarget;
     return {
       target,
       scope: scopeOf(target.node, this.state.scope),
@@ -1275,7 +1599,8 @@ export class SayShape {
     const def = this.registry.get(target.node.type);
     // Writes in the end phase (putting things back on cancel) still count as held, until it's done.
     if (phase === "end") this.dragging = target;
-    const relayout = def?.drag?.({ ...this.pressContext(target), x, y, phase, ...(cancelled ? { cancelled } : {}) });
+    const [lx, ly] = this.toLocal(target, x, y);
+    const relayout = def?.drag?.({ ...this.pressContext(target), x: lx, y: ly, phase, ...(cancelled ? { cancelled } : {}) });
     if (phase === "end") { this.dragging = null; this.dragHeld = []; }
     this.invalidate(relayout ? "layout" : "paint");
   }
@@ -1301,7 +1626,7 @@ export class SayShape {
 
   private resetState(): void {
     this.state.clear();
-    this.seen.clear();
+    this.starts.clear();
     this.views.clear();
     this.history = [];
   }
@@ -1740,11 +2065,12 @@ export class SayShape {
   /** After layout, point hover/focus at the new boxes for the same nodes. */
   private refreshTargets(): void {
     const find = (t: HitTarget | null): HitTarget | null => {
-      if (!t || !this.rootBox) return null;
+      const screen = this.screenTree();
+      if (!t || !screen.root) return null;
       let found: Box | null = null;
       const walk = (b: Box) => { if (found) return; if (b.node.id === t.node.id) found = b; else b.children.forEach(walk); };
-      walk(this.rootBox);
-      if (this.modal) walk(this.modal);
+      walk(screen.root);
+      if (screen.modal) walk(screen.modal);
       if (!found || !this.isShown((found as Box).node)) return null;
       return { node: (found as Box).node, box: found, detail: t.detail };
     };
@@ -1769,9 +2095,40 @@ export class SayShape {
   private boxOf(node: SayShapeNode): Box | null {
     let found: Box | null = null;
     const walk = (b: Box) => { if (found) return; if (b.node.id === node.id) found = b; else b.children.forEach(walk); };
-    if (this.rootBox) walk(this.rootBox);
-    if (this.modal) walk(this.modal);
+    const { root, modal } = this.screenTree();
+    if (root) walk(root);
+    if (modal) walk(modal);
     return found;
+  }
+
+  /** The laid-out boxes as they sit on the screen: the same trees unless something draws its children scaled. */
+  private screenTree(): { root: Box | null; modal: Box | null } {
+    const s = this.screen;
+    if (s && s.at.root === this.rootBox && s.at.modal === this.modal) return s;
+    const root = this.rootBox && screenBoxes(this.rootBox, this.registry);
+    const modal = this.modal && screenBoxes(this.modal, this.registry);
+    this.screen = { root, modal, at: { root: this.rootBox, modal: this.modal } };
+    return this.screen;
+  }
+
+  /** The theme an element is laid out and painted with: the screen's, or the one an element around it gives (ComponentDef.theme, a slide's). */
+  private themeAt(node: SayShapeNode): Theme {
+    let found: Theme | null = null;
+    const walk = (b: Box, t: Theme) => {
+      if (found) return;
+      const own = this.registry.get(b.node.type)?.theme?.(t, b.node) ?? t;
+      if (b.node.id === node.id) { found = own; return; }
+      for (const k of b.children) walk(k, own);
+    };
+    if (this.rootBox) walk(this.rootBox, this.theme);
+    if (!found && this.modal) walk(this.modal, this.theme);
+    return found ?? this.theme;
+  }
+
+  /** A pointer position in the space the target's element was laid out in (a slide's, when it's inside one). */
+  private toLocal(target: HitTarget, x: number, y: number): [number, number] {
+    const t = target.layer ? undefined : this.hits.find((h) => sameRegion(h, target))?.local?.transform;
+    return t ? [(x - t.dx) / t.scale, (y - t.dy) / t.scale] : [x, y];
   }
 
   /** How the text box for a field should look, or null if it can't be typed in right now. */
@@ -1781,7 +2138,9 @@ export class SayShape {
     if (!def?.editor || !box || !node.props.bind) return null;
     const p = new PropReader(node, scopeOf(node, this.state.scope));
     if (p.cond("disabled")) return null;
-    const spec = def.editor(box, p, this.theme);
+    // Inside a scaled slide: worked out as laid out, with the slide's theme, then put where it's drawn.
+    const local = this.hits.find((h) => h.box.node.id === node.id && h.local)?.local;
+    const spec = local ? scaledEditor(def.editor(local.box, p, this.themeAt(node)), local.transform) : def.editor(box, p, this.theme);
     // Keep what the person typed while the stored value is still what it wrote.
     if (this.typed && p.bound() === this.typed.value) spec.value = this.typed.text;
     return spec;
@@ -2000,11 +2359,22 @@ export class SayShape {
 
     const onMove = (e: PointerEvent) => {
       this.pointer = local(e);
+      // A drag that began on text selects it: the press (or the element's own drag, like a table's
+      // sideways scroll) under it is given up, so releasing doesn't press anything.
+      if (this.text?.host.pointerMove?.(this.pointer.x, this.pointer.y)) {
+        // The element's drag is dropped without its end (a table's end is a press); it starts afresh next time.
+        if (this.dragging) { this.dragging = null; this.dragHeld = []; }
+        this.pressed = null;
+        this.hover = null;
+        this.invalidate("paint");
+        c.style.cursor = "text";
+        return;
+      }
       if (this.dragging) { c.style.cursor = "grabbing"; this.dragTo("move", this.pointer.x, this.pointer.y); return; }
       if (this.inspector.inspecting) { this.inspector.pointerMove(this.pointer.x, this.pointer.y); return; }
       const t = this.targetAt(this.pointer.x, this.pointer.y);
       const def = t ? this.registry.get(t.node.type) : undefined;
-      c.style.cursor = t ? (t.detail === TIP || isTipPart(t.detail) ? "default" : def?.cursor?.(t) ?? "pointer") : "default";
+      c.style.cursor = t ? (t.detail === TIP || isTipPart(t.detail) ? "default" : def?.cursor?.(t) ?? "pointer") : this.text?.host.lineAt?.(this.pointer.x, this.pointer.y) ? "text" : "default";
       // Moving over a shown tip keeps it (it can be read and selected by eye without vanishing).
       if (this.tipShown) this.invalidate("paint");
       if (!sameTarget(t, this.hover)) { this.hover = t; this.invalidate("paint"); }
@@ -2052,6 +2422,15 @@ export class SayShape {
       this.lastPressY = p.y;
       this.downAt = p;
       this.pressed = this.targetAt(p.x, p.y);
+      // Text under the pointer may become a selection if this turns into a drag; a plain click still presses.
+      this.text?.host.pointerDown?.(p.x, p.y, {
+        pointerType: e.pointerType,
+        button: e.button,
+        shiftKey: e.shiftKey,
+        // Text with an action under it keeps the plain click; a tip alone isn't one.
+        pressable: !!this.pressed && this.pressed.detail !== TIP && !isTipPart(this.pressed.detail),
+        time: typeof performance !== "undefined" ? performance.now() : Date.now(),
+      });
       // Pressing inside a popup leaves keyboard focus on its owner.
       if (this.pressed?.layer === "popup") { this.invalidate("paint"); return; }
       if (this.pressed) { this.focus = this.pressed; this.invalidate("paint"); }
@@ -2064,6 +2443,8 @@ export class SayShape {
     };
     const onUp = (e: PointerEvent) => {
       const p = local(e);
+      // Letting go after selecting text is the end of the selection, not a click.
+      if (this.text?.host.pointerUp?.()) { this.pressed = null; this.dragging = null; c.style.cursor = "text"; this.invalidate("paint"); return; }
       if (this.swallowRelease) { this.swallowRelease = false; this.pressed = null; this.invalidate("paint"); return; }
       if (this.dragging) {
         this.pressed = null;
@@ -2166,6 +2547,18 @@ export class SayShape {
       }
     };
     const onTouchEnd = () => { touch = null; };
+    // The text layer takes touches over words (so a long press selects natively): scrolling elements
+    // must still hear them, so the same handlers go on whatever surface the host gives.
+    this.bindTouchSurface = (el) => {
+      el.addEventListener("touchstart", onTouchStart as EventListener, { passive: true });
+      el.addEventListener("touchmove", onTouchMove as EventListener, { passive: false });
+      el.addEventListener("touchend", onTouchEnd as EventListener);
+      this.cleanup.push(() => {
+        el.removeEventListener("touchstart", onTouchStart as EventListener);
+        el.removeEventListener("touchmove", onTouchMove as EventListener);
+        el.removeEventListener("touchend", onTouchEnd as EventListener);
+      });
+    };
     c.addEventListener("touchstart", onTouchStart as EventListener, { passive: true });
     c.addEventListener("touchmove", onTouchMove as EventListener, { passive: false });
     c.addEventListener("touchend", onTouchEnd as EventListener);
@@ -2198,16 +2591,28 @@ export class SayShape {
     if (typeof window === "undefined") return;
     // A message sits at the bottom of the visible area, which moves when the page scrolls.
     // A press anywhere on the page outside the canvas closes an open popup too.
-    const onPagePress = (e: Event) => { if (this.popup && e.target !== this.canvas) this.closePopup(false); };
+    const onPagePress = (e: Event) => {
+      // A press on the text layer is a press on the canvas it covers.
+      const layer = this.text?.host.surface as Node | undefined;
+      if (this.popup && e.target !== this.canvas && !(layer && layer.contains(e.target as Node))) this.closePopup(false);
+    };
     document.addEventListener("pointerdown", onPagePress, true);
     this.cleanup.push(() => document.removeEventListener("pointerdown", onPagePress, true));
     const onScroll = () => {
+      // Lines are kept for the part of the page near what's in sight; scrolling past it rebuilds the layer.
+      if (this.text && this.textBuilt && !this.textInView()) this.scheduleText();
       if (this.toast) this.invalidate("paint");
       // An open popup is placed in the visible part of the canvas, which scrolling moves.
       if (this.popup) this.invalidate("layout");
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     this.cleanup.push(() => window.removeEventListener("scroll", onScroll));
+    // An entrance waits until its element is scrolled into sight: the page, or any scrolling box the canvas is in.
+    const onSight = () => { if (this.waitingForSight) this.invalidate("paint"); };
+    // A window that grows taller (a host sizing its frame to the content) shows more without scrolling.
+    document.addEventListener("scroll", onSight, { capture: true, passive: true });
+    window.addEventListener("resize", onSight, { passive: true });
+    this.cleanup.push(() => { document.removeEventListener("scroll", onSight, { capture: true }); window.removeEventListener("resize", onSight); });
     if (this.opts.width === undefined && this.canvas.parentElement && typeof ResizeObserver !== "undefined") {
       const ro = new ResizeObserver(() => {
         const w = this.canvas.parentElement?.clientWidth || 0;
@@ -2235,8 +2640,14 @@ export class SayShape {
     }
   }
 
+  /** The spec's look line's choices, or null when it has none (or the host turned look lines off). */
+  get look(): Look | null {
+    return this.lookChoice;
+  }
+
   private resolveTheme(): Theme {
-    const chosen = this.chosenTheme();
+    // The look over the host's theme, then (in a forced-colors mode) the person's colors over both.
+    const chosen = applyLook(this.chosenTheme(), this.lookChoice);
     // In a forced-colors mode the person's own colors win over any theme.
     if (typeof matchMedia !== "undefined" && matchMedia("(forced-colors: active)").matches) {
       return forcedColorsTheme(chosen, (name) => this.systemColor(name));
@@ -2281,6 +2692,10 @@ export class SayShape {
     if (this.toastTimer !== null) clearTimeout(this.toastTimer);
     if (this.frame && typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(this.frame);
     this.cleanup.forEach((f) => f());
+    if (this.textTimer !== null) { clearTimeout(this.textTimer); this.textTimer = null; }
+    this.text?.collector.dispose();
+    this.text?.host.destroy();
+    this.text = null;
     this.a11y.destroy();
     this.events.clear();
   }
@@ -2312,8 +2727,32 @@ function cameFromAfter(canvas: HTMLCanvasElement, from: EventTarget | null, a11y
 }
 
 /** Whether a hit region is the one a target refers to (same element, same part). */
+/** A text box worked out where a field was laid out, moved and scaled to where it's drawn (inside a slide). */
+function scaledEditor(spec: EditorSpec, t: ChildTransform): EditorSpec {
+  return {
+    ...spec,
+    rect: applyTransform(spec.rect, t),
+    font: spec.font.replace(/(\d+(?:\.\d+)?)px/, (_, n: string) => `${Number(n) * t.scale}px`),
+    ...(spec.lineHeight !== undefined ? { lineHeight: spec.lineHeight * t.scale } : {}),
+  };
+}
+
 function sameRegion(h: HitRegion, t: HitTarget): boolean {
   return h.box.node.id === t.node.id && h.detail === t.detail;
+}
+
+/** A staggering parent's children's turns: their role, when the first may start, and how many have started this frame. */
+interface StaggerCue { role: EnterRole; base: number; slot: number }
+
+/** Draw an entrance's pose: moved down by dy and scaled about the box's centre. */
+function applyPose(g: CanvasRenderingContext2D, box: Box, pose: EnterPose): void {
+  if (pose.dy) g.translate(0, pose.dy);
+  if (pose.scale !== 1) {
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    g.translate(cx, cy);
+    g.scale(pose.scale, pose.scale);
+    g.translate(-cx, -cy);
+  }
 }
 
 /** How often, at most, the mirror follows regions that move without layout (an animated scene's shapes). */

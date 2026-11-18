@@ -1,6 +1,6 @@
 {
   "name": "sayshape-mcp",
-  "version": "0.2.1",
+  "version": "0.4.0",
   "description": "An MCP server that lets Claude, ChatGPT and other MCP Apps clients show SayShape interfaces inside the chat.",
   "type": "module",
   "license": "MIT",
@@ -14,10 +14,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "vite build --config vite.ui.config.ts && node scripts/inline-ui.mjs && vite build --config vite.server.config.ts",
+    "build": "vite build --config vite.ui.config.ts && node scripts/inline-ui.mjs && node scripts/pack-widget-engine.mjs && vite build --config vite.server.config.ts",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "test:e2e": "node scripts/e2e.mjs && node scripts/e2e-data.mjs && node scripts/e2e-import.mjs && node scripts/e2e-fallback.mjs",
+    "test:e2e": "node scripts/e2e.mjs && node scripts/e2e-data.mjs && node scripts/e2e-import.mjs && node scripts/e2e-fallback.mjs && node scripts/e2e-widget.mjs",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm test && npm run build"
   },
@@ -31,6 +31,7 @@
     "@fontsource/inter": "5.3.0",
     "@playwright/test": "1.56.1",
     "@types/node": "22.9.0",
+    "esbuild": "0.21.5",
     "typescript": "5.6.3",
     "vite": "5.4.10",
     "vitest": "2.1.4"
