@@ -192,6 +192,7 @@ The [website](https://premmannava.github.io/sayshape/docs/) is the best place to
 | [The language](docs/language.md) | Elements, state, derived values, expressions, actions, lists, screens and conditions |
 | [Components](docs/components.md) | Every component's props and an example, generated from the code |
 | [Using the engine](docs/engine.md) | Options, methods, events, theming, accessibility and debugging |
+| [React](docs/integration/react.md), [web component](docs/integration/web-component.md), [Vue](docs/integration/vue.md) and [Svelte](docs/integration/svelte.md) | `sayshape/react`, `sayshape/element`, `sayshape/vue` and `sayshape/svelte`: SayShape in your framework |
 | [Connecting a model](docs/model.md) | `sayshape/model`, the guide and its sizes, and scoring a model yourself |
 | [The MCP server](mcp/README.md) | SayShape inside chat apps, and hosting it for a team |
 | [Working on SayShape](docs/development.md) | Commands, tests, writing a component and the project's layout |
