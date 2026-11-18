@@ -34,7 +34,7 @@ import { paintScene, type Frame } from "./draw";
 import { locateOf } from "../../each";
 import { dragShape, keyShape, rangeOf } from "./drag";
 import type { PartSemantics } from "../../a11y/semantics";
-import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
+import { intersect, liveOf, outerGeoms, outline, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
 export { MAX_SCENE_SHAPES, MAX_SCENE_STEPS, MAX_USE_DEPTH, THEME_COLORS } from "./draw";
@@ -266,21 +266,33 @@ function paintFeedback(box: Box, ctx: PaintContext, shown: ReadonlyArray<{ r: Sc
     const strong = !!s.r.selected || focused;
     g.save();
     g.globalAlpha = strong ? 1 : 0.7;
-    for (const { pts, open } of outerGeoms(s.r).flatMap(strokes)) {
-      if (pts.length < 2) continue;
-      g.beginPath();
-      g.moveTo(pts[0]![0], pts[0]![1]);
-      for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
-      if (!open) g.closePath();
-      g.lineJoin = "round";
-      g.lineCap = "round";
-      // A light edge under the accent keeps the outline visible on any color the model chose.
-      g.strokeStyle = c.surface;
-      g.lineWidth = strong ? 6 : 5;
-      g.stroke();
-      g.strokeStyle = c.accent;
-      g.lineWidth = strong ? 3 : 2;
-      g.stroke();
+    for (const geom of outerGeoms(s.r)) {
+      g.save();
+      // An outline around a shape in a clip=true group is cut where the shape is.
+      for (const c of geom.clips ?? []) {
+        const edge = outline({ kind: "rect", ...c });
+        g.beginPath();
+        edge.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.closePath();
+        g.clip();
+      }
+      for (const { pts, open } of strokes(geom)) {
+        if (pts.length < 2) continue;
+        g.beginPath();
+        g.moveTo(pts[0]![0], pts[0]![1]);
+        for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
+        if (!open) g.closePath();
+        g.lineJoin = "round";
+        g.lineCap = "round";
+        // A light edge under the accent keeps the outline visible on any color the model chose.
+        g.strokeStyle = c.surface;
+        g.lineWidth = strong ? 6 : 5;
+        g.stroke();
+        g.strokeStyle = c.accent;
+        g.lineWidth = strong ? 3 : 2;
+        g.stroke();
+      }
+      g.restore();
     }
     g.restore();
   }
@@ -393,14 +405,27 @@ const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), ...PRESS, ...DRAG },
+  props: {
+    x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1),
+    clip: { type: "boolean", description: "Shapes inside are cut to the group's w×h box, rounded by rx: glows inside a phone screen, a map in a card.", default: false },
+    w: num("Width of the clip=true box, from the group's x."), h: num("Height of the clip=true box, from the group's y."), rx: num("Corner rounding of the clip=true box."),
+    ...PRESS, ...DRAG,
+  },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
   example: `group x={600*((t/3) % 1)} y=200
   rect x=-40 y=-20 w=80 h=24 rx=6 fill="#E63946"
   circle x=-22 y=6 r=9 fill="#222222"
-  circle x=22 y=6 r=9 fill="#222222"`,
+  circle x=22 y=6 r=9 fill="#222222"
+group x=20 y=20 w=200 h=120 rx=24 clip=true
+  circle x=180 y=10 r=90 fill="accent 40%" glow=true`,
+  check: (props) => {
+    const clipped = props.clip !== undefined && props.clip !== "false";
+    if (clipped && (props.w === undefined || props.h === undefined)) return ["clip=true needs w= and h=, the size of the box its shapes are cut to"];
+    if (!clipped && (props.w !== undefined || props.h !== undefined)) return ["w= and h= only size a group's clip=true box; add clip=true, or leave them out"];
+    return [];
+  },
   layout: (box) => { box.h = 0; },
   semantics: () => false,
 };

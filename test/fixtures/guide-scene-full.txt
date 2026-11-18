@@ -1057,6 +1057,10 @@ ELEMENTS
     rotate=<number>  Turns everything, in degrees, around the group's x and y.
     scale=<number>  Grows or shrinks everything.
     opacity=<number>  Fades everything, 0 to 1.
+    clip=<boolean>  Shapes inside are cut to the group's w×h box, rounded by rx: glows inside a phone screen, a map in a card.
+    w=<number>  Width of the clip=true box, from the group's x.
+    h=<number>  Height of the clip=true box, from the group's y.
+    rx=<number>  Corner rounding of the clip=true box.
     on=<action>  Actions when it's pressed (click, tap, Enter), like a button's on=; makes it pressable and a Tab stop. Inside the scene's each they see the item: on=set:sel:{m.id}.
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
@@ -1068,6 +1072,8 @@ ELEMENTS
         rect x=-40 y=-20 w=80 h=24 rx=6 fill="#E63946"
         circle x=-22 y=6 r=9 fill="#222222"
         circle x=22 y=6 r=9 fill="#222222"
+      group x=20 y=20 w=200 h=120 rx=24 clip=true
+        circle x=180 y=10 r=90 fill="accent 40%" glow=true
 
   define "<text>"  — A reusable drawing: name it, draw it under this line around 0,0, and draw it anywhere with use. It reads names its use passes in args.
     "<text>" (required)  The drawing's name, used by use.

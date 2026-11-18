@@ -12,7 +12,7 @@ import type { Theme } from "../../theme";
 import type { SayShapeNode, Value } from "../../types";
 import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
-import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type SceneRegion } from "./interact";
+import { flattenPath, rotate, scale, translate, type ClipRect, type Geom, type Matrix, type SceneRegion } from "./interact";
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
@@ -113,6 +113,8 @@ export interface Frame {
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
   m: Matrix;
+  /** The clip=true groups around the line being drawn, outermost first: only what's inside all of them shows. */
+  clips?: readonly ClipRect[];
   /**
    * Set to record pressable shapes (on=) as they're drawn: the regions in the
    * order they start, the ones open around the line being drawn, and which
@@ -307,7 +309,8 @@ function closeRegion(r: SceneRegion | null, f: Frame): void {
  */
 function addGeom(f: Frame, geom: Geom): void {
   if (!f.press?.open.length || f.g.globalAlpha < 0.05 * (f.press.alpha ?? 1)) return;
-  for (const r of f.press.open) r.geoms.push(geom);
+  const cut: Geom = f.clips?.length ? { ...geom, clips: f.clips } : geom;
+  for (const r of f.press.open) r.geoms.push(cut);
 }
 
 function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
@@ -512,6 +515,16 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       const s = n("scale", 1);
       if (s !== 1) { g2.scale(s, s); f.m = scale(f.m, s, s); }
       if (node.props.opacity !== undefined) g2.globalAlpha *= Math.min(1, Math.max(0, n("opacity", 1)));
+      // clip=true: what's inside is cut to the group's own rounded w×h box (glows inside a phone screen).
+      const clips = f.clips;
+      if (node.type === "group" && node.props.clip !== undefined && node.props.w !== undefined && node.props.h !== undefined) {
+        const on = read(node, "clip", scope);
+        if (on === true || on === "true") {
+          const cw = Math.max(0, n("w")), ch = Math.max(0, n("h")), cr = Math.max(0, n("rx"));
+          g2.beginPath(); roundRect(g2, 0, 0, cw, ch, cr); g2.clip();
+          f.clips = [...(clips ?? []), { m: f.m, x: 0, y: 0, w: cw, h: ch, r: cr }];
+        }
+      }
       const rec = f.press, outer = rec?.locate;
       if (node.type === "use") {
         f.useDepth++;
@@ -526,6 +539,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
       if (node.type === "use") { f.useDepth--; if (rec && outer) { rec.copy.pop(); rec.locate = outer; } }
       g2.restore();
       f.m = was;
+      f.clips = clips;
       return;
     }
   }
