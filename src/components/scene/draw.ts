@@ -14,6 +14,7 @@ import { SCENE_FUNCTIONS } from "./functions";
 import { points, tracePath, type Bounds } from "./path";
 import { STYLED, capOf, drawCommands, joinOf, roundPolyline, traceRounded } from "./line-style";
 import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type SceneRegion } from "./interact";
+import { hoverActions } from "./hover";
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
@@ -307,12 +308,13 @@ function openRegion(node: SayShapeNode, scope: Scope, f: Frame): SceneRegion | n
       if (drag) dr.count++;
     }
   } else if (dr && node.props.drag !== undefined && DRAGGABLE.has(node.type)) dr.over = node.line;
-  if (!on && !drag) return null;
+  const hover = hoverActions(node);
+  if (!on && !drag && !hover) return null;
   const sel = node.props.selected === undefined ? undefined : read(node, "selected", scope);
   const r: SceneRegion = {
     key: rec.copy.length ? `${node.id}#${rec.copy.join(".")}` : node.id,
     node, scope, on, locate: rec.locate, geoms: [], words: [],
-    ...(drag ? { drag } : {}),
+    ...(drag ? { drag } : {}), ...hover,
   };
   const parent = rec.open[rec.open.length - 1];
   if (parent) r.parent = parent;

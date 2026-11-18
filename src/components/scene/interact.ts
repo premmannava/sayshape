@@ -63,6 +63,9 @@ export interface SceneRegion {
   /** The pressable line it's drawn inside, if any (a shape in a pressable group). */
   parent?: SceneRegion;
   on: string;
+  /** on-hover= and on-leave= (hover.ts): a region with only these is pointed at, never pressed. */
+  onHover?: string;
+  onLeave?: string;
   tip?: string;
   name?: string;
   selected?: boolean;

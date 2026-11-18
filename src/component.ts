@@ -466,6 +466,15 @@ export interface ComponentDef {
    */
   key?(ctx: PressContext, key: string): boolean;
   /**
+   * The mouse moved onto, between or off this element's parts (never a finger:
+   * touch doesn't hover). from and to are the parts' details as given to
+   * addHit, undefined being off the element; ctx.target is the element. Moving
+   * from one element to another calls the first with (from, undefined), then
+   * the second with (undefined, to). A part that stops being drawn under a
+   * resting pointer counts as left.
+   */
+  hover?(ctx: PressContext, from: unknown, to: unknown): void;
+  /**
    * Whether an element is shown, beyond its `if=` prop. Hidden elements aren't
    * laid out or painted (only the active screen is, for example).
    */
