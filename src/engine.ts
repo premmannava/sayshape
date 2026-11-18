@@ -287,6 +287,8 @@ export class SayShape {
   hover: HitTarget | null = null;
   /** What hover hooks (ComponentDef.hover) were last told the mouse is over: never a tip, a popup's part or a finger. */
   private hoverSent: HitTarget | null = null;
+  /** The pointer resting on the canvas is a mouse or pen (not a finger), so moving parts under it can be hovered. */
+  private mouseOver = false;
   /** The element being dragged, while the pointer is held on one that defines drag. */
   private dragging: HitTarget | null = null;
   focus: HitTarget | null = null;
@@ -1511,6 +1513,15 @@ export class SayShape {
    */
   private syncHover(): boolean {
     const s = this.hoverSent;
+    // While something animates under a resting mouse (a frame is already asked for), what's under it is
+    // found again, once a frame: a planet orbiting away from the pointer is left, one arriving is entered.
+    const p = this.pointer;
+    if ((this.frame || this.dirty.paint) && p && this.mouseOver && !this.dragging && !this.popup) {
+      const t = this.targetAt(p.x, p.y);
+      const was = this.hoverSent;
+      this.hoverTo(t);
+      if (this.hoverSent !== was) { this.hover = t; return true; }
+    }
     if (!s) return false;
     const from = Math.max(0, this.modalFrom);
     if (!this.popup && this.hits.some((h, i) => i >= from && sameRegion(h, s))) return false;
@@ -2427,7 +2438,8 @@ export class SayShape {
       if (!sameTarget(t, this.hover)) { this.hover = t; this.invalidate("paint"); }
       else if (t?.detail !== undefined) this.invalidate("paint");
       // A finger doesn't hover (a tap's move would fire on-hover); a mouse or a pen does.
-      if (e.pointerType !== "touch") this.hoverTo(t);
+      this.mouseOver = e.pointerType !== "touch";
+      if (this.mouseOver) this.hoverTo(t);
     };
     const onLeave = () => {
       if (this.dragging) return; // the pointer is captured; the drag ends on release
