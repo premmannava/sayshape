@@ -152,7 +152,10 @@ scroll "Recent activity" size=sm
       v.dragMoved = 1;
       return scrollTo(v, d, (v.dragFrom ?? 0) - dy);
     }
+    // Taken over (a touch swipe, the browser's scroll): back where it was, for whoever has it now.
+    const back = ctx.cancelled && v.dragMoved ? v.dragFrom : undefined;
     delete v.dragY; delete v.dragFrom; delete v.dragMoved;
+    if (back !== undefined && d) return scrollTo(v, d, back);
     return false;
   },
   semantics(box, ctx) {

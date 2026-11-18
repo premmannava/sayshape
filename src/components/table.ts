@@ -29,7 +29,9 @@
  * - Width: columns get their natural widths, and text columns narrow (never
  *   below MIN_TEXT_COLUMN, nor below their longest word up to
  *   MAX_SCROLL_TEXT_COLUMN, so words aren't split) to fit. Text cells that no longer fit on one line
- *   wrap to at most MAX_CELL_LINES lines, ending with "…" past that; a row is
+ *   wrap, in full; only text longer than MAX_CELL_LINES lines is shortened, ending with "…" and a
+ *   "Show all" toggle under it (its own Tab stop, a button with expanded state) that shows the
+ *   rest, kept as view state (ctx.view, "e:<item>:<column>"); a row is
  *   as tall as its tallest cell (never shorter than one line), and numbers
  *   stay on one line. When even the narrowest columns don't fit, the table
  *   scrolls sideways instead: every column keeps a readable width, the first
@@ -80,8 +82,13 @@ const LOCALE = "en-US";
 const MIN_TEXT_COLUMN = 96;
 /** Room for the sort arrow beside a header. */
 const ARROW = 14;
-/** A text cell wraps onto at most this many lines; past that it ends with an ellipsis. */
-export const MAX_CELL_LINES = 3;
+/** A header wraps onto at most this many lines (its column is at least as wide as its longest word). */
+const MAX_HEADER_LINES = 3;
+/**
+ * A text cell wraps in full up to this many lines; past that it's shortened to them, ending with an
+ * ellipsis, and a "Show all" toggle under it shows the rest (nothing is lost, only folded).
+ */
+export const MAX_CELL_LINES = 8;
 /** How visible a sortable header's neutral arrow is at rest, and under the pointer or focus. */
 const ARROW_REST = 0.4;
 const ARROW_HOVER = 0.8;
@@ -101,7 +108,9 @@ export interface Rect { x: number; y: number; w: number; h: number }
 export interface TableColumn {
   field: string;
   label: string;
-  /** The header as drawn, cut to fit. */
+  /** The header as drawn: its lines, wrapped between words (the column is never narrower than its longest word). */
+  labelLines: string[];
+  /** The header as drawn, on one line (its lines joined). */
   shownLabel: string;
   format: Format;
   align: Align;
@@ -129,6 +138,8 @@ export interface TableCell {
   sign?: "good" | "bad";
   /** The bar's length as a fraction of its scale, negative to the left of zero. */
   bar?: number;
+  /** Text longer than MAX_CELL_LINES lines: folded ("closed", lines cut with "…") or unfolded ("open"); a toggle line under it. */
+  more?: "closed" | "open";
 }
 
 export interface TableRow {
@@ -164,6 +175,10 @@ export type TableGeometry = {
   /** The bordered area: header, rows and any empty message. */
   frame: Rect;
   headerH: number;
+  /** Height of one line of a header label. */
+  headerLH: number;
+  /** Space either side of a cell's text: the theme's medium space, or its small one where only that fits the columns (a phone). */
+  pad: number;
   columns: TableColumn[];
   rows: TableRow[];
   /** total=: a row of sums under the rows. */
@@ -248,6 +263,10 @@ export function keyOf(item: Value, field: string): string | number | null {
 }
 
 const rowDetail = (key: string | number) => `row:${typeof key === "number" ? "n" : "s"}:${key}`;
+/** A long cell's Show all toggle, by item (its place in the list) and column, and where it's kept open in view state. */
+const moreDetail = (item: number, ci: number) => `more:${item}:${ci}`;
+const foldKey = (item: number, ci: number) => `e:${item}:${ci}`;
+const MORE_LABEL = { closed: "Show all", open: "Show less" } as const;
 const sortDetail = (field: string) => `sort:${field}`;
 
 /**
@@ -325,12 +344,13 @@ export function fitColumns(natural: readonly number[], minimum: readonly number[
  * The width of the longest word in column ci. A cell with no space is one word, already
  * measured; a cell no wider than the longest so far can't hold a longer word, so it's skipped.
  */
-function longestWord(texts: readonly string[][], textW: readonly number[][], ci: number, font: string, m: TextMeasurer): number {
+function longestWord(texts: readonly string[][], textW: readonly number[][], ci: number, font: string, m: TextMeasurer, whole?: (r: number) => boolean): number {
   let best = 0;
   texts.forEach((row, r) => {
     const s = row[ci]!, w = textW[r]![ci]!;
     if (w <= best) return;
-    if (!/\s/.test(s)) { best = w; return; }
+    // A badge is one piece: it never wraps, so its whole width is its "word".
+    if (whole?.(r) || !/\s/.test(s)) { best = w; return; }
     for (const word of s.split(/\s+/)) if (word) best = Math.max(best, m.width(word, font));
   });
   return best;
@@ -350,19 +370,20 @@ function readColumns(node: SayShapeNode, ctx: Pick<LayoutContext, "visibleChildr
   });
 }
 
-function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx: Pick<LayoutContext, "theme" | "measure" | "warn" | "visibleChildren" | "props">, loading = false): TableGeometry {
+function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx: Pick<LayoutContext, "theme" | "measure" | "warn" | "visibleChildren" | "props" | "view">, loading = false): TableGeometry {
   const t: Theme = ctx.theme, m = ctx.measure;
   const line = box.node.line;
   const warn = (msg: string) => ctx.warn?.(`table on line ${line}: ${msg}`);
   const titleFont = themeFont(t, 600, t.text.body), headerFont = themeFont(t, 600, t.text.caption), cellFont = themeFont(t, 400, t.text.body);
   const titleLH = Math.round(t.text.body * 1.4);
-  const pad = t.space.md;
-  const headerH = Math.round(t.text.caption * 1.4) + 2 * t.space.sm;
+  let pad = t.space.md;
+  const headerLH = Math.round(t.text.caption * 1.4);
+  let headerH = headerLH + 2 * t.space.sm;
   const rowH = Math.round(t.text.body * 1.4) + 2 * t.space.sm;
   const title = p.text() ? wrapText(p.text(), box.w, titleFont, m) : [];
   const top = title.length ? title.length * titleLH + t.space.sm : 0;
   const cellLH = Math.round(t.text.body * 1.4);
-  const base: TableGeometry = { title, titleFont, titleLH, headerFont, cellFont, badgeFont: themeFont(t, 600, t.text.caption), cellLH, frame: { x: 0, y: top, w: box.w, h: 0 }, headerH, columns: [], rows: [], sortable: false };
+  const base: TableGeometry = { title, titleFont, titleLH, headerFont, cellFont, badgeFont: themeFont(t, 600, t.text.caption), cellLH, frame: { x: 0, y: top, w: box.w, h: 0 }, headerH, headerLH, pad, columns: [], rows: [], sortable: false };
   const say = (message: string): TableGeometry => ({ ...base, message, frame: { x: 0, y: top, w: box.w, h: Math.max(rowH * 2, 64) } });
 
   const specs = readColumns(box.node, ctx);
@@ -449,18 +470,49 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
   });
 
   // Column widths from what they hold.
-  const headerW = specs.map((c) => m.width(c.label, headerFont) + (sortable ? ARROW : 0) + 2 * pad);
   const badgeFont = themeFont(t, 600, t.text.caption);
   const textW = texts.map((row, r) => row.map((s, ci) => (badges[r]![ci] ? m.width(s, badgeFont) + 2 * BADGE_PAD : m.width(s, cellFont))));
   const totalW = totalTexts ? totalTexts.map((s) => m.width(s, themeFont(t, 600, t.text.body))) : [];
-  const cellW = specs.map((c, ci) => Math.max(0, totalW[ci] ?? 0, ...textW.map((row) => row[ci]!)) + 2 * pad + (c.bar ? BAR_ROOM : 0));
-  const natural = specs.map((_, ci) => Math.max(headerW[ci]!, cellW[ci]!));
-  // A text column is never narrower than its longest word (up to MAX_SCROLL_TEXT_COLUMN), so
-  // wrapping happens between words; when that can't fit, the table scrolls instead of splitting
-  // "Healthy" into "Healt / hy". Numbers are never cut short; headers can be.
-  const wordW = specs.map((c, ci) => (c.format === "text" ? Math.min(MAX_SCROLL_TEXT_COLUMN, Math.max(longestWord(texts, textW, ci, cellFont, m), totalW[ci] ?? 0) + 2 * pad) : 0));
-  const minimum = specs.map((c, ci) => (c.format === "text" ? Math.max(Math.min(natural[ci]!, MIN_TEXT_COLUMN), wordW[ci]!) : Math.max(cellW[ci]!, Math.min(headerW[ci]!, MIN_TEXT_COLUMN))));
-  let widths = fitColumns(natural, minimum, box.w, specs.map((c) => c.format === "text"));
+  const isText = specs.map((c) => c.format === "text");
+  const longest = specs.map((c, ci) => (c.format === "text" ? longestWord(texts, textW, ci, cellFont, m, (r) => !!badges[r]![ci]) : 0));
+  const headerWord = specs.map((c) => Math.max(0, ...c.label.split(/\s+/).map((w) => m.width(w, headerFont))));
+  /** Natural and least widths, and the widths that fit the box (null when even the least don't), for a cell padding. */
+  const sized = (pad: number) => {
+    const headerW = specs.map((c) => m.width(c.label, headerFont) + (sortable ? ARROW : 0) + 2 * pad);
+    const cellW = specs.map((c, ci) => Math.max(0, totalW[ci] ?? 0, ...textW.map((row) => row[ci]!)) + 2 * pad + (c.bar ? BAR_ROOM : 0));
+    const natural = specs.map((_, ci) => Math.max(headerW[ci]!, cellW[ci]!));
+    // A text column is never narrower than its longest word (up to MAX_SCROLL_TEXT_COLUMN), so
+    // wrapping happens between words; when that can't fit, the table scrolls instead of splitting
+    // "Healthy" into "Healt / hy". Numbers are never cut short.
+    const wordW = specs.map((c, ci) => (c.format === "text" ? Math.min(MAX_SCROLL_TEXT_COLUMN, Math.max(longest[ci]!, totalW[ci] ?? 0) + 2 * pad) : 0));
+    // Headers wrap between words, so a column needs only its header's longest word, not the whole
+    // label on one line: a number column can be as narrow as its numbers, leaving the room to text.
+    const headerWordW = headerWord.map((w) => Math.min(MAX_SCROLL_TEXT_COLUMN, w + 2 * pad + (sortable ? ARROW : 0)));
+    const minimum = specs.map((c, ci) => Math.max(headerWordW[ci]!, c.format === "text" ? Math.max(Math.min(natural[ci]!, MIN_TEXT_COLUMN), wordW[ci]!) : cellW[ci]!));
+    // Short of room, number columns go first to their snug width (their values, with the header
+    // wrapped), so text keeps as much as it can; any room left goes back to them, up to one-line headers.
+    let widths: number[] | null;
+    if (natural.reduce((a, b) => a + b, 0) <= box.w) widths = fitColumns(natural, minimum, box.w, isText);
+    else {
+      const snug = natural.map((n, i) => (isText[i] ? n : minimum[i]!));
+      const room = box.w - snug.reduce((a, b) => a + b, 0);
+      if (room >= 0) {
+        const want = natural.map((n, i) => n - snug[i]!), wanted = want.reduce((a, b) => a + b, 0);
+        widths = snug.map((n, i) => n + (wanted > 0 ? (room * want[i]!) / wanted : 0));
+      } else widths = fitColumns(snug, minimum, box.w, isText);
+    }
+    return { natural, minimum, widths };
+  };
+  // The theme's medium padding; on a table that wouldn't fit with it (a phone), its small one, if
+  // that fits. One that doesn't fit either way scrolls with the medium padding, as wide as it needs.
+  let fitted = sized(pad);
+  if (!fitted.widths && t.space.sm < pad) {
+    const tight = sized(t.space.sm);
+    if (tight.widths) { fitted = tight; pad = t.space.sm; }
+  }
+  base.pad = pad;
+  const { natural, minimum } = fitted;
+  let widths = fitted.widths;
   let scrollParts: Omit<TableScroll, "bar"> | undefined;
   if (!widths) {
     // Too wide even squeezed: keep every column readable and scroll sideways instead.
@@ -490,9 +542,12 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
   const columns: TableColumn[] = specs.map((c, ci) => {
     const w = widths[ci]!;
     const { bar: _wanted, ...spec } = c;
+    // Half a pixel of slack: a column exactly as wide as its longest header word mustn't split it.
+    const labelLines = fitLines(c.label, Math.max(1, w - 2 * pad - (sortable ? ARROW : 0) + 0.5), headerFont, m, MAX_HEADER_LINES);
     const col: TableColumn = {
       ...spec, x, w,
-      shownLabel: fit(c.label, w - 2 * pad - (sortable ? ARROW : 0), headerFont, m),
+      labelLines,
+      shownLabel: labelLines.join(" "),
       ...(barTrack(bars[ci], w, ci) ? { bar: barTrack(bars[ci], w, ci)! } : {}),
       sorted: sortField === c.field ? direction : null,
     };
@@ -500,8 +555,12 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     return col;
   });
 
+  // The header is as tall as its tallest label.
+  headerH = Math.max(1, ...columns.map((c) => c.labelLines.length)) * headerLH + 2 * t.space.sm;
+  base.headerH = headerH;
   // Each row is as tall as its tallest cell, and never shorter than one line.
   let rowY = top + headerH;
+  const view = ctx.view?.(box.node);
   const rows: TableRow[] = order.map((i, r) => {
     const key = usable[i] ? keys[i]! : null;
     const selectable = bindable && key !== null;
@@ -509,8 +568,19 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
       const room = columns[ci]!.w - 2 * pad;
       // Only text wraps; numbers keep to one line (their column is never narrower than they are).
       const badge = badges[r]![ci], n = numbers[r]![ci], col = columns[ci]!;
-      const lines = badge ? [fit(full, room - 2 * BADGE_PAD, badgeFont, m)] : col.format === "text" ? fitLines(full, room, cellFont, m, MAX_CELL_LINES) : [fit(full, room, cellFont, m)];
+      let more: TableCell["more"];
+      let lines: string[];
+      if (badge) lines = [fit(full, room - 2 * BADGE_PAD, badgeFont, m)];
+      else if (col.format !== "text") lines = [fit(full, room, cellFont, m)];
+      else {
+        lines = wrapText(full, room, cellFont, m);
+        if (lines.length > MAX_CELL_LINES) {
+          more = view?.[foldKey(i, ci)] ? "open" : "closed";
+          if (more === "closed") lines = fitLines(full, room, cellFont, m, MAX_CELL_LINES);
+        }
+      }
       const cell: TableCell = { full, lines };
+      if (more) cell.more = more;
       if (n !== undefined) cell.n = n;
       if (badge) cell.badge = badge;
       if (col.tone === "sign" && n !== undefined && n !== 0) cell.sign = n > 0 ? "good" : "bad";
@@ -520,7 +590,8 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
       }
       return cell;
     });
-    const h = Math.max(rowH, Math.max(1, ...cells.map((c) => c.lines.length)) * cellLH + 2 * t.space.sm);
+    // A folded cell has its toggle as one more line under its text.
+    const h = Math.max(rowH, Math.max(1, ...cells.map((c) => c.lines.length + (c.more ? 1 : 0))) * cellLH + 2 * t.space.sm);
     const y = rowY;
     rowY += h;
     return {
@@ -624,7 +695,7 @@ function paintTable(box: Box, ctx: PaintContext): void {
   const { g, theme } = ctx;
   const c = theme.colors;
   const ox = box.x, oy = box.y;
-  const pad = theme.space.md;
+  const pad = d.pad;
   g.textBaseline = "middle";
 
   g.font = d.titleFont;
@@ -690,15 +761,6 @@ function paintTable(box: Box, ctx: PaintContext): void {
   if (s) ctx.addHit(tablePart(box, ox + f.x, oy + f.y, f.w, f.h), { detail: SCROLL_AREA, focusable: false });
   const strip = s ? s.bar.h : 0;
 
-  // A faint band behind the header sets it apart from the rows, inside the frame's rounded corners.
-  g.save();
-  ctx.roundRect(ox + f.x + 1, oy + f.y + 1, f.w - 2, f.h - 2, theme.radius.md - 1);
-  g.clip();
-  g.beginPath();
-  g.rect(ox + f.x, oy + f.y, f.w, d.headerH);
-  fillTint(g, c.ink, 0.018);
-  g.restore();
-
   // Rules between rows are lighter than the frame: they guide the eye without boxing every row.
   const rule = (y: number, light = true) => {
     g.beginPath();
@@ -718,21 +780,47 @@ function paintTable(box: Box, ctx: PaintContext): void {
     g.stroke();
   };
 
-  // Header: a pressable cell per column when the table sorts.
-  const hy = oy + f.y;
-  g.font = d.headerFont;
+  // Header: a pressable cell per column when the table sorts. Painted after the rows, so on a
+  // table taller than the screen it can stay at the top of what's in sight, over the rows.
+  const restY = oy + f.y;
+  const hy = stickyHeaderY(ctx, d, restY, oy + f.y + f.h - strip);
+  const paintHeaderRow = () => {
+    // An opaque band (a faint tint on the surface) sets it apart and hides rows scrolled under it.
+    g.save();
+    ctx.roundRect(ox + f.x + 1, oy + f.y + 1, f.w - 2, f.h - 2, theme.radius.md - 1);
+    g.clip();
+    g.beginPath();
+    g.rect(ox + f.x + 1, hy, f.w - 2, d.headerH);
+    g.fillStyle = c.raised;
+    g.fill();
+    fillTint(g, c.ink, 0.018);
+    if (hy > restY) edgeShadow(g, c.shadow, ox + f.x + 1, hy + d.headerH, f.w - 2, "down");
+    g.restore();
+    g.font = d.headerFont;
+    d.columns.forEach((col, ci) => {
+      const part = visiblePart(ci);
+      if (!part) return;
+      clipped(ci, () => paintHeader(col, ci, part));
+    });
+    rule(hy - oy + d.headerH, false);
+  };
+  // Header regions first, so Tab reaches the headers before the rows (rows keep out of a stuck header).
   d.columns.forEach((col, ci) => {
     const part = visiblePart(ci);
-    if (!part) return;
-    clipped(ci, () => paintHeader(col, ci, part));
+    if (part && (d.sortable || col.tip)) ctx.addHit(tablePart(box, part.x, hy, part.w, d.headerH), { detail: d.sortable ? sortDetail(col.field) : `tip:${ci}` });
   });
+  /** A row's part of the canvas that isn't under a stuck header (null when it's all under it). */
+  const belowHeader = (y: number, h: number): { y: number; h: number } | null => {
+    if (hy <= restY) return { y, h };
+    const top = Math.max(y, hy + d.headerH);
+    return y + h - top > 1 ? { y: top, h: y + h - top } : null;
+  };
   function paintHeader(col: TableColumn, ci: number, part: { x: number; w: number }) {
     const cell = tablePart(box, part.x, hy, part.w, d!.headerH);
     const cx = ox + colX(ci);
     // A header that doesn't sort but has a tip is pressable for its tip alone.
     const detail = d!.sortable ? sortDetail(col.field) : `tip:${ci}`;
     const hovered = d!.sortable && ctx.isHovered(box.node, detail);
-    if (d!.sortable || col.tip) ctx.addHit(cell, { detail });
     // A sorted column says so quietly: its label in ink with a small arrow, no box
     // or underline. Every other sortable header keeps a faint up-and-down arrow,
     // since a phone has no hover to reveal that it can be pressed.
@@ -743,12 +831,15 @@ function paintTable(box: Box, ctx: PaintContext): void {
     const right = col.align === "right";
     g.textAlign = right ? "right" : "left";
     const tx = right ? cx + col.w - pad : cx + pad;
-    g.fillText(col.shownLabel, tx, hy + d!.headerH / 2);
-    const labelW = g.measureText(col.shownLabel).width;
+    // Its lines, centred in the header (which is as tall as the tallest label).
+    const lh = d!.headerLH, first = hy + (d!.headerH - col.labelLines.length * lh) / 2 + lh / 2;
+    col.labelLines.forEach((l, li) => g.fillText(l, tx, first + li * lh));
+    const labelW = Math.max(0, ...col.labelLines.map((l) => g.measureText(l).width));
     if (col.tip) {
       // A header with a tip is underlined with dots, like a row label in compare or details.
-      const lx = right ? tx - labelW : tx, ly = hy + d!.headerH / 2 + Math.round(d!.headerH / 4);
-      for (let x = 0; x < labelW; x += 4) g.fillRect(lx + x, ly, 2, 1);
+      const lastW = g.measureText(col.labelLines.at(-1) ?? "").width;
+      const lx = right ? tx - lastW : tx, ly = first + (col.labelLines.length - 1) * lh + Math.round(lh / 2);
+      for (let x = 0; x < lastW; x += 4) g.fillRect(lx + x, ly, 2, 1);
     }
     if (d!.sortable) {
       const ax = right ? tx - labelW - 8 : tx + labelW + 8;
@@ -766,7 +857,6 @@ function paintTable(box: Box, ctx: PaintContext): void {
     }
     if ((d!.sortable || col.tip) && ctx.isFocused(box.node, detail)) focusRing(cell.x, cell.y, cell.w, cell.h);
   }
-  rule(f.y + d.headerH, false);
 
   if (d.loading) {
     // Placeholder cells, a little shorter than their columns and of varied lengths.
@@ -777,6 +867,7 @@ function paintTable(box: Box, ctx: PaintContext): void {
     g.beginPath();
     g.rect(ox + f.x, oy + f.y, f.w, f.h);
     g.clip();
+    paintHeaderRow();
     paintGhost(ctx, { x: ox, y: oy + f.y + d.headerH, w: f.w, h: rows * h }, (ghost) => {
       for (let r = 0; r < rows; r++) {
         const cy = oy + f.y + d.headerH + r * h + h / 2;
@@ -792,6 +883,10 @@ function paintTable(box: Box, ctx: PaintContext): void {
     g.restore();
     return;
   }
+
+  // At rest the header is painted before the rows (the text layer reads in paint order); stuck, after them, on top.
+  const stuck = hy > restY;
+  if (!stuck) paintHeaderRow();
 
   // Rows. Just after the data arrived, they slide in one after another.
   const reveal = ctx.reveal(box.node);
@@ -814,18 +909,25 @@ function paintTable(box: Box, ctx: PaintContext): void {
       if (highlight) fillTint(g, c.ink, 0.032 * highlight);
       if (selected) fillTint(g, c.accent, 0.075 * selected);
     }
-    if (selected > 0 || row.selected) {
-      ctx.roundRect(ox + f.x + 3, ry + 7, 2, Math.max(0, row.h - 14), 1);
-      g.save();
-      // Keep the selection rail fully visible immediately; tint eases in.
-      g.globalAlpha *= row.selected ? 1 : selected;
-      g.fillStyle = c.accent;
-      g.fill();
-      g.restore();
-    }
-    if (row.detail) ctx.addHit(tablePart(box, ox + f.x, ry, f.w, row.h), { detail: row.detail });
-    d.columns.forEach((col, ci) => {
+    const hitRow = belowHeader(ry, row.h);
+    if (row.detail && hitRow) ctx.addHit(tablePart(box, ox + f.x, hitRow.y, f.w, hitRow.h), { detail: row.detail });
+    // The pinned first column is drawn last, on an opaque copy of the row's own background, so
+    // nothing scrolled under it shows through or at its edge.
+    const pinnedFirst = !!s?.pinned;
+    const order = pinnedFirst ? [...d.columns.keys()].slice(1).concat(0) : [...d.columns.keys()];
+    order.forEach((ci) => {
+      const col = d.columns[ci]!;
       if (!visiblePart(ci)) return;
+      if (pinnedFirst && ci === 0) {
+        g.beginPath();
+        g.rect(ox + f.x + 1, ry, s!.pinned - 1, row.h);
+        g.fillStyle = c.raised;
+        g.fill();
+        if (r % 2) fillTint(g, c.ink, 0.012);
+        if (highlight) fillTint(g, c.ink, 0.032 * highlight);
+        if (selected) fillTint(g, c.accent, 0.075 * selected);
+        g.fillStyle = c.raised;
+      }
       const cell = row.cells[ci]!;
       const tone = tableValueTone(cell.full, col.format);
       const x = ox + colX(ci);
@@ -833,7 +935,6 @@ function paintTable(box: Box, ctx: PaintContext): void {
         const right = col.align === "right";
         g.textAlign = right ? "right" : "left";
         // Lines sit centred in the row, so a short cell next to a tall one lines up with its middle.
-        const top = ry + (row.h - cell.lines.length * d.cellLH) / 2;
         if (cell.bar !== undefined && col.bar) paintBar(ctx, col, cell.bar, x, ry, row.h);
         if (cell.badge) {
           // A badge: the tone's own color at low opacity behind its text, like details.
@@ -851,15 +952,44 @@ function paintTable(box: Box, ctx: PaintContext): void {
           return;
         }
         g.fillStyle = cell.full === EMPTY_CELL ? c.muted : cell.sign ? c[cell.sign] : col.tone === "sign" ? c.ink : tone === "negative" ? c.bad : tone === "positive" ? c.good : c.ink;
-        cell.lines.forEach((line, li) => g.fillText(line, right ? x + col.w - pad : x + pad, top + li * d.cellLH + d.cellLH / 2));
+        const n = cell.lines.length + (cell.more ? 1 : 0);
+        const first = ry + (row.h - n * d.cellLH) / 2;
+        cell.lines.forEach((line, li) => g.fillText(line, right ? x + col.w - pad : x + pad, first + li * d.cellLH + d.cellLH / 2));
+        if (cell.more) paintMore(cell.more, row.index, ci, x, first + cell.lines.length * d.cellLH, col.w);
       });
     });
+    if (selected > 0 || row.selected) {
+      ctx.roundRect(ox + f.x + 3, ry + 7, 2, Math.max(0, row.h - 14), 1);
+      g.save();
+      // Keep the selection rail fully visible immediately; tint eases in.
+      g.globalAlpha *= row.selected ? 1 : selected;
+      g.fillStyle = c.accent;
+      g.fill();
+      g.restore();
+    }
     if (!last || s) rule(row.y + row.h);
     if (row.detail && ctx.isFocused(box.node, row.detail)) focusRing(ox + f.x, ry, f.w, row.h);
   });
   g.globalAlpha = base;
 
   if (d.totals) paintTotals(box, ctx, d, colX, clipped, visiblePart, !!s);
+  if (stuck) paintHeaderRow();
+
+  /** A long cell's toggle: a line of accent text under it, pressable on its own (above the row). */
+  function paintMore(state: "closed" | "open", item: number, ci: number, x: number, y: number, w: number) {
+    const detail = moreDetail(item, ci);
+    const label = MORE_LABEL[state];
+    g.font = d!.headerFont;
+    g.textAlign = "left";
+    g.fillStyle = c.accent;
+    g.fillText(label, x + pad, y + d!.cellLH / 2);
+    const lw = g.measureText(label).width;
+    if (ctx.isHovered(box.node, detail)) g.fillRect(x + pad, Math.round(y + d!.cellLH * 0.8), lw, 1);
+    const part = tablePart(box, x + pad / 2, y, Math.min(w - pad, lw + pad), d!.cellLH);
+    ctx.addHit(part, { detail });
+    if (ctx.isFocused(box.node, detail)) focusRing(part.x - 2, part.y - 2, part.w + 4, part.h + 4);
+    g.font = d!.cellFont;
+  }
 
   if (d.empty) {
     g.fillStyle = c.muted;
@@ -868,6 +998,34 @@ function paintTable(box: Box, ctx: PaintContext): void {
   }
 
   if (s) paintScroll(box, ctx, d, s, sx);
+}
+
+/** A soft shadow cast from an edge (the pinned column's, a stuck header's), in the theme's shadow color. */
+function edgeShadow(g: CanvasRenderingContext2D, color: string, x: number, y: number, length: number, toward: "right" | "down"): void {
+  // Four stacked bands, each a quarter of the token's strength: about its full strength at the edge
+  // (a card's shadow), fading over 8 px, in light and dark alike.
+  g.save();
+  g.globalAlpha *= 0.25;
+  g.fillStyle = color;
+  for (let i = 1; i <= 4; i++) {
+    g.beginPath();
+    if (toward === "right") g.rect(x, y, 2 * i, length);
+    else g.rect(x, y, length, 2 * i);
+    g.fill();
+  }
+  g.restore();
+}
+
+/**
+ * Where the header is drawn: at the table's top, or, on a table taller than what's in sight that
+ * has been scrolled past its top, at the top of what's in sight, until the last row reaches it.
+ */
+function stickyHeaderY(ctx: PaintContext, d: TableGeometry, restY: number, bottom: number): number {
+  if (!ctx.sight || !d.rows.length) return restY;
+  const top = ctx.sight().top;
+  if (!(top > restY)) return restY;
+  const lastRow = d.rows[d.rows.length - 1]!;
+  return Math.min(top, bottom - d.headerH - Math.min(lastRow.h, d.cellLH * 2));
 }
 
 /** An in-cell bar, behind the number: from the left edge, or from a zero line when some values are negative. */
@@ -898,7 +1056,7 @@ function paintTotals(
 ): void {
   const tot = d.totals!;
   const { g, theme } = ctx;
-  const c = theme.colors, pad = theme.space.md;
+  const c = theme.colors, pad = d.pad;
   const ox = box.x, oy = box.y, f = d.frame;
   const y = oy + tot.y;
   // The band stays inside the frame's rounded corners when nothing sits under it.
@@ -954,13 +1112,7 @@ function paintScroll(box: Box, ctx: PaintContext, d: TableGeometry, s: TableScro
   // A rule at the pinned column's edge, firmer with a soft shadow once columns slide under it.
   if (s.pinned) {
     const ex = Math.round(ox + f.x + s.pinned) + 0.5;
-    if (sx > 0) {
-      for (let i = 1; i <= 3; i++) {
-        g.beginPath();
-        g.rect(ex + 0.5, top, 2 * i, bottom - top);
-        fillTint(g, c.ink, 0.012);
-      }
-    }
+    if (sx > 0) edgeShadow(g, c.shadow, ex + 0.5, top, bottom - top, "right");
     g.beginPath();
     g.moveTo(ex, top);
     g.lineTo(ex, bottom);
@@ -1055,7 +1207,11 @@ table items=gear key=id bind=picked sort=by direction=dir
         selected: row.selectable ? row.selected : undefined,
         rect: { x: box.x + d.frame.x, y: box.y + row.y, w: d.frame.w, h: row.h },
       });
-      row.cells.forEach((cell, ci) => parts.push({ detail: `cell:${row.index}:${ci}`, within: rowDetail, role: ci === 0 ? "rowheader" : "cell", name: cell.full }));
+      row.cells.forEach((cell, ci) => {
+        parts.push({ detail: `cell:${row.index}:${ci}`, within: rowDetail, role: ci === 0 ? "rowheader" : "cell", name: cell.full });
+        // The whole text is the cell's name either way; the toggle is for eyes, and named for its column.
+        if (cell.more) parts.push({ detail: moreDetail(row.index, ci), within: `cell:${row.index}:${ci}`, role: "button", name: `${MORE_LABEL[cell.more]} of ${d.columns[ci]!.label}`, expanded: cell.more === "open" });
+      });
     });
     if (d.totals) {
       parts.push({ detail: "total", role: "row", rect: { x: box.x + d.frame.x, y: box.y + d.totals.y, w: d.frame.w, h: d.totals.h } });
@@ -1096,7 +1252,8 @@ table items=gear key=id bind=picked sort=by direction=dir
     }
     const moved = !!v.dragMoved;
     delete v.dragX; delete v.dragFrom; delete v.dragMoved;
-    if (moved) return false;
+    // Moved, or taken over by the browser (a page scroll): nothing is pressed.
+    if (moved || ctx.cancelled) return false;
     if (onBar && s) {
       // A click on the track centres the thumb there.
       const t = scrollThumb(s, 0);
@@ -1131,6 +1288,14 @@ table items=gear key=id bind=picked sort=by direction=dir
 function pressTable(ctx: PressContext): void {
   const detail = ctx.target.detail;
   if (typeof detail !== "string" || detail.startsWith("scroll:")) return;
+  const fold = /^more:(\d+):(\d+)$/.exec(detail);
+  if (fold) {
+    const v = ctx.view(ctx.target.node), k = foldKey(Number(fold[1]), Number(fold[2]));
+    if (v[k]) delete v[k];
+    else v[k] = 1;
+    ctx.relayout?.();
+    return;
+  }
   const p = ctx.props(ctx.target.node);
   if (detail.startsWith("sort:")) {
     const field = detail.slice(5);

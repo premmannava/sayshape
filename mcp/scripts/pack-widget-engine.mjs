@@ -23,6 +23,9 @@ async function script(entry, name) {
   const result = await build({
     configFile: false,
     logLevel: "warn",
+    // Plain ASCII (characters past it as \u escapes): the widget file must read the same in a frame that
+    // decodes it as windows-1252, which would turn a UTF-8 "−" into "âˆ’" (see asciiOnly in widget-file.ts).
+    esbuild: { charset: "ascii" },
     build: {
       write: false,
       target: "es2020",
