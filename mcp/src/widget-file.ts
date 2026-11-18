@@ -83,14 +83,25 @@ export interface WidgetOptions {
  * in text a spec merely shows.
  */
 function inertJson(value: unknown): string {
-  return scriptJson(value).replace(/(l)(ocalStorage)|(s)(essionStorage)|(i)(ndexedDB)|(o)(penDatabase)/gi, (_m, ...g: string[]) => {
+  return asciiOnly(scriptJson(value)).replace(/(l)(ocalStorage)|(s)(essionStorage)|(i)(ndexedDB)|(o)(penDatabase)/gi, (_m, ...g: string[]) => {
     const at = [0, 2, 4, 6].find((i) => g[i] !== undefined)!;
     return `\\u00${g[at]!.charCodeAt(0).toString(16)}${g[at + 1]}`;
   });
 }
 
+/**
+ * Every character past ASCII as a \u escape. A widget file is a fragment with no <head>, so the frame
+ * around it may read it as windows-1252: a UTF-8 "—" would then show as "â€”". Escaped, the file is
+ * plain ASCII and reads the same in any encoding. Only for JSON, and for code whose characters past
+ * ASCII sit in strings, comments, identifiers or regular expressions without the u flag (where \u
+ * means the same): the engine is built with esbuild's ascii charset, so it has none to escape.
+ */
+function asciiOnly(text: string): string {
+  return text.replace(/[^\x00-\x7f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
 /** Source code for a <script>: the same guards as for JSON, for code that is meant to stay code. */
-const inertSource = (code: string) => code.replace(/<\/(script)/gi, "<\\/$1").replace(/<!--/g, "<\\!--");
+const inertSource = (code: string) => asciiOnly(code.replace(/<\/(script)/gi, "<\\/$1").replace(/<!--/g, "<\\!--"));
 
 /** What shows in place of the canvas if the engine can't be unpacked here. */
 export const NO_UNPACK = "This chat app can't unpack the SayShape engine that draws this interface, so it can't be shown here.";
@@ -116,7 +127,7 @@ const UNPACK = `  if (!(window.DecompressionStream && window.Blob && window.Resp
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).blob().then(function (code) {
       return new Promise(function (done, failed) {
-        var url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+        var url = URL.createObjectURL(new Blob([code], { type: "text/javascript;charset=utf-8" }));
         var script = document.createElement("script");
         script.onload = function () { URL.revokeObjectURL(url); done(); };
         script.onerror = function () { URL.revokeObjectURL(url); failed(new Error("script")); };
