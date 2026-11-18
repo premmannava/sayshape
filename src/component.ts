@@ -158,6 +158,16 @@ export interface PaintContext {
   behavior?: boolean;
   /** Fade-in opacity for a node that just appeared (0..1). */
   appear(node: SayShapeNode): number;
+  /**
+   * Draw what's already painted behind this box, blurred by `blur` CSS px and
+   * clipped to `path` (traced in the current space): a glass surface. Returns
+   * false, drawing nothing, where blur isn't available (no canvas filter, a
+   * recording canvas); draw a stronger tint instead then. Kept between frames
+   * while nothing behind can have changed. Missing in contexts with no engine.
+   */
+  backdrop?(box: Box, path: () => void, blur: number): boolean;
+  /** The person prefers less transparency (prefers-reduced-transparency, or the engine's option): glass is drawn solid. */
+  reducedTransparency?: boolean;
   /** Ask for another frame (for animation). */
   requestFrame(): void;
   /**
