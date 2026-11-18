@@ -156,3 +156,13 @@ describe("card fill=", () => {
     ui.destroy();
   });
 });
+
+describe("a fill card at the root of a framed host (bareRootCard)", () => {
+  it("still draws its gradient behind words in its own colors, and warns when fill= replaces a variant", () => {
+    const ui = render(`card fill=night\n  text "Hello"`, { bareRootCard: true });
+    expect(ui.drawOps.some((op) => op.op === "fill" && op.gradientStops?.length)).toBe(true);
+    expect(parse(`card fill=sky variant=hero\n  text "Hi"\n`, new Registry(coreComponents)).diagnostics.map((d) => d.message)).toEqual([
+      "fill= takes the place of variant=hero; the fill was used. Keep one of them",
+    ]);
+  });
+});
