@@ -11,6 +11,7 @@ export { languageGuide, guideSections, describeGuide, REPORT_FALLBACK, component
 export { resolveProfile, PROFILES, ALWAYS_EXPOSED, type ComponentProfile, type ResolvedProfile } from "./profiles";
 export { COMMON_IMAGE_HOSTS } from "./images";
 export { lightTheme, darkTheme, studioLightTheme, studioDarkTheme, extendTheme, themeFromCSS, forcedColorsTheme, type Theme } from "./theme";
+export { themeFromTokens, seriesFromAccent, type HostTokens } from "./host-tokens";
 export { applyLook, LOOK_OPTIONS, LOOK_PROPS, LOOK_FONTS, lookOptions, type Look, type LookProp } from "./look";
 export { CanvasMeasurer, MonoMeasurer, wrapText, type TextMeasurer } from "./text";
 export { PropReader, COMMON_PROPS, CATEGORIES, type ComponentDef, type ElementPick, type PropDef, type LayoutContext, type PaintContext, type PressContext, type DragContext, type Category } from "./component";

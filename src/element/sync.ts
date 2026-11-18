@@ -18,10 +18,12 @@
  * The engine comes from the core entry (`../index`), so the build shares the
  * core chunks and this file adds no framework code.
  */
+import { isHostTokens, themeFromTokens, type HostTokens } from "../host-tokens";
 import { SayShape, coreComponents, darkTheme, lightTheme, type ComponentDef, type SayShapeEvents, type SayShapeOptions, type Theme } from "../index";
 
 /** A theme as a wrapper takes it: a Theme object, "auto", or the names of the two built-in themes. */
-export type ThemeInput = Theme | "auto" | "light" | "dark";
+/** A whole Theme, a name, or the host page's own tokens (colors, radius, font: src/host-tokens.ts). */
+export type ThemeInput = Theme | "auto" | "light" | "dark" | HostTokens;
 
 /** The engine events the wrappers pass on. */
 export const FORWARDED_EVENTS = ["action", "change", "diagnostics", "navigate", "notify", "render"] as const;
@@ -58,6 +60,7 @@ export interface Session {
 export function resolveThemeInput(theme: ThemeInput | undefined): Theme | "auto" {
   if (theme === "light") return lightTheme;
   if (theme === "dark") return darkTheme;
+  if (isHostTokens(theme)) return themeFromTokens(theme);
   return theme ?? "auto";
 }
 
