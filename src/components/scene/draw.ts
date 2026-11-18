@@ -106,7 +106,16 @@ export function colorOf(raw: string, f: Pick<Frame, "colors">): string | null {
   if (isColor(v)) return v;
   // A written color at an opacity: "#E0807A 30%", "rgb(224, 128, 122) 0%".
   const see = SEE_THROUGH.exec(v);
-  return see && isColor(see[1]!) ? fadeColor(see[1]!, Math.min(100, Number(see[2])) / 100) : null;
+  if (!see || !isColor(see[1]!)) return null;
+  const alpha = Math.min(100, Number(see[2])) / 100;
+  // A CSS name ("red 30%"): the canvas says what color it is.
+  return fadeColor(see[1]!, alpha) ?? fadeColor(cssHex(see[1]!, (f as Partial<Frame>).g), alpha);
+}
+/** A CSS color name as the canvas writes it back ("#ff0000"), or the name unchanged when there's no canvas to ask. */
+function cssHex(name: string, g: CanvasRenderingContext2D | undefined): string {
+  if (!g) return name;
+  const was = g.fillStyle;
+  try { g.fillStyle = name; return typeof g.fillStyle === "string" ? g.fillStyle : name; } finally { g.fillStyle = was; }
 }
 const SEE_THROUGH = /^(.*\S)\s+(\d{1,3})%$/;
 const GRADIENT_REF = /^url\(#?([A-Za-z_][\w-]*)\)$/;
@@ -142,6 +151,8 @@ export interface Frame {
   particles?: number;
   particlesAsked?: number;
   particlesOver?: number;
+  /** The each copies and uses a drawing is inside, kept while press recording is off (a reflection), so particles seed the same. */
+  seedCopy?: readonly string[];
   /** The scene line's id, seeding its shake. */
   sceneId?: string;
   /** Set while the scene moves: trail= copies' budget and the clock they read (trail.ts). */
@@ -296,7 +307,8 @@ function finishShape(node: SayShapeNode, scope: Scope, bounds: Bounds, f: Frame,
 
 /** Apply opacity and a rotation around (cx, cy), then draw, then undo them. */
 function withLook(node: SayShapeNode, scope: Scope, f: Frame, cx: number, cy: number, draw: () => void): void {
-  if (node.props.blur !== undefined && blurShape(node, scope, f, numOf, drawShape)) return;
+  // Trail copies are drawn sharp (as they're drawn without glow): each copy is a new line object, so a blur buffer would never be reused.
+  if (node.props.blur !== undefined && !f.trails?.inCopy && blurShape(node, scope, f, numOf, drawShape)) return;
   const g = f.g;
   g.save();
   if (node.props.opacity !== undefined) g.globalAlpha *= Math.min(1, Math.max(0, numOf(node, "opacity", scope, 1)));
@@ -568,23 +580,30 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
         const fill = paintOf(fillRaw, b, f, scope);
         const stroke = paintOf(node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), b, f, scope);
         // An outline goes under the words, so it frames the letters instead of eating into them.
-        let deep = depthOn(node, scope, f, solidOf(fill ? fillRaw : node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), f, scope));
+        // A shadow or glow is cast by the solid words, as before: with an outline too, they cast it first,
+        // then the outline and the words go on top of it.
+        const deep = depthOn(node, scope, f, solidOf(fill ? fillRaw : node.props.stroke === undefined ? undefined : strOf(node, "stroke", scope), f, scope));
+        if (deep && fill && stroke) { g.fillStyle = fill; g.fillText(text, x, y); depthOff(g); }
         if (stroke) {
           g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.lineJoin = "round";
           g.strokeText(text, x, y);
-          if (deep) { depthOff(g); deep = false; }
+          if (deep && !fill) depthOff(g);
         }
-        if (fill) { g.fillStyle = fill; g.fillText(text, x, y); }
-        if (deep) depthOff(g);
+        if (fill) {
+          g.fillStyle = fill; g.fillText(text, x, y);
+          if (deep && !stroke) depthOff(g);
+        }
+        if (deep && !fill && !stroke) depthOff(g);
         addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
         if (f.press) for (const r of f.press.open) r.words.push(text);
       });
       return;
     }
-    case "emit": if (f.features?.particles !== false) drawEmit(node, scope, f); return;
+    // Particles are never copied into a trail: they'd spend the scene's particle budget on faint ghosts.
+    case "emit": if (f.features?.particles !== false && !f.trails?.inCopy) drawEmit(node, scope, f); return;
     case "group":
     case "use": {
-      if (node.props.reflect !== undefined && f.reflecting !== node && f.features?.reflect !== false && f.offscreen) drawReflection(node, scope, f, drawAll, numOf);
+      if (node.props.reflect !== undefined && f.reflecting !== node && f.features?.reflect !== false && f.offscreen && !f.trails?.inCopy) drawReflection(node, scope, f, drawAll, numOf);
       let kids = node.children, inner = scope;
       if (node.type === "use") {
         const d = node.text === undefined ? undefined : f.defs.get(node.text);
@@ -622,7 +641,7 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
           if (args) rec.locate = (name) => (args(name) !== scope(name) ? null : outer(name));
         }
       }
-      if (!drawBlurred(node, scope, kids, inner, f, drawAll, numOf)) drawAll(kids, inner, f);
+      if (f.trails?.inCopy || !drawBlurred(node, scope, kids, inner, f, drawAll, numOf)) drawAll(kids, inner, f);
       if (node.type === "use") { f.useDepth--; if (rec && outer) { rec.copy.pop(); rec.locate = outer; } }
       g2.restore();
       f.m = was;

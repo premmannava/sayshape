@@ -110,6 +110,11 @@ describe("see-through colors and gradient stops (S9)", () => {
     expect(colorOf("#E0807A", f)).toBe("#E0807A");
     expect(colorOf("javascript:alert(1) 50%", f)).toBeNull();
     expect(colorOf("tomato 50%", f)).toBeNull();
+    // With a canvas to ask, a CSS name fades too.
+    let style = "";
+    const g = { get fillStyle() { return style; }, set fillStyle(v: string) { style = v === "tomato" ? "#ff6347" : v; } };
+    expect(colorOf("tomato 50%", { ...f, g } as unknown as Parameters<typeof colorOf>[1])).toBe("rgba(255, 99, 71, 0.5)");
+    expect(style).toBe("");
   });
 
   it("reads colors as numbers", () => {

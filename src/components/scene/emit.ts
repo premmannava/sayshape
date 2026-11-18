@@ -258,9 +258,10 @@ function windAt(node: SayShapeNode, scope: Scope, f: Frame, s: number): number {
 /** This line's seed: seed= or its id, mixed with which each copy and use it's drawn in, so copies differ. */
 function seedOf(node: SayShapeNode, scope: Scope, f: Frame): number {
   const own = node.props.seed === undefined ? shakeSeed(node.id) : Math.round(numOf(node, "seed", scope, 0)) >>> 0;
-  const copy = f.press?.copy;
+  // The each copies and uses it's drawn in: recorded while pressables are, or kept by a reflection drawing it again.
+  const copy = f.press?.copy ?? f.seedCopy;
   if (copy?.length) return mix(own, shakeSeed(copy.join(".")));
-  if (f.press) return own;
+  if (f.press || f.seedCopy) return own;
   let m = seen.get(f);
   if (!m) seen.set(f, (m = new Map()));
   const k = m.get(node.id) ?? 0;

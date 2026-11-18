@@ -94,7 +94,7 @@ const PAINT: Record<string, PropDef> = {
 };
 /** For filled shapes only. */
 const SHINE: Record<string, PropDef> = {
-  shine: { type: "boolean", description: "Lit from the upper left, so a circle looks like a ball.", default: false },
+  shine: { type: "boolean", description: "Lit like a ball, from upper left or scene light=.", default: false },
 };
 
 /** Props that make a group or use pressable, described in full once. */

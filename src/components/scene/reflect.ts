@@ -64,6 +64,18 @@ export function bufferScale(t: { a: number; b: number; c: number; d: number }): 
   return Number.isFinite(k) ? Math.min(k, 2) : 0;
 }
 
+/**
+ * Buffer pixels per unit of the parent's coordinates: the drawing's own scale on
+ * the page (scene, groups) times the screen's pixel ratio capped at 2. Capping
+ * only the pixel ratio keeps a scene drawn larger than its w sharp.
+ */
+export function deviceScale(t: { a: number; b: number; c: number; d: number }, m: Matrix): number {
+  const k = Math.sqrt(Math.abs(t.a * t.d - t.b * t.c));
+  const css = Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
+  if (!Number.isFinite(k) || !(css > 0)) return bufferScale(t);
+  return css * Math.min(k / css, 2);
+}
+
 /** The ripple's angular speed (radians per second): RIPPLE_HZ, or the nearest whole number of waves per loop. */
 export function rippleSpeed(period = 0): number {
   if (!(period > 0)) return 2 * Math.PI * RIPPLE_HZ;
@@ -184,7 +196,7 @@ export function drawReflection(node: SayShapeNode, scope: Scope, f: Frame, draw:
   if (!(depth > 0)) return;
   const x0 = Math.min(...xs) - PAD, width = Math.max(...xs) + PAD - x0, top = baseline - depth;
 
-  let s = bufferScale(g.getTransform());
+  let s = deviceScale(g.getTransform(), f.m);
   s = Math.min(s, MAX_REFLECT_BUFFER / width, MAX_REFLECT_BUFFER / depth);
   const bw = Math.ceil(width * s), bh = Math.ceil(depth * s);
   if (!(s > 0) || bw < 1 || bh < 1) return;
@@ -271,8 +283,12 @@ function capture(node: SayShapeNode, scope: Scope, f: Frame, draw: Draw, buf: Re
   og.globalAlpha = 1;
   og.clearRect(0, 0, buf.width, buf.height);
   og.setTransform(a.s, 0, 0, a.s, -a.x0 * a.s, -a.top * a.s);
-  const was = { g: f.g, press: f.press, onNode: f.onNode, reflecting: f.reflecting };
+  const was = { g: f.g, press: f.press, onNode: f.onNode, reflecting: f.reflecting, seedCopy: f.seedCopy };
   const shapes = f.shapes, steps = f.steps;
+  // The reflection shows the same particles as the line: it spends none of the scene's particle budget
+  // and seeds them from the same each copies and uses.
+  const particles = f.particles, asked = f.particlesAsked, over = f.particlesOver;
+  f.seedCopy = f.press ? [...f.press.copy] : f.seedCopy ?? [];
   f.g = og;
   f.press = undefined;
   f.onNode = undefined;
@@ -286,6 +302,8 @@ function capture(node: SayShapeNode, scope: Scope, f: Frame, draw: Draw, buf: Re
     f.press = was.press;
     f.onNode = was.onNode;
     f.reflecting = was.reflecting;
+    f.seedCopy = was.seedCopy;
+    f.particles = particles; f.particlesAsked = asked; f.particlesOver = over;
   }
   if (a.fade > 0) {
     // Solid at the line, 1 - fade at the far edge.

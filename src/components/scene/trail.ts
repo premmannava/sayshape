@@ -144,6 +144,8 @@ export function drawTrail(node: SayShapeNode, scope: Scope, f: Frame, hooks: Tra
   const g = f.g;
   const time = f.time, played = f.played ?? f.time;
   const press = f.press, onNode = f.onNode, shapes = f.shapes, steps = f.steps, m = f.m;
+  // Budgets the copies must not spend: blur layers and particles belong to the line itself.
+  const layers = f.layers, particles = f.particles, asked = f.particlesAsked, over = f.particlesOver;
   f.press = undefined;
   f.onNode = undefined;
   tr.inCopy = true;
@@ -181,6 +183,7 @@ export function drawTrail(node: SayShapeNode, scope: Scope, f: Frame, hooks: Tra
     }
   } finally {
     f.time = time; f.press = press; f.onNode = onNode; f.shapes = shapes; f.steps = steps; f.m = m;
+    f.layers = layers; f.particles = particles; f.particlesAsked = asked; f.particlesOver = over;
     tr.inCopy = false;
   }
   // What the whole trail would cost, at what one copy of this line costs.

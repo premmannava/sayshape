@@ -21,7 +21,7 @@ import { liveOf, type SceneRegion } from "./interact";
 
 /** Said in full once, on group (and in brief, unlisted, on shapes and use). */
 export const HOVER: Record<string, PropDef> = {
-  "on-hover": { type: "action", description: "Actions when a mouse moves onto it (never touch): on-hover=set:hov:{p.name}. Shapes too." },
+  "on-hover": { type: "action", description: "On mouse over (never touch): on-hover=set:hov:{p.name}. Shapes too." },
   "on-leave": { type: "action", description: "When it moves off: on-leave=\"set:hov:''\"." },
 };
 export const HOVER_SHAPE: Record<string, PropDef> = {
