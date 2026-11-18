@@ -101,7 +101,7 @@ export const row: ComponentDef = {
     rowLayout(box, ctx, p.num("pad", 0), p.num("gap", ctx.theme.gaps?.row ?? 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true), {
       fit: p.bool("fit", false),
       justify: ROW_JUSTIFY.find((v) => v === p.str("justify")),
-      stretch: p.bool("stretch", false),
+      stretch: p.bool("stretch", ctx.theme.stretchCards ?? false),
       aligned: p.has("align"),
     });
   },
@@ -366,7 +366,7 @@ export const grid: ComponentDef = {
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const gap = Math.max(0, p.num("gap", ctx.theme.gaps?.grid ?? 14));
-    const stretch = p.bool("stretch", false);
+    const stretch = p.bool("stretch", ctx.theme.stretchCards ?? false);
     const kids = ctx.visibleChildren(box.node);
     // A column is never narrower than its widest child needs, whatever min= says.
     const min = Math.max(1, p.num("min", 200), ...kids.map((k) => Math.min(box.w, ctx.minWidth(k))));

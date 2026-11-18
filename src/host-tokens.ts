@@ -128,22 +128,27 @@ export function themeFromTokens(tokens: HostTokens, base?: Theme): Theme {
   if (background) colors.surface = background;
   const raised = color(tokens.surface);
   if (raised) colors.raised = raised;
-  const ink = color(tokens.text);
-  if (ink) colors.ink = reaching(ink, surface, AA);
-  const muted = color(tokens.textSecondary) ?? color(tokens.textMuted);
-  if (muted) colors.muted = reaching(muted, surface, AA);
+  // Text sits on the page and on cards, so it has to read on both (the page's, then the card's).
+  const card = raised ?? (background ? undefined : from.colors.raised);
+  const readable = (c: string, ratio: number) => {
+    const onPage = reaching(c, surface, ratio);
+    return card ? reaching(onPage, card, ratio) : onPage;
+  };
+  // Given or not: a theme's own text may not read on a host's background (dark: true on a light page).
+  colors.ink = readable(color(tokens.text) ?? from.colors.ink, AA);
+  colors.muted = readable(color(tokens.textSecondary) ?? color(tokens.textMuted) ?? from.colors.muted, AA);
   const line = color(tokens.border);
   if (line) colors.line = line;
   const accent = color(tokens.accent);
   if (accent) {
-    colors.accent = reaching(accent, surface, GRAPHIC);
+    colors.accent = readable(accent, GRAPHIC);
     colors.focus = colors.accent;
     const on = color(tokens.onAccent);
     const white = contrastRatio("#ffffff", colors.accent) ?? 0, black = contrastRatio("#000000", colors.accent) ?? 0;
     colors.onAccent = on && (contrastRatio(on, colors.accent) ?? 0) >= AA ? on : white >= black ? "#ffffff" : "#000000";
   }
   const given = (tokens.series ?? []).map(color).filter((c): c is string => !!c);
-  const series = given.length ? given : accent ? seriesFromAccent(colors.accent!, surface) : [];
+  const series = (given.length ? given : accent ? seriesFromAccent(colors.accent!, surface) : []).map((c) => readable(c, GRAPHIC));
   series.slice(0, 6).forEach((c, i) => { (colors as Record<string, string>)[`series${i + 1}`] = c; });
 
   const patch: DeepPartial<Theme> = { colors };

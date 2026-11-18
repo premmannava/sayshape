@@ -100,4 +100,25 @@ describe("host tokens become a theme", () => {
     expect(title.fillStyle).toBe("#1b2533");
     expect(String(title.font)).toContain("Source Sans 3");
   });
+
+  it("keeps text readable on cards as well as on the page", () => {
+    const t = themeFromTokens({ background: "#ffffff", surface: "#222222", text: "#111111" });
+    expect(contrastRatio(t.colors.ink, t.colors.raised)!).toBeGreaterThanOrEqual(4.5);
+    const flipped = themeFromTokens({ background: "#ffffff", dark: true });
+    expect(contrastRatio(flipped.colors.ink, flipped.colors.surface)!).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("stretchCards, a host's opt-out from natural card heights", () => {
+  const spec = `row\n  card\n    text "Short"\n  card\n    text "Tall"\n    text "More"\n    text "Even more"\n`;
+  const heights = (ui: ReturnType<typeof render>) => ui.findAll({ type: "card" }).map((f) => Math.round(f.box!.h));
+  it("cards keep their own heights by default, and share one with the theme's stretchCards", () => {
+    const own = heights(render(spec, { width: 600 }));
+    expect(own[0]).toBeLessThan(own[1]!);
+    const shared = heights(render(spec, { width: 600, theme: { ...lightTheme, stretchCards: true } }));
+    expect(shared[0]).toBe(shared[1]);
+    // The spec still wins.
+    const off = heights(render(spec.replace("row\n", "row stretch=false\n"), { width: 600, theme: { ...lightTheme, stretchCards: true } }));
+    expect(off[0]).toBeLessThan(off[1]!);
+  });
 });

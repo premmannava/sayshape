@@ -273,6 +273,10 @@ const brand = extendTheme(lightTheme, {
 ui.setTheme(brand);
 ```
 
+Cards side by side in a `row` or `grid` keep their own heights unless the spec writes `stretch=true`. A host that wants the earlier look, where they always shared a height, sets `stretchCards: true` on its theme (`extendTheme(lightTheme, { stretchCards: true })`); a spec's `stretch=false` still wins.
+
+To match the page around the interface, `themeFromTokens({ background, surface, text, textSecondary, border, accent, radius, fontFamily, fontSize, series })` turns the host's own tokens into a theme (the wrappers' `theme` takes the same object); see [Host tokens](integration/web-component.md#host-tokens).
+
 ### Trying styles in the playground
 
 The playground's **Appearance** button opens a small panel for previewing the current screen in another style, and copying the setup into your app. It only changes the playground's theme, through `ui.setTheme`: the spec, state, selections and any open list or calendar stay as they are, and no model is asked again.

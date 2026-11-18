@@ -79,6 +79,12 @@ export interface Theme {
   /** Default gaps between the children of column, row and grid, set by the chat density. Missing: 8, 10 and 14. */
   gaps?: { column: number; row: number; grid: number };
   /**
+   * A host's opt-out from natural card heights: cards side by side in a row
+   * or grid share a height unless the spec writes stretch=false (the look
+   * before stretch= existed). Missing: they keep their own heights.
+   */
+  stretchCards?: boolean;
+  /**
    * For slides: the type, spacing, corners and control
    * height inside a slide, which is laid out 960 px wide and then scaled to
    * fit its space, so these are larger than the screen's. Missing: slides
