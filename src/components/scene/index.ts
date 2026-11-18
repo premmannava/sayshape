@@ -35,7 +35,7 @@ import { lightPoint } from "./light";
 import { apply } from "./interact";
 import { locateOf } from "../../each";
 import { dragShape, keyShape, rangeOf } from "./drag";
-import type { PartSemantics } from "../../a11y/semantics";
+import type { PartSemantics, SemanticsContext } from "../../a11y/semantics";
 import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
@@ -127,6 +127,15 @@ export function sceneTime(box: Box, ctx: PaintContext, duration: number, loop: b
   return t;
 }
 
+/**
+ * The scene features a host can switch off, each on by default: particles
+ * (the emit element) and reflections (reflect=, ripple= and fade= on group and
+ * use). Like scenes themselves, a feature is off by leaving it out of what's
+ * registered: sceneComponentsWith({ particles: false }).
+ */
+export interface SceneFeatures { particles?: boolean; reflect?: boolean }
+const ALL_FEATURES: Required<SceneFeatures> = { particles: true, reflect: true };
+
 // ---------- the elements ----------
 
 const scene: ComponentDef = {
@@ -175,13 +184,36 @@ const scene: ComponentDef = {
     box.h = Math.min(MAX_SCENE_HEIGHT, (box.w * h) / w);
   },
   paint(box, ctx) {
+    paintSceneBox(box, ctx, ALL_FEATURES);
+  },
+  hitTest(region, x, y, detail) {
+    const scene = liveOf(region.node);
+    return scene && regionHit(scene, detail, x, y) ? { detail } : null;
+  },
+  press(ctx) {
+    const r = liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail));
+    if (r?.on) ctx.run(r.on, { scope: r.scope, locate: r.locate, functions: SCENE_FUNCTIONS });
+  },
+  // Behavior on: a drag=true shape follows the pointer and the arrow keys. Its regions are the only ones that drag.
+  drag(ctx) {
+    dragShape(ctx, (key) => liveOf(ctx.target.node)?.regions.get(key));
+  },
+  key(ctx, key) {
+    return keyShape(ctx, liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail)), key);
+  },
+  semantics: (box, ctx) => sceneSemantics(box, ctx),
+};
+
+/** Draw one scene: its clock, its lines, then what's pressable in it. */
+function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeatures>): void {
+  {
     const p = ctx.props(box.node);
     const w = Math.max(1, p.num("w", 600)), h = Math.max(1, p.num("h", 340));
     const t = sceneTime(box, ctx, p.num("duration", 0), p.bool("loop", true), p.num("rate", 1));
     const g = ctx.g;
     const sx = box.w / w, sy = box.h / h;
     const f: Frame = {
-      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: t,
+      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: t, features,
       played: ctx.motion ? Number(ctx.view(box.node).played ?? t) : t,
       m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
     };
@@ -205,23 +237,11 @@ const scene: ComponentDef = {
     const shown = pressable(box, ctx, f.press!.regions);
     paintFeedback(box, ctx, shown);
     g.restore();
-  },
-  hitTest(region, x, y, detail) {
-    const scene = liveOf(region.node);
-    return scene && regionHit(scene, detail, x, y) ? { detail } : null;
-  },
-  press(ctx) {
-    const r = liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail));
-    if (r?.on) ctx.run(r.on, { scope: r.scope, locate: r.locate, functions: SCENE_FUNCTIONS });
-  },
-  // Behavior on: a drag=true shape follows the pointer and the arrow keys. Its regions are the only ones that drag.
-  drag(ctx) {
-    dragShape(ctx, (key) => liveOf(ctx.target.node)?.regions.get(key));
-  },
-  key(ctx, key) {
-    return keyShape(ctx, liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail)), key);
-  },
-  semantics: (box, ctx) => {
+  }
+}
+
+function sceneSemantics(box: Box, ctx: SemanticsContext) {
+  {
     const name = ctx.props(box.node).text() || "Picture";
     const scene = liveOf(box.node);
     const parts = ctx.regions.flatMap((h) => {
@@ -236,9 +256,9 @@ const scene: ComponentDef = {
       }];
     });
     // A picture with things to press in it is a figure, so its parts can be reached; a plain one stays an image.
-    return parts.length ? { role: "figure", name, parts } : { role: "img", name };
-  },
-};
+    return parts.length ? { role: "figure" as const, name, parts } : { role: "img" as const, name };
+  }
+}
 
 // ---------- pressable shapes ----------
 
@@ -471,6 +491,35 @@ const gradient: ComponentDef = {
  * Leave them out and scenes are off: "scene" is then an unknown element.
  */
 export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient];
+
+/** What each feature adds: elements, and props on other elements. Off, they're left out. */
+const FEATURE_PARTS: Record<keyof SceneFeatures, { elements: readonly string[]; props: readonly string[] }> = {
+  particles: { elements: ["emit"], props: [] },
+  reflect: { elements: [], props: ["reflect", "ripple", "fade"] },
+};
+
+/**
+ * The scene elements with some features switched off (all on is sceneComponents).
+ * An off feature's elements are unknown (their lines are skipped) and its props
+ * are unknown props (ignored, with a warning), so the guide never mentions them.
+ */
+export function sceneComponentsWith(features: SceneFeatures): ComponentDef[] {
+  const on: Required<SceneFeatures> = { ...ALL_FEATURES, ...features };
+  const offElements = new Set<string>(), offProps = new Set<string>();
+  for (const key of Object.keys(FEATURE_PARTS) as Array<keyof SceneFeatures>) {
+    if (on[key]) continue;
+    FEATURE_PARTS[key].elements.forEach((e) => offElements.add(e));
+    FEATURE_PARTS[key].props.forEach((p) => offProps.add(p));
+  }
+  if (!offElements.size && !offProps.size) return sceneComponents;
+  return sceneComponents.filter((c) => !offElements.has(c.type)).map((c) => {
+    let def: ComponentDef = c;
+    if (Object.keys(c.props).some((p) => offProps.has(p))) def = { ...def, props: Object.fromEntries(Object.entries(c.props).filter(([p]) => !offProps.has(p))) };
+    if (Array.isArray(c.children) && c.children.some((k: string) => offElements.has(k))) def = { ...def, children: c.children.filter((k: string) => !offElements.has(k)) };
+    if (c.type === "scene") def = { ...def, paint: (box, ctx) => paintSceneBox(box, ctx, on) };
+    return def;
+  });
+}
 
 /**
  * A draggable shape to a screen reader: moving one way, a slider with its

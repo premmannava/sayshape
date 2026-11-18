@@ -241,3 +241,11 @@ describe("formula operators in scenes (S15)", () => {
     for (const name of ["floor", "%", "a ? b : c"]) expect(example).toContain(name);
   });
 });
+
+describe("scene feature switches", () => {
+  it("returns the usual list with everything on", async () => {
+    const { sceneComponentsWith } = await import("../src/components/scene");
+    expect(sceneComponentsWith({})).toBe(sceneComponents);
+    expect(sceneComponentsWith({ particles: true, reflect: true })).toBe(sceneComponents);
+  });
+});

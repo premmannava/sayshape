@@ -126,6 +126,8 @@ export interface Frame {
   motion?: boolean;
   /** The scene's own shake=, in scene pixels: everything but its background jolts. */
   shake?: number;
+  /** Scene features this host has on (sceneComponentsWith); unset means all on. */
+  features?: { particles: boolean; reflect: boolean };
   /** The scene line's id, seeding its shake. */
   sceneId?: string;
   /** Told about each element just before it's drawn (the drawing check uses this to know what drew what). */
