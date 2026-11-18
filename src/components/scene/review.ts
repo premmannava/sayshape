@@ -142,6 +142,7 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
     quadraticCurveTo(a: number, b: number, x: number, y: number) { add(a, b); add(x, y); },
     bezierCurveTo(a: number, b: number, c: number, d: number, x: number, y: number) { add(a, b); add(c, d); add(x, y); },
     arc(x: number, y: number, r: number) { round(x, y, r, r); },
+    arcTo(a: number, b: number, x: number, y: number) { add(a, b); add(x, y); },
     ellipse(x: number, y: number, rx: number, ry: number, rot: number) { round(x, y, rx, ry, rot); },
     closePath() {},
     setLineDash() {},
@@ -192,6 +193,13 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
     if (!(numOf(scene, "duration", scope, 0) > 0) && readsClock(scene)) {
       out.push({ line: scene.line, severity: "warning", message: "Drawing: this scene's formulas use t, but its duration is 0, so it never moves. Set duration= to the seconds the motion takes (loop=true, the default, repeats it)" });
     }
+    // Lines that drew nothing for a reason only drawing finds (an icon name a formula works out to), once each.
+    const noted = new Set<string>();
+    for (const n of drawn.notes) {
+      if (noted.has(`${n.line}:${n.message}`)) continue;
+      noted.add(`${n.line}:${n.message}`);
+      out.push({ line: n.line, severity: "warning", message: `Drawing: ${n.message}` });
+    }
     out.push(...findProblems(drawn.marks, drawn.regions, w, h));
     if (drawn.dragOver !== undefined) out.push({ line: drawn.dragOver, severity: "warning", message: `Drawing: a scene can have at most ${MAX_DRAGGABLE} draggable shapes, so this one and those after it can't be dragged. Drag fewer, or use a slider` });
     out.push(...swipeTraps(drawn.regions, w, h));
@@ -227,7 +235,7 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
 }
 
 /** The scene drawn as it rests (its last moment), as marks and pressable regions in scene coordinates. */
-function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; dragOver?: number } {
+function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; notes: Array<{ line: number; message: string }>; dragOver?: number } {
   const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
   const duration = Math.max(0, numOf(scene, "duration", scope, 0));
   const at: Scope = (name) => (name === "t" ? duration : name === "PI" ? Math.PI : scope(name));
@@ -237,7 +245,7 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
   const f: Frame = {
     g, font: (wt, size) => `${wt} ${size}px sans-serif`, colors: theme.colors,
     defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
-    onNode: (n) => { current = n; },
+    onNode: (n) => { current = n; }, notes: [],
     m: IDENTITY, press: { regions: [], open: [], copy: [], locate: stateLocate },
   };
   if (behavior) f.press!.drag = { scene: IDENTITY, w, h, count: 0 };
@@ -246,7 +254,7 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
   const bg = scene.props.bg === undefined ? undefined : strOf(scene, "bg", at);
   const under = (bg && colorOf(bg, { colors: theme.colors })) || theme.colors.raised;
   const over = f.press!.drag?.over;
-  return { marks, regions: f.press!.regions, under, ...(over !== undefined ? { dragOver: over } : {}) };
+  return { marks, regions: f.press!.regions, under, notes: f.notes ?? [], ...(over !== undefined ? { dragOver: over } : {}) };
 }
 
 function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w: number, h: number): Diagnostic[] {

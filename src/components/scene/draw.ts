@@ -16,6 +16,7 @@ import { flattenPath, rotate, scale, translate, type ClipRect, type Geom, type M
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
+import { drawIcon, isIconName } from "../../icons";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -109,6 +110,8 @@ export interface Frame {
   shapes: number;
   steps: number;
   useDepth: number;
+  /** Set to hear about lines that drew nothing for a reason the parser couldn't see (an icon name from a formula). */
+  notes?: Array<{ line: number; message: string }>;
   /** Told about each element just before it's drawn (the drawing check uses this to know what drew what). */
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
@@ -261,7 +264,7 @@ function withLook(node: SayShapeNode, scope: Scope, f: Frame, cx: number, cy: nu
 }
 
 /** Lines that can be pressed: shapes, groups and uses with on=. */
-const PRESSABLE = new Set(["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use"]);
+const PRESSABLE = new Set(["rect", "circle", "ellipse", "line", "path", "polygon", "label", "glyph", "group", "use"]);
 /** Lines with one x and y, which drag=true can move (behavior on). */
 const DRAGGABLE = new Set(["rect", "circle", "ellipse", "label", "group", "use"]);
 
@@ -289,7 +292,10 @@ function openRegion(node: SayShapeNode, scope: Scope, f: Frame): SceneRegion | n
   const parent = rec.open[rec.open.length - 1];
   if (parent) r.parent = parent;
   const tip = node.props.tip === undefined ? undefined : strOf(node, "tip", scope);
-  const name = node.props.name === undefined ? undefined : strOf(node, "name", scope);
+  // A glyph's name= is which icon it is; what it's called is its label, else its tip, else that icon's name in words.
+  const name = node.type === "glyph"
+    ? (node.props.label === undefined ? undefined : strOf(node, "label", scope)) || tip || strOf(node, "name", scope)?.replace(/-/g, " ")
+    : node.props.name === undefined ? undefined : strOf(node, "name", scope);
   if (tip) r.tip = tip;
   if (name) r.name = name;
   if (sel !== undefined) r.selected = !!sel && sel !== "false";
@@ -487,6 +493,26 @@ function drawShape(node: SayShapeNode, scope: Scope, f: Frame): void {
         if (stroke) { g.strokeStyle = stroke; g.lineWidth = Math.max(0, n("width", 1)); g.strokeText(text, x, y); }
         addGeom(f, { kind: "rect", m: f.m, ...b, text: true });
         if (f.press) for (const r of f.press.open) r.words.push(text);
+      });
+      return;
+    }
+    case "glyph": {
+      const icon = strOf(node, "name", scope) ?? "";
+      if (!isIconName(icon)) {
+        // A written name that isn't an icon is the parser's to report; one a formula works out to is only known now.
+        if (node.props.name?.includes("{")) f.notes?.push({ line: node.line, message: `this icon's name works out to "${icon}", which isn't an icon. Use one of icon's names` });
+        return;
+      }
+      const x = n("x"), y = n("y"), size = Math.min(400, Math.max(1, n("size", 24)));
+      f.shapes++;
+      withLook(node, scope, f, x + size / 2, y, () => {
+        const color = solidOf(node.props.fill === undefined ? "ink" : strOf(node, "fill", scope), f, scope);
+        if (color) {
+          const deep = depthOn(node, scope, f, color);
+          drawIcon(g, icon, x, y - size / 2, size, color);
+          if (deep) depthOff(g);
+        }
+        addGeom(f, { kind: "rect", m: f.m, x, y: y - size / 2, w: size, h: size });
       });
       return;
     }

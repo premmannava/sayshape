@@ -326,6 +326,7 @@ describe("pressable scene shapes", () => {
     path: `path d="M20 20 L200 20 L200 100 Z" fill=accent`,
     polygon: `polygon points="20,100 110,20 200,100" fill=accent`,
     label: `label "Press me" x=40 y=60 size=24 fill=ink`,
+    glyph: `glyph name=sun x=40 y=60 size=48 fill=ink`,
     group: `group x=20 y=20\n    rect x=0 y=0 w=120 h=80 fill=accent`,
     use: `use "dot" x=80 y=60`,
   };
@@ -335,7 +336,8 @@ describe("pressable scene shapes", () => {
       expect(first, `a pressable line for ${def.type}`).toBeDefined();
       const [head, ...rest] = first!.split("\n");
       const spec = [`state n=0`, `scene "Shapes" w=300 h=200`, `  define "dot"`, `    circle x=0 y=0 r=30 fill=accent`,
-        `  ${head} on=inc:n name="Thing"`, ...rest].join("\n");
+        // A glyph's name= is which icon it is: its screen-reader name is label=.
+        `  ${head} on=inc:n ${def.type === "glyph" ? "label" : "name"}="Thing"`, ...rest].join("\n");
       const ui = render(spec, { components: ALL, width: 300 });
       expect(ui.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
       const shape = ui.findAll({ type: def.type }).map((f) => f.node).find((n) => n.props.on);

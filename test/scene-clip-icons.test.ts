@@ -126,3 +126,104 @@ describe("clip=true on a group", () => {
     expect(reviewScenes(blobs)).toEqual([]);
   });
 });
+
+describe("icons in a scene", () => {
+  const nodeTypes = (spec: string) => {
+    const out: string[] = [];
+    const walk = (n: { type: string; children: readonly { type: string; children: readonly unknown[] }[] }) => {
+      out.push(n.type);
+      for (const c of n.children) walk(c as typeof n);
+    };
+    walk(parse(spec, reg).root);
+    return out.slice(1);
+  };
+
+  it("reads icon inside a scene as the scene's glyph, silently", () => {
+    const spec = `scene "S" w=300 h=200\n  icon name=sun x=10 y=20 size=30 fill=warn\n  group x=50 y=50\n    icon name=heart x=0 y=0\n  each items={range(2)} as=i\n    icon name=star x={i*40} y=100`;
+    expect(problems(spec)).toEqual([]);
+    expect(nodeTypes(spec)).toEqual(["scene", "glyph", "group", "glyph", "each", "glyph"]);
+    // glyph is its own name too.
+    expect(problems(`scene "S" w=300 h=200\n  glyph name=sun x=10 y=20`)).toEqual([]);
+  });
+
+  it("warns about a name that isn't an icon, as icon does", () => {
+    const main = problems(`icon name=tick`);
+    expect(main).toHaveLength(1);
+    expect(problems(`scene "S" w=300 h=200\n  icon name=tick x=10 y=20`)).toEqual(main);
+    expect(main[0]).toMatch(/^warning: name="tick" isn't an icon\. Did you mean name=check\?/);
+    expect(problems(`scene "S" w=300 h=200\n  icon x=10 y=20`)).toEqual([`warning: "glyph" needs name=`]);
+    expect(problems(`scene "S" w=300 h=200\n  icon name=sun x=10 y=20 size=12px`)[0]).toMatch(/size/);
+  });
+
+  it("outside a scene, icon is the main element and glyph isn't allowed", () => {
+    expect(nodeTypes(`icon name=sun tone=warn`)).toEqual(["icon"]);
+    expect(problems(`icon name=sun tone=warn`)).toEqual([]);
+    expect(problems(`icon name=sun x=10`)[0]).toMatch(/^warning: "icon" has no prop "x"/);
+    expect(problems(`glyph name=sun x=10 y=10`)).toEqual([`error: "glyph" only goes inside scene or group or define`]);
+    // Without scenes registered, glyph is unknown and icon is unchanged.
+    const core = new Registry(coreComponents);
+    expect(parse(`glyph name=sun`, core).diagnostics[0]!.message).toMatch(/Unknown element "glyph"/);
+    expect(parse(`icon name=sun`, core).diagnostics).toEqual([]);
+  });
+
+  it("streams: every prefix of a scene with icons parses", () => {
+    streams(`state liked=false\nscene "Apps" w=300 h=200\n  rect x=20 y=20 w=60 h=60 rx=14 fill=accent\n  icon name=heart x=34 y=50 size=32 fill=onAccent on=toggle:liked tip="Like"\n  label "Likes" x=20 y=100 size=14 fill=ink`);
+  });
+
+  for (const theme of THEMES) {
+    it(`draws in the theme color it names (${theme === darkTheme ? "dark" : "light"})`, () => {
+      const ui = render(`scene "S" w=300 h=200\n  icon name=sun x=10 y=100 size=40 fill=accent`, { components: ALL, width: 300, theme });
+      const strokes = ui.drawOps.filter((o) => o.op === "stroke");
+      expect(strokes.length).toBeGreaterThan(0);
+      expect(strokes.every((o) => o.strokeStyle === theme.colors.accent)).toBe(true);
+      ui.destroy();
+    });
+  }
+
+  it("a pressable icon's region is its size, and pressing it runs on=", () => {
+    const ui = render(`state n=0\nscene "S" w=300 h=200\n  icon name=heart x=100 y=100 size=40 fill=bad on=inc:n`, { components: ALL, width: 300 });
+    const { box, at } = sceneAt(ui, 300, 200);
+    const k = box.w / 300;
+    const hit = sceneHits(ui)[0]!;
+    expect(hit.box.w).toBeCloseTo(40 * k, 5);
+    expect(hit.box.h).toBeCloseTo(40 * k, 5);
+    expect(hit.box.x).toBeCloseTo(at(100, 0)[0], 5);
+    expect(hit.box.y).toBeCloseTo(at(0, 80)[1], 5);
+    ui.click(...at(120, 100));
+    expect(ui.state.n).toBe(1);
+    ui.click(...at(160, 100));
+    expect(ui.state.n).toBe(1);
+    ui.destroy();
+  });
+
+  it("Tab reaches a pressable icon, Enter presses it, and it has a screen-reader name", () => {
+    const parts = (spec: string) => {
+      const ui = render(spec, { components: ALL, width: 300 });
+      const p = ui.accessibility({ full: true }).children[0]!;
+      ui.destroy();
+      return p;
+    };
+    const ui = render(`state liked=false\nscene "S" w=300 h=200\n  icon name=heart x=100 y=100 size=40 on=toggle:liked tip="Like this photo"`, { components: ALL, width: 300 });
+    ui.tab();
+    expect(ui.focused?.type).toBe("scene");
+    ui.key("Enter");
+    expect(ui.state.liked).toBe(true);
+    ui.destroy();
+    const named = (extra: string) => JSON.stringify(parts(`state n=0\nscene "S" w=300 h=200\n  icon name=arrow-right x=100 y=100 size=40 on=inc:n${extra}`));
+    expect(named(` tip="Next"`)).toContain(`"role":"button","name":"Next"`);
+    expect(named(` tip="Next" label="Go on"`)).toContain(`"role":"button","name":"Go on","description":"Next"`);
+    expect(named(``)).toContain(`"role":"button","name":"arrow right"`);
+    // Not pressable: decoration, and the scene stays a plain picture.
+    expect(parts(`scene "S" w=300 h=200\n  icon name=sun x=100 y=100 size=40`).role).toBe("img");
+  });
+
+  it("review: an icon name a formula works out to that isn't an icon", () => {
+    const r = parse(`state kind="sunny"\nscene "S" w=300 h=200\n  icon name={kind} x=100 y=100 size=40`, reg);
+    expect(r.diagnostics).toEqual([]);
+    expect(reviewScenes(r).map((d) => `${d.line}: ${d.message}`)).toEqual([
+      `3: Drawing: this icon's name works out to "sunny", which isn't an icon. Use one of icon's names`,
+    ]);
+    const ok = parse(`state kind="sun"\nscene "S" w=300 h=200\n  icon name={kind} x=100 y=100 size=40`, reg);
+    expect(reviewScenes(ok)).toEqual([]);
+  });
+});

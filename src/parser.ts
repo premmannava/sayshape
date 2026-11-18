@@ -623,6 +623,21 @@ function providedTo(stack: readonly SayShapeNode[], registry: Registry): { names
   return functions ? { names, anyNames, functions } : { names, anyNames };
 }
 
+/**
+ * What an element is called inside the elements open around a line
+ * (ComponentDef.provides.renames), the nearest first: icon in a scene is the
+ * scene's glyph. Only renames to a registered element count.
+ */
+function renamedIn(stack: readonly SayShapeNode[], indent: number, type: string, registry: Registry): string {
+  for (let i = stack.length - 1; i > 0; i--) {
+    const n = stack[i]!;
+    if (n.indent >= indent) continue;
+    const to = registry.get(n.type)?.provides?.renames;
+    if (to && Object.hasOwn(to, type) && registry.get(to[type]!)) return to[type]!;
+  }
+  return type;
+}
+
 export function parse(src: string, registry: Registry, opts: ParseOptions = {}): ParseResult {
   if (!opts.presets || !HAS_PRESET.test(src)) return parseSpec(src, registry, opts);
   if (opts.partial) {
@@ -838,6 +853,8 @@ function parseSpec(src: string, registry: Registry, opts: ParseOptions = {}): Pa
       return;
     }
     openState = null;
+    // An element that means something else inside an enclosing one (icon in a scene draws a glyph) becomes it, silently.
+    if (tok.type) tok.type = renamedIn(stack, indent, tok.type, registry);
     // "on choose_a" blocks are a common guess at handling a press inside the spec. Say how it works
     // instead, once, without the knock-on messages about the rest of the line.
     if (tok.type === "on" && !defOf("on", registry)) {

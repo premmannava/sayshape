@@ -34,6 +34,7 @@ import { paintScene, type Frame } from "./draw";
 import { locateOf } from "../../each";
 import { dragShape, keyShape, rangeOf } from "./drag";
 import type { PartSemantics } from "../../a11y/semantics";
+import { iconProblems } from "../util";
 import { intersect, liveOf, outerGeoms, outline, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
@@ -45,7 +46,7 @@ export { liveOf as sceneRegions, type SceneRegion } from "./interact";
 const MAX_SCENE_HEIGHT = 2000;
 
 /** What a scene and its groups and drawings hold. */
-const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use", "define", "gradient"] as const;
+const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "glyph", "group", "use", "define", "gradient"] as const;
 const IN_SCENE = ["scene", "group", "define"] as const;
 
 const num = (description: string, def?: number): PropDef => (def === undefined ? { type: "number", description } : { type: "number", description, default: def });
@@ -126,7 +127,7 @@ const scene: ComponentDef = {
   category: "content",
   description:
     "EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). " +
-    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; " +
+    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon, label and icon, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; " +
     "give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.",
   text: { description: "What the picture shows, in a few words, for screen readers.", required: true },
   props: {
@@ -139,7 +140,8 @@ const scene: ComponentDef = {
     scale: num("Show it at this share of its own w (0.1 to 1), centered, like maxw={w * scale}."),
   },
   children: SHAPES,
-  provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS },
+  // icon inside a scene is drawn at x and y like the other shapes: the scene's glyph.
+  provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS, renames: { icon: "glyph" } },
   picks: [
     { for: "a picture or animation no other element can show", write: 'scene "A rabbit hopping across a meadow" w=600 h=340 duration=3' },
     { for: "a diagram people press parts of: a floor plan, a network, a production line", write: 'scene "Floor 3: four meeting rooms" w=600 h=360' },
@@ -401,6 +403,28 @@ const label: ComponentDef = {
   example: `label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"`,
 };
 
+const glyph: ComponentDef = {
+  ...leaf,
+  type: "glyph",
+  category: "content",
+  description: "An icon in a scene, written icon inside one (glyph works too): the app's own icons, at any size and color, drawn from its left edge and centered on y like a label. Give it on= to make it a button: an app on a phone, a control.",
+  props: {
+    name: { type: "string", required: true, description: "Which icon: the same names as icon's name=, like sun, heart or arrow-right. It may hold a {formula}." },
+    x: num("Left edge."),
+    y: num("Its middle, down."),
+    size: num("Width and height in scene pixels.", 24),
+    fill: { type: "string", default: "ink", description: 'Its color, like a shape\'s fill: a theme color (accent, ink, onAccent…) or "#hex".' },
+    opacity: PAINT.opacity!,
+    rotate: PAINT.rotate!,
+    shadow: PAINT.shadow!,
+    glow: PAINT.glow!,
+    label: { type: "string", description: "What screen readers call it when it's pressable. Default: its tip, else the icon's name." },
+    on: PRESS_SHAPE.on!, selected: PRESS_SHAPE.selected!, tip: PRESS_SHAPE.tip!,
+  },
+  check: (props) => iconProblems(props.name, "name"),
+  example: `icon name=sun x=40 y=60 size=48 fill=warn glow=true`,
+};
+
 const group: ComponentDef = {
   type: "group",
   category: "content",
@@ -482,7 +506,7 @@ const gradient: ComponentDef = {
  *   new SayShape(canvas, { components: [...coreComponents, ...sceneComponents] })
  * Leave them out and scenes are off: "scene" is then an unknown element.
  */
-export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient];
+export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, glyph, group, define, use, gradient];
 
 /**
  * A draggable shape to a screen reader: moving one way, a slider with its

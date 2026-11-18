@@ -103,7 +103,7 @@ EVERY ELEMENT ACCEPTS
 
 ELEMENTS AT A GLANCE
 - layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll, deck, slide
-- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient
+- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, glyph, group, define, use, gradient
 - data: stat, rating, chart, chart-line, chart-rule, chart-band, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
 - navigation: screen, tabs, tab, breadcrumb, pagination
@@ -876,7 +876,7 @@ ELEMENTS
           list-item "Hire two in support"
           list-item "Open the Denver office"
 
-  scene "<text>"  — EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.
+  scene "<text>"  — EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon, label and icon, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.
     "<text>" (required)  What the picture shows, in a few words, for screen readers.
     w=<number>  Width of the drawing area, in scene pixels. Shapes use these coordinates; the scene is scaled to fit the screen.
     h=<number>  Height of the drawing area, in scene pixels.
@@ -885,7 +885,7 @@ ELEMENTS
     bg=<string>  Background color behind everything.
     maxw=<number>  The widest it's shown, in screen pixels, centered; it still shrinks on a narrower screen. A phone drawn at w=393: maxw=295.
     scale=<number>  Show it at this share of its own w (0.1 to 1), centered, like maxw={w * scale}.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient
     example:
       scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
         # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
@@ -1051,6 +1051,24 @@ ELEMENTS
     example:
       label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"
 
+  glyph  — An icon in a scene, written icon inside one (glyph works too): the app's own icons, at any size and color, drawn from its left edge and centered on y like a label. Give it on= to make it a button: an app on a phone, a control.
+    name=<string, required>  Which icon: the same names as icon's name=, like sun, heart or arrow-right. It may hold a {formula}.
+    x=<number>  Left edge.
+    y=<number>  Its middle, down.
+    size=<number>  Width and height in scene pixels.
+    fill=<string>  Its color, like a shape's fill: a theme color (accent, ink, onAccent…) or "#hex".
+    opacity=<number>  0 (invisible) to 1 (solid).
+    rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    label=<string>  What screen readers call it when it's pressable. Default: its tip, else the icon's name.
+    on=<action>  Makes it pressable, like group's on=.
+    selected=<condition>  Selection outline while true.
+    tip=<string>  Shown while hovered or focused.
+    only inside: scene, group, define
+    example:
+      icon name=sun x=40 y=60 size=48 fill=warn glow=true
+
   group  — Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.
     x=<number>  Moves everything across.
     y=<number>  Moves everything down.
@@ -1065,7 +1083,7 @@ ELEMENTS
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient
     only inside: scene, group, define
     example:
       group x={600*((t/3) % 1)} y=200
@@ -1077,7 +1095,7 @@ ELEMENTS
 
   define "<text>"  — A reusable drawing: name it, draw it under this line around 0,0, and draw it anywhere with use. It reads names its use passes in args.
     "<text>" (required)  The drawing's name, used by use.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient
     only inside: scene
     example:
       define "cactus"
