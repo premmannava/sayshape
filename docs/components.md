@@ -692,7 +692,7 @@ A pressable button that runs actions. Use emit: to tell the app what the user ch
 | `label` | string | What screen readers say, and an icon-only button's tip, e.g. label="Remove {e.name}". |
 
 ```
-button "Book now" on=emit:book
+button "Book now" validate=true on=emit:book
 button "Back" variant=secondary on=dec:step
 button icon=trash label="Remove" variant=secondary on=emit:remove
 ```
@@ -725,7 +725,7 @@ A checkbox that toggles a true/false state value.
 
 ```
 state agreed=false
-check "I agree to the terms" bind=agreed
+check "I agree to the terms" bind=agreed required=true error="Accept the terms to continue"
 ```
 
 ### `switch`

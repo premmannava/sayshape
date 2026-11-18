@@ -80,7 +80,7 @@ export const button: ComponentDef = {
     }
     return out;
   },
-  example: `button "Book now" on=emit:book
+  example: `button "Book now" validate=true on=emit:book
 button "Back" variant=secondary on=dec:step
 button icon=trash label="Remove" variant=secondary on=emit:remove`,
   semantics(box, ctx) {
@@ -255,7 +255,7 @@ export const check: ComponentDef = {
     error: { type: "string", description: "Its message: for a required box left unticked, else shown while not empty." },
   },
   example: `state agreed=false
-check "I agree to the terms" bind=agreed`,
+check "I agree to the terms" bind=agreed required=true error="Accept the terms to continue"`,
   semantics(box, ctx) {
     const p = ctx.props(box.node);
     const problem = (box.data as unknown as CheckData | undefined)?.problem;
