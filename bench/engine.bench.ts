@@ -83,3 +83,17 @@ describe("each over 500 items", () => {
     ui.sayshape.renderNow();
   });
 });
+
+/** A derive that works a value out for each of 5,000 items and ranks them: extend() runs its record once per item. */
+const extendSpec = `state k=3 rows=[]
+derive scored={rank(extend(rows, 'r', {cost: r.price * k + r.id % 7}), 'cost', 'desc')}
+text "Best: {first(sort(scored, 'rank')).id}"
+`;
+describe("extend and rank over 5,000 items", () => {
+  const ui = render(extendSpec, { width: 1024 });
+  ui.sayshape.state.set("rows", Array.from({ length: 5000 }, (_, i) => ({ id: i, price: i % 97 })) as never);
+  bench("change a name the record reads, then draw", () => {
+    ui.sayshape.state.set("k", (Number(ui.state.k) + 1) % 10);
+    ui.sayshape.renderNow();
+  });
+});
