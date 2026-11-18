@@ -20,7 +20,7 @@ import { extendTheme, isDark, mixColors, parseColor, type DeepPartial, type Them
 export const LOOK_OPTIONS = {
   mood: {
     quiet: "a flat accent and no shadows: calm, editorial, printed",
-    bold: "the accent as a gradient and deeper shadows: confident, promotional",
+    bold: "the accent as a gradient (primary buttons, accent progress bars, a strong wash on hero cards) and deeper shadows: confident, promotional",
   },
   type: {
     editorial: "serif headings over the app's own text, a little larger: magazines, stories, portfolios",
@@ -139,6 +139,7 @@ function lookPatch(t: Theme, look: Look): DeepPartial<Theme> {
   }
   const colors = moodColors(t, look.mood);
   if (colors) patch.colors = colors;
+  if (colors && look.mood) patch.mood = look.mood;
   // A slide keeps its design size whatever the look: its own tokens, or the host's scaled as before.
   if (patch.space || patch.radius || patch.text || patch.control) patch.slide = t.slide ?? slideFallback(t);
   return patch;

@@ -98,7 +98,7 @@ A surface that groups related content, stacked vertically. Give it on= to make t
 |---|---|---|
 | `gap` | number | Space between children in pixels (default 14). |
 | `pad` | number | Inner padding in pixels (default 22). |
-| `variant` | `raised` / `hero` / `tinted` / `outline` | raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only). |
+| `variant` | `raised` / `hero` / `tinted` / `outline` | raised (default), hero (an accent wash for the one card that leads the screen; a clear gradient in a bold look), tinted (a quiet accent fill for a side group) or outline (a border only). |
 | `on` | action | Actions to run when the card is pressed, e.g. emit:changed. Separate several with ; |
 | `tone` | `accent` / `good` / `warn` / `bad` / `muted` | Color role of a left edge stripe. |
 

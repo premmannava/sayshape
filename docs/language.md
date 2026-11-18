@@ -72,7 +72,7 @@ Every prop takes one named option, and leaving a prop out (or writing `default`)
 
 | Prop | Options | What changes |
 |---|---|---|
-| `mood` | `quiet`, `bold` | How the app's accent is used. `quiet`: the accent alone, flat, and no shadows. `bold`: the accent as a gradient toward a deeper (or, with dark text on the accent, lighter) mix with the theme's own ink or surface, and deeper shadows. A theme that already has a gradient keeps its own. |
+| `mood` | `quiet`, `bold` | How the app's accent is used. `quiet`: the accent alone, flat, and no shadows. `bold`: the accent as a gradient toward a deeper (or, with dark text on the accent, lighter) mix with the theme's own ink or surface, and deeper shadows. A theme that already has a gradient keeps its own. Where it shows: a primary `button`, `progress tone=accent`, and `card variant=hero`, whose wash becomes a clear gradient (its muted text darkens to stay readable); other cards stay as they are. |
 | `type` | `editorial`, `classic`, `technical`, `system` | The typefaces. `editorial`: serif headings (`text style=title` and `display`), a step larger, over the app's text face. `classic`: serif headings and text. `technical`: the app's monospaced face for headings. `system`: the device's own interface font (San Francisco, Segoe UI, Roboto) for everything, for native-looking widgets: `look type=system` then `text "72°" style=display weight=light`. |
 | `shape` | `sharp`, `soft`, `round` | Corner radii: about a third, one and a half times, or a little over twice the app's. |
 | `density` | `compact`, `airy` | Spacing (three quarters, or 1.35 times the app's) and control height (0.9 or 1.1 times, never under 28 px). |

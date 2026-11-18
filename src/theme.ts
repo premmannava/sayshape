@@ -97,6 +97,12 @@ export interface Theme {
    * of their own (a stat's figure) draw that much larger there.
    */
   zoom?: number;
+  /**
+   * Set by a look line's mood= (src/look.ts), never by a host: how strongly
+   * elements use the accent. bold: a hero card's wash is stronger, so its
+   * gradient shows. Missing: the host's own.
+   */
+  mood?: "quiet" | "bold";
 }
 
 const base = {

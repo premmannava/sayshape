@@ -2,7 +2,8 @@ import type { ComponentDef } from "../component";
 import type { Box } from "../types";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
-import { isDarkTheme, mixColors, parseColor } from "../theme";
+import { isDarkTheme, mixColors, parseColor, type Theme } from "../theme";
+import { contrastRatio } from "../scrim";
 import { MOTION } from "../design";
 import { chevron, detailProp, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, paintPill, partBox, PILL_TONES, pillWidth, row as rowLayout, ROW_ALIGN, ROW_JUSTIFY, rowMinWidth, runOn, stack, themeFont, toneColor } from "./util";
 
@@ -133,10 +134,41 @@ const CARD_VARIANTS = ["raised", "hero", "tinted", "outline"] as const;
 type CardVariant = (typeof CARD_VARIANTS)[number];
 
 /** How strongly a card's variant tints it toward the accent, light and dark: its wash, and for a hero the glow in its top corner. */
-function cardTint(variant: CardVariant, dark: boolean): { wash: number; glow: number } | null {
+function cardTint(variant: CardVariant, dark: boolean, bold = false): { wash: number; glow: number } | null {
+  // Under look mood=bold the hero's accent gradient is meant to show, not read as a flat tint:
+  // a wash about three times as strong (text contrast on it is checked in test/hero-bold.test.ts).
+  if (variant === "hero" && bold) return dark ? { wash: HERO_BOLD_WASH.dark, glow: 0.24 } : { wash: HERO_BOLD_WASH.light, glow: 0.16 };
   if (variant === "hero") return dark ? { wash: 0.13, glow: 0.2 } : { wash: 0.075, glow: 0.12 };
   if (variant === "tinted") return dark ? { wash: 0.07, glow: 0 } : { wash: 0.075, glow: 0 };
   return null;
+}
+
+/** How strongly a hero card under look mood=bold lays its accent gradient over the card. */
+export const HERO_BOLD_WASH = { light: 0.22, dark: 0.3 } as const;
+
+/** Under look mood=bold, unless a forced-colors mode has put the person's own colors in. */
+const isBold = (theme: Theme) => theme.mood === "bold" && !theme.name.endsWith("-forced-colors");
+
+const boldHero = new WeakMap<Theme, Theme>();
+/**
+ * The theme inside a hero card under look mood=bold: its muted color moved
+ * toward ink (5% at a time) until it reads at AA (4.55, as the scrim checks)
+ * on both ends of the wash and on the glowing corner. Ink already does.
+ */
+export function boldHeroTheme(theme: Theme): Theme {
+  let out = boldHero.get(theme);
+  if (out) return out;
+  const c = theme.colors;
+  const dark = isDarkTheme(theme);
+  const wash = dark ? HERO_BOLD_WASH.dark : HERO_BOLD_WASH.light;
+  const ends = [c.accent, c.accent2].map((a) => mixColors(c.raised, a, wash) ?? c.raised);
+  const bgs = [...ends, mixColors(ends[0]!, c.accent, dark ? 0.24 : 0.16) ?? ends[0]!];
+  const reads = (color: string) => bgs.every((bg) => (contrastRatio(color, bg) ?? 0) >= 4.55);
+  let muted = c.muted;
+  for (let k = 0.05; !reads(muted) && k <= 1.0001; k += 0.05) muted = mixColors(c.muted, c.ink, k) ?? c.ink;
+  out = muted === c.muted ? theme : { ...theme, colors: { ...c, muted } };
+  boldHero.set(theme, out);
+  return out;
 }
 
 /** A color at no opacity, for a gradient that fades it out (the same color at 0 avoids fading through gray). */
@@ -152,7 +184,7 @@ export const card: ComponentDef = {
   props: {
     gap: gapProp(14),
     pad: padProp(22),
-    variant: { type: "enum", values: CARD_VARIANTS, default: "raised", description: "raised (default), hero (an accent wash for the one card that leads the screen), tinted (a quiet accent fill for a side group) or outline (a border only)." },
+    variant: { type: "enum", values: CARD_VARIANTS, default: "raised", description: "raised (default), hero (an accent wash for the one card that leads the screen; a clear gradient in a bold look), tinted (a quiet accent fill for a side group) or outline (a border only)." },
     on: onProp("when the card is pressed"),
     tone: { type: "enum", values: PILL_TONES, description: "Color role of a left edge stripe." },
   },
@@ -163,6 +195,10 @@ export const card: ComponentDef = {
 card on=emit:open_order
   text "Trail runner socks" weight=semibold
   text "Arrives Thursday" tone=muted`,
+  theme(theme, node) {
+    // A bold hero's stronger wash: muted words inside lift toward ink until they hold AA on it.
+    return node.props.variant === "hero" && isBold(theme) ? boldHeroTheme(theme) : theme;
+  },
   semantics(box, ctx) {
     // A pressable card is a button named by everything in it; otherwise it's only a surface.
     return box.node.props.on ? { role: "button", name: ctx.textWithin(box) } : null;
@@ -182,7 +218,7 @@ card on=emit:open_order
     const variant = ctx.props(box.node).oneOf("variant", CARD_VARIANTS, "raised");
     // An outline card has no fill: what's in it sits on the page.
     if (variant === "outline") return c.surface;
-    const tint = cardTint(variant, isDarkTheme(ctx.theme));
+    const tint = cardTint(variant, isDarkTheme(ctx.theme), isBold(ctx.theme));
     if (!tint) return undefined;
     // Children sit on the middle of the wash.
     return mixColors(c.raised, mixColors(c.accent, c.accent2, 0.5) ?? c.accent, tint.wash) ?? undefined;
@@ -202,7 +238,7 @@ card on=emit:open_order
     const lift = ctx.tween(box.node, "card:hover", hovered ? 1 : 0, MOTION.hover);
     const press = ctx.tween(box.node, "card:press", pressable && ctx.isPressed(box.node) ? 1 : 0, MOTION.press);
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
-    const tint = cardTint(variant, isDarkTheme(theme));
+    const tint = cardTint(variant, isDarkTheme(theme), isBold(theme));
     if (variant === "raised" || variant === "hero") {
       // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
       // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
