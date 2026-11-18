@@ -176,7 +176,7 @@ List functions, for computing instead of typing numbers:
 | `sum(list)`, `sum(list, 'price')`, `sum(list, 'price', 'qty')` | Total of the items, of a field, or of two fields multiplied per item (cart totals). Only numbers count: a missing field, `null`, `true`/`false` or text (even `"12"`) makes the total — rather than being read as a number; an empty list totals 0. `avg`, `min` and `max` of a field work the same way |
 | `avg(list, 'field')` | Average |
 | `join(list)`, `join(list, 'name', ' / ')` | Text listing the items or a field |
-| `includes(list, value)` | Whether a value is in the list |
+| `includes(list, value)`, `includes(text, part)` | Whether a value is in the list, or text holds other text, matching case: `contains()` is the one that ignores it |
 | `min(list)`, `max(list)`, `min(list, 'price')`, `max(list, 'price')` | Smallest and largest, of the items or of a field |
 | `count(list, 'cat', 'Gas')` | Items whose field equals a value, or any value in a list: `count(list, 'region', shown)` |
 | `filter(list, 'done')`, `filter(list, 'cat', 'Gas')`, `filter(list, 'region', shown)`, `filter(list, 'date', period)`, `filter(list, 'price', {to: budget})` | The items whose field is true, equals a value, is any value in a list (a multi-select's; an empty list keeps none), or is within a `{from, to}` range (a date range's, or numbers; both ends included, an empty end open), as a list |
@@ -226,6 +226,21 @@ Formatting, for text people read:
 | `compact(12345678)`, `compact(n, 'USD')` | `12.3M`, `$12.3M`: big figures in small spaces, like a `stat`. Keeps 3 significant digits or 1 decimal, whichever says more: `compact(1240000)` is `1.24M` |
 | `plural(n, 'item')`, `plural(n, 'child', 'children')` | `1 item`, `3 items`, `2 children` |
 | `lower(text)`, `upper(text)`, `trim(text)` | Text in lower or upper case, or without spaces at the ends |
+
+Text checks, true or false, for `error=`, `required=`, `disabled=` and `if=`. They take a check by name, never a pattern, and null or empty text is always false:
+
+| Function | Result |
+|---|---|
+| `has(pw, 'digit')`, `'upper'`, `'lower'`, `'symbol'`, `'space'` | Whether the text has at least one such character, in any script (`É`, `Ω` and `ß` are letters; `٣` is a digit) |
+| `is(v, 'email')`, `'url'`, `'phone'`, `'zip'`, `'number'`, `'date'` | Whether the whole text, spaces around it aside, is one: an email by `input kind=email`'s rule, an `http` or `https` address, 7 to 15 digits with spaces, dashes, dots, brackets and a leading `+`, a US ZIP code (`85004` or `85004-1234`), a number by `input kind=number`'s rule, a real `YYYY-MM-DD` date. A check that doesn't exist is reported, naming the ones that do |
+| `contains(text, part)`, `starts(text, part)`, `ends(text, part)` | Whether the text holds, starts with or ends with the part, ignoring case; `'case'` as a third argument matches case. An empty part is in any text |
+
+```sayshape
+state pw="" sent=0
+derive strong={len(pw) >= 8 && has(pw, 'upper') && has(pw, 'digit')}
+input "Password" bind=pw kind=password error="{strong ? '' : 'At least 8 characters, a capital and a digit'}"
+button "Sign up" disabled={!strong} on=inc:sent
+```
 
 Numbers and money are formatted in US English for now.
 
