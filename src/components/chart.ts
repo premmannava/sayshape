@@ -46,13 +46,13 @@ import { themeFont } from "./util";
 import { statSizes } from "./content";
 import { CHART_KINDS, paintSankeyHover, sankeyLinkAt, type SankeyGeometry } from "./chart-kinds";
 import {
-  mutedBar, onFill, barPath, chartData, smoothLineControls, traceSmoothLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, labelRows, fieldTitle, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
+  mutedBar, onFill, barPath, chartData, smoothLineControls, traceLine, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, labelRows, fieldTitle, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
   legendValueTexts, plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
   formatter, type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
 } from "./chart-kit";
 
 // Kept importable from here, where they have always been.
-export { chartData, chartSeries, chartScale, smoothLineControls, traceSmoothLine, MAX_CHART_ITEMS, niceStep, shareText, tickLabels, valueText } from "./chart-kit";
+export { chartData, chartSeries, chartScale, smoothLineControls, traceLine, traceSmoothLine, MAX_CHART_ITEMS, niceStep, shareText, tickLabels, valueText } from "./chart-kit";
 export type { ChartData, ChartGeometry, LineControl, SeriesData, ChartSlot, LegendItem, PieSlice, Rect } from "./chart-kit";
 
 /** The most fields one bar or line chart draws, one color each. */
@@ -829,6 +829,9 @@ function check(props: Readonly<Record<string, string>>): string[] {
   for (const prop of ["label", "size", "group"] as const) {
     if (props[prop] !== undefined && kind !== "scatter") out.push(`${prop}= is for kind=scatter only, so it was ignored here; remove it, or use kind=scatter`);
   }
+  if (props.curve !== undefined && kind !== "line" && kind !== "area") {
+    out.push(`curve= shapes the line of kind=line and kind=area only, so it was ignored here; remove it, or use one of them`);
+  }
   if (props.good !== undefined && kind !== "bullet") {
     out.push(`good= says which side of the target is good on kind=bullet only, so it was ignored here; remove it, or use kind=bullet`);
   }
@@ -882,6 +885,7 @@ export const chart: ComponentDef = {
     total: { type: "string", description: "Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total=\"Net income\"." },
     values: { type: "boolean", default: false, description: "bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits." },
     highlight: { type: "string", description: "bar, hbar, stacked: one item's x value, e.g. highlight=\"Mar\"; its bar keeps full color, the others fade." },
+    curve: { type: "enum", values: ["straight", "smooth"], default: "straight", description: "line and area: straight lines between points, true to the data; smooth curves them, for continuous readings only." },
     format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number." },
   },
   picks: [
@@ -970,6 +974,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
         else ctx.warn?.(`chart on line ${line}: highlight="${want}" matches no item, so every bar is drawn the same. highlight= is an item's x value as shown, like highlight="${out.g.slots[0]?.label ?? "Jan"}"`);
       }
     }
+    if (!out.g.message && (out.g.kind === "line" || out.g.kind === "area") && p.oneOf("curve", ["straight", "smooth"] as const, "straight") === "smooth") out.g.smooth = true;
     box.data = out.g;
     box.h = out.h;
   },
@@ -1147,7 +1152,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
           for (const run of runs) {
             if (run.length < 2) continue;
             g.beginPath();
-            traceSmoothLine(g, run, ox, oy);
+            traceLine(g, run, ox, oy, d.smooth);
             g.lineTo(ox + run[run.length - 1]!.x, floor);
             g.lineTo(ox + run[0]!.x, floor);
             g.closePath();
@@ -1165,7 +1170,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
         for (const run of runs) {
           if (run.length < 2) continue;
           g.beginPath();
-          traceSmoothLine(g, run, ox, oy);
+          traceLine(g, run, ox, oy, d.smooth);
           g.strokeStyle = colorOf(k);
           // A hair of colored depth below a crisp core, not a permanent glow.
           g.save();

@@ -107,6 +107,8 @@ export type ChartGeometry = {
   values?: boolean;
   /** highlight= on bar, hbar and stacked: the slots kept in full color while the others are muted. */
   highlight?: number[];
+  /** curve=smooth on line and area (and their chart-line layers): a monotone curve instead of straight segments. */
+  smooth?: boolean;
   /** Bar and line: what the chart-line, chart-rule and chart-note lines under it add. */
   layers?: ChartLayers;
   kind: Kind;
@@ -696,6 +698,23 @@ export function smoothLineControls(points: readonly { x: number; y: number }[]):
 
 /** Below this many pixels between points, a line is drawn straight from point to point. */
 export const DENSE_POINT_GAP = 14;
+
+/**
+ * A series' line through its points: straight segments unless smooth, since
+ * a curve between discrete samples (yearly returns, weekly weights) draws
+ * values that were never measured. curve=smooth asks for the monotone curve.
+ */
+export function traceLine(
+  g: CanvasRenderingContext2D,
+  run: readonly { x: number; y: number }[],
+  ox: number, oy: number,
+  smooth = false,
+): void {
+  if (smooth) { traceSmoothLine(g, run, ox, oy); return; }
+  if (!run.length) return;
+  g.moveTo(ox + run[0]!.x, oy + run[0]!.y);
+  for (const pt of run.slice(1)) g.lineTo(ox + pt.x, oy + pt.y);
+}
 
 export function traceSmoothLine(
   g: CanvasRenderingContext2D,

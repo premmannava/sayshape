@@ -18,7 +18,7 @@ import { easeOut } from "../../ghost";
 import { mixColors, seriesColors } from "../../theme";
 import {
   chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels, plotHeight,
-  preciseText, slotLabels, labelRows, fieldTitle, tickLabels, traceSmoothLine, type ChartGeometry, type ChartSlot, type Rect,
+  preciseText, slotLabels, labelRows, fieldTitle, tickLabels, traceLine, type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
@@ -157,7 +157,7 @@ export const area: ChartKindDef = {
           // A single point between gaps: a thin column, so it still shows.
           g.rect(ox + run[0]!.x - 1.5, oy + run[0]!.y, 3, floor - (oy + run[0]!.y));
         } else {
-          traceSmoothLine(g, run, ox, oy);
+          traceLine(g, run, ox, oy, d.smooth);
           g.lineTo(ox + run[run.length - 1]!.x, floor);
           g.lineTo(ox + run[0]!.x, floor);
           g.closePath();
@@ -175,7 +175,7 @@ export const area: ChartKindDef = {
       for (const run of runs) {
         if (run.length < 2) continue;
         g.beginPath();
-        traceSmoothLine(g, run, ox, oy);
+        traceLine(g, run, ox, oy, d.smooth);
         g.strokeStyle = colorOf(k);
         g.lineWidth = 2.25;
         g.stroke();

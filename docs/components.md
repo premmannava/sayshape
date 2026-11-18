@@ -465,6 +465,7 @@ A chart of a list of records: bar or line for one or more numbers per item, such
 | `total` | string | Waterfall only: the name of an extra last bar showing the total the changes add up to, e.g. total="Net income". |
 | `values` | boolean | bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits. |
 | `highlight` | string | bar, hbar, stacked: one item's x value, e.g. highlight="Mar"; its bar keeps full color, the others fade. |
+| `curve` | `straight` / `smooth` | line and area: straight lines between points, true to the data; smooth curves them, for continuous readings only. |
 | `format` | `number` / `money` / `percent` | How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number. |
 
 Children: `chart-line`, `chart-rule`, `chart-band`, `chart-note`.

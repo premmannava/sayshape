@@ -6,7 +6,7 @@ import { isList, isRecord } from "../data";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { fitText } from "./input";
 import { easeOut, paintGhost } from "../ghost";
-import { traceSmoothLine } from "./chart";
+import { traceLine } from "./chart";
 import { detailProp, fillTint, iconBefore, iconProblems, iconProp, paintPill, partBox, PILL_TONES, PILL_VARIANTS, pillWidth, TEXT_STYLES, textMetrics, textWidth, themeFont, toneColor, toneProp, TONES, WEIGHTS } from "./util";
 import { drawIcon, ICON_NAMES, isIconName, type IconName } from "../icons";
 import { looksRich, parseRich, plainOf, wrapRich, type RichLine, type RichStyle, type Run } from "../rich";
@@ -724,7 +724,7 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     const end = points[points.length - 1]!;
     // A flat line: no wash under it and no glow, only a small dot at the latest value.
     g.beginPath();
-    traceSmoothLine(g, points, box.x, box.y);
+    traceLine(g, points, box.x, box.y);
     g.strokeStyle = color;
     g.lineWidth = 2.15;
     g.stroke();
