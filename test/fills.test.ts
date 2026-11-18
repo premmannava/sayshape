@@ -3,7 +3,10 @@ import { darkTheme, extendTheme, forcedColorsTheme, lightTheme, studioDarkTheme,
 import { applyLook } from "../src/look";
 import { FILLS, fillGradient, fillOf, fillSamples, fillSource, onFillTheme } from "../src/fills";
 import { worstContrast } from "../src/contrast";
-import { createRecordingContext } from "../src/testing";
+import { createRecordingContext, render } from "../src/testing";
+import { parse } from "../src/parser";
+import { Registry } from "../src/registry";
+import { coreComponents } from "../src/components";
 
 const brand = (t: Theme) => extendTheme(t, { colors: { accent: "#2F7FE0", accent2: "#5AB8F5" } });
 const THEMES: Array<[string, Theme]> = [
@@ -91,5 +94,65 @@ describe("named fills", () => {
     expect(x1).toBeCloseTo(100); expect(y1).toBeCloseTo(100);
     const forced = forcedColorsTheme(lightTheme, () => "#000000");
     expect(fillGradient(g, forced, "sky", { x: 0, y: 0, w: 10, h: 10 })).toBeNull();
+  });
+});
+
+const WEATHER = `card fill=sky
+  text "Phoenix" weight=semibold
+  text "72°" style=display weight=light
+  text "Sunny all day" tone=muted`;
+
+describe("card fill=", () => {
+  it.each([["light", lightTheme], ["dark", darkTheme]] as const)("paints the fill's gradient and reads on it (%s)", (_n, theme) => {
+    const ui = render(WEATHER, { theme });
+    const f = fillOf(theme, "sky")!;
+    const card = ui.drawOps.find((op) => op.op === "fill" && op.gradientStops?.length === 2 && op.gradientStops[0]!.color === f.from);
+    expect(card?.gradientStops?.map((s) => s.color)).toEqual([f.from, f.to]);
+    const inside = onFillTheme(theme, "sky").colors;
+    const text = (t: string) => ui.drawOps.find((op) => op.op === "fillText" && String(op.args[0]) === t)!.fillStyle;
+    expect(text("Phoenix")).toBe(inside.ink);
+    expect(text("72°")).toBe(inside.ink);
+    expect(text("Sunny all day")).toBe(inside.muted);
+    ui.destroy();
+  });
+
+  it("night turns the words light in a light theme", () => {
+    const ui = render(`card fill=night\n  text "Clear"`, { theme: lightTheme });
+    expect(ui.drawOps.find((op) => op.op === "fillText")!.fillStyle).toBe(lightTheme.colors.surface);
+    ui.destroy();
+  });
+
+  it("keeps the card's semantics: a pressable fill card is still a button", () => {
+    const ui = render(`card fill=accent on=emit:open\n  text "Open"`);
+    ui.click("Open");
+    expect(ui.emitted.map((e) => e.name)).toContain("open");
+    expect(JSON.stringify(ui.accessibility())).toContain(`"role":"button","name":"Open"`);
+    ui.destroy();
+  });
+
+  it("warns for a color, an address or an unknown name, with the line, and draws as raised", () => {
+    const reg = new Registry(coreComponents);
+    for (const bad of ["#ff0000", "url(#x)", "rainbow"]) {
+      const r = parse(`text "Hi"\ncard fill=${bad}\n  text "Inside"`, reg);
+      const d = r.diagnostics.find((x) => x.message.includes("fill"));
+      expect(d, bad).toMatchObject({ line: 2, severity: "warning" });
+      const ui = render(`card fill=${bad}\n  text "Inside"`, { theme: lightTheme });
+      expect(ui.drawOps.find((op) => op.op === "fillText")!.fillStyle).toBe(lightTheme.colors.ink);
+      ui.destroy();
+    }
+  });
+
+  it("parses every prefix of a fill card", () => {
+    const reg = new Registry(coreComponents);
+    const lines = WEATHER.split("\n");
+    for (let i = 1; i <= lines.length; i++) expect(() => parse(lines.slice(0, i).join("\n"), reg)).not.toThrow();
+  });
+
+  it("draws as a plain raised card in a forced-colors mode", () => {
+    const forced = forcedColorsTheme(lightTheme, (s) => (s === "Canvas" ? "#FFFFFF" : "#000000"));
+    const ui = render(WEATHER, { theme: forced });
+    expect(ui.drawOps.some((op) => op.gradientStops?.some((s) => s.color === fillOf(lightTheme, "sky")!.from))).toBe(false);
+    expect(ui.drawOps.find((op) => op.op === "fillText")!.fillStyle).toBe(forced.colors.ink);
+    ui.destroy();
   });
 });

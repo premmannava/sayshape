@@ -5,6 +5,7 @@ import { drawIcon, isIconName } from "../icons";
 import { isDarkTheme, mixColors, parseColor, type Theme } from "../theme";
 import { contrastRatio } from "../scrim";
 import { MOTION } from "../design";
+import { FILLS, fillGradient, fillSource, isFillName, onFillTheme, type FillName } from "../fills";
 import { chevron, detailProp, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, paintPill, partBox, PILL_TONES, pillWidth, row as rowLayout, ROW_ALIGN, ROW_JUSTIFY, rowMinWidth, runOn, stack, themeFont, toneColor } from "./util";
 
 /** A parent card is already the frame; let nested tables use its surface. */
@@ -171,10 +172,27 @@ export function boldHeroTheme(theme: Theme): Theme {
   return out;
 }
 
+/** The fill a card paints, when it has one and the theme gives it (not in a forced-colors mode): the theme it's worked out from, and its name. */
+function cardFill(box: Box, theme: Theme): { base: Theme; name: FillName } | null {
+  const name = box.node.props.fill;
+  if (!isFillName(name)) return null;
+  const src = fillSource(theme);
+  return src && src.name === name ? src : null;
+}
+
 /** A color at no opacity, for a gradient that fades it out (the same color at 0 avoids fading through gray). */
 function clearOf(color: string): string {
   const c = parseColor(color);
   return c ? `rgba(${c[0]}, ${c[1]}, ${c[2]}, 0)` : "rgba(0, 0, 0, 0)";
+}
+
+/** A raised card's fill: the raised color, a shade toward ink at the bottom. */
+function raisedFinish(g: CanvasRenderingContext2D, box: Box, theme: Theme): CanvasGradient {
+  const c = theme.colors;
+  const finish = g.createLinearGradient(box.x, box.y, box.x, box.y + box.h);
+  finish.addColorStop(0, c.raised);
+  finish.addColorStop(1, mixColors(c.raised, c.ink, 0.018) ?? c.raised);
+  return finish;
 }
 
 export const card: ComponentDef = {
@@ -187,6 +205,7 @@ export const card: ComponentDef = {
     variant: { type: "enum", values: CARD_VARIANTS, default: "raised", description: "raised (default), hero (an accent wash for the one card that leads the screen; a clear gradient in a bold look), tinted (a quiet accent fill for a side group) or outline (a border only)." },
     on: onProp("when the card is pressed"),
     tone: { type: "enum", values: PILL_TONES, description: "Color role of a left edge stripe." },
+    fill: { type: "enum", values: FILLS, description: "A gradient from the theme that sets a mood, by name, never a color: card fill=sky for today's weather. Words inside switch to colors that read on it." },
   },
   children: "any",
   example: `card variant=hero
@@ -196,6 +215,8 @@ card on=emit:open_order
   text "Trail runner socks" weight=semibold
   text "Arrives Thursday" tone=muted`,
   theme(theme, node) {
+    // A fill: the words inside take colors that read on its gradient (the theme's own, unchanged in a forced-colors mode).
+    if (isFillName(node.props.fill)) return onFillTheme(theme, node.props.fill);
     // A bold hero's stronger wash: muted words inside lift toward ink until they hold AA on it.
     return node.props.variant === "hero" && isBold(theme) ? boldHeroTheme(theme) : theme;
   },
@@ -215,6 +236,8 @@ card on=emit:open_order
     const c = ctx.theme.colors;
     // A bare card has no fill: what's in it sits on the page.
     if (box.data?.bare) return c.surface;
+    // A fill's theme already has the gradient's middle as raised.
+    if (cardFill(box, ctx.theme)) return undefined;
     const variant = ctx.props(box.node).oneOf("variant", CARD_VARIANTS, "raised");
     // An outline card has no fill: what's in it sits on the page.
     if (variant === "outline") return c.surface;
@@ -232,21 +255,20 @@ card on=emit:open_order
     const { g, theme } = ctx;
     const c = theme.colors;
     const p = ctx.props(box.node);
-    const variant = p.oneOf("variant", CARD_VARIANTS, "raised");
+    const fill = cardFill(box, theme);
+    // A fill paints as a raised card with the gradient in place of its finish, and no accent wash.
+    const variant = fill ? "raised" : p.oneOf("variant", CARD_VARIANTS, "raised");
     const pressable = p.has("on");
     const hovered = pressable && ctx.isHovered(box.node);
     const lift = ctx.tween(box.node, "card:hover", hovered ? 1 : 0, MOTION.hover);
     const press = ctx.tween(box.node, "card:press", pressable && ctx.isPressed(box.node) ? 1 : 0, MOTION.press);
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
-    const tint = cardTint(variant, isDarkTheme(theme), isBold(theme));
+    const tint = fill ? null : cardTint(variant, isDarkTheme(theme), isBold(theme));
     if (variant === "raised" || variant === "hero") {
       // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
       // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
       g.save();
-      const finish = g.createLinearGradient(box.x, box.y, box.x, box.y + box.h);
-      finish.addColorStop(0, c.raised);
-      finish.addColorStop(1, mixColors(c.raised, c.ink, 0.018) ?? c.raised);
-      g.fillStyle = finish;
+      g.fillStyle = (fill && fillGradient(g, fill.base, fill.name, box)) || raisedFinish(g, box, theme);
       g.shadowColor = c.shadow;
       g.shadowBlur = 10 + 8 * lift - 3 * press;
       g.shadowOffsetY = 2 + 2 * lift - press;
