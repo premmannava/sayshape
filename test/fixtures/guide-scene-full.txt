@@ -1063,6 +1063,8 @@ ELEMENTS
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
+    on-hover=<action>  Actions when a mouse moves onto it (never touch): on-hover=set:hov:{p.name}. Shapes too.
+    on-leave=<action>  When it moves off: on-leave="set:hov:''".
     children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
     only inside: scene, group, define
     example:

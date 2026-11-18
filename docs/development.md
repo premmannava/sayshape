@@ -138,6 +138,7 @@ What a `ComponentDef` can define:
 | `visible(node, scope)` | Hide the element beyond `if=` (only the active `screen` shows) |
 | `press(ctx)` | What happens on activation; by default it runs the `on` prop |
 | `cursor(target)` | Mouse cursor over it |
+| `hover(ctx, from, to)` | The mouse moved onto, between or off its parts (details, `undefined` = off it); never for touch. A scene's `on-hover=`/`on-leave=` use it |
 | `noBox` | It has no box of its own: its parent draws it or reads it as data (a table-column, a chart layer). The parser then warns that `enter=` and `stagger=` on it don't play |
 | `quiet` | Props the parser accepts but the model guide leaves out until a guide option asks for them (image's `shape=` and `zoom=`, shown with `GuideOptions.pictures`) |
 

@@ -343,7 +343,8 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
   }
   // On a phone the whole picture shrinks to PHONE_WIDTH, and things to press shrink with it.
   const k = PHONE_WIDTH / w;
-  const pressable = regions.map((r) => ({ r, b: regionBounds(r) })).filter((x): x is { r: SceneRegion; b: Rect } => !!x.b);
+  // Shapes only hovered (on-hover=, no on=) aren't tapped, so they're not held to tap sizes.
+  const pressable = regions.filter((r) => r.on || r.drag).map((r) => ({ r, b: regionBounds(r) })).filter((x): x is { r: SceneRegion; b: Rect } => !!x.b);
   for (const { r, b } of pressable) {
     if (overlap(b, { x: 0, y: 0, w, h }) <= 0) {
       warn(r.node.line, `this ${r.drag ? "draggable" : "pressable"} ${r.node.type} is outside the picture, so it can't be ${r.drag ? "dragged" : "pressed"}. Move it inside 0..${w} across and 0..${h} down`);

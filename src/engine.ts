@@ -285,6 +285,8 @@ export class SayShape {
   private hostPaused = false;
 
   hover: HitTarget | null = null;
+  /** What hover hooks (ComponentDef.hover) were last told the mouse is over: never a tip, a popup's part or a finger. */
+  private hoverSent: HitTarget | null = null;
   /** The element being dragged, while the pointer is held on one that defines drag. */
   private dragging: HitTarget | null = null;
   focus: HitTarget | null = null;
@@ -550,6 +552,12 @@ export class SayShape {
   }
 
   private renderStages(): void {
+    this.runStages();
+    // A hovered part that's gone (or now behind a dialog or popup) is left; what that writes shows in this same frame.
+    if (this.syncHover()) this.runStages();
+  }
+
+  private runStages(): void {
     if (this.dirty.parse) this.runParse();
     if (this.dirty.layout) this.runLayout();
     if (this.dirty.paint) this.runPaint();
@@ -1478,6 +1486,38 @@ export class SayShape {
     this.invalidate("layout");
   }
 
+  /**
+   * Tell hover hooks the mouse is now over target (null: over nothing that has one).
+   * Within one element the hook gets both parts; between two, the first hears
+   * it was left, then the second that it was entered. Hovering isn't a press:
+   * it doesn't count as the person acting.
+   */
+  private hoverTo(target: HitTarget | null): void {
+    const to = target && target.layer !== "popup" && target.detail !== TIP && !isTipPart(target.detail) && this.registry.get(target.node.type)?.hover ? target : null;
+    const was = this.hoverSent;
+    if (was === to || (was && to && sameTarget(was, to))) return;
+    this.hoverSent = to;
+    const tell = (t: HitTarget, from: unknown, into: unknown) => this.registry.get(t.node.type)?.hover?.(this.pressContext(t), from, into);
+    if (was && to && was.node.id === to.node.id) { tell(to, was.detail, to.detail); return; }
+    if (was) tell(was, was.detail, undefined);
+    if (to) tell(to, undefined, to.detail);
+  }
+
+  /**
+   * After a frame: a hovered part that's no longer drawn (its if= turned false,
+   * the spec changed) or is now behind a dialog or an open popup is left. The
+   * pointer resting where it was isn't hit-tested again; its next move does that.
+   * Returns whether anything was left.
+   */
+  private syncHover(): boolean {
+    const s = this.hoverSent;
+    if (!s) return false;
+    const from = Math.max(0, this.modalFrom);
+    if (!this.popup && this.hits.some((h, i) => i >= from && sameRegion(h, s))) return false;
+    this.hoverTo(null);
+    return true;
+  }
+
   /** Close the open popup, sending keyboard focus back to its owner when it's still shown. */
   closePopup(restoreFocus = true): void {
     const p = this.popup;
@@ -2363,9 +2403,6 @@ export class SayShape {
       const r = c.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
-    const sameTarget = (a: HitTarget | null, b: HitTarget | null) =>
-      a === b || (!!a && !!b && a.node.id === b.node.id && a.detail === b.detail);
-
     const onMove = (e: PointerEvent) => {
       this.pointer = local(e);
       // A drag that began on text selects it: the press (or the element's own drag, like a table's
@@ -2375,6 +2412,7 @@ export class SayShape {
         if (this.dragging) { this.dragging = null; this.dragHeld = []; }
         this.pressed = null;
         this.hover = null;
+        this.hoverTo(null);
         this.invalidate("paint");
         c.style.cursor = "text";
         return;
@@ -2388,11 +2426,14 @@ export class SayShape {
       if (this.tipShown) this.invalidate("paint");
       if (!sameTarget(t, this.hover)) { this.hover = t; this.invalidate("paint"); }
       else if (t?.detail !== undefined) this.invalidate("paint");
+      // A finger doesn't hover (a tap's move would fire on-hover); a mouse or a pen does.
+      if (e.pointerType !== "touch") this.hoverTo(t);
     };
     const onLeave = () => {
       if (this.dragging) return; // the pointer is captured; the drag ends on release
       this.pointer = null;
       if (this.hover || this.pressed) { this.hover = null; this.pressed = null; this.invalidate("paint"); }
+      this.hoverTo(null);
       this.inspector.pointerLeave();
     };
     // Set while a press is focusing the canvas, so onFocus can tell a click from Tab.
@@ -2525,6 +2566,7 @@ export class SayShape {
         // What's under the pointer has moved: hover follows it once the frame is laid out.
         this.renderNow();
         this.hover = this.targetAt(at.x, at.y);
+        this.hoverTo(this.hover);
         this.invalidate("paint");
       }
     };
@@ -2762,6 +2804,10 @@ function scaledEditor(spec: EditorSpec, t: ChildTransform): EditorSpec {
     font: spec.font.replace(/(\d+(?:\.\d+)?)px/, (_, n: string) => `${Number(n) * t.scale}px`),
     ...(spec.lineHeight !== undefined ? { lineHeight: spec.lineHeight * t.scale } : {}),
   };
+}
+
+function sameTarget(a: HitTarget | null, b: HitTarget | null): boolean {
+  return a === b || (!!a && !!b && a.node.id === b.node.id && a.detail === b.detail);
 }
 
 function sameRegion(h: HitRegion, t: HitTarget): boolean {

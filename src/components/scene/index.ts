@@ -36,6 +36,7 @@ import { apply } from "./interact";
 import { locateOf } from "../../each";
 import { dragShape, keyShape, rangeOf } from "./drag";
 import type { PartSemantics, SemanticsContext } from "../../a11y/semantics";
+import { HOVER, HOVER_SHAPE, hoverOnly, sceneCursor, sceneHover } from "./hover";
 import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
@@ -89,6 +90,7 @@ const PRESS_SHAPE: Record<string, PropDef> = {
   selected: { type: "condition", description: "Selection outline while true." },
   tip: { type: "string", description: "Shown while hovered or focused." },
   name: { type: "string", description: "Screen-reader name." },
+  ...HOVER_SHAPE,
 };
 
 const leaf = { layout: (box: Box) => { box.h = 0; }, semantics: () => false as const, parents: IN_SCENE, noBox: true } satisfies Partial<ComponentDef>;
@@ -201,6 +203,9 @@ const scene: ComponentDef = {
   key(ctx, key) {
     return keyShape(ctx, liveOf(ctx.target.node)?.regions.get(String(ctx.target.detail)), key);
   },
+  // The mouse moving over on-hover= and on-leave= shapes (never touch).
+  hover: sceneHover,
+  cursor: sceneCursor,
   semantics: (box, ctx) => sceneSemantics(box, ctx),
 };
 
@@ -246,7 +251,8 @@ function sceneSemantics(box: Box, ctx: SemanticsContext) {
     const scene = liveOf(box.node);
     const parts = ctx.regions.flatMap((h) => {
       const r = typeof h.detail === "string" ? scene?.regions.get(h.detail) : undefined;
-      if (!r) return [];
+      // A shape only hovered isn't something to press.
+      if (!r || hoverOnly(r)) return [];
       const label = regionName(r);
       if (r.drag) return [dragSemantics(r, label, h.detail)];
       return [{
@@ -279,8 +285,8 @@ function pressable(box: Box, ctx: PaintContext, regions: readonly SceneRegion[])
     if (!at) continue;
     byKey.set(r.key, r);
     shown.push({ r, at });
-    // Only draggable shapes drag; pressable ones press as before.
-    ctx.addHit({ node: box.node, children: [], ...at }, { detail: r.key, drags: !!r.drag, ...(r.drag?.y ? { claimsSwipe: true } : {}) });
+    // Only draggable shapes drag; pressable ones press as before. One only hovered is pointed at, never a Tab stop.
+    ctx.addHit({ node: box.node, children: [], ...at }, { detail: r.key, drags: !!r.drag, ...(hoverOnly(r) ? { focusable: false } : {}), ...(r.drag?.y ? { claimsSwipe: true } : {}) });
   }
   setLive(box.node, { box: area, regions: byKey });
   return shown;
@@ -292,9 +298,11 @@ function paintFeedback(box: Box, ctx: PaintContext, shown: ReadonlyArray<{ r: Sc
   const g = ctx.g, c = ctx.theme.colors;
   let tipped: { r: SceneRegion; at: Rect } | null = null;
   for (const s of shown) {
-    const hovered = ctx.isHovered(box.node, s.r.key), focused = ctx.isFocused(box.node, s.r.key);
+    const pointed = ctx.isHovered(box.node, s.r.key), focused = ctx.isFocused(box.node, s.r.key);
+    // A shape only hovered (on-hover=, no on=) shows its tip but no outline: it isn't pressable.
+    const hovered = pointed && !hoverOnly(s.r);
+    if ((focused || pointed) && s.r.tip && (!tipped || focused)) tipped = s;
     if (!s.r.selected && !hovered && !focused) continue;
-    if ((focused || hovered) && s.r.tip && (!tipped || focused)) tipped = s;
     const strong = !!s.r.selected || focused;
     g.save();
     g.globalAlpha = strong ? 1 : 0.7;
@@ -426,7 +434,7 @@ const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), ...PRESS, ...DRAG },
+  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), ...PRESS, ...HOVER, ...DRAG },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
@@ -465,6 +473,7 @@ const use: ComponentDef = {
     x: num("Across."), y: num("Down."), rotate: num("Degrees."), scale: num("Size.", 1), opacity: num("0 to 1.", 1),
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
     ...PRESS,
+    ...HOVER_SHAPE,
     ...DRAG_SHAPE,
   },
   example: `use "cactus" x=120 y=300 scale=1.2 args={{h: 70}}`,
