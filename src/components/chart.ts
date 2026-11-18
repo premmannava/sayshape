@@ -858,7 +858,7 @@ export const chart: ComponentDef = {
   category: "data",
   description:
     "A chart of a list of records: bar or line for one or more numbers per item, such as revenue and last year's revenue by month, stacked for each item's total split into parts, such as revenue by product per month, area for an amount over time, hbar for a ranking with long names, such as top customers, pie or donut for how one number splits across items, such as sales by region, funnel for how many get through each stage, such as leads to won deals, waterfall for how changes add up to a total, such as revenue minus costs, bullet for each KPI against its target, such as quarterly goals, heatmap for one number across two dimensions, such as retention by cohort, scatter for how two numbers relate, such as price against rating, treemap for how a total splits across many parts, such as costs by line item, or sankey for how amounts flow from sources to where they end up, such as budget to departments to projects. It redraws when the list changes, and shows at most 200 items, 6 series and 6 slices (smaller slices are summed into Other).",
-  text: { description: "A title above the chart." },
+  text: { description: "A title above the chart; leave it out when the heading just above says the same." },
   props: {
     kind: {
       type: "enum", values: KINDS, default: "bar",

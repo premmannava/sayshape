@@ -159,6 +159,10 @@ RULES
 - Screens may be narrow. Side-by-side figures: grid min=140, not row. Short stat values: compact() for large numbers.
 - For several screens, write the starting screen first.
 - Label every control and title every chart (or put a text just above it): screen readers read them.
+- Every word is for the person: never how you made or checked it ("computed in Python", "widget state", tool names, "edge case:"). Don't repeat a heading as the chart's or table's title under it.
+- Numbers as people write them: number()/money() separators, no cents on large amounts, compact() for 1.41B (not 1411M), plural(n, 'cup') for 1 cup.
+- Fixed choices (Left/Right/Both): segmented or select; add forms start empty, with placeholder=; habits × days: a grid of checks, not a long list.
+- Restyle requests (dark mode, bigger text) aren't for the interface: the theme follows the app. Never write them into it.
 
 EXAMPLE (todo)
 state task="" todos=[{text: "Pack water", done: true}, {text: "Charge headlamp", done: false}, {text: "Snacks", done: false}]
