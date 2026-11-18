@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COMMON_IMAGE_HOSTS } from "../../src/images";
-import { accentNotes, decodeViewOptions, DEFAULT_VIEW_OPTIONS, encodeViewOptions, MAX_IMAGE_HOSTS, parseViewArgs, readViewOptions, withViewOptions } from "../src/ui/view-options";
+import { accentNotes, decodeViewOptions, DEFAULT_VIEW_OPTIONS, encodeViewOptions, imageHostsChars, MAX_IMAGE_HOSTS_CHARS, parseViewArgs, readViewOptions, withViewOptions } from "../src/ui/view-options";
 
 /** What a server started without --image-hosts or --no-image-hosts allows. */
 const COMMON = { imageHosts: [...COMMON_IMAGE_HOSTS] };
@@ -87,7 +87,8 @@ describe("view options", () => {
     it("gets the whole common list to the view: every entry is a host name, and there's room for a logo's", () => {
       const o = parseViewArgs([]);
       expect(decodeViewOptions(encodeViewOptions(o))).toEqual(o);
-      expect(COMMON_IMAGE_HOSTS.length).toBeLessThan(MAX_IMAGE_HOSTS);
+      // A long logo host still fits after the whole common list.
+      expect(imageHostsChars([...COMMON_IMAGE_HOSTS, "x".repeat(60) + ".example.com"])).toBeLessThanOrEqual(MAX_IMAGE_HOSTS_CHARS);
     });
 
     it("says what it takes when given a URL, a bare * or nothing", () => {
@@ -96,8 +97,14 @@ describe("view options", () => {
       }
       expect(() => parseViewArgs(["--image-hosts"])).toThrow(/--image-hosts needs .*images\.example\.com\.$/);
       expect(() => parseViewArgs(["--image-hosts", "--scene"])).toThrow(/--image-hosts needs .*images\.example\.com\.$/);
-      const many = Array.from({ length: MAX_IMAGE_HOSTS + 1 }, (_, i) => `h${i}.example.com`).join(",");
-      expect(() => parseViewArgs(["--image-hosts", many])).toThrow(new RegExp(`up to ${MAX_IMAGE_HOSTS} host names`));
+      const many = Array.from({ length: 60 }, (_, i) => `h${i}.images.example.com`);
+      expect(imageHostsChars(many)).toBeGreaterThan(MAX_IMAGE_HOSTS_CHARS);
+      expect(() => parseViewArgs(["--image-hosts", many.join(",")])).toThrow(new RegExp(`${MAX_IMAGE_HOSTS_CHARS} characters in all`));
+      // As many as fit, then a logo whose host is one too many.
+      const full: string[] = [];
+      while (imageHostsChars([...full, `h${full.length}.images.example.com`]) <= MAX_IMAGE_HOSTS_CHARS) full.push(`h${full.length}.images.example.com`);
+      expect(parseViewArgs(["--image-hosts", full.join(",")]).imageHosts).toEqual(full);
+      expect(() => parseViewArgs(["--image-hosts", full.join(","), "--logo", "https://brand-assets.example.com/logo.png"])).toThrow(/--logo's host, brand-assets\.example\.com, makes the image hosts longer/);
     });
 
     it("travels to the view with the other settings", () => {
