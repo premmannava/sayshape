@@ -38,4 +38,26 @@ segmented bind=speed options={[1, 5, 20]}`,
   each items={[[200, 280], [260, 170], [420, 120], [180, 60], [400, 300]]} as=s
     circle x={s[0]} y={s[1]} r=8 fill=surface stroke=ink width=3
   label "Central" x=274 y=170 size=15 weight=bold fill=ink`,
+  confetti: `scene "Confetti bursts from both sides" w=600 h=340 duration=5 shake={10*(1 - ease(t, 1.3, 1.8))*ease(t, 1.25, 1.3)}
+  label "GOAL!" x=300 y=150 size=72 weight=heavy style=italic fill=accent align=center
+  emit count=120 from=1.3 x=0 y=330 angle=-60 spread=30 speed=650 gravity=380 drag=1.6 life=3.5 size=9 shape=rect flutter=1 fill="accent, warn, good, #E63946, #FFFFFF"
+  emit count=120 from=1.3 x=600 y=330 angle=-120 spread=30 speed=650 gravity=380 drag=1.6 life=3.5 size=9 shape=rect flutter=1 fill="accent, warn, good, #E63946, #FFFFFF"`,
+  snowParticles: `scene "Snow blowing in gusts" w=600 h=340 duration=12 bg="#0B1D3A"
+  let wind={40*sin(t*PI/3) + 15*sin(t*PI*2/3)}
+  each items={range(150)} as=i
+    circle x={(i*37 + t*(20 + i % 7)*3 + wind*2) % 640 - 20} y={(i*53 + t*(30 + i % 5)*6) % 380 - 20} r={1 + i % 3} fill="#FFFFFF" opacity={0.4 + 0.1*(i % 5)}
+  emit count=450 x=-80 y=-20 w=760 angle=90 spread=20 speed=40 gravity=30 drag=0.8 wind={wind} life=12 size=4 fill="#FFFFFF, #DDE7F5"
+  ellipse x=300 y=360 rx=420 ry=60 fill="#E8EEF6"`,
+  firework: `scene "A firework bursts over the city" w=600 h=340 duration=4 bg="#0B1D3A"
+  line x1=300 y1=340 x2=300 y2={340 - 220*ease(t, 0, 0.9)} stroke="#FFD166" width=3 opacity={1 - ease(t, 0.85, 0.95)}
+  emit count=160 from=0.9 x=300 y=120 spread=360 speed=260 gravity=90 drag=1.2 life=2.2 size=4 shape=line fill="#FFD166, warn, #FF6B6B"`,
+  skyline: `scene "Harbor at night" w=600 h=340 duration=8 bg="#0B1026"
+  circle x=480 y=70 r=22 fill="#FFF3B0" glow=true
+  rect x=0 y=220 w=600 h=120 fill="#13204A"
+  group reflect=220 ripple=0.35 fade=0.7
+    each items={range(30)} as=i
+      rect x={i*20} y={220 - 40 - 110*random(i)} w=18 h={40 + 110*random(i)} fill="#1C2550"
+    each items={range(30)} as=i
+      rect x={i*20 + 6} y={220 - 20 - 90*random(i + 40)} w=5 h=6 fill="#FFD166" opacity={0.5 + 0.5*random(i + 80)}
+  label "Harbor at night" x=24 y=36 size=22 weight=bold fill="#FFFFFF"`,
 };
