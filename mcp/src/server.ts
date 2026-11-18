@@ -231,6 +231,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false, 
       ? `- ${pressesSaved ? PRESSES_SAVED : NO_EMIT}`
       : "- on=emit:pick:{x.name} sends a choice to you; no handler blocks. Also update the screen: on=set:sel:{x.name};emit:pick:{x.name}",
     `- Functions (no others exist): ${EXPRESSION_FUNCTIONS.join(", ")}. The best row: first(sort(rows, 'revenue', 'desc')).month; a total: sum(rows, 'revenue'); within a budget: filter(rows, 'price', {to: budget})`,
+    "- Rows from a formula, not by hand: derive rows={map(range(1, n + 1), 'i', {n: i, total: i * price})} feeds a table or chart",
     ...(behaviorFor(textOnly, fileMode) ? [sectionText("compact", "behavior")] : []),
     `ELEMENTS\n${elementIndex(components.filter((c) => !arrivesWithParent(c)))}`,
     // The same heading as the guides', in fewer words: this text goes out with every call.
