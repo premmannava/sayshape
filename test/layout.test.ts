@@ -35,8 +35,20 @@ describe("layout", () => {
     expect(button!.y - stat!.y).toBe((54 - lightTheme.control.height) / 2);
   });
 
-  it("gives sibling grid cards equal height without shifting their content", () => {
-    const { box } = lay(`grid min=140 gap=12
+  it("keeps sibling grid cards at their own height, top-aligned, unless stretch=true", () => {
+    const loose = lay(`grid min=140 gap=12
+  card
+    text "Revenue"
+    text "Monthly trend"
+    text "Renewals"
+  card
+    text "Churn"`).box.children[0]!.children;
+    expect(loose[0]!.h).toBeGreaterThan(loose[1]!.h);
+    expect(loose[0]!.y).toBe(loose[1]!.y);
+  });
+
+  it("gives sibling grid cards equal height with stretch=true, without shifting their content", () => {
+    const { box } = lay(`grid min=140 gap=12 stretch=true
   card
     text "Revenue"
     text "Monthly trend"
@@ -50,14 +62,17 @@ describe("layout", () => {
     expect(short!.h).toBeGreaterThan(short!.children[0]!.h + 44);
   });
 
-  it("aligns sibling card rows but preserves explicit bottom alignment", () => {
+  it("tops sibling card rows, stretches them with stretch=true, and preserves explicit bottom alignment", () => {
     const spec = `row gap=12
   card
     text "Revenue"
     text "Trend"
   card
     text "Churn"`;
-    const [tall, short] = lay(spec).box.children[0]!.children;
+    const [loose, looseShort] = lay(spec).box.children[0]!.children;
+    expect(loose!.h).toBeGreaterThan(looseShort!.h);
+    expect(loose!.y).toBe(looseShort!.y);
+    const [tall, short] = lay(spec.replace("row gap=12", "row gap=12 stretch=true")).box.children[0]!.children;
     expect(tall!.h).toBe(short!.h);
     expect(tall!.y).toBe(short!.y);
     const [bottomTall, bottomShort] = lay(spec.replace("row gap=12", "row gap=12 align=bottom")).box.children[0]!.children;

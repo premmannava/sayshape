@@ -11,8 +11,9 @@ FORMAT
 EXPRESSIONS
 - {…} reads state and loop variables: {count}, {price*qty}, {t.text}, {cart[0].price}, {todos.length}. Text mixes words and {…}: "Total: ${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! a ? b : c. Words inside {…} are names, so quote text: {done ? 'Yes' : 'No'}
-- Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend
-- On lists: count(l, 'done'), count(l, 'cat', 'Gas'), sum(l, 'price'), sum(l, 'price', 'qty') multiplies per item, avg/min/max(l, 'f'), group(l, 'f'[, 'n'[, 'avg']]) one record per value of f, named after your fields: group(spend, 'category', 'amount') gives {category, count, amount}, filter(l, 'f'[, value, list of values or {from, to}]), find(l, 'id', x), search(l, 'f', text), sort(l, 'f'[, 'desc']), take(l, n), slice(l, start, end) from 0 with the end left out, so one page is slice(l, (page - 1) * 5, page * 5), first(l)/last(l) (best: first(sort(l, 'f', 'desc')).name), pluck(l, 'f') one field of each, join(l, 'f'), includes(l, x). extend(l, 'q', {total: q.price * q.qty}) adds computed fields to every item (q only inside the braces), rank(l, 'f', 'desc') adds rank (1 best, ties share it). Compute totals; never type them
+- Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, range, has, is, contains, starts, ends, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend, map
+- On lists: count(l, 'done'), count(l, 'cat', 'Gas'), sum(l, 'price'), sum(l, 'price', 'qty') multiplies per item, avg/min/max(l, 'f'), group(l, 'f'[, 'n'[, 'avg']]) one record per value of f, named after your fields: group(spend, 'category', 'amount') gives {category, count, amount}, filter(l, 'f'[, value, list of values or {from, to}]), find(l, 'id', x), search(l, 'f', text), sort(l, 'f'[, 'desc']), take(l, n), slice(l, start, end) from 0 with the end left out, so one page is slice(l, (page - 1) * 5, page * 5), first(l)/last(l) (best: first(sort(l, 'f', 'desc')).name), pluck(l, 'f') one field of each, join(l, 'f'), includes(l, x). extend(l, 'q', {total: q.price * q.qty}) adds computed fields to every item (q only inside the braces), rank(l, 'f', 'desc') adds rank (1 best, ties share it), map(l, 'q', expr) one value per item, range(n) or range(a, b) counts up to n or b, not including it. Compute totals; never type them
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Formatting: money(2400) = $2,400.00, number(37000) = 37,000, compact(12345678) = 12.3M, compact(n, 'USD') = $12.3M for big figures in stats, plural(n, 'item') = 1 item / 3 items
 
 ACTIONS on=…, several joined with ; and quoted when they have spaces: on="inc:n;notify:'Saved {n}'"
@@ -32,9 +33,9 @@ DATA AND LISTS
 ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path a state name or t.field, action an on= value; ["text"] is optional quoted text, written without the brackets: "Sales", never ["Sales"])
 - every element: if=cond
 - column gap=number pad=number [holds elements] — Stacks its children vertically.
-- row gap=number pad=number align=top|center|bottom wrap=true|false fit=true|false justify=start|end|between [holds elements] — Places children side by side, splitting the width equally.
+- row gap=number pad=number align=top|center|bottom wrap=true|false fit=true|false justify=start|end|between stretch=true|false [holds elements] — Places children side by side, splitting the width equally.
 - overlap at=top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right inset=number [holds elements] — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card.
-- grid min=number cols=number gap=number [holds elements] — Places children in responsive equal columns.
+- grid min=number cols=number gap=number stretch=true|false [holds elements] — Places children in responsive equal columns.
 - card gap=number pad=number variant=raised|hero|tinted|outline on=action tone=accent|good|warn|bad|muted [holds elements] — A surface that groups related content, stacked vertically.
 - list [holds elements] — A bordered list of rows, separated by lines.
 - list-item "text" detail=text trailing=text tone=accent|good|warn|bad|muted icon=text on=action [holds elements; only in list] — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title.
@@ -66,9 +67,9 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - compare-row ["text"] field=name! format=text|number|money best=low|high [only in compare] — One row of a comparison: an attribute and the field each option's value comes from.
 - details ["text"] subtitle=text [holds detail] — One record as label and value rows, for a single customer, order, policy or ticket: its fields one per line, with an optional status badge.
 - detail "text" value=text! tone=default|muted|accent|good|warn|bad [only in details] — One row of details: a field's name and its value.
-- button "text" on=action variant=primary|secondary|danger disabled=cond icon=text size=md|sm fit=true|false — A pressable button that runs actions.
+- button ["text"] on=action variant=primary|secondary|danger disabled=cond icon=text size=md|sm fit=true|false validate=true|false label=text — A pressable button that runs actions.
 - link "text" on=action! icon=text — Pressable text for a secondary action, lighter than a button.
-- check "text" bind=path! detail=text — A checkbox that toggles a true/false state value.
+- check "text" bind=path! detail=text required=cond error=text — A checkbox that toggles a true/false state value.
 - switch "text" bind=path! on=action detail=text — An on/off switch with a label, for settings that take effect right away.
 - radio "text" bind=path! value=text! on=action — One choice among several.
 - select ["text"] items=expr! value=name label=name bind=path! multiple=true|false placeholder=text unavailable=name disabled=cond on=action — A field that opens a list to pick one option from, for choices like a department, status or filter; compact where radio buttons would take too much room.
@@ -155,7 +156,7 @@ RULES
 - Use only these elements and props. No colors, sizes or fonts: choose roles with tone=, variant= and style=; for "red" or "big", use the closest role.
 - Cards group related content, never a card inside a card; leave page titles outside cards. One task per screen, short labels, realistic values.
 - Dashboards: title, filters under it, 3-4 KPIs, one main chart, then detail (smaller chart or table). Styling is built in.
-- grid min=170 gap=12 for peer KPI/chart cards (equal heights per row); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer.
+- grid min=170 gap=12 for peer KPI/chart cards (stretch=true for equal heights); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer.
 - Screens may be narrow. Side-by-side figures: grid min=140, not row. Short stat values: compact() for large numbers.
 - For several screens, write the starting screen first.
 - Label every control and title every chart (or put a text just above it): screen readers read them.

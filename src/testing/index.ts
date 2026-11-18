@@ -68,6 +68,8 @@ export interface RenderOptions {
   bareRootCard?: boolean;
   /** The engine's look option: false ignores a spec's look line with a warning. Default true, as in the engine. */
   look?: boolean;
+  /** The engine's context option: "chat" draws as inside a chat app (the chat density, CHAT_PADDING). Default none. */
+  context?: "chat";
 }
 
 /** The test's clock: advance it to run rules' ticks and move scenes on, without waiting. */
@@ -116,6 +118,8 @@ export interface Rendered {
   canvas: FakeCanvas;
   /** Current state, as a plain object. */
   readonly state: Record<string, Value>;
+  /** State as a host may share it (SayShape.shareableState()): passwords hidden. */
+  readonly shareableState: Record<string, Value>;
   readonly diagnostics: Diagnostic[];
   /** Every `emit:` the screen has sent, oldest first. */
   readonly emitted: Emitted[];
@@ -248,6 +252,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     reducedMotion: !!opts.reducedMotion,
     ...(opts.bareRootCard ? { bareRootCard: true } : {}),
     ...(opts.look === false ? { look: false } : {}),
+    ...(opts.context ? { context: opts.context } : {}),
     loadImage: opts.loadImage,
     onWarning: (m) => warnings.push(m),
     viewport: opts.viewport ? () => opts.viewport! : undefined,
@@ -335,6 +340,7 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     sayshape,
     canvas,
     get state() { return sayshape.state.snapshot(); },
+    get shareableState() { return sayshape.shareableState(); },
     get diagnostics() { return sayshape.diagnostics; },
     get emitted() { return emitted; },
     get warnings() { return warnings; },

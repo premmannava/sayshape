@@ -10,8 +10,9 @@
  * nothing else. There is no assignment and no way to reach JavaScript
  * objects or globals, so model-written expressions cannot run code.
  */
-import { displayData, fieldOf, isData, isList, isRecord, isScalar, makeList, makeRecord, MAX_DATA_DEPTH, readField, toNumber } from "./data";
-import type { DataRecord, Value } from "./types";
+import { displayData, fieldOf, isData, isList, isRecord, isScalar, makeList, makeRecord, MAX_DATA_DEPTH, MAX_DATA_VALUES, readField, toNumber } from "./data";
+import { TEXT_HAS, TEXT_IS } from "./text-checks";
+import type { DataList, DataRecord, Value } from "./types";
 
 type Node =
   | { k: "lit"; v: Value }
@@ -20,8 +21,11 @@ type Node =
   | { k: "bin"; op: string; a: Node; b: Node }
   | { k: "cond"; c: Node; a: Node; b: Node }
   | { k: "call"; fn: string; args: Node[]; extra?: Fn }
-  /** extend(list, 'q', {field: expr}): the record is worked out once per item, with the item named q. */
-  | { k: "extend"; list: Node; as: string; entries: Array<[string, Node]> }
+  /**
+   * extend(list, 'q', {field: expr}) and map(list, 'q', expr): the body is worked out once per item,
+   * with the item named q. extend's body is always a record literal, whose fields are added to the item.
+   */
+  | { k: "per"; fn: "extend" | "map"; list: Node; as: string; body: Node }
   | { k: "list"; items: Node[] }
   | { k: "rec"; entries: Array<[string, Node]> }
   | { k: "get"; obj: Node; key: Node };
@@ -38,7 +42,7 @@ export type Fn = (...a: Value[]) => Value;
  * functions of their arguments, written in reviewed TypeScript like a component;
  * a spec can only call them, never add one. Make sets with expressionFunctions(),
  * which gives them no prototype, so names like constructor can't reach Object.
- * Built-in names always win: an extra set can't replace one.
+ * Built-in names always win: an extra set can't replace one, except those in REPLACEABLE.
  */
 export type ExpressionFunctions = Readonly<Record<string, Fn>>;
 
@@ -48,7 +52,7 @@ export function expressionFunctions(fns: Record<string, Fn>): ExpressionFunction
 }
 
 const extraOf = (fns: ExpressionFunctions | undefined, name: string): Fn | undefined =>
-  fns && !Object.hasOwn(FUNCTIONS, name) && Object.hasOwn(fns, name) ? fns[name] : undefined;
+  fns && (!Object.hasOwn(FUNCTIONS, name) || REPLACEABLE.includes(name)) && Object.hasOwn(fns, name) ? fns[name] : undefined;
 
 /** min(3, 5) or min(list): a single list argument stands for its items. */
 const spread = (a: Value[]): Value[] => (a.length === 1 && isList(a[0]) ? [...a[0]] : a);
@@ -222,6 +226,64 @@ function rank(v: Value, field: Value | undefined, dir: Value | undefined): Value
   return makeList(v.map((item, i) => withFields(item as DataRecord, [["rank", ranks[i]!]])));
 }
 
+/**
+ * The most items range() makes, or map() works through, in one list: a formula can't ask for millions.
+ * A whole expression makes at most MAX_DATA_VALUES items with them, so nesting can't multiply it.
+ */
+export const MAX_MADE_ITEMS = 2_000;
+
+/** Items range() and map() have made in the expression being worked out (evaluate() starts it at 0). */
+let made = 0;
+function make(n: number, fn: string): void {
+  made += n;
+  if (made > MAX_DATA_VALUES) throw new ExprError(`${fn}() would make more than ${MAX_DATA_VALUES.toLocaleString("en-US")} items in one expression; work out fewer, or take() part of the list first`);
+}
+
+/** from, from + 1, … : count whole numbers, for range() here and in scenes. */
+export function counting(from: number, count: number): DataList {
+  return makeList(Array.from({ length: Math.max(0, count) }, (_, i) => from + i));
+}
+
+/**
+ * range(5) is [0, 1, 2, 3, 4] and range(1, 4) is [1, 2, 3]: from the start up to, not including,
+ * the end, like slice(). Whole numbers only; an end before the start gives an empty list.
+ */
+function range(a: Value | undefined, b: Value | undefined): Value {
+  const whole = (v: Value | undefined): number => {
+    if (typeof v !== "number" || !isFinite(v)) throw new ExprError(`range() counts with numbers, not ${describeValue(v)}: range(5) is 0 to 4, range(1, years + 1) is 1 to years`);
+    return Math.floor(v);
+  };
+  if (a === undefined) throw new ExprError("range() needs a count, like range(5) for 0 to 4, or a start and end, like range(1, years + 1)");
+  const [from, to] = b === undefined ? [0, whole(a)] : [whole(a), whole(b)];
+  const count = Math.max(0, to - from);
+  if (count > MAX_MADE_ITEMS) throw new ExprError(`range() makes at most ${MAX_MADE_ITEMS.toLocaleString("en-US")} items, not ${count.toLocaleString("en-US")}`);
+  make(count, "range");
+  return counting(from, count);
+}
+
+/** Text for the text checks: text as it is, a number as written, and null for anything else (null, true/false, lists, records). */
+const checkedText = (v: Value | undefined): string | null => (typeof v === "string" ? v : typeof v === "number" && isFinite(v) ? String(v) : null);
+
+/** The check a name picks for has() or is(); any other name is an error listing them, even for empty text. */
+function namedCheck<T>(fn: string, checks: ReadonlyMap<string, T>, kind: Value | undefined): T {
+  const found = typeof kind === "string" ? checks.get(kind) : undefined;
+  if (found === undefined) throw new ExprError(`${fn}() checks ${[...checks.keys()].map((k) => `'${k}'`).join(", ")}, not ${typeof kind === "string" ? `'${kind}'` : describeValue(kind)}`);
+  return found;
+}
+
+/**
+ * contains, starts and ends: whether text has another text in it, at its start or at its end,
+ * ignoring case unless the third argument is 'case'. Empty or null text is false, never an error.
+ */
+function textMatch(fn: "contains" | "starts" | "ends", text: Value | undefined, part: Value | undefined, mode: Value | undefined): boolean {
+  if (mode !== undefined && mode !== "case") throw new ExprError(`${fn}() ignores case, or with 'case' as its third argument matches it; nothing else goes there`);
+  if (isList(text) || isRecord(text)) throw new ExprError(`${fn}() checks text, not ${describeValue(text)}${fn === "contains" ? ": for a list use includes(list, value)" : ""}`);
+  const t = checkedText(text), p = checkedText(part);
+  if (!t || p === null) return false;
+  const [a, b] = mode === "case" ? [t, p] : [t.toLowerCase(), p.toLowerCase()];
+  return fn === "contains" ? a.includes(b) : fn === "starts" ? a.startsWith(b) : a.endsWith(b);
+}
+
 const BUILTINS: Record<string, Fn> = {
   min: (...a) => extreme(false, a),
   max: (...a) => extreme(true, a),
@@ -283,7 +345,19 @@ const BUILTINS: Record<string, Fn> = {
     const sep = ofRecords ? b : a;
     return parts.map((x) => formatValue(x)).join(typeof sep === "string" ? sep : ", ");
   },
-  /** Whether a list holds a value, or text contains other text. */
+  /** range(5) is [0, 1, 2, 3, 4], range(1, 4) is [1, 2, 3]: the end is left out, like slice(). */
+  range: (a, b) => range(a, b),
+  /** has(pw, 'digit'): whether text has a digit, an upper or lower case letter, a symbol or a space, in any script. */
+  has: (t, kind) => { const re = namedCheck("has", TEXT_HAS, kind); const s = checkedText(t); return !!s && re.test(s); },
+  /** is(email, 'email'): whether the text is an email, url, phone, zip, number or date (YYYY-MM-DD). */
+  is: (t, kind) => { const ok = namedCheck("is", TEXT_IS, kind); const s = checkedText(t)?.trim(); return !!s && ok(s); },
+  /** contains(name, query): text in other text, ignoring case; contains(code, 'A', 'case') matches case. */
+  contains: (t, part, mode) => textMatch("contains", t, part, mode),
+  /** starts(name, 'Dr'): whether text starts with other text, ignoring case unless the third argument is 'case'. */
+  starts: (t, part, mode) => textMatch("starts", t, part, mode),
+  /** ends(file, '.pdf'): whether text ends with other text, ignoring case unless the third argument is 'case'. */
+  ends: (t, part, mode) => textMatch("ends", t, part, mode),
+  /** Whether a list holds a value, or text contains other text (matching case: contains() ignores it). */
   includes: (v, x) => (isList(v) ? v.some((item) => item === x) : typeof v === "string" && x !== undefined && x !== null ? v.includes(formatValue(x)) : false),
   round: (n, d = 0) => {
     const f = 10 ** toNumber(d);
@@ -347,8 +421,13 @@ const BUILTINS: Record<string, Fn> = {
 // A frozen copy with no prototype, looked up by own property only, so names
 // like `constructor` or `__defineGetter__` can't reach Object.prototype.
 const FUNCTIONS: Readonly<Record<string, Fn>> = Object.freeze(Object.assign(Object.create(null) as Record<string, Fn>, BUILTINS));
-/** Functions with their own syntax, parsed in parseExpr instead of called: extend(list, 'q', {…}). */
-const SPECIAL = ["extend"];
+/** Functions with their own syntax, parsed in parseExpr instead of called: extend(list, 'q', {…}), map(list, 'q', …). */
+const SPECIAL = ["extend", "map"];
+/**
+ * Built-in names an element's own functions may still replace (see ExpressionFunctions): a scene's
+ * range() keeps its own rule (500 items at most, never an error), which its drawings rely on.
+ */
+const REPLACEABLE = ["range"];
 const isFunctionName = (name: string) => Object.hasOwn(FUNCTIONS, name) || SPECIAL.includes(name);
 
 /**
@@ -359,7 +438,7 @@ const isFunctionName = (name: string) => Object.hasOwn(FUNCTIONS, name) || SPECI
 const MAX_ARGS: Readonly<Record<string, number>> = Object.freeze(Object.assign(
   Object.create(null) as Record<string, number>,
   Object.fromEntries(Object.entries(BUILTINS).map(([k, f]) => [k, f.length])),
-  { min: Infinity, max: Infinity, round: 2, fixed: 2, money: 2, extend: 3 },
+  { min: Infinity, max: Infinity, round: 2, fixed: 2, money: 2, extend: 3, map: 3 },
 ));
 
 /** How to call the functions models most often give too many arguments. */
@@ -371,6 +450,10 @@ const SIGNATURES: Record<string, string> = {
   group: "group(list, 'field', 'amount', 'avg')", first: "first(list)", last: "last(list)", pluck: "pluck(list, 'field')",
   rank: "rank(list, 'field', 'desc') adds a rank field to each item (1 is best, ties share a rank)",
   extend: "extend(list, 'q', {field: q.a * 2}) adds computed fields to each item, which is q inside the braces",
+  map: "map(list, 'q', q.a * 2) makes one value per item, which is q in the third argument",
+  range: "range(n) for 0 to n - 1, or range(from, to) with to left out",
+  has: "has(text, 'digit'), or 'upper', 'lower', 'symbol' or 'space'", is: "is(text, 'email'), or 'url', 'phone', 'zip', 'number' or 'date'",
+  contains: "contains(text, part), or contains(text, part, 'case') to match case", starts: "starts(text, part[, 'case'])", ends: "ends(text, part[, 'case'])",
 };
 
 function tooManyArgs(name: string, got: number): string {
@@ -395,10 +478,11 @@ const FUNCTION_HINTS: Record<string, string> = {
   maxby: "first(sort(list, 'field', 'desc'))", minby: "first(sort(list, 'field'))",
   max_by: "first(sort(list, 'field', 'desc'))", min_by: "first(sort(list, 'field'))",
   mean: "avg(list, 'field')", average: "avg(list, 'field')", total: "sum(list, 'field')",
-  where: "filter(list, 'field', value)", contains: "includes(list, value)",
+  where: "filter(list, 'field', value)", startswith: "starts(text, part)", starts_with: "starts(text, part)", endswith: "ends(text, part)", ends_with: "ends(text, part)",
+  match: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns", regex: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns", test: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns",
   groupby: "group(list, 'field', 'amount')", group_by: "group(list, 'field', 'amount')", aggregate: "group(list, 'field', 'amount')", pivot: "group(list, 'field', 'amount')",
   format: "number(n) or money(n)", currency: "money(n)", tofixed: "fixed(n, 2)", str: "text in quotes: \"{n} items\"", string: "text in quotes: \"{n} items\"",
-  if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes", map: "extend(list, 'q', {field: q.price * 2}) for a computed field on every item, pluck(list, 'field') for one field of every item, or sum/avg/join with a field",
+  if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes",
   mutate: "extend(list, 'q', {field: q.price * 2})", assign: "extend(list, 'q', {field: q.price * 2})", withcolumn: "extend(list, 'q', {field: q.price * 2})", addfield: "extend(list, 'q', {field: q.price * 2})",
   ranking: "rank(list, 'field', 'desc')", row_number: "rank(list, 'field', 'desc')", dense_rank: "rank(list, 'field', 'desc')",
   values: "pluck(list, 'field')", column: "pluck(list, 'field')", get: "pluck(list, 'field')",
@@ -509,25 +593,35 @@ function parseExpr(src: string, fns?: ExpressionFunctions): Node {
     }
   }
 
-  /** extend(list, 'q', {field: expression, …}), after the name: its own syntax, since the record is worked out once per item. */
-  function extendCall(): Node {
-    const usage = () => new ExprError("extend() takes a list, a name for each item in quotes, and a record of new fields: extend(rows, 'r', {total: r.price * r.qty})");
+  /**
+   * extend(list, 'q', {field: expression, …}) and map(list, 'q', expression), after the name: their own
+   * syntax, since the third argument is worked out once per item, with the item named.
+   */
+  function perCall(fn: "extend" | "map"): Node {
+    const usage = () => new ExprError(fn === "extend"
+      ? "extend() takes a list, a name for each item in quotes, and a record of new fields: extend(rows, 'r', {total: r.price * r.qty})"
+      : "map() takes a list, a name for each item in quotes, and what to make of each: map(range(1, years + 1), 'y', {year: y, balance: loan * pow(1 + r, y)})");
     next();
     const list = ternary();
     if (peek().v !== ",") throw usage();
     next();
     const as = next();
     if (as.t !== "str" || !/^[A-Za-z_]\w*$/.test(as.v) || ["true", "false", "null"].includes(as.v)) {
-      throw new ExprError(`extend()'s second argument names each item, like 'q' in quotes (a plain word), not ${as.t === "str" ? `'${as.v}'` : `"${as.v || "end"}"`}`);
+      throw new ExprError(`${fn}()'s second argument names each item, like 'q' in quotes (a plain word), not ${as.t === "str" ? `'${as.v}'` : `"${as.v || "end"}"`}`);
     }
+    // map(cart, 'price'), as in lodash: one field of every item is pluck()'s job.
+    if (fn === "map" && peek().v === ")") throw new ExprError(`map() needs what to make of each item as its third argument, like map(list, 'q', q.price * 2); for one field of every item, use pluck(list, 'field')`);
     if (peek().v !== ",") throw usage();
     next();
-    if (peek().v !== "{") throw new ExprError("extend()'s third argument must be the new fields written out in braces, like {total: q.price * q.qty}");
-    next();
-    const rec = nested(() => { const r = recordBody("}"); expect("}"); return r; }) as Extract<Node, { k: "rec" }>;
-    if (peek().v === ",") throw new ExprError(tooManyArgs("extend", 4));
+    let body: Node;
+    if (fn === "extend") {
+      if (peek().v !== "{") throw new ExprError("extend()'s third argument must be the new fields written out in braces, like {total: q.price * q.qty}");
+      next();
+      body = nested(() => { const r = recordBody("}"); expect("}"); return r; });
+    } else body = ternary();
+    if (peek().v === ",") throw new ExprError(tooManyArgs(fn, 4));
     expect(")");
-    return { k: "extend", list, as: as.v, entries: rec.entries };
+    return { k: "per", fn, list, as: as.v, body };
   }
 
   function atom(): Node {
@@ -538,7 +632,7 @@ function parseExpr(src: string, fns?: ExpressionFunctions): Node {
       if (t.v === "true") return { k: "lit", v: true };
       if (t.v === "false") return { k: "lit", v: false };
       if (t.v === "null") return { k: "lit", v: null };
-      if (t.v === "extend" && peek().v === "(") return extendCall();
+      if ((t.v === "extend" || t.v === "map") && peek().v === "(") return perCall(t.v);
       if (peek().v === "(") {
         const extra = extraOf(fns, t.v);
         if (!isFunctionName(t.v) && !extra) throw new ExprError(unknownFunction(t.v, fns));
@@ -554,6 +648,10 @@ function parseExpr(src: string, fns?: ExpressionFunctions): Node {
           return { k: "call", fn: t.v, args, extra };
         }
         if (args.length > MAX_ARGS[t.v]!) throw new ExprError(tooManyArgs(t.v, args.length));
+        // A check named in quotes is known now, so a misspelt one is reported on its line, not when it runs.
+        const kind = args[1];
+        if (t.v === "has" && kind?.k === "lit") namedCheck("has", TEXT_HAS, kind.v);
+        if (t.v === "is" && kind?.k === "lit") namedCheck("is", TEXT_IS, kind.v);
         return { k: "call", fn: t.v, args };
       }
       return { k: "id", name: t.v };
@@ -629,20 +727,25 @@ function run(n: Node, scope: Scope): Value {
       if ("error" in r) throw new ExprError(r.error);
       return r.value;
     }
-    case "extend": {
+    case "per": {
       const list = run(n.list, scope);
       if (!isList(list)) return NaN;
+      if (n.fn === "map") {
+        if (list.length > MAX_MADE_ITEMS) throw new ExprError(`map() works through at most ${MAX_MADE_ITEMS.toLocaleString("en-US")} items, and this list has ${list.length.toLocaleString("en-US")}; filter() or take() it first`);
+        make(list.length, "map");
+      }
       // One name for the item in the whole expression: it can't also mean state, a derived value or an outer item.
-      if (scope(n.as) !== undefined) throw new ExprError(`extend() names its item "${n.as}", but "${n.as}" is already a name here. Pick another, like '${n.as}_'`);
+      if (scope(n.as) !== undefined) throw new ExprError(`${n.fn}() names its item "${n.as}", but "${n.as}" is already a name here. Pick another, like '${n.as}_'`);
       let current: Value = null;
       const inner: Scope = (name) => (name === n.as ? current : scope(name));
+      const { body } = n;
       return makeList(list.map((item, i) => {
-        if (!isRecord(item)) throw new ExprError(`extend(): item ${i} is ${describeValue(item)}, not a record`);
+        if (n.fn === "extend" && !isRecord(item)) throw new ExprError(`extend(): item ${i} is ${describeValue(item)}, not a record`);
         current = item;
         try {
-          return withFields(item, n.entries.map(([k, x]) => [k, run(x, inner)] as const));
+          return n.fn === "map" || body.k !== "rec" ? run(body, inner) : withFields(item as DataRecord, body.entries.map(([k, x]) => [k, run(x, inner)] as const));
         } catch (e) {
-          throw e instanceof ExprError ? new ExprError(`extend(): item ${i}: ${e.message}`) : e;
+          throw e instanceof ExprError ? new ExprError(`${n.fn}(): item ${i}: ${e.message}`) : e;
         }
       }));
     }
@@ -716,10 +819,17 @@ export type EvalResult = { ok: true; value: Value } | { ok: false; error: string
 
 /** Evaluate an expression against a scope, with an element's extra functions if any. Never throws. */
 export function evaluate(src: string, scope: Scope, fns?: ExpressionFunctions): EvalResult {
+  // A derived value worked out in the middle of another expression (its scope read it) counts on
+  // its own: the outer expression's count is put back afterwards, not reset.
+  const outer = made;
   try {
-    return { ok: true, value: run(compile(src, fns), scope) };
+    const node = compile(src, fns);
+    made = 0;
+    return { ok: true, value: run(node, scope) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    made = outer;
   }
 }
 
@@ -730,7 +840,7 @@ export function checkSyntax(src: string, fns?: ExpressionFunctions): string | nu
 
 /**
  * Collect the state names an expression reads (with an element's extra functions, if it calls them).
- * The name extend() gives its items is not one: it only exists inside that call's braces.
+ * The name extend() or map() gives its items is not one: it only exists inside that call's last argument.
  */
 export function identifiers(src: string, fns?: ExpressionFunctions): string[] {
   try {
@@ -744,10 +854,9 @@ export function identifiers(src: string, fns?: ExpressionFunctions): string[] {
       else if (n.k === "list") n.items.forEach((a) => walk(a, bound));
       else if (n.k === "rec") n.entries.forEach(([, x]) => walk(x, bound));
       else if (n.k === "get") { walk(n.obj, bound); walk(n.key, bound); }
-      else if (n.k === "extend") {
+      else if (n.k === "per") {
         walk(n.list, bound);
-        const inside = new Set(bound).add(n.as);
-        n.entries.forEach(([, x]) => walk(x, inside));
+        walk(n.body, new Set(bound).add(n.as));
       }
     };
     walk(compile(src, fns), new Set());
@@ -755,10 +864,10 @@ export function identifiers(src: string, fns?: ExpressionFunctions): string[] {
   } catch { return []; }
 }
 
-/** The names extend() calls in an expression give their items, for the parser to check against state and derived names. */
-export function itemNames(src: string, fns?: ExpressionFunctions): string[] {
+/** The names extend() and map() calls in an expression give their items, and which call, for the parser to check against state and derived names. */
+export function namedItems(src: string, fns?: ExpressionFunctions): Array<{ name: string; fn: string }> {
   try {
-    const out = new Set<string>();
+    const out = new Map<string, string>();
     const walk = (n: Node): void => {
       if (n.k === "un") walk(n.a);
       else if (n.k === "bin") { walk(n.a); walk(n.b); }
@@ -767,11 +876,16 @@ export function itemNames(src: string, fns?: ExpressionFunctions): string[] {
       else if (n.k === "list") n.items.forEach(walk);
       else if (n.k === "rec") n.entries.forEach(([, x]) => walk(x));
       else if (n.k === "get") { walk(n.obj); walk(n.key); }
-      else if (n.k === "extend") { out.add(n.as); walk(n.list); n.entries.forEach(([, x]) => walk(x)); }
+      else if (n.k === "per") { if (!out.has(n.as)) out.set(n.as, n.fn); walk(n.list); walk(n.body); }
     };
     walk(compile(src, fns));
-    return [...out];
+    return [...out].map(([name, fn]) => ({ name, fn }));
   } catch { return []; }
+}
+
+/** The names extend() and map() calls in an expression give their items. */
+export function itemNames(src: string, fns?: ExpressionFunctions): string[] {
+  return namedItems(src, fns).map((n) => n.name);
 }
 
 /** Format a value for display in text. */
