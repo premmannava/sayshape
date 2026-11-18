@@ -53,6 +53,10 @@ const IN_SCENE = ["scene", "group", "define"] as const;
 const num = (description: string, def?: number): PropDef => (def === undefined ? { type: "number", description } : { type: "number", description, default: def });
 const color = (description: string): PropDef => ({ type: "string", description });
 
+/** z= (depth.ts): said in full once, on group; shapes and use take it unlisted. */
+const Z: PropDef = num("Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.", 0);
+const Z_SHAPE: PropDef = { ...num("Like group's z."), unlisted: true };
+
 /** Props every shape takes. */
 const PAINT: Record<string, PropDef> = {
   fill: color('Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.'),
@@ -63,6 +67,7 @@ const PAINT: Record<string, PropDef> = {
   dash: { type: "string", description: 'A dashed outline: dash and gap lengths, like dash="6 4".' },
   shadow: { type: "enum", values: ["sm", "md", "lg"], description: "A soft shadow under it, so it sits above what's behind." },
   glow: { type: "boolean", description: "A soft light around it in its own color: a sun, a lamp, a live dot.", default: false },
+  z: Z_SHAPE,
 };
 /** For filled shapes only. */
 const SHINE: Record<string, PropDef> = {
@@ -434,7 +439,7 @@ const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), ...PRESS, ...DRAG },
+  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), z: Z, ...PRESS, ...DRAG },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
@@ -472,6 +477,7 @@ const use: ComponentDef = {
   props: {
     x: num("Across."), y: num("Down."), rotate: num("Degrees."), scale: num("Size.", 1), opacity: num("0 to 1.", 1),
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
+    z: Z_SHAPE,
     ...PRESS,
     ...DRAG_SHAPE,
   },

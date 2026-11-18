@@ -21,6 +21,7 @@ import { fadeColor, gradientStops } from "./fade";
 import { highlightOf } from "./light";
 import { shakeOffset, shakeSeed } from "./shake";
 import { letScope } from "./lets";
+import { drawByDepth, hasDepth, type DepthHooks } from "./depth";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -355,12 +356,22 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
 
 /** Draw a scene's lines with this scope. Stops quietly at the shape and step limits. */
 export function drawAll(nodes: readonly SayShapeNode[], scope: Scope, f: Frame): void {
-  // A let's name can't be written to below it (drawLines); put back what was there for the lines after this block.
-  const rec = f.press, locate = rec?.locate;
-  try { drawLines(nodes, scope, f); } finally { if (rec && locate) rec.locate = locate; }
+  // z= somewhere in the block (depth.ts): its lines, each copies included, are drawn back to front.
+  if (hasDepth(nodes)) drawByDepth(nodes, scope, f, DEPTH);
+  else drawBlock(nodes, scope, f, drawOne);
 }
 
-function drawLines(nodes: readonly SayShapeNode[], scope: Scope, f: Frame): void {
+type Leaf = (node: SayShapeNode, scope: Scope, f: Frame) => void;
+const DEPTH: DepthHooks = { walk: drawBlock, draw: drawOne, z: (node, scope) => numOf(node, "z", scope, 0), maxShapes: MAX_SCENE_SHAPES };
+
+/** Work through a block's lines, handing each one to draw to leaf (drawOne, or depth.ts noting it). */
+function drawBlock(nodes: readonly SayShapeNode[], scope: Scope, f: Frame, leaf: Leaf): void {
+  // A let's name can't be written to below it (drawLines); put back what was there for the lines after this block.
+  const rec = f.press, locate = rec?.locate;
+  try { drawLines(nodes, scope, f, leaf); } finally { if (rec && locate) rec.locate = locate; }
+}
+
+function drawLines(nodes: readonly SayShapeNode[], scope: Scope, f: Frame, leaf: Leaf): void {
   for (const node of nodes) {
     if (++f.steps > MAX_SCENE_STEPS || f.shapes >= MAX_SCENE_SHAPES) return;
     if (node.type === "define" || node.type === "gradient") continue;
@@ -370,9 +381,9 @@ function drawLines(nodes: readonly SayShapeNode[], scope: Scope, f: Frame): void
       const r = evaluate(wholeExpression(node.props.if) ?? node.props.if, scope, SCENE_FUNCTIONS);
       if (!r.ok || !r.value) continue;
     }
-    if (node.type === "if") { drawAll(node.children, scope, f); continue; }
-    if (node.type === "each") { drawEach(node, scope, f); continue; }
-    drawOne(node, scope, f);
+    if (node.type === "if") { drawBlock(node.children, scope, f, leaf); continue; }
+    if (node.type === "each") { drawEach(node, scope, f, leaf); continue; }
+    leaf(node, scope, f);
   }
 }
 
@@ -382,7 +393,7 @@ function letLocate(node: SayShapeNode, f: Frame): void {
   if (rec && outer) rec.locate = (n) => (n === name ? null : outer(n));
 }
 
-function drawEach(node: SayShapeNode, scope: Scope, f: Frame): void {
+function drawEach(node: SayShapeNode, scope: Scope, f: Frame, leaf: Leaf): void {
   const raw = node.props.items;
   if (raw === undefined) return;
   const expr = wholeExpression(raw) ?? raw;
@@ -411,11 +422,11 @@ function drawEach(node: SayShapeNode, scope: Scope, f: Frame): void {
       const place = listPlace && { key: listPlace.key, steps: [...listPlace.steps, i] };
       rec.copy.push(`${node.id}:${key}`);
       rec.locate = (name) => (name === as ? place : name === index ? null : outer(name));
-      drawAll(node.children, own, f);
+      drawBlock(node.children, own, f, leaf);
       rec.copy.pop();
       rec.locate = outer;
     } else {
-      drawAll(node.children, own, f);
+      drawBlock(node.children, own, f, leaf);
     }
   }
 }
