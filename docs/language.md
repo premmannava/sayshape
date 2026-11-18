@@ -391,6 +391,23 @@ card
   button "Create account" validate=true on=emit:signup
 ```
 
+A compact form puts its fields in one `row`, without labels: each field's `placeholder=` is then its name to screen readers, a message still shows under it, and a button beside it stays level with the field. The row wraps on a narrow screen. An icon-only button (`icon=` and `label=`, no text) is square, at least 44 px on a phone, and `label=` is what screen readers say and its tip; the parser warns when it's missing. On a button with text, `label=` is only what screen readers say, and should start with the text, as in `button "Remove" label="Remove {e.name}"`.
+
+```
+state desc="" amount=null category="Food" day="" categories=["Food", "Travel", "Home"] expenses=[]
+row
+  input bind=desc placeholder="Description" required=true
+  input bind=amount kind=number placeholder="Amount" required=true
+  select items=categories bind=category placeholder="Category"
+  date-picker bind=day placeholder="Date"
+  button "Add" validate=true on="add:expenses:{name: desc, amount: amount, category: category, day: day};set:desc:''"
+each items=expenses as=e
+  row
+    text "{e.name}"
+    text "{money(e.amount)}" tone=muted
+    button icon=trash label="Remove {e.name}" variant=secondary on=remove:e
+```
+
 ## Screens
 
 A spec can hold several screens. Only one shows at a time: the first, until a button moves to another with `go:name`. `back` returns to the previous one, and the visible screen's name is in `{screen}`.

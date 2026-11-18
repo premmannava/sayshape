@@ -64,3 +64,5 @@ The pointer can move onto the bubble without it vanishing. Escape hides it witho
 - Tips on parts of an element (one star of a rating).
 
 A scene's shapes keep their own `tip=`.
+
+An icon-only button (`button icon= label=`, no text) shows its `label=` as its tip without `tip=` (`ComponentDef.ownTip`), on hover and keyboard focus. On touch, a tap presses it, so like a sortable header its tip can't be reached there: there is no long-press tip yet (a known limit); screen readers have the label as its name.

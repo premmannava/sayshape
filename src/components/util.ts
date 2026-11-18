@@ -107,14 +107,32 @@ export function row(box: Box, ctx: LayoutContext, pad: number, gap: number, alig
     } else if (align !== "top" && !(align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "stat"))) {
       // (Skipped for a row of only KPIs: their labels and values stay on shared
       // lines when one has a sparkline or a wrapped change, so it's top-aligned.)
-      for (const kb of placed) {
-        const d = tallest - kb.h;
-        if (d > 0) ctx.shift(kb, 0, align === "center" ? d / 2 : d);
-      }
+      tallest = alignLine(placed, tallest, align, ctx);
     }
     y += tallest;
   });
   box.h = y - box.y + pad;
+}
+
+/**
+ * Move a line's children down to centre (or bottom-align) them, and return the line's height.
+ * Centred, a box with a band (Box.band: a field without its message) is centred by that band,
+ * so a message under a field doesn't push the button beside it down; the line grows to hold it.
+ */
+function alignLine(placed: Box[], tallest: number, align: (typeof ROW_ALIGN)[number], ctx: LayoutContext): number {
+  if (align !== "center") {
+    for (const kb of placed) if (tallest > kb.h) ctx.shift(kb, 0, tallest - kb.h);
+    return tallest;
+  }
+  const bandOf = (kb: Box) => Math.min(kb.h, kb.band ?? kb.h);
+  const widest = Math.max(0, ...placed.map(bandOf));
+  let bottom = tallest;
+  for (const kb of placed) {
+    const d = (widest - bandOf(kb)) / 2;
+    if (d > 0) ctx.shift(kb, 0, d);
+    bottom = Math.max(bottom, d + kb.h);
+  }
+  return bottom;
 }
 
 export const ROW_JUSTIFY = ["start", "end", "between"] as const;
@@ -173,10 +191,7 @@ function fitRow(box: Box, ctx: LayoutContext, pad: number, gap: number, align: (
     if (align === "center" && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
       for (const kb of placed) kb.h = tallest;
     } else if (align !== "top") {
-      for (const kb of placed) {
-        const d = tallest - kb.h;
-        if (d > 0) ctx.shift(kb, 0, align === "center" ? d / 2 : d);
-      }
+      tallest = alignLine(placed, tallest, align, ctx);
     }
     y += tallest;
   });
