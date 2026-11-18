@@ -22,7 +22,7 @@ export function componentSection(c: ComponentDef, opts: SectionOptions = {}): st
   let out = `### \`${c.type}\`\n\n${c.description}\n\n`;
   const rows: string[] = [];
   if (c.text) rows.push(`| \`"text"\` | text${c.text.required ? ", required" : ""} | ${esc(c.text.description)} |`);
-  for (const [name, d] of Object.entries(c.props)) {
+  for (const [name, d] of Object.entries(c.props).filter(([, p]) => !p.unlisted)) {
     const type = d.type === "enum" && d.values ? d.values.map((v) => `\`${v}\``).join(" / ") : d.type;
     rows.push(`| \`${name}\` | ${type}${d.required ? ", required" : ""} | ${esc(d.description)} |`);
   }

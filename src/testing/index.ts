@@ -167,8 +167,15 @@ export interface Rendered {
 
   /** Click the centre of an element through the real pointer path. Throws if it can't be pressed. */
   press(query: Query): void;
-  /** Click at a point, in CSS pixels from the canvas's top-left corner. */
-  click(x: number, y: number, o?: { shift?: boolean }): void;
+  /**
+   * Click at a point, in CSS pixels from the canvas's top-left corner. touch
+   * sends it as a finger's tap (pointerType "touch"), which never hovers.
+   */
+  click(x: number, y: number, o?: { shift?: boolean; touch?: boolean }): void;
+  /** Move the mouse to a point, in CSS pixels from the canvas's top-left corner, without pressing (hover, on-hover=). */
+  hover(x: number, y: number): void;
+  /** Move the mouse off the canvas (on-leave=, tips going away). */
+  leave(): void;
   /**
    * Drag across drawn text through the real pointer path, as a mouse would: from the start of the
    * first line whose text matches `from` to the end of the first line matching `to` (`from` again when
@@ -432,9 +439,20 @@ export function render(spec: string, opts: RenderOptions = {}): Rendered {
     },
 
     click(x, y, o = {}) {
+      const kind = o.touch ? { pointerType: "touch" } : {};
+      pointer("pointermove", x, y, kind);
+      pointer("pointerdown", x, y, { ...kind, ...(o.shift ? { shiftKey: true } : {}) });
+      pointer("pointerup", x, y, kind);
+      flush();
+    },
+
+    hover(x, y) {
       pointer("pointermove", x, y);
-      pointer("pointerdown", x, y, o.shift ? { shiftKey: true } : {});
-      pointer("pointerup", x, y);
+      flush();
+    },
+
+    leave() {
+      pointer("pointerleave", 0, 0);
       flush();
     },
 

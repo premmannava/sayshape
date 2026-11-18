@@ -13,7 +13,9 @@
  * - labels too small to read (one warning for them all), or a pressable shape too small to tap, on a phone,
  * - a scene whose formulas use t but whose duration is 0, so it never moves,
  * - a label too close in color to what's under it, in light or dark mode,
- * - pressable shapes on top of each other, or outside the picture.
+ * - pressable shapes on top of each other, or outside the picture,
+ * - a station or small circle a few pixels off the line it seems meant to sit
+ *   on, where other markers sit right on that line (so the line looks like it misses it).
  *
  * It doesn't check the animation's other moments: what moves is usually
  * meant to cross other things on its way.
@@ -22,13 +24,14 @@
  * shows. Headless, like layout: no canvas or DOM, so it runs on a server.
  */
 import { MAX_DRAGGABLE } from "./drag";
+import { MAX_SCENE_PARTICLES } from "./emit";
 import type { Diagnostic, SayShapeNode, Value } from "../../types";
 import type { Scope } from "../../expr";
 import type { ParseResult } from "../../parser";
 import { Store } from "../../state";
 import { darkTheme, lightTheme, type Theme } from "../../theme";
 import { colorOf, paintScene, numOf, strOf, type Frame } from "./draw";
-import { IDENTITY, regionBounds, type SceneRegion } from "./interact";
+import { boundsOf as boundsOfPts, IDENTITY, outline, regionBounds, regionName, type SceneRegion } from "./interact";
 import { stateLocate } from "../../paths";
 
 /** The most drawing problems reported for one spec; the first few are what a model needs. */
@@ -61,7 +64,20 @@ interface Mark {
   color?: string;
   /** A label's text size in scene pixels, after groups' scaling. */
   size?: number;
+  /** For a line or a path drawn as an outline only: its centre lines, curves flattened. */
+  lines?: Subpath[];
+  /** That outline's width in scene pixels, after groups' scaling. */
+  width?: number;
+  /** The pressable lines it was drawn inside, when there are any. */
+  inside?: readonly SceneRegion[];
 }
+
+/** One subpath of a stroked outline, in scene coordinates. Closed ones end where they began. */
+interface Subpath { pts: Array<[number, number]>; closed: boolean }
+/** The most points kept for one stroked outline in the marker-off-its-path check. */
+const MAX_LINE_POINTS = 4000;
+/** Short lines each curve is flattened into for that check. */
+const CURVE_STEPS = 10;
 
 /** How wide text is, given its size and weight. The default is a close estimate for sans-serif. */
 export type MeasureText = (text: string, size: number, bold: boolean) => number;
@@ -81,7 +97,7 @@ const boundsOf = (pts: ReadonlyArray<[number, number]>): Rect | null => {
 };
 
 /** A stand-in 2D context that records where things land instead of painting them. */
-function measuringContext(marks: Mark[], current: () => SayShapeNode | null, measure: MeasureText): CanvasRenderingContext2D {
+function measuringContext(marks: Mark[], current: () => SayShapeNode | null, measure: MeasureText, openNow: () => readonly SceneRegion[] = () => []): CanvasRenderingContext2D {
   type State = { m: Matrix; alpha: number; font: string; align: string };
   let fillNow: unknown = "";
   let st: State = { m: [1, 0, 0, 1, 0, 0], alpha: 1, font: "16px sans-serif", align: "left" };
@@ -96,13 +112,50 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
       path.push(apply(st.m, cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)));
     }
   };
-  const mark = (filled: boolean) => {
+  // The same path again, as the canvas would draw its outline (curves and arcs over their real sweep), kept apart from the rough bounds above.
+  let subs: Subpath[] = [];
+  let sub: Subpath | null = null;
+  let count = 0, filledNow = false;
+  const put = (p: [number, number]) => { if (count < MAX_LINE_POINTS && Number.isFinite(p[0]) && Number.isFinite(p[1])) { count++; sub!.pts.push(p); } };
+  const begin = (p: [number, number]) => { sub = { pts: [], closed: false }; subs.push(sub); put(p); };
+  const to = (p: [number, number]) => { if (sub) put(p); else begin(p); };
+  const curve = (ctrl: Array<[number, number]>) => {
+    // With no point yet, the canvas starts the curve at its first control point.
+    if (!sub?.pts.length) begin(ctrl[0]!);
+    const p0 = sub?.pts[sub.pts.length - 1];
+    if (!p0) return;
+    const pts = [p0, ...ctrl];
+    for (let k = 1; k <= CURVE_STEPS; k++) {
+      // de Casteljau: works for quadratic and cubic alike, and transforms commute with it.
+      let q = pts.slice();
+      const u = k / CURVE_STEPS;
+      while (q.length > 1) q = q.slice(1).map((b, i) => [q[i]![0] + (b[0] - q[i]![0]) * u, q[i]![1] + (b[1] - q[i]![1]) * u] as [number, number]);
+      put(q[0]!);
+    }
+  };
+  const sweep = (cx: number, cy: number, rx: number, ry: number, rot: number, start: number, end: number, ccw: boolean) => {
+    let span = end - start;
+    if (ccw && span > 0) span -= 2 * Math.PI;
+    if (!ccw && span < 0) span += 2 * Math.PI;
+    span = Math.max(-2 * Math.PI, Math.min(2 * Math.PI, span));
+    const steps = Math.max(4, Math.ceil(Math.abs(span) / (Math.PI / 12)));
+    for (let k = 0; k <= steps; k++) {
+      const a = start + (span * k) / steps;
+      const x = rx * Math.cos(a), y = ry * Math.sin(a);
+      to(apply(st.m, cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)));
+    }
+  };
+  const mark = (filled: boolean): Mark | undefined => {
     const node = current();
     const b = boundsOf(path);
-    if (!node || !b) return;
+    // Particles (emit) move and scatter by design: no rule judges them.
+    if (!node || !b || node.type === "emit") return;
     const ends = node.type === "line" && segment.length >= 2 ? [segment[0]!, segment[segment.length - 1]!] as [[number, number], [number, number]] : undefined;
     const color = filled && typeof fillNow === "string" ? fillNow : undefined;
-    marks.push({ node, order: marks.length, kind: node.type, bounds: b, filled, alpha: st.alpha, ...(ends ? { ends } : {}), ...(color ? { color } : {}) });
+    const open = openNow();
+    const m: Mark = { node, order: marks.length, kind: node.type, bounds: b, filled, alpha: st.alpha, ...(ends ? { ends } : {}), ...(color ? { color } : {}), ...(open.length ? { inside: open.slice() } : {}) };
+    marks.push(m);
+    return m;
   };
   const ctx = {
     get globalAlpha() { return st.alpha; },
@@ -119,18 +172,33 @@ function measuringContext(marks: Mark[], current: () => SayShapeNode | null, mea
     translate(x: number, y: number) { st.m = mul(st.m, [1, 0, 0, 1, x, y]); },
     rotate(a: number) { st.m = mul(st.m, [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0]); },
     scale(x: number, y: number) { st.m = mul(st.m, [x, 0, 0, y, 0, 0]); },
-    beginPath() { path = []; segment = []; },
-    moveTo: add, lineTo: add,
-    quadraticCurveTo(a: number, b: number, x: number, y: number) { add(a, b); add(x, y); },
-    bezierCurveTo(a: number, b: number, c: number, d: number, x: number, y: number) { add(a, b); add(c, d); add(x, y); },
-    arc(x: number, y: number, r: number) { round(x, y, r, r); },
-    ellipse(x: number, y: number, rx: number, ry: number, rot: number) { round(x, y, rx, ry, rot); },
-    closePath() {},
+    beginPath() { path = []; segment = []; subs = []; sub = null; count = 0; filledNow = false; },
+    moveTo(x: number, y: number) { add(x, y); begin(apply(st.m, x, y)); },
+    lineTo(x: number, y: number) { add(x, y); to(apply(st.m, x, y)); },
+    quadraticCurveTo(a: number, b: number, x: number, y: number) { add(a, b); add(x, y); curve([apply(st.m, a, b), apply(st.m, x, y)]); },
+    bezierCurveTo(a: number, b: number, c: number, d: number, x: number, y: number) { add(a, b); add(c, d); add(x, y); curve([apply(st.m, a, b), apply(st.m, c, d), apply(st.m, x, y)]); },
+    arc(x: number, y: number, r: number, start = 0, end = 2 * Math.PI, ccw = false) { round(x, y, r, r); sweep(x, y, r, r, 0, start, end, ccw); },
+    ellipse(x: number, y: number, rx: number, ry: number, rot: number, start = 0, end = 2 * Math.PI, ccw = false) { round(x, y, rx, ry, rot); sweep(x, y, rx, ry, rot, start, end, ccw); },
+    closePath() {
+      const first = sub?.pts[0];
+      if (!sub || !first) return;
+      put(first);
+      sub.closed = true;
+      begin(first);
+    },
     clip() {},
     setLineDash() {},
-    fill() { mark(true); },
-    stroke() { mark(false); },
-    fillRect(x: number, y: number, w: number, h: number) { path = []; add(x, y); add(x + w, y + h); },
+    fill() { mark(true); filledNow = true; },
+    stroke() {
+      const m = mark(false);
+      // Only an outline with nothing filled is a line something can sit on; a filled shape's border isn't.
+      if (!m || filledNow || (m.kind !== "line" && m.kind !== "path")) return;
+      const lines = subs.filter((s) => s.pts.length >= 2);
+      if (!lines.length) return;
+      m.lines = lines;
+      m.width = ctx.lineWidth * Math.sqrt(Math.abs(st.m[0] * st.m[3] - st.m[1] * st.m[2]));
+    },
+    fillRect(x: number, y: number, w: number, h: number) { path = []; subs = []; sub = null; add(x, y); add(x + w, y + h); },
     measureText(text: string) { return { width: measure(text, sizeOf(st.font), boldOf(st.font)) }; },
     fillText(text: string, x: number, y: number) {
       const node = current();
@@ -168,6 +236,7 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
       out.push({ line: scene.line, severity: "warning", message: "Drawing: this scene's formulas use t, but its duration is 0, so it never moves. Set duration= to the seconds the motion takes (loop=true, the default, repeats it)" });
     }
     out.push(...findProblems(drawn.marks, drawn.regions, w, h));
+    if (drawn.particlesOver !== undefined) out.push({ line: drawn.particlesOver, severity: "warning", message: `Drawing: a scene draws at most ${MAX_SCENE_PARTICLES} particles in all and its emit lines ask for ${drawn.particlesAsked}, so this one and those after it draw fewer. Lower their count=` });
     if (drawn.dragOver !== undefined) out.push({ line: drawn.dragOver, severity: "warning", message: `Drawing: a scene can have at most ${MAX_DRAGGABLE} draggable shapes, so this one and those after it can't be dragged. Drag fewer, or use a slider` });
     out.push(...swipeTraps(drawn.regions, w, h));
     // Contrast in both modes when no theme was asked for: theme colors change between them.
@@ -202,26 +271,27 @@ export function reviewScene(scene: SayShapeNode, scope: Scope, opts: { theme?: T
 }
 
 /** The scene drawn as it rests (its last moment), as marks and pressable regions in scene coordinates. */
-function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; dragOver?: number } {
+function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: MeasureText | undefined, behavior: boolean): { marks: Mark[]; regions: SceneRegion[]; under: string; dragOver?: number; particlesOver?: number; particlesAsked?: number } {
   const w = Math.max(1, numOf(scene, "w", scope, 600)), h = Math.max(1, numOf(scene, "h", scope, 340));
   const duration = Math.max(0, numOf(scene, "duration", scope, 0));
-  const at: Scope = (name) => (name === "t" ? duration : name === "PI" ? Math.PI : scope(name));
   const marks: Mark[] = [];
   let current: SayShapeNode | null = null;
-  const g = measuringContext(marks, () => current, measure ?? estimate);
+  const g = measuringContext(marks, () => current, measure ?? estimate, () => f.press?.open ?? []);
   const f: Frame = {
     g, font: (wt, size) => `${wt} ${size}px sans-serif`, colors: theme.colors,
-    defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
+    defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, time: duration,
     onNode: (n) => { current = n; },
     m: IDENTITY, press: { regions: [], open: [], copy: [], locate: stateLocate },
+    clock: { duration, loop: strOf(scene, "loop", scope) !== "false" },
   };
+  const at: Scope = (name) => (name === "t" ? f.time : name === "PI" ? Math.PI : scope(name));
   if (behavior) f.press!.drag = { scene: IDENTITY, w, h, count: 0 };
   paintScene(f, scene.children, at, w, h, undefined);
   // What a label with nothing under it sits on: the scene's background, or the card it's in.
   const bg = scene.props.bg === undefined ? undefined : strOf(scene, "bg", at);
   const under = (bg && colorOf(bg, { colors: theme.colors })) || theme.colors.raised;
   const over = f.press!.drag?.over;
-  return { marks, regions: f.press!.regions, under, ...(over !== undefined ? { dragOver: over } : {}) };
+  return { marks, regions: f.press!.regions, under, ...(over !== undefined ? { dragOver: over } : {}), ...(f.particlesOver !== undefined ? { particlesOver: f.particlesOver, particlesAsked: f.particlesAsked ?? 0 } : {}) };
 }
 
 function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w: number, h: number): Diagnostic[] {
@@ -277,7 +347,8 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
   }
   // On a phone the whole picture shrinks to PHONE_WIDTH, and things to press shrink with it.
   const k = PHONE_WIDTH / w;
-  const pressable = regions.map((r) => ({ r, b: regionBounds(r) })).filter((x): x is { r: SceneRegion; b: Rect } => !!x.b);
+  // Shapes only hovered (on-hover=, no on=) aren't tapped, so they're not held to tap sizes.
+  const pressable = regions.filter((r) => r.on || r.drag).map((r) => ({ r, b: regionBounds(r) })).filter((x): x is { r: SceneRegion; b: Rect } => !!x.b);
   for (const { r, b } of pressable) {
     if (overlap(b, { x: 0, y: 0, w, h }) <= 0) {
       warn(r.node.line, `this ${r.drag ? "draggable" : "pressable"} ${r.node.type} is outside the picture, so it can't be ${r.drag ? "dragged" : "pressed"}. Move it inside 0..${w} across and 0..${h} down`);
@@ -297,7 +368,151 @@ function findProblems(marks: readonly Mark[], regions: readonly SceneRegion[], w
       }
     }
   }
+  for (const p of offPath(marks, regions)) warn(p.line, p.message);
   return out;
+}
+
+// ---------- markers just off their path ----------
+
+/** The most marker-off-its-path warnings for one scene: one or two show the pattern. */
+const MAX_OFF_PATH = 3;
+/** Segments per chunk when looking for the nearest point on a long path. */
+const CHUNK = 16;
+
+interface Marker { line: number; order: number; x: number; y: number; r: number; name?: string; what: string; region?: SceneRegion }
+interface Track { mark: Mark; hw: number; length: number; bounds: Rect; subs: Subpath[]; chunks: Array<{ b: Rect; sub: number; from: number; to: number }> }
+interface Nearest { d: number; dx: number; dy: number; atEnd: boolean }
+
+/** A prop that moves with the clock: t inside a {formula}, or t on its own. */
+const movesWithClock = (raw: string | undefined) => raw !== undefined && (raw.trim() === "t" || [...raw.matchAll(/\{([^}]*)\}/g)].some((m) => /(^|[^\w.'"])t\b(?!\s*:)/.test(m[1]!)));
+
+/**
+ * Stations, pins and dots that sit a few pixels off the line they're meant to
+ * be on: it looks like the line misses them. Only judged where the picture
+ * shows the habit (at least two markers sit right on that path, and at least
+ * as many as miss it), so scatter dots near a trend line, nodes whose links
+ * end at their edge, and legends stay quiet.
+ */
+function offPath(marks: readonly Mark[], regions: readonly SceneRegion[]): Array<{ line: number; message: string }> {
+  const tracks: Track[] = [];
+  for (const m of marks) {
+    if (!m.lines || m.alpha < 0.15 || !(m.width! > 0) || m.width! > 30) continue;
+    let length = 0;
+    const all: Array<[number, number]> = [];
+    const chunks: Track["chunks"] = [];
+    m.lines.forEach((s, si) => {
+      for (let i = 1; i < s.pts.length; i++) length += Math.hypot(s.pts[i]![0] - s.pts[i - 1]![0], s.pts[i]![1] - s.pts[i - 1]![1]);
+      for (let from = 0; from < s.pts.length - 1; from += CHUNK) {
+        const to = Math.min(s.pts.length - 1, from + CHUNK);
+        chunks.push({ b: boundsOf(s.pts.slice(from, to + 1))!, sub: si, from, to });
+      }
+      all.push(...s.pts);
+    });
+    const bounds = boundsOf(all);
+    if (bounds && chunks.length) tracks.push({ mark: m, hw: m.width! / 2, length, bounds, subs: m.lines, chunks });
+  }
+  if (!tracks.length) return [];
+
+  const markers: Marker[] = [];
+  const seen = new Set<string>();
+  const add = (k: Marker, node: SayShapeNode) => {
+    if (movesWithClock(node.props.x) || movesWithClock(node.props.y) || node.props.drag !== undefined) return;
+    const key = `${Math.round(k.x)},${Math.round(k.y)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    markers.push(k);
+  };
+  for (const r of regions) {
+    if (r.drag || r.node.type === "label" || r.geoms.some((g) => g.kind === "line" || g.kind === "polyline")) continue;
+    const shapes = r.geoms.filter((g) => !(g.kind === "rect" && g.text));
+    const b = shapes.length ? boundsOfPts(shapes.flatMap((g) => outline(g))) : null;
+    if (!b || Math.max(b.w, b.h) > 36 || Math.min(b.w, b.h) < 3) continue;
+    const named = regionName(r);
+    const name = named !== "Shape" ? named : undefined;
+    add({ line: r.node.line, order: regions.indexOf(r), x: b.x + b.w / 2, y: b.y + b.h / 2, r: Math.max(b.w, b.h) / 2, what: r.node.type, region: r, ...(name ? { name } : {}) }, r.node);
+  }
+  const labels = marks.filter((m) => m.kind === "label" && m.alpha >= 0.15 && m.text?.trim());
+  for (const c of marks) {
+    // Circles inside a pressable line are judged with it (or not at all, when it's dragged).
+    if (c.kind !== "circle" || c.alpha < 0.15 || c.inside) continue;
+    const r = Math.max(c.bounds.w, c.bounds.h) / 2;
+    if (r > 12 || r < 1.5) continue;
+    const x = c.bounds.x + c.bounds.w / 2, y = c.bounds.y + c.bounds.h / 2;
+    let name: string | undefined, best = r + 24;
+    for (const l of labels) {
+      const d = Math.hypot(Math.max(l.bounds.x - x, 0, x - l.bounds.x - l.bounds.w), Math.max(l.bounds.y - y, 0, y - l.bounds.y - l.bounds.h));
+      if (d <= best) { best = d; name = l.text!.trim(); }
+    }
+    add({ line: c.node.line, order: regions.length + c.order, x, y, r, what: "circle", ...(name ? { name } : {}) }, c.node);
+  }
+
+  const onCount = new Map<Track, number>(), missCount = new Map<Track, number>();
+  const misses: Array<{ k: Marker; t: Track; d: number }> = [];
+  for (const k of markers) {
+    const near: Array<{ t: Track; n: Nearest }> = [];
+    // A line of any length ending at its edge (a link, a pin's stem) means it's attached on purpose.
+    let attached = false;
+    for (const t of tracks) {
+      if (k.region && t.mark.inside?.includes(k.region)) continue;
+      const reach = Math.max(20, k.r + t.hw);
+      const b = t.bounds;
+      if (k.x < b.x - reach || k.x > b.x + b.w + reach || k.y < b.y - reach || k.y > b.y + b.h + reach) continue;
+      const n = nearestOn(t, k.x, k.y, reach);
+      if (!n) continue;
+      if (n.atEnd && n.d <= k.r + t.hw + 2) attached = true;
+      if (t.length >= Math.max(40, 6 * k.r)) near.push({ t, n });
+    }
+    const on = new Set(near.filter(({ t, n }) => n.d <= Math.max(2, t.hw + 1)).map((x) => x.t));
+    // A pill or ring spanning two lines (an interchange) is on both: its centre sits between them.
+    const spanning = near.filter(({ t, n }) => n.d <= k.r + t.hw);
+    for (let i = 0; i < spanning.length; i++) {
+      for (let j = i + 1; j < spanning.length; j++) {
+        const a = spanning[i]!.n, c = spanning[j]!.n;
+        if (a.dx * c.dx + a.dy * c.dy < 0) { on.add(spanning[i]!.t); on.add(spanning[j]!.t); }
+      }
+    }
+    for (const t of on) onCount.set(t, (onCount.get(t) ?? 0) + 1);
+    if (on.size || attached) continue;
+    const closest = near.sort((a, b) => a.n.d - b.n.d)[0];
+    if (!closest) continue;
+    const { t, n } = closest;
+    const limit = Math.min(20, Math.max(12, k.r + t.hw + 8));
+    if (n.d > limit || n.atEnd) continue;
+    missCount.set(t, (missCount.get(t) ?? 0) + 1);
+    misses.push({ k, t, d: n.d });
+  }
+  return misses
+    .filter(({ t }) => (onCount.get(t) ?? 0) >= 2 && (onCount.get(t) ?? 0) >= (missCount.get(t) ?? 0))
+    .sort((a, b) => a.k.line - b.k.line || a.k.order - b.k.order)
+    .slice(0, MAX_OFF_PATH)
+    .map(({ k, t, d }) => {
+      const kind = t.mark.node.type;
+      const who = k.name ? `the marker ${quote(k.name)} is` : `this ${k.what === "use" ? "shape" : k.what} is`;
+      return { line: k.line, message: `${who} ${Math.round(d)} px off the ${kind} on line ${t.mark.node.line}, so it looks like it misses it. Move its centre onto the ${kind}, or well clear of it if it isn't meant to be on it` };
+    });
+}
+
+/** The nearest point of a track to (x, y), if any is within reach; atEnd when it's an open end of the line. */
+function nearestOn(t: Track, x: number, y: number, reach: number): Nearest | null {
+  let best: Nearest | null = null;
+  let bestD = reach;
+  for (const c of t.chunks) {
+    if (x < c.b.x - bestD || x > c.b.x + c.b.w + bestD || y < c.b.y - bestD || y > c.b.y + c.b.h + bestD) continue;
+    const s = t.subs[c.sub]!;
+    for (let i = c.from + 1; i <= c.to; i++) {
+      const [x1, y1] = s.pts[i - 1]!, [x2, y2] = s.pts[i]!;
+      const dx = x2 - x1, dy = y2 - y1, len = dx * dx + dy * dy;
+      const u = len ? Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / len)) : 0;
+      const px = x1 + u * dx, py = y1 + u * dy;
+      const d = Math.hypot(x - px, y - py);
+      if (d > bestD) continue;
+      const first = s.pts[0]!, last = s.pts[s.pts.length - 1]!;
+      const atEnd = !s.closed && (Math.hypot(px - first[0], py - first[1]) <= 2 || Math.hypot(px - last[0], py - last[1]) <= 2);
+      bestD = d;
+      best = { d, dx: px - x, dy: py - y, atEnd };
+    }
+  }
+  return best;
 }
 
 /**
@@ -327,6 +542,8 @@ function readsClock(scene: SayShapeNode): boolean {
   let clock = false, shadowed = false;
   const walk = (n: SayShapeNode) => {
     if (n.props.as === "t" || n.props.index === "t") shadowed = true;
+    // Particles move with the clock without saying t.
+    if (n.type === "emit") clock = true;
     for (const v of [...Object.values(n.props), n.text ?? ""]) {
       for (const m of v.matchAll(/\{([^}]*)\}/g)) if (/(^|[^\w.'"])t\b(?!\s*:)/.test(m[1]!)) clock = true;
     }

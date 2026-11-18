@@ -36,6 +36,12 @@ export interface PropDef {
    * guide and the docs act as if the prop weren't there (scene drag= needs behavior).
    */
   needs?: "behavior";
+  /**
+   * Accepted and checked like any prop, but left out of the guide and docs for
+   * this element: it's described once, in full, on another element (a scene's
+   * shapes take group's z=, trail= and blur=), so the guide doesn't repeat it.
+   */
+  unlisted?: boolean;
 }
 
 /** A component's props as a host with these features on sees them. */
@@ -321,6 +327,8 @@ export interface ComponentDef {
   description: string;
   /** The positional quoted text, if this component takes one. */
   text?: { description: string; required?: boolean };
+  /** How the line is written, for the guide, when its props are unlisted because they aren't written as name=value (a scene's let a={…}). */
+  usage?: string;
   props: Record<string, PropDef>;
   /** Which child types are allowed. Omit for leaf components. */
   children?: "any" | readonly string[];
@@ -332,7 +340,11 @@ export interface ComponentDef {
    * defines them. Only lines inside the element see these; the element
    * evaluates those lines itself, with the same functions.
    */
-  provides?: { names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions };
+  provides?: {
+    names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions;
+    /** The element's own props that it evaluates with these too (a scene's shake= reads t and ease). */
+    ownProps?: readonly string[];
+  };
   /** Restrict where this component may appear. */
   parents?: readonly string[];
   /** A short spec snippet for docs and the model prompt. */
@@ -473,6 +485,15 @@ export interface ComponentDef {
    * if it was handled. Enter and Space still press the element when not handled.
    */
   key?(ctx: PressContext, key: string): boolean;
+  /**
+   * The mouse moved onto, between or off this element's parts (never a finger:
+   * touch doesn't hover). from and to are the parts' details as given to
+   * addHit, undefined being off the element; ctx.target is the element. Moving
+   * from one element to another calls the first with (from, undefined), then
+   * the second with (undefined, to). A part that stops being drawn under a
+   * resting pointer counts as left.
+   */
+  hover?(ctx: PressContext, from: unknown, to: unknown): void;
   /**
    * Whether an element is shown, beyond its `if=` prop. Hidden elements aren't
    * laid out or painted (only the active screen is, for example).

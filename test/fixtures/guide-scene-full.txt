@@ -104,7 +104,7 @@ EVERY ELEMENT ACCEPTS
 
 ELEMENTS AT A GLANCE
 - layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll, deck, slide
-- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient
+- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient, let, emit
 - data: stat, rating, chart, chart-line, chart-rule, chart-band, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
 - navigation: screen, tabs, tab, breadcrumb, pagination
@@ -889,13 +889,16 @@ ELEMENTS
     h=<number>  Height of the drawing area, in scene pixels.
     duration=<number>  Seconds the animation runs (t goes from 0 to this). 0 is a still picture.
     loop=<boolean>  Start again when it ends.
+    light=<string>  Where shine= is lit from: light=300,170.
+    shake=<number>  Jolts all but bg up to this many px: shake={14*(1-ease(t,1,1.5))}.
+    rate=<number>  How fast t runs, smoothly: 2 is double, 0 pauses (rate={speed}).
     bg=<string>  Background color behind everything.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let, emit
     example:
       scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
         # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
         # ease(t, start, end) (0 to 1, eased), wave(t, seconds) (0 to 1 and back), random(seed) (the same 0 to 1 each time),
-        # range(n) for each, and pick(list, i). Reuse a drawing with define and use.
+        # range(n) for each, pick(list, i), floor, abs, % and a ? b : c. Reuse a drawing with define and use.
         # Colors: theme names first (fill=accent, stroke=line, fill="bad 15%"), "#hex" for anything else.
         # Depth: shadow=md under a shape, glow=true around a light, shine=true to make a circle a ball.
         # Lay it out cleanly: keep labels inside the picture and clear of each other, say each fact once,
@@ -922,7 +925,7 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -943,7 +946,7 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -965,7 +968,7 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -1005,7 +1008,10 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    cap=<butt|round|square>  Line ends.
+    join=<miter|round|bevel>  Corners.
+    round=<number>  Rounds straight corners by this many pixels. cap, join and round work on line and polygon too.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -1024,7 +1030,7 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
-    shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
+    shine=<boolean>  Lit like a ball, from upper left or scene light=.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
@@ -1038,7 +1044,8 @@ ELEMENTS
     x=<number>  Where it's anchored, across.
     y=<number>  Its middle, down.
     size=<number>  Text size in scene pixels.
-    weight=<regular|bold>  regular or bold.
+    weight=<light|regular|bold|heavy>  Letter weight.
+    style=<normal|italic>  italic slants it.
     align=<left|center|right>  Which end of the words sits at x.
     fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
@@ -1062,11 +1069,18 @@ ELEMENTS
     rotate=<number>  Turns everything, in degrees, around the group's x and y.
     scale=<number>  Grows or shrinks everything.
     opacity=<number>  Fades everything, 0 to 1.
+    shake=<number>  Like scene's.
+    z=<number>  Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.
+    trail=<number>  Seconds of fading copies left behind as it moves: trail=0.4; trail-count= how many (12). Shapes too.
+    blur=<number>  Softens it, in px: blur=8 for fog or smoke. Shapes too.
+    reflect=<number>  Mirrors it below this y, like water: reflect=220; ripple= waves it, fade= dims it (0 to 1).
     on=<action>  Actions when it's pressed (click, tap, Enter), like a button's on=; makes it pressable and a Tab stop. Inside the scene's each they see the item: on=set:sel:{m.id}.
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    on-hover=<action>  On mouse over (never touch): on-hover=set:hov:{p.name}. Shapes too.
+    on-leave=<action>  When it moves off: on-leave="set:hov:''".
+    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let, emit
     only inside: scene, group, define
     example:
       group x={600*((t/3) % 1)} y=200
@@ -1076,7 +1090,7 @@ ELEMENTS
 
   define "<text>"  — A reusable drawing: name it, draw it under this line around 0,0, and draw it anywhere with use. It reads names its use passes in args.
     "<text>" (required)  The drawing's name, used by use.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient, let, emit
     only inside: scene
     example:
       define "cactus"
@@ -1102,12 +1116,22 @@ ELEMENTS
   gradient  — A color blend to fill shapes with fill="url(id)": a sky, a glow, a shiny ball.
     id=<name, required>  Its name, for url(id).
     from=<string>  The first color: a theme color or "#hex", like fill.
-    to=<string>  The last color.
+    to=<string>  The last color ("#FFF3B0 0%" fades out).
     kind=<linear|radial>  linear (a straight blend) or radial (from the middle out).
     angle=<number>  Direction of a linear blend in degrees: 90 is top to bottom, 0 left to right.
     only inside: scene, group, define
     example:
       gradient id=glow kind=radial from="accent 25%" to=accent
+
+  let a={…}  — A named value, worked out each frame, for the lines below it in its block: x={cos(a)}.
+    only inside: scene, group, define
+    example:
+      let a={t*1.5}
+
+  emit  — Confetti, snow, sparks: count≤600 from=burst second (else endless) fill shape=rect|line x y w h angle spread speed gravity drag wind life size flutter.
+    only inside: scene, group, define
+    example:
+      emit count=60 from=1 spread=360 shape=line fill="accent, warn"
 
 PICK BY WHAT YOU'RE SHOWING (use these instead of rebuilding them from stats, progress bars, text or a plain bar chart)
 - a headline number with its change and recent trend: stat change="+12%" spark=weekly

@@ -151,7 +151,7 @@ function elementData(c: ComponentDef) {
     title: TITLES[c.category],
     description: c.description,
     text: c.text ? { description: c.text.description, required: !!c.text.required } : null,
-    props: Object.entries(c.props).map(([name, d]) => ({
+    props: Object.entries(c.props).filter(([, p]) => !p.unlisted).map(([name, d]) => ({
       name,
       type: d.type,
       values: d.values ?? null,

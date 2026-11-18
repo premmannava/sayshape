@@ -19,6 +19,8 @@ export interface DrawOp {
   textAlign: string;
   /** The rectangle drawing was clipped to (canvas clip() with a rect path), if any. */
   clip?: { x: number; y: number; w: number; h: number };
+  /** The canvas filter in effect (blur(…)), when it isn't "none". */
+  filter?: string;
 }
 
 /** Calls that mark pixels. Everything else (paths, transforms, state) only prepares. */
@@ -38,7 +40,7 @@ interface Style {
   [key: string]: unknown;
 }
 
-const initialStyle = (): Style => ({ fillStyle: "#000000", strokeStyle: "#000000", font: "10px sans-serif", globalAlpha: 1 });
+const initialStyle = (): Style => ({ fillStyle: "#000000", strokeStyle: "#000000", font: "10px sans-serif", globalAlpha: 1, filter: "none" });
 
 /** Width of text in a font, with a fixed advance per character (same rule as MonoMeasurer). */
 export function monoWidth(text: string, font: string, advance = 0.55): number {
@@ -109,6 +111,7 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
           globalAlpha: style.globalAlpha,
           textAlign: prop.endsWith("Text") ? String(style.textAlign ?? "start") : "",
           ...(style.clip ? { clip: style.clip as DrawOp["clip"] } : {}),
+          ...(style.filter !== "none" ? { filter: String(style.filter) } : {}),
         });
         return undefined;
       };

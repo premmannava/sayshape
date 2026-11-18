@@ -16,6 +16,7 @@
 import type { Scope } from "../../expr";
 import type { Locate } from "../../paths";
 import { tracePath, type PathSink } from "./path";
+import { traceRounded } from "./line-style";
 import type { Rect, SayShapeNode } from "../../types";
 import type { DragInfo } from "./drag";
 
@@ -62,6 +63,9 @@ export interface SceneRegion {
   /** The pressable line it's drawn inside, if any (a shape in a pressable group). */
   parent?: SceneRegion;
   on: string;
+  /** on-hover= and on-leave= (hover.ts): a region with only these is pointed at, never pressed. */
+  onHover?: string;
+  onLeave?: string;
   tip?: string;
   name?: string;
   selected?: boolean;
@@ -117,9 +121,10 @@ export function strokes(g: Geom): Array<{ pts: Array<[number, number]>; open: bo
 
 /**
  * A path's subpaths as point lists, curves and arcs flattened to short lines,
- * the way the canvas will have drawn them. At most MAX_PATH_POINTS points.
+ * the way the canvas will have drawn them (straight corners rounded by
+ * round, as path's round= draws them). At most MAX_PATH_POINTS points.
  */
-export function flattenPath(d: string): Array<Array<[number, number]>> {
+export function flattenPath(d: string, round = 0): Array<Array<[number, number]>> {
   const rings: Array<Array<[number, number]>> = [];
   let ring: Array<[number, number]> = [];
   let total = 0;
@@ -152,7 +157,9 @@ export function flattenPath(d: string): Array<Array<[number, number]>> {
     },
     closePath() { if (ring.length) { const first = ring[0]!; rings.push(ring); ring = [first]; } },
   };
-  tracePath(d, sink);
+  // Rounded corners (round=) are pressed where they're drawn.
+  if (round > 0) traceRounded(d, sink, round);
+  else tracePath(d, sink);
   if (ring.length > 1) rings.push(ring);
   return rings.filter((r) => r.length >= 2);
 }

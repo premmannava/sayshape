@@ -1,6 +1,7 @@
 /**
  * Scene benchmarks: one frame of the factory monitor, the same scene with
- * nothing pressable, and finding what's under the pointer.
+ * nothing pressable, 150 shapes with and without z or trails, finding what's under the
+ * pointer, particles (emit), a reflected skyline and blur (fog, a blurred snowstorm).
  *
  *   npm run bench -- bench/scene.bench.ts
  *
@@ -10,8 +11,9 @@
 import { bench, describe } from "vitest";
 import { coreComponents } from "../src/components";
 import { sceneComponents } from "../src/components/scene";
-import { render } from "../src/testing";
+import { createRecordingContext, render } from "../src/testing";
 import { FACTORY_MONITOR } from "../playground/scene-samples";
+import { computeParticles, STRIDE, type EmitParams } from "../src/components/scene/emit";
 
 const components = [...coreComponents, ...sceneComponents];
 /** The same picture with nothing pressable: what scenes cost before interaction. */
@@ -47,6 +49,43 @@ describe("scene frame", () => {
   });
 });
 
+/** 150 moving shapes, as in a snowstorm, drawn in written order or sorted by z each frame. */
+const FLAKES = `scene "150 flakes" w=600 h=340 duration=10
+  each items={range(150)} as=i
+    circle x={(random(i)*600 + t*20) % 600} y={(random(i + 1)*340 + t*30) % 340} r={1 + 3*random(i + 2)} fill="#FFFFFF"`;
+
+describe("scene depth", () => {
+  const flat = render(FLAKES, { components, width: 1000 });
+  const deep = render(FLAKES.replace('fill="#FFFFFF"', 'fill="#FFFFFF" z={random(i + 2)}'), { components, width: 1000 });
+
+  bench("150 shapes, no z", () => {
+    flat.sayshape.invalidate("paint");
+    flat.sayshape.renderNow();
+  });
+  bench("150 shapes sorted by z", () => {
+    deep.sayshape.invalidate("paint");
+    deep.sayshape.renderNow();
+  });
+});
+
+/** The snowstorm with trail=0.3 on every flake: 12 copies each asked for, thinned to the 600-shape trail budget. */
+describe("scene trails", () => {
+  const plain = render(FLAKES, { components, width: 1000, animate: true, clock: true });
+  const trailed = render(FLAKES.replace('fill="#FFFFFF"', 'fill="#FFFFFF" trail=0.3'), { components, width: 1000, animate: true, clock: true });
+  // Past the first frame (nothing behind it yet) so every frame draws its trails.
+  plain.clock.advance(1000);
+  trailed.clock.advance(1000);
+
+  bench("150 moving shapes, no trail", () => {
+    plain.sayshape.invalidate("paint");
+    plain.sayshape.renderNow();
+  });
+  bench("150 moving shapes with trail=0.3", () => {
+    trailed.sayshape.invalidate("paint");
+    trailed.sayshape.renderNow();
+  });
+});
+
 describe("hit testing", () => {
   const ui = render(MANY, { components, width: 1000 });
   const box = ui.find({ type: "scene" }).box!;
@@ -55,4 +94,109 @@ describe("hit testing", () => {
     k = (k + 37) % 1000;
     ui.sayshape.targetAt(box.x + (k / 1000) * box.w, box.y + ((k * 7) % 1000 / 1000) * box.h);
   });
+});
+
+/** The snowstorm-sized scene: ~150 animated shapes, then with particles on top (S13). */
+const SNOWSTORM = `scene "A snowstorm" w=600 h=340 duration=12 bg="#0B1D3A"
+  let wind={40*sin(t*PI/3) + 15*sin(t*PI*2/3)}
+  each items={range(150)} as=i
+    circle x={(i*37 + t*(20 + i % 7)*3) % 640 - 20} y={(i*53 + t*(30 + i % 5)*6) % 380 - 20} r={1 + i % 3} fill="#FFFFFF" opacity={0.4 + 0.1*(i % 5)}`;
+const SNOW_PARTICLES = `${SNOWSTORM}
+  emit count=450 x=-80 y=-10 w=760 angle=90 spread=20 speed=40 gravity=60 drag=1 wind={wind} life=7 size=4 fill="#FFFFFF, #DDE7F5"`;
+const CONFETTI_600 = `scene "Confetti" w=600 h=340 duration=2.5
+  emit count=300 from=0.5 x=0 y=300 angle=-60 spread=30 speed=700 gravity=500 drag=1.5 life=3.5 size=9 shape=rect flutter=1 fill="accent, warn, good, bad, #FFD166"
+  emit count=300 from=0.5 x=600 y=300 angle=-120 spread=30 speed=700 gravity=500 drag=1.5 life=3.5 size=9 shape=rect flutter=1 fill="accent, warn, good, bad, #FFD166"`;
+const FIREWORK_300 = `scene "Firework" w=600 h=340 duration=2 bg="#0B1D3A"
+  emit count=300 from=0.9 x=300 y=120 spread=360 speed=260 gravity=120 drag=2 life=1.6 size=6 shape=line fill="warn, #FFD166, bad"`;
+
+describe("particles", () => {
+  const frame = (spec: string) => {
+    const ui = render(spec, { components, width: 1000 });
+    return () => { ui.sayshape.invalidate("paint"); ui.sayshape.renderNow(); };
+  };
+  bench("snowstorm, 150 shapes only", frame(SNOWSTORM));
+  bench("snowstorm + 450 particles, gusting let wind", frame(SNOW_PARTICLES));
+  bench("600 confetti, flutter", frame(CONFETTI_600));
+  bench("300 firework streaks", frame(FIREWORK_300));
+  const p: EmitParams = { count: 600, from: null, x: -80, y: -10, w: 760, h: 0, angle: 90, spread: 20, speed: 40, gravity: 60, drag: 1, wind: 20, life: 7, size: 4, seed: 1, flutter: 1, colors: 2, shape: "rect" };
+  const out = new Float64Array(600 * STRIDE);
+  let t = 0;
+  bench("computeParticles alone, 600 fluttering", () => {
+    t = (t + 1 / 60) % 12;
+    computeParticles(p, t, { duration: 12, loop: true }, out);
+  });
+});
+
+/**
+ * A skyline reflected in a river (reflect=, reflect.ts), with OffscreenCanvas
+ * stubbed by the recording canvas: the cached buffer with a moving ripple,
+ * contents that read t (drawn into the buffer every frame), and no reflection.
+ */
+const SKYLINE = `scene "Harbor at night" w=600 h=340 duration=8 bg="#0B1026"
+  circle x=480 y=70 r=22 fill="#FFF3B0" glow=true
+  rect x=0 y=220 w=600 h=120 fill="#13204A"
+  group reflect=220 ripple=0.35 fade=0.7
+    each items={range(30)} as=i
+      rect x={i*20} y={220 - 40 - 110*random(i)} w=18 h={40 + 110*random(i)} fill="#1C2550"
+    each items={range(30)} as=i
+      rect x={i*20 + 6} y={220 - 20 - 90*random(i + 40)} w=5 h=6 fill="#FFD166" opacity={0.5 + 0.5*random(i + 80)}
+  label "Harbor at night" x=24 y=36 size=22 weight=bold fill="#FFFFFF"`;
+
+describe("scene reflect", () => {
+  class Offscreen {
+    private rec = createRecordingContext();
+    constructor(public width: number, public height: number) {}
+    getContext() { return this.rec.context; }
+  }
+  const g = globalThis as { OffscreenCanvas?: unknown };
+  g.OffscreenCanvas ??= Offscreen;
+  const frame = (spec: string) => {
+    const ui = render(spec, { components, width: 1000, animate: true, clock: true });
+    return () => { ui.clock.advance(16); };
+  };
+  const cached = frame(SKYLINE);
+  const moving = frame(SKYLINE.replace("w=18 h=", "w={18 + 2*sin(t)} h="));
+  const none = frame(SKYLINE.replace(" reflect=220 ripple=0.35 fade=0.7", ""));
+
+  bench("skyline reflect, cached buffer + ripple", cached);
+  bench("skyline reflect, contents read t", moving);
+  bench("skyline, no reflect", none);
+});
+
+/**
+ * blur= (blur.ts) with OffscreenCanvas stubbed by the recording canvas: the
+ * snowstorm with 12 near flakes in one blurred group and 10 far ones blurred
+ * each, against the same flakes sharp, and a drifting fog bank (cached bitmap).
+ */
+const SNOW_BLUR = `scene "Snowstorm" w=600 h=340 duration=10 bg="#16324F"
+  each items={range(10)} as=i
+    circle x={(i*67 + t*12) % 620 - 10} y={(i*41 + t*18) % 360 - 10} r=2 fill="#FFFFFF" opacity=0.5 blur=2
+  each items={range(140)} as=i
+    circle x={(i*37 + t*(30 + 20*random(i))) % 620 - 10} y={(i*53 + t*(40 + 30*random(i+7))) % 360 - 10} r={1.5 + 3*random(i+3)} fill="#FFFFFF" opacity={0.5 + 0.5*random(i+11)}
+  group blur=4
+    each items={range(12)} as=i
+      circle x={(i*97 + t*60) % 680 - 40} y={(i*61 + t*90) % 420 - 40} r={10 + 8*random(i+5)} fill="#FFFFFF" opacity=0.8`;
+const FOG = `scene "Fog" w=600 h=340 duration=12 bg="#1E2D44"
+  rect x=0 y=210 w=600 h=130 fill="#2F4858"
+  group x={-80 + 15*t} y=0 blur=24 opacity=0.85
+    ellipse x=160 y=190 rx=150 ry=30 fill="#FFFFFF 45%"
+    ellipse x=380 y=212 rx=190 ry=36 fill="#FFFFFF 35%"
+    ellipse x=600 y=180 rx=150 ry=28 fill="#FFFFFF 40%"`;
+
+describe("scene blur", () => {
+  class Offscreen {
+    private rec = createRecordingContext();
+    constructor(public width: number, public height: number) {}
+    getContext() { return this.rec.context; }
+  }
+  const g = globalThis as { OffscreenCanvas?: unknown };
+  g.OffscreenCanvas ??= Offscreen;
+  const frame = (spec: string) => {
+    const ui = render(spec, { components, width: 1000, animate: true, clock: true });
+    return () => { ui.clock.advance(16); };
+  };
+  bench("snowstorm, blurred near and far flakes", frame(SNOW_BLUR));
+  bench("snowstorm, same flakes sharp", frame(SNOW_BLUR.replace(/ blur=\d+/g, "")));
+  bench("fog bank drifting, cached blur", frame(FOG));
+  bench("fog bank, sharp", frame(FOG.replace(" blur=24", "")));
 });
