@@ -1000,6 +1000,9 @@ ELEMENTS
     dash=<string>  A dashed outline: dash and gap lengths, like dash="6 4".
     shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
     glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    cap=<butt|round|square>  Line ends.
+    join=<miter|round|bevel>  Corners.
+    round=<number>  Rounds straight corners by this many pixels. cap, join and round work on line and polygon too.
     shine=<boolean>  Lit from the upper left, so a circle looks like a ball.
     on=<action>  Makes it pressable, like group's on=.
     selected=<condition>  Selection outline while true.

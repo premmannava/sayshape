@@ -91,6 +91,14 @@ const PRESS_SHAPE: Record<string, PropDef> = {
   name: { type: "string", description: "Screen-reader name." },
 };
 
+/** Line style (line-style.ts), described once, on path; line and polygon take it unlisted. */
+const CAP: PropDef = { type: "enum", values: ["butt", "round", "square"], description: "Line ends.", default: "round" };
+const JOIN: PropDef = { type: "enum", values: ["miter", "round", "bevel"], description: "Corners.", default: "round" };
+const ROUND: PropDef = num("Rounds straight corners by this many pixels. cap, join and round work on line and polygon too.");
+const LINE_STYLE: Record<string, PropDef> = { cap: CAP, join: JOIN };
+const unlisted = (props: Record<string, PropDef>): Record<string, PropDef> =>
+  Object.fromEntries(Object.entries(props).map(([k, d]) => [k, { ...d, unlisted: true }]));
+
 const leaf = { layout: (box: Box) => { box.h = 0; }, semantics: () => false as const, parents: IN_SCENE, noBox: true } satisfies Partial<ComponentDef>;
 
 /** The fastest a scene's clock runs, either way (rate=). */
@@ -380,7 +388,7 @@ const line: ComponentDef = {
   type: "line",
   category: "content",
   description: "A straight line in a scene. Give it a stroke and width.",
-  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...PRESS_SHAPE },
+  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...unlisted(LINE_STYLE), ...PRESS_SHAPE },
   example: `line x1=20 y1=200 x2=580 y2=200 stroke="#FFFFFF" width=4 dash="16 12"`,
 };
 
@@ -389,7 +397,7 @@ const path: ComponentDef = {
   type: "path",
   category: "content",
   description: "Any outline, in SVG path commands (M move, L line, H, V, C and S curves, Q and T curves, A arc, Z close). For curved shapes: ears, hills, a car body, a wave.",
-  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
+  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...LINE_STYLE, round: ROUND, ...SHINE, ...PRESS_SHAPE },
   example: `path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"`,
 };
 
@@ -398,7 +406,7 @@ const polygon: ComponentDef = {
   type: "polygon",
   category: "content",
   description: "A closed shape through points, for triangles, stars, mountains and roofs.",
-  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
+  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...unlisted({ ...LINE_STYLE, round: ROUND }), ...SHINE, ...PRESS_SHAPE },
   example: `polygon points="300,40 380,180 220,180" fill="#E9C46A"`,
 };
 
