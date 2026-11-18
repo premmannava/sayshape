@@ -75,10 +75,13 @@ export const overlap: ComponentDef = {
   },
 };
 
+/** row's and grid's stretch prop. */
+const STRETCH = { type: "boolean", default: false, description: "Cards side by side share the tallest one's height, for panels that should line up." } as const;
+
 export const row: ComponentDef = {
   type: "row",
   category: "layout",
-  description: "Places children side by side, splitting the width equally. On narrow screens they wrap; sibling cards share a height per line by default.",
+  description: "Places children side by side, splitting the width equally. On narrow screens they wrap; cards keep their own height, top-aligned.",
   props: {
     gap: gapProp(10),
     pad: padProp(0),
@@ -86,6 +89,7 @@ export const row: ComponentDef = {
     wrap: { type: "boolean", default: true, description: "Move children onto more lines when they don't fit side by side (default true). Set false to always keep them on one line." },
     fit: { type: "boolean", default: false, description: "Keep children at their natural width." },
     justify: { type: "enum", values: ROW_JUSTIFY, description: "Where children sit: start, end, or between (spread). Implies fit." },
+    stretch: STRETCH,
   },
   children: "any",
   example: `row gap=10
@@ -97,6 +101,8 @@ export const row: ComponentDef = {
     rowLayout(box, ctx, p.num("pad", 0), p.num("gap", 10), p.oneOf("align", ROW_ALIGN, "center"), p.bool("wrap", true), {
       fit: p.bool("fit", false),
       justify: ROW_JUSTIFY.find((v) => v === p.str("justify")),
+      stretch: p.bool("stretch", false),
+      aligned: p.has("align"),
     });
   },
   minWidth(node, ctx) {
@@ -344,11 +350,12 @@ export const spacer: ComponentDef = {
 export const grid: ComponentDef = {
   type: "grid",
   category: "layout",
-  description: "Places children in responsive equal columns. Cards in the same grid row automatically share a height, keeping dashboard panels aligned.",
+  description: "Places children in responsive equal columns. Cards keep their own height, top-aligned.",
   props: {
     min: { type: "number", default: 200, description: "Narrowest a column may be, in pixels (default 200)." },
     cols: { type: "number", description: "Most columns; fewer when min doesn't fit." },
     gap: gapProp(14),
+    stretch: STRETCH,
   },
   children: "any",
   example: `grid min=140 gap=10
@@ -359,6 +366,7 @@ export const grid: ComponentDef = {
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const gap = Math.max(0, p.num("gap", 14));
+    const stretch = p.bool("stretch", false);
     const kids = ctx.visibleChildren(box.node);
     // A column is never narrower than its widest child needs, whatever min= says.
     const min = Math.max(1, p.num("min", 200), ...kids.map((k) => Math.min(box.w, ctx.minWidth(k))));
@@ -381,9 +389,10 @@ export const grid: ComponentDef = {
         placed.push(kb);
         tallest = Math.max(tallest, kb.h);
       });
-      // A sparkline or donut legend in one card must not leave ragged bottoms
-      // on its neighbouring panels. Children stay top-aligned within each card.
-      if (placed.length > 1 && placed.every((k) => k.node.type === "card")) {
+      // stretch=true: a sparkline or donut legend in one card leaves no ragged bottoms on its
+      // neighbouring panels. Children stay top-aligned within each card. Off by default, since a
+      // short card stretched beside a tall one is mostly empty space.
+      if (stretch && placed.length > 1 && placed.every((k) => k.node.type === "card")) {
         for (const k of placed) k.h = tallest;
       }
       y += tallest;

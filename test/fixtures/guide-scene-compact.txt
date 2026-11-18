@@ -32,9 +32,9 @@ DATA AND LISTS
 ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path a state name or t.field, action an on= value; ["text"] is optional quoted text, written without the brackets: "Sales", never ["Sales"])
 - every element: if=cond
 - column gap=number pad=number [holds elements] — Stacks its children vertically.
-- row gap=number pad=number align=top|center|bottom wrap=true|false fit=true|false justify=start|end|between [holds elements] — Places children side by side, splitting the width equally.
+- row gap=number pad=number align=top|center|bottom wrap=true|false fit=true|false justify=start|end|between stretch=true|false [holds elements] — Places children side by side, splitting the width equally.
 - overlap at=top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right inset=number [holds elements] — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card.
-- grid min=number cols=number gap=number [holds elements] — Places children in responsive equal columns.
+- grid min=number cols=number gap=number stretch=true|false [holds elements] — Places children in responsive equal columns.
 - card gap=number pad=number variant=raised|hero|tinted|outline on=action tone=accent|good|warn|bad|muted [holds elements] — A surface that groups related content, stacked vertically.
 - list [holds elements] — A bordered list of rows, separated by lines.
 - list-item "text" detail=text trailing=text tone=accent|good|warn|bad|muted icon=text on=action [holds elements; only in list] — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title.
@@ -155,7 +155,7 @@ RULES
 - Use only these elements and props. No colors, sizes or fonts: choose roles with tone=, variant= and style=; for "red" or "big", use the closest role.
 - Cards group related content, never a card inside a card; leave page titles outside cards. One task per screen, short labels, realistic values.
 - Dashboards: title, filters under it, 3-4 KPIs, one main chart, then detail (smaller chart or table). Styling is built in.
-- grid min=170 gap=12 for peer KPI/chart cards (equal heights per row); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer.
+- grid min=170 gap=12 for peer KPI/chart cards (stretch=true for equal heights); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer.
 - Screens may be narrow. Side-by-side figures: grid min=140, not row. Short stat values: compact() for large numbers.
 - For several screens, write the starting screen first.
 - Label every control and title every chart (or put a text just above it): screen readers read them.
