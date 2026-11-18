@@ -245,7 +245,7 @@ function drawAtRest(scene: SayShapeNode, scope: Scope, theme: Theme, measure: Me
   let current: SayShapeNode | null = null;
   const g = measuringContext(marks, () => current, measure ?? estimate);
   const f: Frame = {
-    g, font: (wt, size) => `${wt} ${size}px sans-serif`, colors: theme.colors,
+    g, font: (wt, size) => `${wt} ${size}px sans-serif`, colors: theme.colors, theme,
     defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(),
     onNode: (n) => { current = n; }, notes: [],
     m: IDENTITY, press: { regions: [], open: [], copy: [], locate: stateLocate },

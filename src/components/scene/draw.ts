@@ -17,6 +17,13 @@ import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
 import { drawIcon, isIconName } from "../../icons";
+import { fillGradient, type FillName } from "../../fills";
+
+/**
+ * The named fills a scene shape takes, matching card fill=. accent stays the
+ * solid theme color here (fill=accent always meant that in a scene).
+ */
+export const SCENE_FILLS: readonly FillName[] = ["sky", "sunset", "dusk", "night"];
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -105,6 +112,8 @@ export interface Frame {
   font: (weight: number, size: number) => string;
   /** The theme's colors, for fill=accent and the other theme color names. */
   colors: Theme["colors"];
+  /** The whole theme, for the named fills (fill=sky, the same gradients as card fill=). */
+  theme?: Theme;
   defs: Map<string, SayShapeNode>;
   gradients: Map<string, SayShapeNode>;
   shapes: number;
@@ -167,6 +176,7 @@ function paintOf(raw: string | undefined, bounds: Bounds, f: Frame, scope: Scope
     grad.addColorStop(1, to);
     return grad;
   }
+  if (f.theme && (SCENE_FILLS as readonly string[]).includes(v)) return fillGradient(f.g, f.theme, v as FillName, bounds);
   return colorOf(v, f);
 }
 

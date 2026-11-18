@@ -353,3 +353,21 @@ describe("acceptance: a phone screen", () => {
     });
   }
 });
+
+describe("named fills on scene shapes", () => {
+  it("fill=sky paints the same theme gradient as card fill=sky, light and dark; accent stays solid", async () => {
+    const { fillOf } = await import("../src/fills");
+    const { darkTheme: dark, lightTheme: light } = await import("../src/theme");
+    const { coreComponents: core } = await import("../src/components");
+    const { sceneComponents: scenes } = await import("../src/components/scene");
+    const { render: draw } = await import("../src/testing");
+    for (const theme of [light, dark]) {
+      const ui = draw(`scene "Sky" w=200 h=100\n  rect x=0 y=0 w=200 h=100 fill=sky\n  circle x=50 y=50 r=10 fill=accent`, { components: [...core, ...scenes], theme });
+      expect(ui.diagnostics).toEqual([]);
+      const sky = fillOf(ui.sayshape.theme, "sky")!;
+      const grad = ui.drawOps.find((op) => op.op === "fill" && op.gradientStops?.length);
+      expect(grad?.gradientStops?.map((s) => s.color)).toEqual([sky.from, sky.to]);
+      expect(ui.drawOps.some((op) => op.op === "fill" && op.fillStyle === ui.sayshape.theme.colors.accent)).toBe(true);
+    }
+  });
+});

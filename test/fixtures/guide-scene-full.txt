@@ -910,7 +910,7 @@ ELEMENTS
     w=<number>  Width.
     h=<number>  Height.
     rx=<number>  Corner rounding.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -932,7 +932,7 @@ ELEMENTS
     x=<number>  Center, across.
     y=<number>  Center, down.
     r=<number>  Radius.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -955,7 +955,7 @@ ELEMENTS
     y=<number>  Center, down.
     rx=<number>  Half the width.
     ry=<number>  Half the height.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -978,7 +978,7 @@ ELEMENTS
     y1=<number>  Start, down.
     x2=<number>  End, across.
     y2=<number>  End, down.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -997,7 +997,7 @@ ELEMENTS
 
   path  — Any outline, in SVG path commands (M move, L line, H, V, C and S curves, Q and T curves, A arc, Z close). For curved shapes: ears, hills, a car body, a wave.
     d=<string>  The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -1017,7 +1017,7 @@ ELEMENTS
 
   polygon  — A closed shape through points, for triangles, stars, mountains and roofs.
     points=<string>  x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).
@@ -1043,7 +1043,7 @@ ELEMENTS
     weight=<light|regular|bold>  light (large calm figures: 72°, a clock), regular or bold.
     align=<left|center|right>  Which end of the words sits at x.
     id=<name>  Its name, for after= on a later shape.
-    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
+    fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
     opacity=<number>  0 (invisible) to 1 (solid).

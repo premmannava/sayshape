@@ -54,7 +54,7 @@ const color = (description: string): PropDef => ({ type: "string", description }
 
 /** Props every shape takes. */
 const PAINT: Record<string, PropDef> = {
-  fill: color('Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.'),
+  fill: color('Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%"; sky, sunset, dusk or night for the theme gradients cards use (card fill=sky). Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.'),
   stroke: color("Outline color, like fill (stroke=line for a quiet border). No outline unless set."),
   width: num("Outline width in scene pixels.", 1),
   opacity: num("0 (invisible) to 1 (solid).", 1),
@@ -186,7 +186,7 @@ const scene: ComponentDef = {
     const g = ctx.g;
     const sx = box.w / w, sy = box.h / h;
     const f: Frame = {
-      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(),
+      g, font: ctx.font, colors: ctx.theme.colors, theme: ctx.theme, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(),
       m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
     };
     if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
