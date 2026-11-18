@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { coreComponents } from "../src/components";
-import { sceneComponents } from "../src/components/scene";
+import { reviewScenes, sceneComponents } from "../src/components/scene";
 import { render } from "../src/testing";
 
 const ON = [...coreComponents, ...sceneComponents];
@@ -41,5 +41,10 @@ describe("scene depth: shadow, glow and shine", () => {
     const off = fills(`state on=false\nscene "S" w=100 h=100\n  circle x=50 y=50 r=20 fill=accent shine={on} glow={on}\n`);
     const on = fills(`state on=true\nscene "S" w=100 h=100\n  circle x=50 y=50 r=20 fill=accent shine={on} glow={on}\n`);
     expect(on.length).toBe(off.length + 1);
+  });
+
+  it("the drawing check still checks a scene with glow and shadow", () => {
+    const r = parse(`scene "S" w=300 h=100\n  circle x=50 y=50 r=20 fill=accent glow=true\n  rect x=100 y=20 w=60 h=60 fill=surface shadow=md\n  label "Far too long to fit in here at all" x=200 y=50 size=20 fill=ink`, reg);
+    expect(reviewScenes(r).map((d) => d.message)).toContain(`Drawing: the label "Far too long to fit in here at…" is cut off by the right edge of the picture. Move it in or make it smaller`);
   });
 });

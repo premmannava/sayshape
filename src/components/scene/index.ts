@@ -34,7 +34,8 @@ import { paintScene, type Frame } from "./draw";
 import { locateOf } from "../../each";
 import { dragShape, keyShape, rangeOf } from "./drag";
 import type { PartSemantics } from "../../a11y/semantics";
-import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
+import { iconProblems } from "../util";
+import { intersect, liveOf, outerGeoms, outline, strokes, regionBounds, regionHit, regionName, setLive, type SceneRegion } from "./interact";
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
 export { MAX_SCENE_SHAPES, MAX_SCENE_STEPS, MAX_USE_DEPTH, THEME_COLORS } from "./draw";
@@ -45,7 +46,7 @@ export { liveOf as sceneRegions, type SceneRegion } from "./interact";
 const MAX_SCENE_HEIGHT = 2000;
 
 /** What a scene and its groups and drawings hold. */
-const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use", "define", "gradient"] as const;
+const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "glyph", "group", "use", "define", "gradient"] as const;
 const IN_SCENE = ["scene", "group", "define"] as const;
 
 const num = (description: string, def?: number): PropDef => (def === undefined ? { type: "number", description } : { type: "number", description, default: def });
@@ -61,6 +62,13 @@ const PAINT: Record<string, PropDef> = {
   dash: { type: "string", description: 'A dashed outline: dash and gap lengths, like dash="6 4".' },
   shadow: { type: "enum", values: ["sm", "md", "lg"], description: "A soft shadow under it, so it sits above what's behind." },
   glow: { type: "boolean", description: "A soft light around it in its own color: a sun, a lamp, a live dot.", default: false },
+};
+/** Placing a line right after a label's words, whatever font draws them. Said in full once, on group. */
+const AFTER_GROUP: Record<string, PropDef> = {
+  after: { type: "name", description: "Starts at the end of the words of the label with this id, drawn before it: x= is then the gap from there." },
+};
+const AFTER: Record<string, PropDef> = {
+  after: { type: "name", description: "Starts after a label's words, like group's after=." },
 };
 /** For filled shapes only. */
 const SHINE: Record<string, PropDef> = {
@@ -126,7 +134,7 @@ const scene: ComponentDef = {
   category: "content",
   description:
     "EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). " +
-    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; " +
+    "Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon, label and icon, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; " +
     "give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.",
   text: { description: "What the picture shows, in a few words, for screen readers.", required: true },
   props: {
@@ -139,7 +147,8 @@ const scene: ComponentDef = {
     scale: num("Show it at this share of its own w (0.1 to 1), centered, like maxw={w * scale}."),
   },
   children: SHAPES,
-  provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS },
+  // icon inside a scene is drawn at x and y like the other shapes: the scene's glyph.
+  provides: { names: SCENE_NAMES, functions: SCENE_FUNCTIONS, renames: { icon: "glyph" } },
   picks: [
     { for: "a picture or animation no other element can show", write: 'scene "A rabbit hopping across a meadow" w=600 h=340 duration=3' },
     { for: "a diagram people press parts of: a floor plan, a network, a production line", write: 'scene "Floor 3: four meeting rooms" w=600 h=360' },
@@ -177,7 +186,7 @@ const scene: ComponentDef = {
     const g = ctx.g;
     const sx = box.w / w, sy = box.h / h;
     const f: Frame = {
-      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0,
+      g, font: ctx.font, colors: ctx.theme.colors, defs: new Map(), gradients: new Map(), shapes: 0, steps: 0, useDepth: 0, ends: new Map(),
       m: [sx, 0, 0, sy, box.x, box.y], press: { regions: [], open: [], copy: [], locate: locateOf(box.node) },
     };
     if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
@@ -266,21 +275,33 @@ function paintFeedback(box: Box, ctx: PaintContext, shown: ReadonlyArray<{ r: Sc
     const strong = !!s.r.selected || focused;
     g.save();
     g.globalAlpha = strong ? 1 : 0.7;
-    for (const { pts, open } of outerGeoms(s.r).flatMap(strokes)) {
-      if (pts.length < 2) continue;
-      g.beginPath();
-      g.moveTo(pts[0]![0], pts[0]![1]);
-      for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
-      if (!open) g.closePath();
-      g.lineJoin = "round";
-      g.lineCap = "round";
-      // A light edge under the accent keeps the outline visible on any color the model chose.
-      g.strokeStyle = c.surface;
-      g.lineWidth = strong ? 6 : 5;
-      g.stroke();
-      g.strokeStyle = c.accent;
-      g.lineWidth = strong ? 3 : 2;
-      g.stroke();
+    for (const geom of outerGeoms(s.r)) {
+      g.save();
+      // An outline around a shape in a clip=true group is cut where the shape is.
+      for (const c of geom.clips ?? []) {
+        const edge = outline({ kind: "rect", ...c });
+        g.beginPath();
+        edge.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+        g.closePath();
+        g.clip();
+      }
+      for (const { pts, open } of strokes(geom)) {
+        if (pts.length < 2) continue;
+        g.beginPath();
+        g.moveTo(pts[0]![0], pts[0]![1]);
+        for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
+        if (!open) g.closePath();
+        g.lineJoin = "round";
+        g.lineCap = "round";
+        // A light edge under the accent keeps the outline visible on any color the model chose.
+        g.strokeStyle = c.surface;
+        g.lineWidth = strong ? 6 : 5;
+        g.stroke();
+        g.strokeStyle = c.accent;
+        g.lineWidth = strong ? 3 : 2;
+        g.stroke();
+      }
+      g.restore();
     }
     g.restore();
   }
@@ -321,7 +342,7 @@ const rect: ComponentDef = {
   type: "rect",
   category: "content",
   description: "A rectangle in a scene, from its top-left corner.",
-  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Left edge."), y: num("Top edge."), w: num("Width."), h: num("Height."), rx: num("Corner rounding."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}`,
 };
 
@@ -330,7 +351,7 @@ const circle: ComponentDef = {
   type: "circle",
   category: "content",
   description: "A circle in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), r: num("Radius."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"`,
 };
 
@@ -339,7 +360,7 @@ const ellipse: ComponentDef = {
   type: "ellipse",
   category: "content",
   description: "An oval in a scene, from its center.",
-  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE },
+  props: { x: num("Center, across."), y: num("Center, down."), rx: num("Half the width."), ry: num("Half the height."), ...PAINT, ...SHINE, ...PRESS_SHAPE, ...DRAG_SHAPE, ...AFTER },
   example: `ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"`,
 };
 
@@ -348,7 +369,7 @@ const line: ComponentDef = {
   type: "line",
   category: "content",
   description: "A straight line in a scene. Give it a stroke and width.",
-  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...PRESS_SHAPE },
+  props: { x1: num("Start, across."), y1: num("Start, down."), x2: num("End, across."), y2: num("End, down."), ...PAINT, ...PRESS_SHAPE, ...AFTER },
   example: `line x1=20 y1=200 x2=580 y2=200 stroke="#FFFFFF" width=4 dash="16 12"`,
 };
 
@@ -357,7 +378,7 @@ const path: ComponentDef = {
   type: "path",
   category: "content",
   description: "Any outline, in SVG path commands (M move, L line, H, V, C and S curves, Q and T curves, A arc, Z close). For curved shapes: ears, hills, a car body, a wave.",
-  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
+  props: { d: { type: "string", description: 'The path, like d="M20 200 Q150 60 280 200 Z". It may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE, ...AFTER },
   example: `path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"`,
 };
 
@@ -366,7 +387,7 @@ const polygon: ComponentDef = {
   type: "polygon",
   category: "content",
   description: "A closed shape through points, for triangles, stars, mountains and roofs.",
-  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE },
+  props: { points: { type: "string", description: 'x,y pairs: points="300,40 360,160 240,160". They may hold {formulas}.' }, ...PAINT, ...SHINE, ...PRESS_SHAPE, ...AFTER },
   example: `polygon points="300,40 380,180 220,180" fill="#E9C46A"`,
 };
 
@@ -382,25 +403,65 @@ const label: ComponentDef = {
     size: num("Text size in scene pixels.", 16),
     weight: { type: "enum", values: ["light", "regular", "bold"], description: "light (large calm figures: 72°, a clock), regular or bold.", default: "regular" },
     align: { type: "enum", values: ["left", "center", "right"], description: "Which end of the words sits at x.", default: "left" },
+    id: { type: "name", description: "Its name, for after= on a later shape." },
     ...PAINT,
     ...PRESS_SHAPE,
     ...DRAG_SHAPE,
+    ...AFTER,
   },
   example: `label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"`,
+};
+
+const glyph: ComponentDef = {
+  ...leaf,
+  type: "glyph",
+  category: "content",
+  description: "An icon in a scene, written icon inside one (glyph works too): the app's own icons, at any size and color, drawn from its left edge and centered on y like a label. Give it on= to make it a button: an app on a phone, a control.",
+  props: {
+    name: { type: "string", required: true, description: "Which icon: the same names as icon's name=, like sun, heart or arrow-right. It may hold a {formula}." },
+    x: num("Left edge."),
+    y: num("Its middle, down."),
+    size: num("Width and height in scene pixels.", 24),
+    fill: { type: "string", default: "ink", description: 'Its color, like a shape\'s fill: a theme color (accent, ink, onAccent…) or "#hex".' },
+    opacity: PAINT.opacity!,
+    rotate: PAINT.rotate!,
+    shadow: PAINT.shadow!,
+    glow: PAINT.glow!,
+    label: { type: "string", description: "What screen readers call it when it's pressable. Default: its tip, else the icon's name." },
+    on: PRESS_SHAPE.on!, selected: PRESS_SHAPE.selected!, tip: PRESS_SHAPE.tip!,
+    ...AFTER,
+  },
+  check: (props) => iconProblems(props.name, "name"),
+  example: `icon name=sun x=40 y=60 size=48 fill=warn glow=true
+label "Phoenix" id=city x=40 y=130 size=24 fill=ink
+icon name=arrow-right after=city x=8 y=130 size=24 fill=accent`,
 };
 
 const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), ...PRESS, ...DRAG },
+  props: {
+    x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1),
+    clip: { type: "boolean", description: "Shapes inside are cut to the group's w×h box, rounded by rx: glows inside a phone screen, a map in a card.", default: false },
+    w: num("Width of the clip=true box, from the group's x."), h: num("Height of the clip=true box, from the group's y."), rx: num("Corner rounding of the clip=true box."),
+    ...PRESS, ...DRAG, ...AFTER_GROUP,
+  },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
   example: `group x={600*((t/3) % 1)} y=200
   rect x=-40 y=-20 w=80 h=24 rx=6 fill="#E63946"
   circle x=-22 y=6 r=9 fill="#222222"
-  circle x=22 y=6 r=9 fill="#222222"`,
+  circle x=22 y=6 r=9 fill="#222222"
+group x=20 y=20 w=200 h=120 rx=24 clip=true
+  circle x=180 y=10 r=90 fill="accent 40%" glow=true`,
+  check: (props) => {
+    const clipped = props.clip !== undefined && props.clip !== "false";
+    if (clipped && (props.w === undefined || props.h === undefined)) return ["clip=true needs w= and h=, the size of the box its shapes are cut to"];
+    if (!clipped && (props.w !== undefined || props.h !== undefined)) return ["w= and h= only size a group's clip=true box; add clip=true, or leave them out"];
+    return [];
+  },
   layout: (box) => { box.h = 0; },
   semantics: () => false,
 };
@@ -433,6 +494,7 @@ const use: ComponentDef = {
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
     ...PRESS,
     ...DRAG_SHAPE,
+    ...AFTER,
   },
   example: `use "cactus" x=120 y=300 scale=1.2 args={{h: 70}}`,
 };
@@ -457,7 +519,7 @@ const gradient: ComponentDef = {
  *   new SayShape(canvas, { components: [...coreComponents, ...sceneComponents] })
  * Leave them out and scenes are off: "scene" is then an unknown element.
  */
-export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient];
+export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, glyph, group, define, use, gradient];
 
 /**
  * A draggable shape to a screen reader: moving one way, a slider with its

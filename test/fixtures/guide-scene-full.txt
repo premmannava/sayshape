@@ -103,7 +103,7 @@ EVERY ELEMENT ACCEPTS
 
 ELEMENTS AT A GLANCE
 - layout: column, row, overlap, grid, card, list, list-item, accordion, divider, spacer, each, timeline, step, carousel, scroll, deck, slide
-- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient
+- content: text, image, code, badge, avatar, callout, icon, tile, scene, rect, circle, ellipse, line, path, polygon, label, glyph, group, define, use, gradient
 - data: stat, rating, chart, chart-line, chart-rule, chart-band, chart-note, meter, table, table-column, compare, compare-row, details, detail, schedule, board, tree, flow
 - input: button, link, check, switch, radio, select, date-picker, stepper, slider, input, segmented, menu, menu-item
 - navigation: screen, tabs, tab, breadcrumb, pagination
@@ -876,7 +876,7 @@ ELEMENTS
           list-item "Hire two in support"
           list-item "Open the Denver office"
 
-  scene "<text>"  — EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon and label, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.
+  scene "<text>"  — EXPERIMENTAL: a picture or animation you paint yourself from shapes, for what no other element shows (a goal celebration, a rabbit hopping, a car on a road). Draw back to front on a w×h canvas with rect, circle, ellipse, line, path, polygon, label and icon, in theme colors (accent, bad, ink, surface, line…) where you can, and animate any prop as a formula of t, the seconds since it started; give a shape, group or use on= to make it pressable (a machine, a node), with selected= to outline it and tip= to label it while hovered.
     "<text>" (required)  What the picture shows, in a few words, for screen readers.
     w=<number>  Width of the drawing area, in scene pixels. Shapes use these coordinates; the scene is scaled to fit the screen.
     h=<number>  Height of the drawing area, in scene pixels.
@@ -885,7 +885,7 @@ ELEMENTS
     bg=<string>  Background color behind everything.
     maxw=<number>  The widest it's shown, in screen pixels, centered; it still shrinks on a narrower screen. A phone drawn at w=393: maxw=295.
     scale=<number>  Show it at this share of its own w (0.1 to 1), centered, like maxw={w * scale}.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient
     example:
       scene "The sun rising over hills" w=600 h=300 duration=4 bg="#0B1D3A"
         # Inside a scene only: t (seconds) and PI, and sin, cos, tan, atan2, sqrt, clamp(x, lo, hi), lerp(a, b, u),
@@ -922,6 +922,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       rect x=40 y=40 w=160 h=90 rx=12 fill="#F4A261" rotate={t*20}
@@ -943,6 +944,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       circle x={80 + 200*ease(t, 0, 2)} y=120 r=30 fill="#E63946"
@@ -965,6 +967,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       ellipse x=300 y=200 rx=120 ry=40 fill="#2A9D8F"
@@ -986,6 +989,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       line x1=20 y1=200 x2=580 y2=200 stroke="#FFFFFF" width=4 dash="16 12"
@@ -1005,6 +1009,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       path d="M20 220 Q160 {120 + 40*sin(t*2)} 300 220 T580 220 L580 300 L20 300 Z" fill="#264653"
@@ -1024,6 +1029,7 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       polygon points="300,40 380,180 220,180" fill="#E9C46A"
@@ -1035,6 +1041,7 @@ ELEMENTS
     size=<number>  Text size in scene pixels.
     weight=<light|regular|bold>  light (large calm figures: 72°, a clock), regular or bold.
     align=<left|center|right>  Which end of the words sits at x.
+    id=<name>  Its name, for after= on a later shape.
     fill=<string>  Fill. Prefer a theme color, which matches the app and dark mode: accent, good, warn, bad, ink, muted, surface, raised, line, onAccent or series1-series6, faded like "bad 15%". Otherwise "#hex", rgb() or hsl(), or url(id) for a gradient. "none" for no fill.
     stroke=<string>  Outline color, like fill (stroke=line for a quiet border). No outline unless set.
     width=<number>  Outline width in scene pixels.
@@ -1047,9 +1054,31 @@ ELEMENTS
     selected=<condition>  Selection outline while true.
     tip=<string>  Shown while hovered or focused.
     name=<string>  Screen-reader name.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       label "GOAL!" x=300 y=120 size={60 + 20*wave(t, 1)} weight=bold align=center fill="#FFFFFF"
+
+  glyph  — An icon in a scene, written icon inside one (glyph works too): the app's own icons, at any size and color, drawn from its left edge and centered on y like a label. Give it on= to make it a button: an app on a phone, a control.
+    name=<string, required>  Which icon: the same names as icon's name=, like sun, heart or arrow-right. It may hold a {formula}.
+    x=<number>  Left edge.
+    y=<number>  Its middle, down.
+    size=<number>  Width and height in scene pixels.
+    fill=<string>  Its color, like a shape's fill: a theme color (accent, ink, onAccent…) or "#hex".
+    opacity=<number>  0 (invisible) to 1 (solid).
+    rotate=<number>  Turn it by this many degrees around its center (a formula of t spins it).
+    shadow=<sm|md|lg>  A soft shadow under it, so it sits above what's behind.
+    glow=<boolean>  A soft light around it in its own color: a sun, a lamp, a live dot.
+    label=<string>  What screen readers call it when it's pressable. Default: its tip, else the icon's name.
+    on=<action>  Makes it pressable, like group's on=.
+    selected=<condition>  Selection outline while true.
+    tip=<string>  Shown while hovered or focused.
+    after=<name>  Starts after a label's words, like group's after=.
+    only inside: scene, group, define
+    example:
+      icon name=sun x=40 y=60 size=48 fill=warn glow=true
+      label "Phoenix" id=city x=40 y=130 size=24 fill=ink
+      icon name=arrow-right after=city x=8 y=130 size=24 fill=accent
 
   group  — Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.
     x=<number>  Moves everything across.
@@ -1057,21 +1086,28 @@ ELEMENTS
     rotate=<number>  Turns everything, in degrees, around the group's x and y.
     scale=<number>  Grows or shrinks everything.
     opacity=<number>  Fades everything, 0 to 1.
+    clip=<boolean>  Shapes inside are cut to the group's w×h box, rounded by rx: glows inside a phone screen, a map in a card.
+    w=<number>  Width of the clip=true box, from the group's x.
+    h=<number>  Height of the clip=true box, from the group's y.
+    rx=<number>  Corner rounding of the clip=true box.
     on=<action>  Actions when it's pressed (click, tap, Enter), like a button's on=; makes it pressable and a Tab stop. Inside the scene's each they see the item: on=set:sel:{m.id}.
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    after=<name>  Starts at the end of the words of the label with this id, drawn before it: x= is then the gap from there.
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient
     only inside: scene, group, define
     example:
       group x={600*((t/3) % 1)} y=200
         rect x=-40 y=-20 w=80 h=24 rx=6 fill="#E63946"
         circle x=-22 y=6 r=9 fill="#222222"
         circle x=22 y=6 r=9 fill="#222222"
+      group x=20 y=20 w=200 h=120 rx=24 clip=true
+        circle x=180 y=10 r=90 fill="accent 40%" glow=true
 
   define "<text>"  — A reusable drawing: name it, draw it under this line around 0,0, and draw it anywhere with use. It reads names its use passes in args.
     "<text>" (required)  The drawing's name, used by use.
-    children: rect, circle, ellipse, line, path, polygon, label, group, use, define, gradient
+    children: rect, circle, ellipse, line, path, polygon, label, glyph, group, use, define, gradient
     only inside: scene
     example:
       define "cactus"
@@ -1090,6 +1126,7 @@ ELEMENTS
     selected=<condition>  Draws a selection outline while true, e.g. selected={sel == m.id}.
     tip=<string>  Words shown in a small tag while it's hovered or focused; may hold {formulas}.
     name=<string>  What screen readers call it. Default: the words of its labels, else its tip.
+    after=<name>  Starts after a label's words, like group's after=.
     only inside: scene, group, define
     example:
       use "cactus" x=120 y=300 scale=1.2 args={{h: 70}}

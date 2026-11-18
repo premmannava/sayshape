@@ -40,15 +40,23 @@ export function invert(m: Matrix): Matrix | null {
   return [m[3] / det, -m[1] / det, -m[2] / det, m[0] / det, (m[2] * m[5] - m[3] * m[4]) / det, (m[1] * m[4] - m[0] * m[5]) / det];
 }
 
-/** One drawn outline of a pressable region, in its own coordinates, with the transform to canvas pixels. */
-export type Geom =
+/** A clip=true group's rounded box, in the group's coordinates, with the transform to canvas pixels. */
+export interface ClipRect { m: Matrix; x: number; y: number; w: number; h: number; r: number }
+
+/**
+ * One drawn outline of a pressable region, in its own coordinates, with the
+ * transform to canvas pixels, and the clip=true groups it was drawn inside
+ * (only the part inside every one of them shows, so only that part presses).
+ */
+export type Geom = (
   | { kind: "rect"; m: Matrix; x: number; y: number; w: number; h: number; r?: number; text?: boolean }
   | { kind: "ellipse"; m: Matrix; x: number; y: number; rx: number; ry: number }
   /** A filled outline of one or more rings (a path's subpaths), filled nonzero as the canvas fills it. */
   | { kind: "poly"; m: Matrix; rings: ReadonlyArray<ReadonlyArray<readonly [number, number]>> }
   | { kind: "line"; m: Matrix; x1: number; y1: number; x2: number; y2: number; width: number }
   /** An outline drawn but not filled (a path with only a stroke): pressed near its line. */
-  | { kind: "polyline"; m: Matrix; pts: ReadonlyArray<readonly [number, number]>; width: number };
+  | { kind: "polyline"; m: Matrix; pts: ReadonlyArray<readonly [number, number]>; width: number }
+) & { clips?: readonly ClipRect[] };
 
 /** A pressable shape, group or use, as drawn this frame. */
 export interface SceneRegion {
@@ -171,11 +179,18 @@ export function boundsOf(pts: ReadonlyArray<readonly [number, number]>, pad = 0)
   return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad };
 }
 
-/** The upright box around a region's outlines, in canvas pixels. */
+/** The upright box around a clip, in canvas pixels. */
+export const clipBounds = (c: ClipRect): Rect | null => boundsOf(outline({ kind: "rect", ...c }));
+
+/** The upright box around a region's outlines, in canvas pixels, cut to its clips; null when nothing of it shows. */
 export function regionBounds(r: SceneRegion): Rect | null {
   let out: Rect | null = null;
   for (const g of r.geoms) {
-    const b = boundsOf(outline(g), g.kind === "line" || g.kind === "polyline" ? Math.max(LINE_SLOP, lineWidthOnScreen(g) / 2) : 0);
+    let b = boundsOf(outline(g), g.kind === "line" || g.kind === "polyline" ? Math.max(LINE_SLOP, lineWidthOnScreen(g) / 2) : 0);
+    for (const c of g.clips ?? []) {
+      const cb = clipBounds(c);
+      b = b && cb ? intersect(b, cb) : null;
+    }
     if (!b) continue;
     out = out ? union(out, b) : b;
   }
@@ -198,8 +213,21 @@ function lineWidthOnScreen(g: Extract<Geom, { kind: "line" | "polyline" }>): num
   return g.width * Math.sqrt(Math.abs(g.m[0] * g.m[3] - g.m[1] * g.m[2]));
 }
 
-/** Whether a canvas-pixel point is on this geometry: inside its outline, or near its line. */
+/** Whether a canvas-pixel point is inside a clip's rounded box. */
+export function inClip(c: ClipRect, px: number, py: number): boolean {
+  const inv = invert(c.m);
+  if (!inv) return false;
+  const [x, y] = apply(inv, px, py);
+  if (x < c.x || x > c.x + c.w || y < c.y || y > c.y + c.h) return false;
+  // Outside a rounded corner's curve is cut off too.
+  const r = Math.max(0, Math.min(c.r, c.w / 2, c.h / 2));
+  const cx = Math.min(Math.max(x, c.x + r), c.x + c.w - r), cy = Math.min(Math.max(y, c.y + r), c.y + c.h - r);
+  return (x - cx) ** 2 + (y - cy) ** 2 <= r * r + 1e-9;
+}
+
+/** Whether a canvas-pixel point is on this geometry (inside its outline, or near its line) and inside every clip around it. */
 export function geomHit(g: Geom, px: number, py: number): boolean {
+  if (g.clips && !g.clips.every((c) => inClip(c, px, py))) return false;
   if (g.kind === "line" || g.kind === "polyline") {
     const pts = outline(g), reach = Math.max(LINE_SLOP, lineWidthOnScreen(g) / 2);
     for (let i = 1; i < pts.length; i++) {

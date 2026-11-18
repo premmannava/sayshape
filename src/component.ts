@@ -324,9 +324,11 @@ export interface ComponentDef {
    * math), or, with anyNames, names it fills in itself when it draws (the
    * params a drawing is used with), so the parser doesn't warn that nothing
    * defines them. Only lines inside the element see these; the element
-   * evaluates those lines itself, with the same functions.
+   * evaluates those lines itself, with the same functions. renames swaps an
+   * element written inside it for another, silently: a scene reads icon as
+   * its own glyph, since the main icon element is laid out, not drawn.
    */
-  provides?: { names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions };
+  provides?: { names?: readonly string[]; anyNames?: boolean; functions?: ExpressionFunctions; renames?: Readonly<Record<string, string>> };
   /** Restrict where this component may appear. */
   parents?: readonly string[];
   /** A short spec snippet for docs and the model prompt. */
