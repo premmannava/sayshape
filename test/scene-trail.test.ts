@@ -126,8 +126,8 @@ describe("trail: budget", () => {
       expect(flakes - 150).toBeLessThanOrEqual(MAX_TRAIL_DRAWS);
       expect(texts(ui, "END")).toHaveLength(1);
     }
-    // Evenly: 1800 asked for, 600 allowed, so every flake keeps 4 of its 12.
-    expect(fillsOf(ui, "#FFFFFF").length - 150).toBe(600);
+    // Evenly: 1800 asked for, 300 allowed, so every flake keeps 2 of its 12.
+    expect(fillsOf(ui, "#FFFFFF").length - 150).toBe(MAX_TRAIL_DRAWS);
     ui.destroy();
   });
 

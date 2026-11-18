@@ -60,4 +60,12 @@ segmented bind=speed options={[1, 5, 20]}`,
     each items={range(30)} as=i
       rect x={i*20 + 6} y={220 - 20 - 90*random(i + 40)} w=5 h=6 fill="#FFD166" opacity={0.5 + 0.5*random(i + 80)}
   label "Harbor at night" x=24 y=36 size=22 weight=bold fill="#FFFFFF"`,
+  orbitTrail: `scene "A planet leaving a trail" w=600 h=340 duration=8 bg="#0B1026" light=300,170
+  circle x=300 y=170 r=26 fill="#FFD166" glow=true
+  group x={300 + 200*cos(t*0.785)} y={170 + 110*sin(t*0.785)} trail=1.2 z={sin(t*0.785)}
+    circle x=0 y=0 r=14 fill="#4CC9F0" shine=true
+  circle x={-20 + 640*((t % 2.5)/2.5)} y={300 - 200*sin(PI*(t % 2.5)/2.5)} r=10 fill=warn trail=0.4 trail-count=10`,
+  snowstormTrails: `scene "Snowstorm with streaks" w=600 h=340 duration=10 bg="#16324F"
+  each items={range(150)} as=i
+    circle x={(i*37 + t*(30 + 20*random(i))) % 620 - 10} y={(i*53 + t*(40 + 30*random(i+7))) % 360 - 10} r={1.5 + 3*random(i+3)} fill="#FFFFFF" opacity={0.5 + 0.5*random(i+11)} trail=0.3`,
 };

@@ -28,7 +28,7 @@ import { mul, type Matrix } from "./interact";
 import { points } from "./path";
 
 /** The most shapes trail copies draw in one frame, all trails together. */
-export const MAX_TRAIL_DRAWS = 600;
+export const MAX_TRAIL_DRAWS = 300;
 /** The most copies one trail draws (trail-count=). */
 export const MAX_TRAIL_COUNT = 24;
 /** The longest trail, in scene seconds. */
