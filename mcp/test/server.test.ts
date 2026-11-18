@@ -41,6 +41,13 @@ describe("SayShape MCP server", () => {
     expect(client.getInstructions()).toMatch(/show_interface/);
   });
 
+  it("tells the model that restyle requests are answered in chat, and that the interface's words are for the person", async () => {
+    const client = await connect();
+    expect(client.getInstructions()).toMatch(/restyle an interface \(dark mode, bigger text\)\? Its theme and sizes follow the chat app: say so in a sentence/);
+    expect(docsText([], ["chat"])).toMatch(/never how you made or checked it/);
+    expect(guideText()).toMatch(/never how you made or checked it/);
+  });
+
   it("carries a short quick start in show_interface: the syntax, every element's name and which to pick for what", async () => {
     const client = await connect();
     const show = (await client.listTools()).tools.find((t) => t.name === "show_interface")!;
