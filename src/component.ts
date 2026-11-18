@@ -279,6 +279,11 @@ export interface WheelContext extends PressContext {
   ctrlKey: boolean;
   /** Shift held: many mice scroll sideways with Shift and the wheel. */
   shiftKey: boolean;
+  /**
+   * A finger swipe on a touch screen, already locked to one axis by the engine (the other
+   * delta is 0). Scroll only by it; never zoom or do anything else, or the page can't scroll.
+   */
+  touch?: boolean;
 }
 
 /** One entry in the guide's "pick by what you're showing" list (see ComponentDef.picks). */

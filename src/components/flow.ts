@@ -648,7 +648,8 @@ flow "Claim approval" items=steps edges=edges bind=picked`,
     }
     const moved = !!v.dragMoved;
     delete v.dragX; delete v.dragFrom; delete v.dragMoved;
-    if (!moved) pressFlow(ctx);
+    // Moved, or taken over by the browser (a page scroll): nothing is pressed.
+    if (!moved && !ctx.cancelled) pressFlow(ctx);
     return false;
   },
   wheel(ctx) {

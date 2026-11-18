@@ -670,7 +670,7 @@ export class SayShape {
    * Scroll whatever is at (x, y): the element under the point first, then each element under
    * it in turn (a scrolling element under a button inside it), until one uses the movement.
    */
-  private scrollAt(x: number, y: number, deltaX: number, deltaY: number, mods: { ctrlKey: boolean; shiftKey: boolean }): boolean {
+  private scrollAt(x: number, y: number, deltaX: number, deltaY: number, mods: { ctrlKey: boolean; shiftKey: boolean; touch?: boolean }): boolean {
     const first = this.targetAt(x, y);
     const targets: HitTarget[] = first ? [first] : [];
     for (let i = this.hits.length - 1; i >= 0; i--) {
@@ -2519,9 +2519,13 @@ export class SayShape {
         this.invalidate("paint");
       }
     };
-    // Touch: a vertical swipe over a scrolling element scrolls it (the page's own touch-action
-    // would otherwise take it), and the press it started on doesn't fire.
-    let touch: { x: number; y: number; lastY: number; scrolled: boolean; claims: boolean } | null = null;
+    // Touch: one gesture, one axis, one owner. The first TOUCH_LOCK px of movement lock the axis;
+    // the first move after that picks the owner, once: an element under the finger that can still
+    // scroll that way (a sideways table, an inner scroll region not at its edge) takes the whole
+    // gesture, otherwise the page does and nothing inside ever takes it back (a browser can't resume
+    // its own scroll once a move was prevented, so switching mid-gesture would freeze the page).
+    // At an edge, then, the page gets the next swipe. The press it started on never fires.
+    let touch: { x: number; y: number; lastX: number; lastY: number; axis: "x" | "y" | null; owner: "inner" | "page" | null; claims: boolean } | null = null;
     const onTouchStart = (e: TouchEvent) => {
       const t = e.touches.length === 1 ? e.touches[0] : undefined;
       if (!t || this.popup) { touch = null; return; }
@@ -2529,22 +2533,36 @@ export class SayShape {
       const x = t.clientX - r.left, y = t.clientY - r.top;
       // On a shape that's dragged up or down, the finger moves it, not the page (canvas touch-action is pan-y).
       const at = this.targetAt(x, y);
-      touch = { x, y, lastY: y, scrolled: false, claims: !!(at && this.regionOf(at)?.claimsSwipe) };
+      touch = { x, y, lastX: x, lastY: y, axis: null, owner: null, claims: !!(at && this.regionOf(at)?.claimsSwipe) };
     };
     const onTouchMove = (e: TouchEvent) => {
       const t = e.touches.length === 1 ? e.touches[0] : undefined;
       if (touch?.claims && e.cancelable) { e.preventDefault(); return; }
-      if (!touch || !t || this.dragging) return;
-      const y = t.clientY - c.getBoundingClientRect().top;
-      if (!touch.scrolled && Math.abs(y - touch.y) < 6) return;
-      if (this.scrollAt(touch.x, touch.y, 0, touch.lastY - y, { ctrlKey: false, shiftKey: false })) {
-        e.preventDefault();
-        touch.scrolled = true;
-        touch.lastY = y;
-        // The finger is scrolling, not pressing: the release mustn't press what it started on.
-        this.pressed = null;
-        this.swallowRelease = true;
+      if (!touch || !t || touch.owner === "page") return;
+      const r = c.getBoundingClientRect();
+      const x = t.clientX - r.left, y = t.clientY - r.top;
+      if (!touch.axis) {
+        const dx = x - touch.x, dy = y - touch.y;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < TOUCH_LOCK) return;
+        touch.axis = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
       }
+      if (this.dragging) {
+        // Sideways, a drag the engine follows through pointer events (a table's rows) moves it.
+        if (touch.axis === "x") return;
+        // Up and down is decided here, page or inner, never by a pointer drag (which the browser
+        // would cancel anyway): it steps aside and puts back what it moved.
+        this.dragTo("end", touch.x, touch.y, true);
+      }
+      const dx = touch.axis === "x" ? touch.lastX - x : 0, dy = touch.axis === "y" ? touch.lastY - y : 0;
+      touch.lastX = x; touch.lastY = y;
+      const moved = (dx || dy) ? this.scrollAt(touch.x, touch.y, dx, dy, { ctrlKey: false, shiftKey: false, touch: true }) : false;
+      if (!touch.owner) touch.owner = moved ? "inner" : "page";
+      if (touch.owner !== "inner") return;
+      // Ours for the rest of the gesture, at an edge too (the page can't take over mid-gesture).
+      if (e.cancelable) e.preventDefault();
+      // The finger is scrolling, not pressing: the release mustn't press what it started on.
+      this.pressed = null;
+      this.swallowRelease = true;
     };
     const onTouchEnd = () => { touch = null; };
     // The text layer takes touches over words (so a long press selects natively): scrolling elements
@@ -2782,6 +2800,8 @@ export const MIN_TARGET = 24;
  */
 /** How far a press may move and still count as a tap, in CSS pixels. */
 const TAP_SLOP = 4;
+/** How far a finger moves, in CSS px, before a swipe is locked to one axis. */
+const TOUCH_LOCK = 6;
 /** While rules are what changes the screen, the screen reader mirror is rebuilt at most this often. */
 const RULE_A11Y_MS = 1000;
 

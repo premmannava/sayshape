@@ -1096,7 +1096,8 @@ table items=gear key=id bind=picked sort=by direction=dir
     }
     const moved = !!v.dragMoved;
     delete v.dragX; delete v.dragFrom; delete v.dragMoved;
-    if (moved) return false;
+    // Moved, or taken over by the browser (a page scroll): nothing is pressed.
+    if (moved || ctx.cancelled) return false;
     if (onBar && s) {
       // A click on the track centres the thumb there.
       const t = scrollThumb(s, 0);
