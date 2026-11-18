@@ -145,7 +145,7 @@ function propLine(name: string, d: PropDef): string {
 }
 
 function componentBlock(c: ComponentDef, examples: boolean): string {
-  const head = c.text ? `${c.type} "<text>"` : c.type;
+  const head = c.usage ?? (c.text ? `${c.type} "<text>"` : c.type);
   const lines = [`  ${head}  — ${c.description}`];
   if (c.text) lines.push(`    "<text>"${c.text.required ? " (required)" : ""}  ${c.text.description}`);
   for (const [n, d] of Object.entries(c.props)) lines.push(propLine(n, d));
@@ -512,7 +512,7 @@ const COMPACT_TYPES: Record<PropDef["type"], string> = {
 
 /** One line for an element: its signature, where it may go, and what it's for. */
 function compactLine(c: ComponentDef): string {
-  const parts: string[] = [c.type];
+  const parts: string[] = [c.usage ?? c.type];
   // Optional text keeps its brackets: shown like required text, models wrote screen lines with a bare
   // word for their name (screen budget). The legend says the brackets are never written.
   if (c.text) parts.push(c.text.required ? `"text"` : `["text"]`);

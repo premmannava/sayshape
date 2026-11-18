@@ -47,7 +47,7 @@ export { liveOf as sceneRegions, type SceneRegion } from "./interact";
 const MAX_SCENE_HEIGHT = 2000;
 
 /** What a scene and its groups and drawings hold. */
-const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use", "define", "gradient"] as const;
+const SHAPES = ["rect", "circle", "ellipse", "line", "path", "polygon", "label", "group", "use", "define", "gradient", "let"] as const;
 const IN_SCENE = ["scene", "group", "define"] as const;
 
 const num = (description: string, def?: number): PropDef => (def === undefined ? { type: "number", description } : { type: "number", description, default: def });
@@ -486,11 +486,28 @@ const gradient: ComponentDef = {
 };
 
 /**
+ * let a={…}: a named value for the lines below it in its block (lets.ts). The
+ * parser turns the line into name= and value=, which the guide leaves out: usage says how it's written.
+ */
+const letLine: ComponentDef = {
+  ...leaf,
+  type: "let",
+  category: "content",
+  usage: "let a={…}",
+  description: "A named value, worked out each frame, for the lines below it in its block (scene, group, each): x={cos(a)}.",
+  props: {
+    name: { type: "name", description: "The value's name.", required: true, unlisted: true },
+    value: { type: "expression", description: "Its formula.", required: true, unlisted: true },
+  },
+  example: `let a={t*1.5}`,
+};
+
+/**
  * The scene elements. Register them to turn scenes on:
  *   new SayShape(canvas, { components: [...coreComponents, ...sceneComponents] })
  * Leave them out and scenes are off: "scene" is then an unknown element.
  */
-export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient];
+export const sceneComponents: ComponentDef[] = [scene, rect, circle, ellipse, line, path, polygon, label, group, define, use, gradient, letLine];
 
 /** What each feature adds: elements, and props on other elements. Off, they're left out. */
 const FEATURE_PARTS: Record<keyof SceneFeatures, { elements: readonly string[]; props: readonly string[] }> = {

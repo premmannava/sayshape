@@ -321,6 +321,8 @@ export interface ComponentDef {
   description: string;
   /** The positional quoted text, if this component takes one. */
   text?: { description: string; required?: boolean };
+  /** How the line is written, for the guide, when its props are unlisted because they aren't written as name=value (a scene's let a={…}). */
+  usage?: string;
   props: Record<string, PropDef>;
   /** Which child types are allowed. Omit for leaf components. */
   children?: "any" | readonly string[];
