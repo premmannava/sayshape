@@ -53,14 +53,14 @@ ${TABLE.split("\n").map((l) => (l ? "  " + l : l)).join("\n")}`;
       expect(l.font).toMatch(/^\d+ \d+(\.\d+)?px /);
     }
     // Everything those elements drew is there: nothing left out, nothing added.
-    for (const t of ["Weekend plan", "Left", "Right", "Days", "12", "Equipment", "Price", "In stock", "Laptop", "$1,200.00", "41"]) expect(words(ui)).toContain(t);
+    for (const t of ["Weekend plan", "Left", "Right", "Days", "12", "Equipment", "Price", "In stock", "Laptop", "$1,200", "41"]) expect(words(ui)).toContain(t);
   });
 
   it("keeps text, a stat's label and value, and a table's header and cells at distinct places", () => {
     const ui = shown(`${TABLE}text "After"`);
     const at = (t: string) => ui.textLayer.lines.find((l) => l.text === t)!;
     expect(at("Laptop").y).toBeGreaterThan(at("Equipment").y);
-    expect(at("$1,200.00").x).toBeGreaterThan(at("Laptop").x);
+    expect(at("$1,200").x).toBeGreaterThan(at("Laptop").x);
     expect(at("After").y).toBeGreaterThan(at("Keyboard").y);
   });
 });
@@ -92,15 +92,15 @@ describe("text layer: copying a selection", () => {
   it("copies a table row as tab-separated cells, one row per line", () => {
     const ui = shown(TABLE);
     ui.textLayer.select("Laptop", "12");
-    expect(ui.textLayer.selection).toBe("Laptop\t$1,200.00\t12");
+    expect(ui.textLayer.selection).toBe("Laptop\t$1,200\t12");
     ui.textLayer.select("Equipment", "41");
-    expect(ui.textLayer.selection).toBe("Equipment\tPrice\tIn stock\nLaptop\t$1,200.00\t12\nMonitor\t$350.00\t24\nKeyboard\t$79.00\t41");
+    expect(ui.textLayer.selection).toBe("Equipment\tPrice\tIn stock\nLaptop\t$1,200\t12\nMonitor\t$350\t24\nKeyboard\t$79\t41");
   });
 
   it("selects by dragging across a row through the real pointer path", () => {
     const ui = shown(TABLE);
     ui.dragText("Laptop", "12");
-    expect(ui.textLayer.selection).toBe("Laptop\t$1,200.00\t12");
+    expect(ui.textLayer.selection).toBe("Laptop\t$1,200\t12");
   });
 
   it("copies the selection with Ctrl/Cmd+C, and the whole interface when nothing is selected", () => {
@@ -143,7 +143,7 @@ card on=inc:n
     expect(ui.state.selected).toBe("monitor");
     ui.dragText("Keyboard", "41");
     expect(ui.state.selected).toBe("monitor");
-    expect(ui.textLayer.selection).toBe("Keyboard\t$79.00\t41");
+    expect(ui.textLayer.selection).toBe("Keyboard\t$79\t41");
   });
 
   it("still presses a button, and a click clears the selection", () => {

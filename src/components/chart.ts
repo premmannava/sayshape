@@ -1136,9 +1136,10 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       }));
       const drawnSeries = d.seriesSegments.map((runs) => runs.map((run) => run.map((pt) => drawnPoints.get(pt) ?? pt)));
       // Restrained vertical gradient fills use only existing theme colors.
-      // Limit overlapping washes to two series so larger comparisons stay clear.
-      if (drawnSeries.length <= 2) {
-        const floor = oy + d.plot.y + d.plot.h;
+      // Only for one series on a scale that starts at 0: a wash down to a cut-off
+      // axis would make the gap between values look larger than it is.
+      if (drawnSeries.length === 1 && d.zeroY !== null) {
+        const floor = oy + d.zeroY;
         drawnSeries.forEach((runs, k) => {
           const gradient = g.createLinearGradient(0, oy + d.plot.y, 0, floor);
           gradient.addColorStop(0, colorOf(k));
@@ -1152,7 +1153,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
             g.closePath();
             g.save();
             g.fillStyle = gradient;
-            g.globalAlpha *= drawnSeries.length === 1 ? 0.17 : 0.085;
+            g.globalAlpha *= 0.14;
             g.fill();
             g.restore();
           }

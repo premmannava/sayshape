@@ -588,7 +588,7 @@ One column of a table: its header and the field it shows.
 |---|---|---|
 | `"text"` | text | The header. Defaults to the field name. |
 | `field` | name, required | The field of each record to show, e.g. field=price. |
-| `format` | `text` / `number` / `money` / `percent` / `date` / `compact` | text, number (1,200.5), money ($1,200.00), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —. |
+| `format` | `text` / `number` / `money` / `percent` / `date` / `compact` | text, number (1,200.5), money ($1,200, with cents when an amount has them), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —. |
 | `align` | `left` / `right` | left or right. Default: right for numbers, left for text and date. |
 | `tone` | name | sign (negative bad, positive good) or a row field holding good, warn, bad, accent or muted to draw a badge. |
 | `bar` | boolean | A bar behind each number, sized to the column's largest. |

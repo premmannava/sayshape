@@ -182,9 +182,9 @@ table items=byCat
 button "More fun" on="add:spend:{cat: 'Fun', amt: 5}"`);
     expect(ui.diagnostics).toEqual([]);
     expect(ui.warnings).toEqual([]);
-    expect(ui.text()).toEqual(expect.arrayContaining(["Fun", "$30.00", "Food", "$20.00"]));
+    expect(ui.text()).toEqual(expect.arrayContaining(["Fun", "$30", "Food", "$20"]));
     ui.press("button");
-    expect(ui.text()).toContain("$35.00");
+    expect(ui.text()).toContain("$35");
   });
 });
 

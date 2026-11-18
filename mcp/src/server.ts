@@ -157,7 +157,7 @@ const CHAT_EMIT =
 
 /** Extra rules for a model writing into a chat, on top of the generated guide. */
 const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
-Keep it to one focused screen: a card or column with a title, then the content. Prefer row and grid for side-by-side numbers; avoid more than three columns.
+Keep it to one focused screen: a title, any filters just under it, then the content. Use cards for panels, never a card inside a card or one card around everything. Prefer grid for side-by-side numbers; avoid more than three columns.
 Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption.
 ${CHAT_EMIT}
 Output only the spec in show_interface's spec argument, with no Markdown fences.`;
@@ -236,7 +236,7 @@ export function quickStart(withData = false, withMcp = false, textOnly = false, 
     // prop (kind=org): the guides and sayshape_docs keep them all, and this text goes out with
     // every call, so each new element's pick fits.
     `${PICKS_HEADING_SHORT}\n${pickList(components).replace(/, such as [^:\n]*(?=: )/g, "").replace(/ \((?![^)\n]*=)[^)\n]*\)(?=: )/g, "")}`,
-    "IN A CHAT: one card with a title; about 600px wide. Use grid min=140 for side-by-side figures; caption estimated numbers.",
+    "IN A CHAT: under 600px. Title, filters, a few KPIs in grid min=140, one main chart; no nested cards. Caption estimates.",
     "A PRESENTATION: a deck at the top level, not inside a card; a slide per idea, its title in the slide's own text.",
     // Only where those topics exist (ownEngine), so a model that reads this knows when to ask for them.
     ...(ownEngine(textOnly, fileMode) ? ["Polished screens: sayshape_docs topics look (style), motion (entrances), pictures (over photos)."] : []),

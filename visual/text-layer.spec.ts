@@ -82,13 +82,13 @@ test("a table row still selects on a click, and copies as tab-separated cells on
   await drag(page, keyboard, stock);
   expect(await state(page, "selected")).toBe("monitor");
   await page.keyboard.press("Control+C");
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("Keyboard\t$79.00\t41");
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("Keyboard\t$79\t41");
   // A selection over the whole table copies one row per line.
   const header = await box(page, "Equipment", 1);
   await drag(page, header, stock);
   await page.keyboard.press("Control+C");
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
-    .toBe("Equipment\tPrice\tIn stock\nLaptop\t$1,200.00\t12\nMonitor\t$350.00\t24\nKeyboard\t$79.00\t41");
+    .toBe("Equipment\tPrice\tIn stock\nLaptop\t$1,200\t12\nMonitor\t$350\t24\nKeyboard\t$79\t41");
 });
 
 test("a button still presses", async ({ page }) => {
@@ -150,7 +150,7 @@ test("a light, a dark and a forced-colors page all show the highlight", async ({
     const row = await box(page, "Keyboard");
     const stock = await box(page, "41");
     await drag(page, row, stock);
-    expect(await selection(page)).toBe("Keyboard$79.0041");
+    expect(await selection(page)).toBe("Keyboard$7941");
     // The page's own ::selection rule for the layer is in force: it isn't the browser's default for transparent text.
     const bg = await page.evaluate((sel) => {
       const el = document.querySelector<HTMLElement>(`${sel} > div`)!;
@@ -347,14 +347,14 @@ ${Array.from({ length: 120 }, (_, i) => `text "Filler line number ${i}"`).join("
     const result = await page.evaluate(() => {
       const divs = [...document.querySelectorAll<HTMLElement>("[data-sayshape-text] > div")];
       const find = (t: string) => divs.filter((d) => d.textContent === t).pop()!;
-      const a = find("Laptop"), b = find("$350.00");
+      const a = find("Laptop"), b = find("$350");
       getSelection()!.setBaseAndExtent(a.firstChild!, 0, b.firstChild!, b.textContent!.length);
       const data = new DataTransfer();
       const ev = new ClipboardEvent("copy", { clipboardData: data, bubbles: true, cancelable: true });
       document.dispatchEvent(ev);
       return data.getData("text/plain");
     });
-    expect(result).toBe("Laptop\t$1,200.00\nMonitor\t$350.00");
+    expect(result).toBe("Laptop\t$1,200\nMonitor\t$350");
   });
 
   test("by default the layer takes no touches, whatever the device", async ({ page }) => {

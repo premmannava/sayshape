@@ -63,7 +63,7 @@ const LEVELS: Level[] = [
 const registry = new Registry(coreComponents);
 // The MCP server's chat notes (mcp/src/server.ts), copied so this runs without the MCP package.
 const CHAT_NOTES = `You are writing an interface that appears inside a chat conversation, in a narrow column about 600 pixels wide.
-Keep it to one focused screen: a card or column with a title, then the content. Prefer row and grid for side-by-side numbers; avoid more than three columns.
+Keep it to one focused screen: a title, any filters just under it, then the content. Use cards for panels, never a card inside a card or one card around everything. Prefer grid for side-by-side numbers; avoid more than three columns.
 Put the data you know straight into state (lists of records for tables, charts and each). Never claim data is live: if numbers come from your own knowledge, say so in a caption.
 When the person should be able to send something back to you (a choice, a form, an approval), give it a button with on=emit:name, for example on=emit:submit_order. The chat shows a short line like "Submit order", and you also receive the exact action name, its value and every state value; reply to it, or call show_interface again with an updated spec.
 Output only the spec in show_interface's spec argument, with no Markdown fences.`;

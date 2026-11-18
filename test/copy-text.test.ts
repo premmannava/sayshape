@@ -47,7 +47,7 @@ radio "Video" bind=use value=Video
 table "By region" items=rows
   table-column "Region" field=region
   table-column "Sales" field=sales format=money
-`)).toBe(["By region", "Region\tSales", "West\t$12,400.00", "East\t$9,100.00"].join("\n"));
+`)).toBe(["By region", "Region\tSales", "West\t$12,400", "East\t$9,100"].join("\n"));
   });
 
   it("copies a chart as the data behind it", () => {

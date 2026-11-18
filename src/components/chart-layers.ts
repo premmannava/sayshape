@@ -231,7 +231,7 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
     const w = g.measureText(words).width;
     const onLeft = x + 6 + w > right;
     g.textAlign = onLeft ? "right" : "left";
-    g.fillStyle = c.ink;
+    g.fillStyle = c.muted;
     g.fillText(words, onLeft ? x - 6 : x + 6, top + 2);
   }
 
@@ -240,11 +240,12 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
   for (const r of L.rules) {
     const y = oy + r.y;
     g.beginPath();
-    g.setLineDash([6, 4]);
+    g.setLineDash([5, 4]);
     g.moveTo(left, y);
     g.lineTo(right, y);
-    g.lineWidth = 1.5;
-    g.strokeStyle = c.ink;
+    // A reference, not data: thinner and quieter than the series it's read against.
+    g.lineWidth = 1.25;
+    g.strokeStyle = c.muted;
     g.stroke();
     g.setLineDash([]);
   }
@@ -282,7 +283,9 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
   const plateH = size + 6, padX = 5;
   // Points along every line, close enough together that none slips between two of them past a plate.
   const linePoints: Array<[number, number]> = [];
-  for (const ln of L.lines) for (const run of ln.runs) {
+  // The chart's own lines count too, so a label never sits on a series.
+  const runs = [...L.lines.flatMap((ln) => ln.runs), ...(d.kind === "line" ? d.seriesSegments.flat() : [])];
+  for (const run of runs) {
     run.forEach((pt, i) => {
       const next = run[i + 1];
       const steps = next ? Math.max(1, Math.ceil(Math.abs(next.x - pt.x) / 6)) : 1;
@@ -336,9 +339,9 @@ export function paintLayers(ctx: PaintCtx, d: ChartGeometry, ox: number, oy: num
     taken.push([px, py, w, plateH]);
     g.beginPath();
     ctx.roundRect(px, py, w, plateH, theme.radius.sm / 2);
-    g.fillStyle = c.surface;
+    g.fillStyle = c.raised;
     g.fill();
-    g.fillStyle = c.ink;
+    g.fillStyle = c.muted;
     g.textAlign = "left";
     g.fillText(text, px + padX, py + plateH / 2);
   }

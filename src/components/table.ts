@@ -48,7 +48,7 @@ import { fitLines, wrapText } from "../text";
 import type { Theme } from "../theme";
 import type { Box, SayShapeNode, Value } from "../types";
 import { chevron, fillTint, onProp, partBox, runOn, themeFont, toneColor, type Tone } from "./util";
-import { EMPTY_CELL, FORMAT_NAMES, formatNumber, formatValue, isNumericFormat, type FormatName } from "./formats";
+import { EMPTY_CELL, FORMAT_NAMES, formatValue, isNumericFormat, needsCents, type FormatName } from "./formats";
 import { paintGhost, staggered } from "../ghost";
 import { MOTION } from "../design";
 
@@ -59,7 +59,7 @@ export const MAX_TABLE_ROWS = 200;
  * only a safety bound (a whole property schedule of values has about 56).
  */
 export const MAX_TABLE_COLUMNS = 64;
-export { EMPTY_CELL };
+export { EMPTY_CELL, needsCents };
 
 const FORMATS = FORMAT_NAMES;
 const ALIGNS = ["left", "right"] as const;
@@ -76,8 +76,8 @@ const MIN_BAR_TRACK = 24;
 const FADE_W = 28;
 type Align = (typeof ALIGNS)[number];
 const LOCALE = "en-US";
-/** Text columns shrink to this before the table gives up (numbers never shrink). */
-const MIN_TEXT_COLUMN = 72;
+/** Text columns shrink to this before the table scrolls instead (numbers never shrink): enough for a short name, not "Ac…". */
+const MIN_TEXT_COLUMN = 96;
 /** Room for the sort arrow beside a header. */
 const ARROW = 14;
 /** A text cell wraps onto at most this many lines; past that it ends with an ellipsis. */
@@ -201,9 +201,9 @@ const GHOST_ROWS = 5;
 
 // ---------------------------------------------------------------- cells
 
-/** A cell's text, and whether the value didn't suit its column (for one warning). */
-export function cellText(v: Value | undefined, format: Format): { text: string; incompatible: boolean } {
-  return formatValue(v, format);
+/** A cell's text, and whether the value didn't suit its column (for one warning). cents: false drops .00 from whole money amounts. */
+export function cellText(v: Value | undefined, format: Format, cents = true): { text: string; incompatible: boolean } {
+  return formatValue(v, format, cents);
 }
 
 // ---------------------------------------------------------------- sorting
@@ -407,6 +407,8 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
 
   // Cell text, in the order shown.
   let malformed = 0, incompatible = 0;
+  const valueAt = (item: Value | undefined, field: string) => (isRecord(item) ? fieldOf(item, field) : undefined);
+  const cents = specs.map((c) => c.format === "money" && needsCents(order.map((i) => valueAt(items[i], c.field))));
   const numbers: Array<Array<number | undefined>> = [];
   const badges: Array<Array<Tone | undefined>> = [];
   const texts = order.map((i) => {
@@ -415,9 +417,9 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     const nums: Array<number | undefined> = [], tones: Array<Tone | undefined> = [];
     numbers.push(nums);
     badges.push(tones);
-    return specs.map((c) => {
-      const v = isRecord(item) ? fieldOf(item, c.field) : undefined;
-      const r = cellText(v, c.format);
+    return specs.map((c, ci) => {
+      const v = valueAt(item, c.field);
+      const r = cellText(v, c.format, cents[ci]);
       if (r.incompatible && isRecord(item)) incompatible++;
       nums.push(isNumericFormat(c.format) && typeof v === "number" ? v : undefined);
       const t = isRecord(item) && c.tone && c.tone !== "sign" ? fieldOf(item, c.tone) : undefined;
@@ -443,7 +445,7 @@ function tableLayout(box: { w: number; node: SayShapeNode }, p: PropReader, ctx:
     if (ci === 0) return totalLabel;
     if (!isNumericFormat(c.format) || c.format === "percent") return "";
     const vals = numbers.map((row) => row[ci]).filter((n): n is number => n !== undefined);
-    return vals.length ? cellText(vals.reduce((a, b) => a + b, 0), c.format).text : "";
+    return vals.length ? cellText(vals.reduce((a, b) => a + b, 0), c.format, cents[ci]).text : "";
   });
 
   // Column widths from what they hold.
@@ -1157,7 +1159,7 @@ export const tableColumn: ComponentDef = {
   text: { description: "The header. Defaults to the field name." },
   props: {
     field: { type: "name", required: true, description: "The field of each record to show, e.g. field=price." },
-    format: { type: "enum", values: FORMATS, default: "text", description: "text, number (1,200.5), money ($1,200.00), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —." },
+    format: { type: "enum", values: FORMATS, default: "text", description: "text, number (1,200.5), money ($1,200, with cents when an amount has them), percent (42 reads 42%), compact (1.25M) or date (YYYY-MM-DD reads Mar 3, 2026). Number formats show only numbers; other values show —." },
     align: { type: "enum", values: ALIGNS, description: "left or right. Default: right for numbers, left for text and date." },
     tone: { type: "name", description: "sign (negative bad, positive good) or a row field holding good, warn, bad, accent or muted to draw a badge." },
     bar: { type: "boolean", default: false, description: "A bar behind each number, sized to the column's largest." },
