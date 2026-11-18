@@ -17,7 +17,8 @@
  * And another: the look, motion and pictures topics joined sayshape_docs, which adds
  * their names to the topic list in both tools files. And another: the quick start gained one line
  * saying what those topics are for, so models ask for motion too. And another: extend and rank
- * joined the expression functions, which adds their names to the list in the quick start.)
+ * joined the expression functions, which adds their names to the list in the quick start, and so
+ * did range and map.)
  */
 import { describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

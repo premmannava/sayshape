@@ -187,6 +187,8 @@ List functions, for computing instead of typing numbers:
 | `slice(list, 10, 20)`, `slice(name, 0, 1)` | Items (or characters) from a start up to, not including, an end, counting from 0: one page of a `pagination` is `slice(rows, (page - 1) * 10, page * 10)` |
 | `pluck(list, 'revenue')` | One field of every item, as a list (`null` where it's missing), e.g. for a stat's `spark=` |
 | `extend(list, 'q', {total: q.price * q.qty})` | The list with new fields worked out for every item, kept next to the item's own (a field with the same name replaces it, where it was). `q` names the current item, only inside the braces; everything else there means state or a derived value as usual, so `{expected: q.premium + claims * min(q.deductible, claimSize)}` follows `claims` when it changes. The item name must be a plain word in quotes that no state or derived name uses (reported by the parser), and the third argument must be a record written out in braces. The new fields can't read each other: chain a second `extend` for that. An item that isn't a record is an error naming it, as is an expression that fails for one (`extend(): item 4: No field "price"`). The result is new records, so `bind=` into them can't write back, like `group()` |
+| `range(5)`, `range(1, years + 1)` | Whole numbers from a start (0 if left out) up to, not including, the end, like `slice()`: `[0, 1, 2, 3, 4]`, then 1 to `years`. An end before the start gives an empty list; anything but numbers is an error. In a scene, `range()` keeps its own rule (at most 500 items, never an error) |
+| `map(list, 'y', {year: y, total: save * y})`, `map(range(4), 'n', n * n)` | One value per item, worked out by the last argument with the item named as in `extend()` (a plain word in quotes, only inside that argument; nesting is fine). The value can be a record, a number, text or a list. Not a list gives nothing (—), and a failing item is named (`map(): item 2: …`). The result is new values, so like `extend()` it can be shown, charted, totalled and filtered, but not written back to |
 | `rank(list, 'score', 'desc')` | The list in its own order with a `rank` field on each item: 1 for the best, items that tie share a rank (1, 1, 3), and items whose field isn't a number get `null`. `'asc'` (the default, as in `sort()`) makes the smallest 1. Use `sort()` to put the list in order |
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
 | `group(list, 'region')`, `group(list, 'region', 'revenue')`, `group(list, 'region', 'revenue', 'avg')` | Totals per category: one record per region, in the order each first appears, with `count` (how many items) and, given a field, its total under the field's own name: `[{region: "West", count: 12, revenue: 48200}, …]`. A fourth argument works out `'avg'`, `'min'` or `'max'` instead. Totals follow `sum()`'s rules. Values group as they are (`"US"` and `"USA"` are two groups), and items without the field share a `null` group. The groups are new, read-only records |
@@ -202,6 +204,16 @@ table "Quotes" items=ranked
   table-column field=expected
   table-column field=rank
 ```
+
+A list from a formula, like a loan's yearly balance, is a `map()` over a `range()`:
+
+```sayshape
+state loan=200000 rate=5 years=10
+derive plan={map(range(1, years + 1), 'y', {year: y, balance: round(loan * pow(1 + rate / 100, y))})}
+chart "Balance" kind=line items=plan x=year y=balance format=money
+```
+
+`range()` and `map()` make at most 2,000 items per list, and 10,000 in one expression however they nest; past that the value can't be worked out, and is reported like any failing `derive`.
 
 They combine: `{money(sum(filter(tx, 'cat', 'Gas'), 'amount'))}`, `{take(sort(runners, 'miles', 'desc'), 3)}`. There are no methods or template strings: `rows.slice(0, 5)` is written `slice(rows, 0, 5)`, and text with values in it goes in quotes without braces around it (`value="${total}K"`, not `value={"${total}K"}`, which is reported because its braces would show as they are), and a function given more arguments than it takes is reported rather than silently ignoring the extras. Use them for counts and totals, and for the lists people work with: items of a filtered, sorted or searched list keep their place in state, so `bind=t.done` inside `each items=shown` (with `derive shown={filter(tasks, 'owner', owner)}`) ticks the task in `tasks`, and totals worked out from `tasks` follow. To hide items without a derived list, put `if=` on the `each` or on the repeated element. On the `each`, `if=` is read per item, with the item in scope: `each items=tasks as=t if={owner == 'All' || t.owner == owner}`.
 
