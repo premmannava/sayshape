@@ -748,6 +748,8 @@ map bind=selected fit=pins cluster=true controls=true
   },
   wheel(ctx) {
     if (!ctx.props(ctx.target.node).bool("interactive", true)) return false;
+    // A one-finger swipe is the page's scroll, not a zoom (pinching is the browser's, and the buttons zoom).
+    if (ctx.touch) return false;
     const box = ctx.target.box;
     const data = details(box);
     const factor = Math.exp(-Math.max(-600, Math.min(600, ctx.deltaY)) * 0.0015);

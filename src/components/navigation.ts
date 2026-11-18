@@ -1,6 +1,7 @@
 import { toNumber } from "../data";
+import { parseColor } from "../theme";
 import { MOTION } from "../design";
-import type { ComponentDef, LayoutContext, PropReader } from "../component";
+import type { ComponentDef, ElementView, LayoutContext, PropReader } from "../component";
 import type { Box, SayShapeNode, Value } from "../types";
 import { wrapText } from "../text";
 import { fitText } from "./input";
@@ -21,7 +22,36 @@ function selectedTab(tabs: SayShapeNode[], current: Value | undefined, props: (n
   return tabs.find((t) => tabValue(t, props) === current) ?? tabs[0];
 }
 
-interface TabCell { node: SayShapeNode; label: string; value: Value; x: number; w: number; badge: string; pillW: number }
+interface TabCell { node: SayShapeNode; label: string; value: Value; x: number; w: number; badge: string; pillW: number; /** Narrower than its label (one tab wider than the whole strip): only then is its label cut. */ squeezed: boolean }
+
+/** What layout leaves for paint: the tabs at their own widths, and how far the strip scrolls when they don't fit. */
+interface TabsData { cells: TabCell[]; font: string; selected?: string; scroll?: { max: number } }
+
+/** How far the edge fade reaches over tabs scrolled out of sight. */
+const TAB_FADE = 32;
+
+/** The strip's offset, kept in range. */
+function tabOffset(v: ElementView | undefined, d: TabsData): number {
+  const max = d.scroll?.max ?? 0;
+  const x = Math.max(0, Math.min(max, v?.x ?? 0));
+  if (v) v.x = x;
+  return x;
+}
+
+/** Scroll so a tab is wholly in sight (with room for the fade), moving as little as possible. */
+function revealTab(v: ElementView, d: TabsData, cell: TabCell, left: number, width: number): void {
+  const x = tabOffset(v, d), at = cell.x - left;
+  const margin = Math.min(TAB_FADE, Math.max(0, (width - cell.w) / 2));
+  if (at - margin < x) v.x = at - margin;
+  else if (at + cell.w + margin > x + width) v.x = at + cell.w + margin - width;
+  tabOffset(v, d);
+}
+
+/** A color at no opacity, for the end of a fade. */
+function clear(color: string): string {
+  const c = parseColor(color);
+  return c ? `rgba(${c[0]}, ${c[1]}, ${c[2]}, 0)` : "rgba(0, 0, 0, 0)";
+}
 
 /** A tab's count pill: its height, and the space between it and the label. */
 const TAB_PILL_H = 18, TAB_PILL_GAP = 6;
@@ -59,16 +89,25 @@ tabs bind=view
     const badges = kids.map((k) => ctx.props(k).str("badge"));
     const pills = badges.map((b) => (b ? pillWidth(ctx, b, null) : 0));
     const natural = kids.map((k, i) => ctx.measure.width(ctx.props(k).text(), font) + (pills[i] ? pills[i]! + TAB_PILL_GAP : 0) + TAB_PAD * 2);
-    const total = natural.reduce((a, b) => a + b, 0);
-    const scale = total > box.w ? box.w / total : 1;
+    // Each tab at its own width: labels are never cut down to "Day …". Tabs that don't fit scroll
+    // sideways (a swipe, the wheel sideways, the keyboard), the selected one brought into view.
     let x = box.x;
     const cells: TabCell[] = kids.map((k, i) => {
-      const w = natural[i]! * scale;
-      const cell = { node: k, label: ctx.props(k).text(), value: tabValue(k, ctx.props), x, w, badge: badges[i]!, pillW: pills[i]! };
+      const w = Math.min(natural[i]!, box.w);
+      const cell = { node: k, label: ctx.props(k).text(), value: tabValue(k, ctx.props), x, w, badge: badges[i]!, pillW: pills[i]!, squeezed: w < natural[i]! };
       x += w;
       return cell;
     });
-    box.data = { cells, font, selected: selected?.id };
+    const total = x - box.x;
+    const data: TabsData = { cells, font, selected: selected?.id, ...(total > box.w + 0.5 ? { scroll: { max: total - box.w } } : {}) };
+    box.data = data as unknown as Box["data"];
+    const v = ctx.view?.(box.node);
+    if (v) {
+      const at = selected ? cells.findIndex((c) => c.node.id === selected.id) : -1;
+      // A newly selected tab (pressed, or set from state) is scrolled into view; otherwise the strip stays where it was put.
+      if (at >= 0 && v.sel !== at) { v.sel = at; revealTab(v, data, cells[at]!, box.x, box.w); }
+      tabOffset(v, data);
+    }
     const top = box.y + BAR_H + 14;
     let h = BAR_H;
     for (const k of kids) {
@@ -86,18 +125,40 @@ tabs bind=view
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const { cells, font, selected } = box.data as { cells: TabCell[]; font: string; selected?: string };
+    const d = box.data as unknown as TabsData;
+    const { cells, font, selected } = d;
+    const v = ctx.view(box.node);
+    // The keyboard landing on a tab out of sight brings it into view.
+    for (const cell of cells) if (d.scroll && ctx.isFocused(box.node, cell.value)) revealTab(v, d, cell, box.x, box.w);
+    const sx = tabOffset(v, d);
     g.save();
     g.globalAlpha *= 0.8;
     g.fillStyle = c.line;
     g.fillRect(box.x, box.y + BAR_H - 1, box.w, 1);
     g.restore();
+    g.save();
+    if (d.scroll) { g.beginPath(); g.rect(box.x, box.y, box.w, BAR_H); g.clip(); }
+    // Where more tabs are out of sight, labels fade out toward that edge.
+    const fadeLeft = sx > 0.5, fadeRight = !!d.scroll && sx < d.scroll.max - 0.5;
+    const ink = (color: string): string | CanvasGradient => {
+      if (!fadeLeft && !fadeRight) return color;
+      const grad = g.createLinearGradient(box.x, 0, box.x + box.w, 0);
+      const f = Math.min(0.4, TAB_FADE / Math.max(1, box.w));
+      grad.addColorStop(0, fadeLeft ? clear(color) : color);
+      grad.addColorStop(f, color);
+      grad.addColorStop(1 - f, color);
+      grad.addColorStop(1, fadeRight ? clear(color) : color);
+      return grad;
+    };
     g.font = font;
     g.textAlign = "center";
     g.textBaseline = "middle";
     for (const cell of cells) {
+      const cx = cell.x - sx;
+      const l = Math.max(cx, box.x), r = Math.min(cx + cell.w, box.x + box.w);
+      if (r - l < 1) continue;
       const on = cell.node.id === selected;
-      const part = partBox(box, cell.x, box.y, cell.w, BAR_H);
+      const part = partBox(box, cx, box.y, cell.w, BAR_H);
       const hover = ctx.tween(box.node, "tab:hover:" + String(cell.value),
         !on && ctx.isHovered(box.node, cell.value) ? 1 : 0, MOTION.hover);
       const selectedBg = ctx.tween(box.node, "tab:selected:" + String(cell.value), on ? 1 : 0, MOTION.selection);
@@ -106,29 +167,41 @@ tabs bind=view
         if (hover > 0) fillTint(g, c.ink, 0.042 * hover);
         if (selectedBg > 0) fillTint(g, c.accent, 0.05 * selectedBg);
       }
-      g.fillStyle = on ? c.ink : c.muted;
+      g.fillStyle = ink(on ? c.ink : c.muted);
       if (cell.badge) {
         // The label and its count pill are centred together.
         const room = Math.max(0, cell.w - 8 - cell.pillW - TAB_PILL_GAP);
-        const label = fitText(g, cell.label, room);
+        const label = cell.squeezed ? fitText(g, cell.label, room) : cell.label;
         const textW = g.measureText(label).width;
-        const left = cell.x + (cell.w - (textW + TAB_PILL_GAP + cell.pillW)) / 2;
+        const left = cx + (cell.w - (textW + TAB_PILL_GAP + cell.pillW)) / 2;
         g.textAlign = "left";
         g.fillText(label, left, box.y + BAR_H / 2);
         paintPill(ctx, { x: left + textW + TAB_PILL_GAP, y: box.y + (BAR_H - TAB_PILL_H) / 2, w: cell.pillW, h: TAB_PILL_H }, cell.badge, on ? c.accent : c.muted, "soft", null);
         g.font = font;
         g.textAlign = "center";
-      } else g.fillText(fitText(g, cell.label, Math.max(0, cell.w - 8)), cell.x + cell.w / 2, box.y + BAR_H / 2);
+      } else g.fillText(cell.squeezed ? fitText(g, cell.label, Math.max(0, cell.w - 8)) : cell.label, cx + cell.w / 2, box.y + BAR_H / 2);
       if (on) {
         // A slim accent rule on the baseline, rounded at its ends.
-        const underlineX = ctx.tween(box.node, "tabs:underline:x", cell.x + 8, MOTION.navigation);
+        const underlineX = ctx.tween(box.node, "tabs:underline:x", cx + 8, MOTION.navigation);
         const underlineW = ctx.tween(box.node, "tabs:underline:w", Math.max(0, cell.w - 16), MOTION.navigation);
         ctx.roundRect(underlineX, box.y + BAR_H - 2, underlineW, 2, 1);
         g.fillStyle = c.accent;
         g.fill();
       }
-      ctx.addHit(part, { detail: cell.value });
+      // Pressable only where it's in sight.
+      ctx.addHit({ ...partBox(box, l, box.y, r - l, BAR_H), data: d as unknown as Box["data"] }, { detail: cell.value });
     }
+    g.restore();
+  },
+  wheel(ctx) {
+    const d = ctx.target.box.data as unknown as TabsData | undefined;
+    if (!d?.scroll) return false;
+    // Only sideways movement scrolls the strip; up and down stay with the page.
+    const dx = ctx.deltaX || (ctx.shiftKey ? ctx.deltaY : 0);
+    if (!dx) return false;
+    const v = ctx.view(ctx.target.node), before = tabOffset(v, d);
+    v.x = before + dx;
+    return Math.abs(tabOffset(v, d) - before) > 0.01;
   },
   press(ctx) {
     const key = ctx.props(ctx.target.node).raw("bind");

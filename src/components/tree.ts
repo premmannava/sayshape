@@ -678,7 +678,8 @@ tree "Northwind Mutual" items=people parent=manager label=name detail=role bind=
     }
     const moved = !!v.dragMoved;
     delete v.dragX; delete v.dragFrom; delete v.dragMoved;
-    if (!moved) pressTree(ctx);
+    // Moved, or taken over by the browser (a page scroll): nothing is pressed.
+    if (!moved && !ctx.cancelled) pressTree(ctx);
     return false;
   },
   wheel(ctx) {

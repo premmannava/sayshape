@@ -965,7 +965,8 @@ schedule "Support rota" items=shifts date=day start=from end=to label=name tone=
     }
     const moved = !!v.dragMoved;
     delete v.dragX; delete v.dragFrom; delete v.dragMoved;
-    if (!moved) pressSchedule(ctx);
+    // Moved, or taken over by the browser (a page scroll): nothing is pressed.
+    if (!moved && !ctx.cancelled) pressSchedule(ctx);
     return false;
   },
   wheel(ctx) {
