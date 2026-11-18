@@ -1,6 +1,6 @@
 /**
  * Scene benchmarks: one frame of the factory monitor, the same scene with
- * nothing pressable, 150 shapes with and without z, and finding what's under the pointer.
+ * nothing pressable, 150 shapes with and without z or trails, and finding what's under the pointer.
  *
  *   npm run bench -- bench/scene.bench.ts
  *
@@ -63,6 +63,24 @@ describe("scene depth", () => {
   bench("150 shapes sorted by z", () => {
     deep.sayshape.invalidate("paint");
     deep.sayshape.renderNow();
+  });
+});
+
+/** The snowstorm with trail=0.3 on every flake: 12 copies each asked for, thinned to the 600-shape trail budget. */
+describe("scene trails", () => {
+  const plain = render(FLAKES, { components, width: 1000, animate: true, clock: true });
+  const trailed = render(FLAKES.replace('fill="#FFFFFF"', 'fill="#FFFFFF" trail=0.3'), { components, width: 1000, animate: true, clock: true });
+  // Past the first frame (nothing behind it yet) so every frame draws its trails.
+  plain.clock.advance(1000);
+  trailed.clock.advance(1000);
+
+  bench("150 moving shapes, no trail", () => {
+    plain.sayshape.invalidate("paint");
+    plain.sayshape.renderNow();
+  });
+  bench("150 moving shapes with trail=0.3", () => {
+    trailed.sayshape.invalidate("paint");
+    trailed.sayshape.renderNow();
   });
 });
 

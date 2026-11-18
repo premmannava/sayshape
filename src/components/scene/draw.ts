@@ -23,6 +23,7 @@ import { highlightOf } from "./light";
 import { shakeOffset, shakeSeed } from "./shake";
 import { letScope } from "./lets";
 import { drawByDepth, hasDepth, type DepthHooks } from "./depth";
+import { drawTrail, type TrailHooks, type TrailState } from "./trail";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -134,6 +135,8 @@ export interface Frame {
   features?: { particles: boolean; reflect: boolean };
   /** The scene line's id, seeding its shake. */
   sceneId?: string;
+  /** Set while the scene moves: trail= copies' budget and the clock they read (trail.ts). */
+  trails?: TrailState;
   /** Told about each element just before it's drawn (the drawing check uses this to know what drew what). */
   onNode?: (node: SayShapeNode) => void;
   /** Scene coordinates to canvas pixels, through every group, use and turn so far. */
@@ -212,6 +215,8 @@ function solidOf(raw: string | undefined, f: Frame, scope: Scope): string | null
  */
 function depthOn(node: SayShapeNode, scope: Scope, f: Frame, own: string | null): boolean {
   if (node.props.glow === undefined && node.props.shadow === undefined) return false;
+  // Trail copies skip the blur: faint copies don't show it, and it's the costly part.
+  if (f.trails?.inCopy) return false;
   const g = f.g;
   const t = g.getTransform();
   const k = Math.sqrt(Math.abs(t.a * t.d - t.b * t.c)) || 1;
@@ -365,6 +370,7 @@ export function drawAll(nodes: readonly SayShapeNode[], scope: Scope, f: Frame):
 
 type Leaf = (node: SayShapeNode, scope: Scope, f: Frame) => void;
 const DEPTH: DepthHooks = { walk: drawBlock, draw: drawOne, z: (node, scope) => numOf(node, "z", scope, 0), maxShapes: MAX_SCENE_SHAPES };
+const TRAIL: TrailHooks = { draw: drawShape, num: numOf, str: strOf, maxShapes: MAX_SCENE_SHAPES, maxSteps: MAX_SCENE_STEPS };
 
 /** Work through a block's lines, handing each one to draw to leaf (drawOne, or depth.ts noting it). */
 function drawBlock(nodes: readonly SayShapeNode[], scope: Scope, f: Frame, leaf: Leaf): void {
@@ -434,6 +440,8 @@ function drawEach(node: SayShapeNode, scope: Scope, f: Frame, leaf: Leaf): void 
 }
 
 function drawOne(node: SayShapeNode, scope: Scope, f: Frame): void {
+  // trail= (trail.ts): fading copies at earlier times first, so the line draws on top of them.
+  if (node.props.trail !== undefined && f.trails && !f.trails.inCopy) drawTrail(node, scope, f, TRAIL);
   const region = openRegion(node, scope, f);
   drawShape(node, scope, f);
   closeRegion(region, f);

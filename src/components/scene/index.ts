@@ -30,7 +30,8 @@ import type { Scope } from "../../expr";
 import type { Box, Rect } from "../../types";
 import type { Theme } from "../../theme";
 import { SCENE_FUNCTIONS, SCENE_NAMES } from "./functions";
-import { numOf, paintScene, strOf, type Frame } from "./draw";
+import { MAX_SCENE_STEPS, numOf, paintScene, strOf, type Frame } from "./draw";
+import { MAX_TRAIL_DRAWS } from "./trail";
 import { lightPoint } from "./light";
 import { apply } from "./interact";
 import { locateOf } from "../../each";
@@ -41,6 +42,7 @@ import { intersect, liveOf, outerGeoms, strokes, regionBounds, regionHit, region
 
 export { SCENE_FUNCTIONS, MAX_RANGE } from "./functions";
 export { MAX_SCENE_SHAPES, MAX_SCENE_STEPS, MAX_USE_DEPTH, THEME_COLORS } from "./draw";
+export { MAX_TRAIL_DRAWS, MAX_TRAIL_COUNT, MAX_TRAIL_SECONDS } from "./trail";
 export { reviewScene, reviewScenes, MAX_DRAWING_PROBLEMS, PHONE_WIDTH, type MeasureText } from "./review";
 export { liveOf as sceneRegions, type SceneRegion } from "./interact";
 
@@ -57,6 +59,10 @@ const color = (description: string): PropDef => ({ type: "string", description }
 /** z= (depth.ts): said in full once, on group; shapes and use take it unlisted. */
 const Z: PropDef = num("Higher draws in front of siblings and each copies, z={sin(a)}. Shapes take it too.", 0);
 const Z_SHAPE: PropDef = { ...num("Like group's z."), unlisted: true };
+/** trail= (trail.ts): said once, on group, with trail-count in its words; unlisted everywhere else. */
+const TRAIL: PropDef = num("Seconds of fading copies left behind as it moves; trail-count= how many (12). Shapes too.");
+const TRAIL_COUNT: PropDef = { ...num("How many trail copies, 1 to 24.", 12), unlisted: true };
+const TRAIL_SHAPE: Record<string, PropDef> = { trail: { ...num("Like group's trail."), unlisted: true }, "trail-count": TRAIL_COUNT };
 
 /** Props every shape takes. */
 const PAINT: Record<string, PropDef> = {
@@ -69,6 +75,7 @@ const PAINT: Record<string, PropDef> = {
   shadow: { type: "enum", values: ["sm", "md", "lg"], description: "A soft shadow under it, so it sits above what's behind." },
   glow: { type: "boolean", description: "A soft light around it in its own color: a sun, a lamp, a live dot.", default: false },
   z: Z_SHAPE,
+  ...TRAIL_SHAPE,
 };
 /** For filled shapes only. */
 const SHINE: Record<string, PropDef> = {
@@ -138,7 +145,9 @@ export function sceneTime(box: Box, ctx: PaintContext, duration: number, loop: b
   view.played = played;
   let t = loop ? played % duration : Math.max(0, Math.min(duration, played));
   if (t < 0) t += duration;
-  if (r !== 0 && (loop || (r > 0 ? t < duration : t > 0))) ctx.requestFrame();
+  // A non-looping scene's trails (trail.ts) keep fading for their length after the end.
+  const tail = r > 0 && !loop ? Number(view.trailTail ?? 0) : 0;
+  if (r !== 0 && (loop || (r > 0 ? t < duration || played < duration + tail : t > 0))) ctx.requestFrame();
   return t;
 }
 
@@ -227,7 +236,8 @@ function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeat
   {
     const p = ctx.props(box.node);
     const w = Math.max(1, p.num("w", 600)), h = Math.max(1, p.num("h", 340));
-    const t = sceneTime(box, ctx, p.num("duration", 0), p.bool("loop", true), p.num("rate", 1));
+    const duration = p.num("duration", 0), loop = p.bool("loop", true);
+    const t = sceneTime(box, ctx, duration, loop, p.num("rate", 1));
     const g = ctx.g;
     const sx = box.w / w, sy = box.h / h;
     const f: Frame = {
@@ -243,6 +253,9 @@ function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeat
     const light = lightPoint(box.node.props.light === undefined ? undefined : strOf(box.node, "light", base));
     if (light) f.light = apply(f.m, light[0], light[1]);
     if (ctx.behavior) f.press!.drag = { scene: f.m, w, h, count: 0 };
+    // Trails only while it moves (never a still, reduced motion or the drawing check); last frame's demand thins them evenly.
+    const view = ctx.motion && duration > 0 ? ctx.view(box.node) : undefined;
+    if (view) f.trails = { left: MAX_TRAIL_DRAWS, steps: MAX_SCENE_STEPS, demand: 0, last: Number(view.trailDemand ?? 0), inCopy: false, duration, loop, tail: 0 };
     g.save();
     g.beginPath();
     ctx.roundRect(box.x, box.y, box.w, box.h, ctx.theme.radius.md);
@@ -251,6 +264,7 @@ function paintSceneBox(box: Box, ctx: PaintContext, features: Required<SceneFeat
     g.translate(box.x, box.y);
     g.scale(sx, sy);
     paintScene(f, box.node.children, base, w, h, p.raw("bg") === undefined ? undefined : p.str("bg"));
+    if (view && f.trails) { view.trailDemand = f.trails.demand; view.trailTail = f.trails.tail; }
     g.restore();
     const shown = pressable(box, ctx, f.press!.regions);
     paintFeedback(box, ctx, shown);
@@ -447,7 +461,7 @@ const group: ComponentDef = {
   type: "group",
   category: "content",
   description: "Shapes moved, turned, scaled or faded together: a car and its wheels, a waving arm. Its shapes are placed relative to its x and y.",
-  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), z: Z, ...PRESS, ...HOVER, ...DRAG },
+  props: { x: num("Moves everything across."), y: num("Moves everything down."), rotate: num("Turns everything, in degrees, around the group's x and y."), scale: num("Grows or shrinks everything.", 1), opacity: num("Fades everything, 0 to 1.", 1), shake: num("Like scene's."), z: Z, trail: TRAIL, "trail-count": TRAIL_COUNT, ...PRESS, ...HOVER, ...DRAG },
   children: SHAPES,
   parents: IN_SCENE,
   noBox: true,
@@ -486,6 +500,7 @@ const use: ComponentDef = {
     x: num("Across."), y: num("Down."), rotate: num("Degrees."), scale: num("Size.", 1), opacity: num("0 to 1.", 1),
     args: { type: "expression", description: "A record of the names the drawing reads, like args={{h: 60, lean: -5}}." },
     z: Z_SHAPE,
+    ...TRAIL_SHAPE,
     ...PRESS,
     ...HOVER_SHAPE,
     ...DRAG_SHAPE,
