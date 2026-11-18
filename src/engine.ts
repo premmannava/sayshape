@@ -237,6 +237,8 @@ export class SayShape {
   private starts = new MotionStarts();
   /** This frame: some entrance is waiting to be scrolled into sight (scrolling then repaints). */
   private waitingForSight = false;
+  /** Something painted this frame follows the visible area (a table's sticky header): scrolling repaints. */
+  private followsSight = false;
   /** The part of the canvas in sight, read at most once per frame, when an entrance first asks. */
   private sightArea: Viewport | null = null;
   /** Where each element's entrance was in the last frame, by id, for tools and tests. */
@@ -729,6 +731,7 @@ export class SayShape {
     this.hits = [];
     this.clips = [];
     this.waitingForSight = false;
+    this.followsSight = false;
     this.entrances.clear();
     this.sightArea = null;
     this.text?.collector.begin();
@@ -1035,6 +1038,12 @@ export class SayShape {
         const p = Math.max(0, Math.min(1, (t - start) / ms));
         if (p < 1) this.invalidate("paint");
         return ease === "linear" ? p : ease === "out" ? easeOut(p) : easeInOut(p);
+      },
+      sight: () => {
+        this.followsSight = true;
+        const area = (this.sightArea ??= this.viewport());
+        const clip = this.clips[this.clips.length - 1]?.rect;
+        return { top: Math.max(area.top, clip ? clip.y : -Infinity), bottom: Math.min(area.bottom, clip ? clip.y + clip.h : Infinity) };
       },
       requestFrame: () => this.invalidate("paint"),
       tween: (node, key, target, duration = 220) =>
@@ -2626,7 +2635,7 @@ export class SayShape {
     window.addEventListener("scroll", onScroll, { passive: true });
     this.cleanup.push(() => window.removeEventListener("scroll", onScroll));
     // An entrance waits until its element is scrolled into sight: the page, or any scrolling box the canvas is in.
-    const onSight = () => { if (this.waitingForSight) this.invalidate("paint"); };
+    const onSight = () => { if (this.waitingForSight || this.followsSight) this.invalidate("paint"); };
     // A window that grows taller (a host sizing its frame to the content) shows more without scrolling.
     document.addEventListener("scroll", onSight, { capture: true, passive: true });
     window.addEventListener("resize", onSight, { passive: true });

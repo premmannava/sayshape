@@ -176,6 +176,13 @@ export interface PaintContext {
    * it is 1 at once: check ctx.motion to rest somewhere else.
    */
   progress(box: Box, key: string, ms: number, ease?: "out" | "inOut" | "linear"): number;
+  /**
+   * The part of the canvas people can see, top to bottom in canvas CSS px (the page's visible area,
+   * within any scrolling element around this one; -Infinity/Infinity where unknown, as in Node).
+   * Calling it means the paint follows it: scrolling repaints. For things that stick in view, like a
+   * tall table's header. Optional: contexts with no engine have none.
+   */
+  sight?(): { top: number; bottom: number };
   /** Whether this element reads data that's still loading; paintLoading is drawing it. */
   isLoading(node: SayShapeNode): boolean;
   /**

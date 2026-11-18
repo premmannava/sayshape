@@ -414,7 +414,9 @@ table items=rows key=sku bind=pick
     for (const col of g.columns) {
       expect(col.x).toBeCloseTo(x, 6);
       expect(col.w).toBeGreaterThan(0);
-      expect(monoWidth(col.shownLabel, g.headerFont)).toBeLessThanOrEqual(col.w);
+      // Headers wrap between words; each line fits.
+      for (const l of col.labelLines) expect(monoWidth(l, g.headerFont)).toBeLessThanOrEqual(col.w);
+      expect(col.labelLines.join(" ")).toBe(col.label);
       x += col.w;
     }
     expect(x).toBeCloseTo(box!.w, 6);
@@ -677,7 +679,7 @@ describe("table cells that wrap", () => {
     const note = b!.cells[1]!;
     expect(note.lines.length).toBeGreaterThan(1);
     expect(note.lines.length).toBeLessThanOrEqual(MAX_CELL_LINES);
-    for (const [ci, cell] of b!.cells.entries()) for (const l of cell.lines) expect(monoWidth(l, g.cellFont), l).toBeLessThanOrEqual(g.columns[ci]!.w - 2 * theme.space.md + 1e-6);
+    for (const [ci, cell] of b!.cells.entries()) for (const l of cell.lines) expect(monoWidth(l, g.cellFont), l).toBeLessThanOrEqual(g.columns[ci]!.w - 2 * g.pad + 1e-6);
     expect(a!.h).toBe(rowHeight(theme));
     expect(b!.h).toBe(note.lines.length * lineHeight(theme) + 2 * theme.space.sm);
     expect(b!.h).toBeGreaterThan(a!.h);
