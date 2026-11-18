@@ -23,7 +23,8 @@ const ZIP_FORM = /^\d{5}(-\d{4})?$/;
 
 /** is(text, kind): whether the whole text (spaces around it aside) is one of these. */
 export const TEXT_IS: ReadonlyMap<string, (t: string) => boolean> = new Map<string, (t: string) => boolean>([
-  ["email", (t) => EMAIL.test(t)],
+  // An address is at most 254 characters, and the cap keeps the pattern fast on any text from the host.
+  ["email", (t) => t.length <= 254 && EMAIL.test(t)],
   // http or https, a host with a dot in it, then an optional port and path.
   ["url", (t) => URL_FORM.test(t)],
   // 7 to 15 digits (the most any number has), with spaces, dashes, dots, brackets and a leading + allowed.

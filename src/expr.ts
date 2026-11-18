@@ -819,12 +819,17 @@ export type EvalResult = { ok: true; value: Value } | { ok: false; error: string
 
 /** Evaluate an expression against a scope, with an element's extra functions if any. Never throws. */
 export function evaluate(src: string, scope: Scope, fns?: ExpressionFunctions): EvalResult {
+  // A derived value worked out in the middle of another expression (its scope read it) counts on
+  // its own: the outer expression's count is put back afterwards, not reset.
+  const outer = made;
   try {
     const node = compile(src, fns);
     made = 0;
     return { ok: true, value: run(node, scope) };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  } finally {
+    made = outer;
   }
 }
 
