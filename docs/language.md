@@ -515,7 +515,7 @@ button "{running ? 'Pause' : 'Start'}" on=toggle:running
 
 ## Not JavaScript
 
-Models often reach for code when a spec needs logic. Each kind of code line gets an error saying what to write instead, so one repair can fix it: `let`, `const` and `var` (use `derive name={…}` or `state`), `function` and `return` (use `derive`), `for` and `while` (use `each`), `elif` (use `else if={…}`), `if (…) {` and closing braces (use `if={…}` lines and indentation), `//` comments (use `#`), and sentences of prose.
+Models often reach for code when a spec needs logic. Each kind of code line gets an error saying what to write instead, so one repair can fix it: `let`, `const` and `var` (use `derive name={…}` or `state`; inside a scene, when scenes are on, `let a={…}` is a scene line instead: a value for the lines below it), `function` and `return` (use `derive`), `for` and `while` (use `each`), `elif` (use `else if={…}`), `if (…) {` and closing braces (use `if={…}` lines and indentation), `//` comments (use `#`), and sentences of prose.
 
 ## Comments
 

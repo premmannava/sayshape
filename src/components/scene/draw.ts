@@ -16,6 +16,7 @@ import { flattenPath, rotate, scale, translate, type Geom, type Matrix, type Sce
 import { PATH, placeOf, type Locate } from "../../paths";
 import { dragInfoOf, MAX_DRAGGABLE, type DragInfo } from "./drag";
 import { isScalar } from "../../data";
+import { letScope } from "./lets";
 
 /** The most shapes a scene draws in one frame; past it, the rest are left out. */
 export const MAX_SCENE_SHAPES = 2000;
@@ -330,9 +331,17 @@ function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number,
 
 /** Draw a scene's lines with this scope. Stops quietly at the shape and step limits. */
 export function drawAll(nodes: readonly SayShapeNode[], scope: Scope, f: Frame): void {
+  // A let's name can't be written to below it (drawLines); put back what was there for the lines after this block.
+  const rec = f.press, locate = rec?.locate;
+  try { drawLines(nodes, scope, f); } finally { if (rec && locate) rec.locate = locate; }
+}
+
+function drawLines(nodes: readonly SayShapeNode[], scope: Scope, f: Frame): void {
   for (const node of nodes) {
     if (++f.steps > MAX_SCENE_STEPS || f.shapes >= MAX_SCENE_SHAPES) return;
     if (node.type === "define" || node.type === "gradient") continue;
+    // let a={…} (lets.ts): the lines after it in this block read a; it isn't drawn.
+    if (node.type === "let") { scope = letScope(node, scope, f); letLocate(node, f); continue; }
     if (node.props.if !== undefined) {
       const r = evaluate(wholeExpression(node.props.if) ?? node.props.if, scope, SCENE_FUNCTIONS);
       if (!r.ok || !r.value) continue;
@@ -341,6 +350,12 @@ export function drawAll(nodes: readonly SayShapeNode[], scope: Scope, f: Frame):
     if (node.type === "each") { drawEach(node, scope, f); continue; }
     drawOne(node, scope, f);
   }
+}
+
+/** Below a let, writing its name (on=set:a:…) goes nowhere rather than to state of that name. */
+function letLocate(node: SayShapeNode, f: Frame): void {
+  const rec = f.press, outer = rec?.locate, name = node.props.name;
+  if (rec && outer) rec.locate = (n) => (n === name ? null : outer(n));
 }
 
 function drawEach(node: SayShapeNode, scope: Scope, f: Frame): void {
