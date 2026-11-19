@@ -151,13 +151,6 @@ export function themeFromTokens(tokens: HostTokens, base?: Theme): Theme {
   const given = (tokens.series ?? []).map(color).filter((c): c is string => !!c);
   const series = (given.length ? given : accent ? seriesFromAccent(colors.accent!, surface) : []).map((c) => readable(c, GRAPHIC));
   series.slice(0, 6).forEach((c, i) => { (colors as Record<string, string>)[`series${i + 1}`] = c; });
-  // The theme's own series fill the rest, and they too have to stand out on the host's page.
-  for (let i = series.length; i < 6; i++) {
-    const key = `series${i + 1}` as keyof Theme["colors"];
-    const lifted = readable(from.colors[key], GRAPHIC);
-    if (lifted !== from.colors[key]) colors[key] = lifted;
-  }
-
   const patch: DeepPartial<Theme> = { colors };
   const r = px(tokens.radius, 0, 24);
   if (r !== undefined) patch.radius = { sm: Math.round(r * 0.75), md: Math.round(r), lg: Math.round(r * 1.5) };
