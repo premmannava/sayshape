@@ -92,6 +92,32 @@ describe("phone hit areas (draw small, hit big)", () => {
     console.info(`phone-targets: small buttons stacked ${gap} px apart get ${two!.box.h} px between their neighbours`);
   });
 
+  it.each([320, 375])("at %i in a column's 6 px gaps, regular controls keep 40 and nothing is covered", (width) => {
+    const ui = render(`state a="" plans=["Free","Pro"] plan="Pro" day="2026-11-20" view="Week" n=2
+column
+  input bind=a placeholder="Name"
+  input bind=a placeholder="City"
+  select bind=plan items=plans
+  date-picker bind=day
+  segmented bind=view options="Day,Week,Month" label="Period"
+  stepper "Guests" bind=n min=1 max=9
+  button "Book" on=notify:b
+  button "Cancel" variant=secondary on=notify:c
+  button "Note" size=sm on=notify:n
+  button "Remove" size=sm on=notify:r`, { width, context: "chat" });
+    expect(ui.diagnostics).toEqual([]);
+    expect(overreach(ui.hits)).toEqual([]);
+    const regular = ui.sayshape.theme.control.height;
+    const lows: string[] = [];
+    for (const h of ui.hits.filter((r) => r.focusable)) {
+      // 34 px controls 6 apart: 34 + 3 + 3. Positions are fractional, so allow rounding.
+      if (drawn(h).h >= regular) expect(h.box.h, name(h)).toBeGreaterThanOrEqual(TRIMMED_FLOOR - 1e-6);
+      else if (h.box.h < TRIMMED_FLOOR) lows.push(`${name(h)} ${h.box.h.toFixed(1)}`);
+    }
+    // Below the floor, recorded for the PR: segmented options (drawn 28) and stacked small buttons (drawn 24).
+    console.info(`phone-targets column ${width}: under 40 where 6 px gaps leave no room: ${lows.join(", ") || "none"}`);
+  });
+
   it("presses from the grown area, and still from anywhere on the drawn box", () => {
     const ui = render(FORM, { width: 375, context: "chat" });
     const book = ui.find({ type: "button", text: "Book" }).box!;
