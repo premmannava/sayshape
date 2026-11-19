@@ -29,7 +29,7 @@ import { parse, type ParseResult } from "./parser";
 import { Registry } from "./registry";
 import { Store } from "./state";
 import { CanvasMeasurer, ellipsize, font as fontString, wrapText } from "./text";
-import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
+import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, PHONE_WIDTH, themeFromCSS, type Theme } from "./theme";
 import { applyLook, CHAT_DENSITY, lookKey, type AppliedLook, type Look } from "./look";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
@@ -199,12 +199,16 @@ export interface SayShapeOptions {
   look?: boolean;
   /**
    * Where the view is shown. "chat": inside a chat app's message, which is
-   * the frame and the background. The chat density is then the default look
-   * (tighter type, spacing and controls, list rows on one line where they
-   * fit; a spec's own look density= still wins) and the screen's padding
+   * the frame and the background. The compact scale is then the default
+   * density (tighter type, spacing and controls, list rows on one line where
+   * they fit; a spec's own look density= still wins), surfaces are Hairline
+   * (cards, lists and tables draw a 1px line in the page's color, with no
+   * fill or shadow, whatever density the spec chose) and the screen's padding
    * defaults to CHAT_PADDING. The engine never paints a background of its
    * own (it clears to transparent), so the host leaves its page showing
-   * through. Default: none, the look exactly as before.
+   * through. Default: none, the look exactly as before. On any host, a
+   * canvas narrower than PHONE_WIDTH draws with the theme's phone sizes
+   * where it has them (the compact scale does).
    */
   context?: "chat";
 }
@@ -229,6 +233,8 @@ export class SayShape {
   theme: Theme;
   /** The spec's look line's choices, laid over the host's theme (null: none). */
   private lookChoice: Look | null = null;
+  /** Whether the last layout was narrower than PHONE_WIDTH, so the theme's phone sizes apply. */
+  private phone = false;
 
   private source = "";
   private streaming = false;
@@ -377,6 +383,7 @@ export class SayShape {
     if (!g) throw new Error("SayShape needs a 2D canvas context");
     this.g = g;
     this.measurer = new CanvasMeasurer(g);
+    this.phone = opts.width !== undefined && opts.width < PHONE_WIDTH;
     this.theme = this.resolveTheme();
     this.inspector = new Inspector(this);
     this.editorHost = opts.editor ?? (typeof document !== "undefined" ? domEditorHost(canvas) : noEditor);
@@ -666,6 +673,13 @@ export class SayShape {
     const t = this.clock.now();
     const width = this.opts.width ?? (this.canvas.parentElement?.clientWidth || 600);
     this.width = width;
+    // Crossing PHONE_WIDTH switches the theme's phone sizes on or off, before anything is laid out with them.
+    const phone = width < PHONE_WIDTH;
+    if (phone !== this.phone) {
+      this.phone = phone;
+      this.theme = this.resolveTheme();
+      this.parsed.root.props.gap = String(this.theme.space.md);
+    }
     const lv = this.loadingView();
     const scope = this.state.scope;
     const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.layoutWarning(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
@@ -2866,11 +2880,16 @@ export class SayShape {
     return this.lookChoice;
   }
 
-  /** The look drawn with: the spec's, over the chat density in a chat (context "chat") unless the spec chose a density. */
+  /**
+   * The look drawn with: the spec's, and in a chat (context "chat") the
+   * compact scale unless the spec chose a density, and Hairline surfaces
+   * whatever it chose. On a phone-width canvas, the theme's phone sizes.
+   */
   private appliedLook(): AppliedLook | null {
     const look = this.lookChoice;
-    if (this.opts.context !== "chat" || look?.density) return look;
-    return { ...look, density: CHAT_DENSITY };
+    const screen: Pick<AppliedLook, "screen"> = this.phone ? { screen: "phone" } : {};
+    if (this.opts.context !== "chat") return look || this.phone ? { ...look, ...screen } : null;
+    return { ...look, density: look?.density ?? CHAT_DENSITY, surface: "lines", ...screen };
   }
 
   private resolveTheme(): Theme {

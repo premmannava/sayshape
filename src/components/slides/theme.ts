@@ -31,8 +31,8 @@ export function slideTheme(t: Theme): Theme {
   let s = made.get(t);
   if (!s) {
     const k = slideTokens(t);
-    // The chat density's gaps and one-line list items are for a chat column, not a 960px slide: left out.
-    const { gaps: _gaps, listInline: _listInline, ...rest } = t;
+    // The compact scale's gaps, one-line list items, part sizes and phone sizes are for a chat column, not a 960px slide: left out.
+    const { gaps: _gaps, listInline: _listInline, sizes: _sizes, phone: _phone, scale: _scale, ...rest } = t;
     s = { ...rest, space: k.space, radius: k.radius, text: k.text, control: k.control, zoom: k.text.body / Math.max(1, t.text.body) };
     made.set(t, s);
     // A slide inside a slide keeps the same sizes.

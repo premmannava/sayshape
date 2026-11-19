@@ -71,7 +71,8 @@ export interface Theme {
    */
   font: { family: string; mono: string; display?: string };
   text: { caption: number; body: number; lead: number; title: number; display: number };
-  control: { height: number };
+  /** height: a control's height. small: a small button's (size=small); missing, round(height * 0.8). */
+  control: { height: number; small?: number };
   /**
    * Set by the chat density (src/look.ts), the default in chat hosts: a
    * list-item puts its title, detail and trailing value on one line where
@@ -80,6 +81,22 @@ export interface Theme {
   listInline?: boolean;
   /** Default gaps between the children of column, row and grid, set by the chat density. Missing: 8, 10 and 14. */
   gaps?: { column: number; row: number; grid: number };
+  /**
+   * How cards, lists and tables are set apart. raised (missing): a fill and a
+   * soft shadow. lines: no fill or shadow, a 1px line stroke (the default in
+   * chats and for host tokens). Popups and dialogs keep their fill and shadow
+   * either way.
+   */
+  surfaces?: "raised" | "lines";
+  /** Sizes of parts that aren't type, spacing or controls. Missing: DEFAULT_SIZES (read them through sizesOf). */
+  sizes?: Partial<ThemeSizes>;
+  /**
+   * Overrides for a canvas narrower than PHONE_WIDTH, laid over the theme
+   * when the engine draws on a phone. Sizes only, never colors.
+   */
+  phone?: { text?: Partial<Theme["text"]>; control?: Partial<Theme["control"]>; space?: Partial<Theme["space"]>; sizes?: Partial<ThemeSizes> };
+  /** Set by the compact scale (src/look.ts), never by a host: it has been applied, so applying it again does nothing. */
+  scale?: "compact";
   /**
    * A host's opt-out from natural card heights: cards side by side in a row
    * or grid share a height unless the spec writes stretch=false (the look
@@ -127,6 +144,90 @@ export interface Theme {
    */
   fills?: Partial<Record<FillName, { from: string; to: string }>>;
 }
+
+/**
+ * The sizes of parts that aren't type, spacing or controls: list rows,
+ * accordion headers, stat labels and pills, badges, field labels and text,
+ * segmented controls, callouts, empty states and the shortest chart plot.
+ */
+export interface ThemeSizes {
+  /** A list row's padding, across and down. */
+  listPadX: number;
+  listPadY: number;
+  /** A list row's icon, and the gap after it. */
+  listIcon: number;
+  listIconGap: number;
+  /** An accordion section's header height. */
+  accordionHeader: number;
+  /** A stat's label size; its line height is 4 more. */
+  statLabel: number;
+  /** The height of a stat's change pill. */
+  pill: number;
+  /** The height of a badge, and of a list row's trailing pill. */
+  badge: number;
+  /** A field's label size, and the gap under it. */
+  label: number;
+  labelGap: number;
+  /** A field's text padding across, and its text size (16 on phones keeps iOS from zooming in). */
+  fieldPadX: number;
+  fieldText: number;
+  /** A segmented control's height, and each option's padding across. */
+  segmented: number;
+  segmentedPadX: number;
+  /** A callout's action button height, and its icon. */
+  calloutAction: number;
+  calloutIcon: number;
+  /** An empty state's icon, its button's height, and its padding top and bottom. */
+  emptyIcon: number;
+  emptyButton: number;
+  emptyPad: number;
+  /** The shortest a chart's plot gets. */
+  plotMin: number;
+}
+
+/** The sizes every theme has unless it says otherwise: the ones components drew with before these were tokens. */
+export const DEFAULT_SIZES: Readonly<ThemeSizes> = Object.freeze({
+  listPadX: 16,
+  listPadY: 12,
+  listIcon: 20,
+  listIconGap: 12,
+  accordionHeader: 48,
+  statLabel: 13,
+  pill: 20,
+  badge: 22,
+  label: 13,
+  labelGap: 6,
+  fieldPadX: 12,
+  fieldText: 16,
+  segmented: 36,
+  segmentedPadX: 14,
+  calloutAction: 30,
+  calloutIcon: 18,
+  emptyIcon: 40,
+  emptyButton: 36,
+  emptyPad: 24,
+  plotMin: 144,
+});
+
+const sizesMade = new WeakMap<Theme, ThemeSizes>();
+
+/** A theme's sizes: DEFAULT_SIZES with the theme's own over them. The same object for the same theme. */
+export function sizesOf(t: Theme): ThemeSizes {
+  let s = sizesMade.get(t);
+  if (!s) {
+    s = Object.freeze({ ...DEFAULT_SIZES, ...t.sizes });
+    sizesMade.set(t, s);
+  }
+  return s;
+}
+
+/** A small button's height: the theme's control.small, or 0.8 of a control's. */
+export function smallControlOf(t: Theme): number {
+  return t.control.small ?? Math.round(t.control.height * 0.8);
+}
+
+/** A canvas narrower than this, in CSS pixels, is a phone: the theme's phone sizes apply. */
+export const PHONE_WIDTH = 600;
 
 const base = {
   space: { xs: 4, sm: 8, md: 14, lg: 22, xl: 32 },

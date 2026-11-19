@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { darkTheme, forcedColorsTheme, lightTheme, studioDarkTheme, studioLightTheme, type Theme } from "../../src";
 import { parseColor, seriesColors, sliceColors } from "../../src/theme";
-import { applyLook, LOOK_OPTIONS, LOOK_PROPS, type Look } from "../../src/look";
+import { applyLook, CHAT_DENSITY, LOOK_OPTIONS, LOOK_PROPS, type AppliedLook, type Look } from "../../src/look";
+import { themeFromTokens, type HostTokens } from "../../src/host-tokens";
 import { render } from "../../src/testing";
 
 /** WCAG contrast ratio between two colors. */
@@ -21,9 +22,26 @@ const LOOKS: Look[] = [
   ...LOOK_PROPS.flatMap((p) => Object.keys(LOOK_OPTIONS[p]).map((o) => ({ [p]: o }) as Look)),
   { mood: "bold", type: "editorial", shape: "round", density: "airy" },
 ];
+/** What a chat draws with (engine.ts appliedLook): the compact scale and Hairline surfaces, on a desktop and a phone. */
+const SCREENS: Array<[string, AppliedLook]> = [
+  ["chat desktop", { density: CHAT_DENSITY, surface: "lines" }],
+  ["chat phone", { density: CHAT_DENSITY, surface: "lines", screen: "phone" }],
+];
+/** Pages SayShape is shown on through host tokens: chat apps' and a portal's, light and dark. */
+const HOSTS: Array<[string, HostTokens]> = [
+  ["chat light", { background: "#FAF9F5", text: "#141413", textSecondary: "#5e5d59", border: "#e8e6dc", accent: "#ae5630" }],
+  ["chat dark", { background: "#262624", text: "#faf9f5", textSecondary: "#b7b5a9", border: "#3d3d3a", accent: "#d97757" }],
+  ["portal light", { background: "#f4f5f7", text: "#1b2533", border: "#d5dbe3", accent: "#00695c" }],
+  ["portal dark", { background: "#12161c", text: "#e6e9ee", border: "#2a313b", accent: "#7aa2ff" }],
+];
 const THEMES: Array<[string, Theme]> = [
   ...BASE_THEMES,
   ...BASE_THEMES.flatMap(([name, t]) => LOOKS.map((l) => [`${name} + look ${Object.entries(l).map(([k, v]) => `${k}=${v}`).join(" ")}`, applyLook(t, l)] as [string, Theme])),
+  ...BASE_THEMES.flatMap(([name, t]) => SCREENS.map(([s, l]) => [`${name} in a ${s}`, applyLook(t, l)] as [string, Theme])),
+  ...HOSTS.flatMap(([name, tokens]) => {
+    const t = themeFromTokens(tokens);
+    return [[`${name} host tokens`, t], ...SCREENS.map(([s, l]) => [`${name} host tokens in a ${s}`, applyLook(t, l)])] as Array<[string, Theme]>;
+  }),
 ];
 
 describe.each(THEMES)("%s theme contrast (WCAG 2.1 AA)", (_name, theme) => {

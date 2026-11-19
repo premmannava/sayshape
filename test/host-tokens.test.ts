@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { isHostTokens, seriesFromAccent, themeFromTokens, type HostTokens } from "../src/host-tokens";
+import { controlFor, isHostTokens, seriesFromAccent, themeFromTokens, type HostTokens } from "../src/host-tokens";
+import { applyLook } from "../src/look";
 import { resolveThemeInput } from "../src/element/sync";
 import { contrastRatio } from "../src/scrim";
 import { darkTheme, lightTheme, type Theme } from "../src/theme";
@@ -24,20 +25,25 @@ describe("host tokens become a theme", () => {
   it("maps a portal's colors, radius and font onto SayShape's tokens", () => {
     const t = themeFromTokens(PORTAL);
     expect(t.colors.surface).toBe("#f4f6f9");
-    expect(t.colors.raised).toBe("#ffffff");
+    // Hairline surfaces: cards are outlined in the page's own color, not the host's card color.
+    expect(t.colors.raised).toBe("#f4f6f9");
+    expect(t.surfaces).toBe("lines");
     expect(t.colors.ink).toBe("#1b2533");
     expect(t.colors.muted).toBe("#5a6678");
     expect(t.colors.line).toBe("#d5dbe3");
     expect(t.colors.accent).toBe("#00695c");
     expect(t.colors.focus).toBe("#00695c");
     expect(t.colors.onAccent).toBe("#ffffff");
-    expect(t.radius).toEqual({ sm: 3, md: 4, lg: 6 });
+    // The compact scale over the host's own: its large corner 10/12 of 6.
+    expect(t.radius).toEqual({ sm: 3, md: 4, lg: 5 });
     expect(t.font.family).toBe("'Source Sans 3', Arial, sans-serif");
     expect(t.text.body).toBe(15);
-    expect(t.text.title).toBe(Math.round(20 * 15 / 14));
-    // Everything not given stays SayShape's light theme.
+    expect(t.text.title).toBe(Math.round(Math.round(20 * 15 / 14) * 18 / 20));
+    expect(t.control).toEqual({ height: 32, small: 23 });
+    expect(t.scale).toBe("compact");
+    // Everything not given stays SayShape's light theme, compact.
     expect(t.colors.good).toBe(lightTheme.colors.good);
-    expect(t.space).toEqual(lightTheme.space);
+    expect(t.space).toEqual(applyLook(lightTheme, { density: "chat" }).space);
   });
 
   it("keeps text at AA and chart colors at 3:1 against the background", () => {
@@ -79,7 +85,7 @@ describe("host tokens become a theme", () => {
     expect(t.colors.surface).toBe(lightTheme.colors.surface);
     expect(t.colors.ink).toBe(lightTheme.colors.ink);
     expect(t.colors.accent).toBe(lightTheme.colors.accent);
-    expect(t.radius).toEqual(lightTheme.radius);
+    expect(t.radius).toEqual(applyLook(lightTheme, { density: "chat" }).radius);
     expect(t.font.family).toBe(lightTheme.font.family);
     expect(t.text.body).toBe(20); // clamped to 20 px
   });
@@ -103,9 +109,40 @@ describe("host tokens become a theme", () => {
 
   it("keeps text readable on cards as well as on the page", () => {
     const t = themeFromTokens({ background: "#ffffff", surface: "#222222", text: "#111111" });
+    // Cards take the page's color, so text that reads on the page reads on them.
+    expect(t.colors.raised).toBe(t.colors.surface);
     expect(contrastRatio(t.colors.ink, t.colors.raised)!).toBeGreaterThanOrEqual(4.5);
     const flipped = themeFromTokens({ background: "#ffffff", dark: true });
     expect(contrastRatio(flipped.colors.ink, flipped.colors.surface)!).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("control outlines on a host's page (WCAG 1.4.11)", () => {
+  const PAGES: Array<[string, HostTokens]> = [
+    ["portal light", { background: "#f4f5f7", text: "#1b2533", accent: "#00695c" }],
+    ["portal dark", { background: "#12161c", text: "#e6e9ee", accent: "#5cc8b8" }],
+    ["chat light", { background: "#FAF9F5", text: "#141413", accent: "#ae5630" }],
+    ["chat dark", { background: "#262624", text: "#faf9f5", accent: "#d97757" }],
+    ["page only, light", { background: "#f4f5f7" }],
+    ["page only, dark", { background: "#262624" }],
+    ["page only, a lighter dark", { background: "#30302e" }],
+  ];
+  it.each(PAGES)("show at 3:1 on the %s page and its cards", (_n, tokens) => {
+    const t = themeFromTokens(tokens);
+    expect(contrastRatio(t.colors.control, t.colors.surface)!).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(t.colors.control, t.colors.raised)!).toBeGreaterThanOrEqual(3);
+  });
+
+  it("lifts SayShape's own outline where it falls short", () => {
+    // Under 3:1 as they come: SayShape's light outline on a portal's #f4f5f7, its dark one on #30302e.
+    expect(contrastRatio(lightTheme.colors.control, "#f4f5f7")!).toBeLessThan(3);
+    expect(contrastRatio(darkTheme.colors.control, "#30302e")!).toBeLessThan(3);
+    for (const [colors, page] of [[lightTheme.colors, "#f4f5f7"], [darkTheme.colors, "#30302e"], [darkTheme.colors, "#262624"]] as const) {
+      const c = controlFor({ control: colors.control, surface: page, raised: page });
+      expect(contrastRatio(c, page)!).toBeGreaterThanOrEqual(3);
+    }
+    // One that already shows is kept.
+    expect(controlFor(lightTheme.colors)).toBe(lightTheme.colors.control);
   });
 });
 

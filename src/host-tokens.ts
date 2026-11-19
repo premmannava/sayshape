@@ -16,11 +16,15 @@
  */
 import { darkTheme, extendTheme, isDark, lightTheme, parseColor, type DeepPartial, type Theme } from "./theme";
 import { contrastRatio } from "./scrim";
+import { compactPatch, linesPatch } from "./look";
 
 export interface HostTokens {
   /** The page behind the interface. */
   background?: string;
-  /** Cards and other surfaces on it. */
+  /**
+   * Cards and other surfaces on it. Accepted, but not drawn: an interface in
+   * a host's page has Hairline surfaces, cards outlined in the page's color.
+   */
   surface?: string;
   /** Primary text. */
   text?: string;
@@ -126,19 +130,16 @@ export function themeFromTokens(tokens: HostTokens, base?: Theme): Theme {
   const colors: Partial<Theme["colors"]> = {};
   const surface = background ?? from.colors.surface;
   if (background) colors.surface = background;
-  const raised = color(tokens.surface);
-  if (raised) colors.raised = raised;
-  // Text sits on the page and on cards, so it has to read on both (the page's, then the card's).
-  const card = raised ?? (background ? undefined : from.colors.raised);
-  const readable = (c: string, ratio: number) => {
-    const onPage = reaching(c, surface, ratio);
-    return card ? reaching(onPage, card, ratio) : onPage;
-  };
+  // Hairline surfaces (linesPatch, below): cards, lists, tables and popups take the page's color, so
+  // text has to read on the page alone, and the host's own card color isn't drawn.
+  const readable = (c: string, ratio: number) => reaching(c, surface, ratio);
   // Given or not: a theme's own text may not read on a host's background (dark: true on a light page).
   colors.ink = readable(color(tokens.text) ?? from.colors.ink, AA);
   colors.muted = readable(color(tokens.textSecondary) ?? color(tokens.textMuted) ?? from.colors.muted, AA);
   const line = color(tokens.border);
   if (line) colors.line = line;
+  // A control's outline shows where it is (WCAG 1.4.11): 3:1 on the host's page, which SayShape's own may not reach.
+  colors.control = readable(from.colors.control, GRAPHIC);
   const accent = color(tokens.accent);
   if (accent) {
     colors.accent = readable(accent, GRAPHIC);
@@ -150,6 +151,12 @@ export function themeFromTokens(tokens: HostTokens, base?: Theme): Theme {
   const given = (tokens.series ?? []).map(color).filter((c): c is string => !!c);
   const series = (given.length ? given : accent ? seriesFromAccent(colors.accent!, surface) : []).map((c) => readable(c, GRAPHIC));
   series.slice(0, 6).forEach((c, i) => { (colors as Record<string, string>)[`series${i + 1}`] = c; });
+  // The theme's own series fill the rest, and they too have to stand out on the host's page.
+  for (let i = series.length; i < 6; i++) {
+    const key = `series${i + 1}` as keyof Theme["colors"];
+    const lifted = readable(from.colors[key], GRAPHIC);
+    if (lifted !== from.colors[key]) colors[key] = lifted;
+  }
 
   const patch: DeepPartial<Theme> = { colors };
   const r = px(tokens.radius, 0, 24);
@@ -161,5 +168,17 @@ export function themeFromTokens(tokens: HostTokens, base?: Theme): Theme {
     const k = size / from.text.body;
     patch.text = Object.fromEntries(Object.entries(from.text).map(([key, v]) => [key, Math.round(v * k)])) as Theme["text"];
   }
-  return { ...extendTheme(from, patch), name: `${from.name} (host tokens)` };
+  // An interface in a host's page is part of it: the compact scale, and Hairline surfaces in the page's color.
+  const own = extendTheme(from, patch);
+  const compact = extendTheme(own, compactPatch(own));
+  return { ...extendTheme(compact, linesPatch(compact)), name: `${from.name} (host tokens)` };
+}
+
+/**
+ * The control outline for a set of colors: the given one, moved lighter or
+ * darker until it shows at 3:1 (WCAG 1.4.11) on the surface and then on
+ * raised. For hosts that build their colors another way (the MCP view).
+ */
+export function controlFor(colors: Pick<Theme["colors"], "control" | "surface" | "raised">): string {
+  return reaching(reaching(colors.control, colors.surface, GRAPHIC), colors.raised, GRAPHIC);
 }
