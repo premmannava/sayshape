@@ -32,7 +32,8 @@ import { fieldOf, isList, isRecord, makeList } from "../data";
 import type { PopupState } from "../popup";
 import type { PartSemantics } from "../a11y/semantics";
 import type { Box, Rect, Value } from "../types";
-import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE, paintField } from "./input";
+import { fieldBox, fitText, paintField } from "./input";
+import { sizesOf } from "../theme";
 import { chevron, fillTint, onProp, partBox, runOn } from "./util";
 
 /** The most options one select offers. Narrow longer lists with filter() or search(). */
@@ -204,6 +205,7 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
   const o = readOptions(p);
   const { g, theme } = ctx;
   const c = theme.colors;
+  const sizes = sizesOf(theme), pad = sizes.fieldPadX;
   const { visible, moreH, top } = listLayout(area, o.options.length);
   const scroll = scrollOf(state, o, visible);
   const hi = highlightOf(state, o);
@@ -227,7 +229,7 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
     }
   }
 
-  g.font = ctx.font(400, FIELD_TEXT);
+  g.font = ctx.font(400, sizes.fieldText);
   g.textBaseline = "middle";
   g.textAlign = "left";
   for (let i = scroll; i < Math.min(o.options.length, scroll + visible); i++) {
@@ -246,7 +248,7 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
     const markW = 22;
     if (multiple) {
       // A box per option, ticked when chosen, so several choices read as several.
-      const size = 16, bx = row.x + FIELD_PAD, by = row.y + (ROW_H - size) / 2;
+      const size = 16, bx = row.x + pad, by = row.y + (ROW_H - size) / 2;
       ctx.roundRect(bx + 0.5, by + 0.5, size - 1, size - 1, 4);
       if (on) { g.fillStyle = c.accent; g.fill(); }
       else { g.strokeStyle = opt.available ? c.muted : c.line; g.lineWidth = 1.5; g.stroke(); }
@@ -262,17 +264,17 @@ function paintList(owner: Box, area: Rect, ctx: PaintContext, state: PopupState)
         g.lineJoin = "round";
         g.stroke();
       }
-      g.font = ctx.font(400, FIELD_TEXT);
+      g.font = ctx.font(400, sizes.fieldText);
       g.fillStyle = opt.available ? c.ink : c.muted;
-      g.fillText(fitText(g, opt.label, row.w - FIELD_PAD * 2 - markW), bx + markW + 4, row.y + ROW_H / 2 + 1);
+      g.fillText(fitText(g, opt.label, row.w - pad * 2 - markW), bx + markW + 4, row.y + ROW_H / 2 + 1);
       continue;
     }
-    g.font = ctx.font(on ? 600 : 400, FIELD_TEXT);
+    g.font = ctx.font(on ? 600 : 400, sizes.fieldText);
     g.fillStyle = opt.available ? c.ink : c.muted;
-    g.fillText(fitText(g, opt.label, row.w - FIELD_PAD * 2 - markW), row.x + FIELD_PAD, row.y + ROW_H / 2 + 1);
+    g.fillText(fitText(g, opt.label, row.w - pad * 2 - markW), row.x + pad, row.y + ROW_H / 2 + 1);
     if (on) {
       // A check mark beside the chosen option.
-      const cx = row.x + row.w - FIELD_PAD - 7, cy = row.y + ROW_H / 2;
+      const cx = row.x + row.w - pad - 7, cy = row.y + ROW_H / 2;
       g.beginPath();
       g.moveTo(cx - 6, cy);
       g.lineTo(cx - 2, cy + 4);
@@ -344,24 +346,25 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    box.h = fieldBox(box, p, ctx.theme.control.height).y - box.y + ctx.theme.control.height;
+    box.h = fieldBox(box, p, ctx.theme.control.height, ctx.theme).y - box.y + ctx.theme.control.height;
     warnAbout(box, p, ctx);
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
     const c = theme.colors;
+    const sizes = sizesOf(theme), pad = sizes.fieldPadX;
     const o = readOptions(p);
     const shown = fieldText(p, o);
     const disabled = p.cond("disabled") || !shown.openable;
     const isOpen = ctx.isPopupOpen(box.node);
-    const field = fieldBox(box, p, theme.control.height);
+    const field = fieldBox(box, p, theme.control.height, theme);
     const hot = !disabled && ctx.isHovered(box.node);
     g.save();
     if (p.cond("disabled")) g.globalAlpha *= 0.45;
     const label = p.text();
     if (label) {
-      g.font = ctx.font(600, LABEL_SIZE);
+      g.font = ctx.font(600, sizes.label);
       g.textAlign = "left";
       g.textBaseline = "top";
       g.fillStyle = c.ink;
@@ -370,16 +373,16 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
     const focus = ctx.tween(box.node, "select:field:focus", isOpen || ctx.isFocused(box.node) ? 1 : 0, MOTION.selection);
     const hover = ctx.tween(box.node, "select:field:hover", hot ? 1 : 0, MOTION.hover);
-    paintField(g, c, focus, hover);
-    g.font = ctx.font(400, FIELD_TEXT);
+    paintField(g, theme, focus, hover);
+    g.font = ctx.font(400, sizes.fieldText);
     g.textAlign = "left";
     g.textBaseline = "middle";
     g.fillStyle = shown.muted ? c.muted : c.ink;
     const arrowRoom = 24;
-    const room = field.w - FIELD_PAD * 2 - arrowRoom;
+    const room = field.w - pad * 2 - arrowRoom;
     const text = shown.labels.length > 1 ? chosenText(shown.labels, (t) => g.measureText(t).width <= room) : shown.text;
-    g.fillText(fitText(g, text, room), field.x + FIELD_PAD, field.y + field.h / 2 + 1);
-    chevron(g, field.x + field.w - FIELD_PAD - 6, field.y + field.h / 2, 10, isOpen ? "up" : "down", disabled ? c.line : c.muted);
+    g.fillText(fitText(g, text, room), field.x + pad, field.y + field.h / 2 + 1);
+    chevron(g, field.x + field.w - pad - 6, field.y + field.h / 2, 10, isOpen ? "up" : "down", disabled ? c.line : c.muted);
     g.restore();
     if (!disabled) ctx.addHit(field);
   },
@@ -399,7 +402,7 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
       if (p.cond("disabled") || !fieldText(p, o).openable) return null;
       const n = o.options.length;
       const rows = (k: number) => Math.min(n, k) * ROW_H + 2 * PANEL_PAD + (n > k ? 2 * MORE_H : 0);
-      const field = fieldBox(owner, p, ctx.theme.control.height);
+      const field = fieldBox(owner, p, ctx.theme.control.height, ctx.theme);
       // Shorter than wanted means scrolling, so the strips are part of the base.
       return { w: Math.max(field.w, 180), h: rows(VISIBLE_OPTIONS), minH: rows(3), snap: { base: 2 * PANEL_PAD + 2 * MORE_H, step: ROW_H } };
     },

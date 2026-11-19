@@ -3,13 +3,14 @@
  * The everyday way to switch a view (Chart | Table) or a period
  * (Week, Month, Year), lighter than tabs or a select.
  */
-import { isDarkTheme } from "../theme";
+import { isDarkTheme, sizesOf } from "../theme";
 import { MOTION } from "../design";
 import type { ComponentDef, PressContext } from "../component";
 import { fitText } from "./input";
 import { fillTint, onProp, partBox, runOn, themeFont } from "./util";
 
-const H = 36, PAD = 14, INSET = 3;
+/** The track's inset around the chosen tile. Its height and each option's padding are the theme's (sizesOf: segmented, segmentedPadX). */
+const INSET = 3;
 const MAX_OPTIONS = 6;
 
 /**
@@ -78,7 +79,7 @@ text "Showing the {lower(view)}" tone=muted`,
     const p = ctx.props(box.node);
     const options = optionsOf(p.str("options"));
     const font = themeFont(ctx.theme, 600, 13);
-    const natural = options.map((o) => ctx.measure.width(o, font) + PAD * 2);
+    const natural = options.map((o) => ctx.measure.width(o, font) + sizesOf(ctx.theme).segmentedPadX * 2);
     const total = natural.reduce((a, b) => a + b, 0) + INSET * 2;
     // As wide as its labels need, up to the whole width; squeezed evenly when there's less room.
     const width = Math.min(box.w, Math.max(total, 0));
@@ -91,11 +92,11 @@ text "Showing the {lower(view)}" tone=muted`,
       return cell;
     });
     box.data = { cells, font, width };
-    box.h = H;
+    box.h = sizesOf(ctx.theme).segmented;
   },
   paint(box, ctx) {
     const { g, theme } = ctx;
-    const c = theme.colors;
+    const c = theme.colors, H = sizesOf(theme).segmented;
     const p = ctx.props(box.node);
     const { cells, font, width } = box.data as { cells: Array<{ option: string; x: number; w: number }>; font: string; width: number };
     const chosen = p.bound();
