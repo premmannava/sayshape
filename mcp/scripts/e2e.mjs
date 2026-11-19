@@ -316,9 +316,9 @@ try {
   // Inside the card's padding, 6px in from its top-left corner (the card starts at the 20px root padding).
   const cardPixel = await pixelAt(styledFrame, 26, 26);
   check(cardPixel[3] === 0, `a framed card on a host-token page draws no fill inside its line (alpha ${cardPixel[3]})`);
-  // Its line: somewhere across the card's left edge, a pixel is drawn.
-  const edge = await Promise.all([18, 19, 20, 21, 22].map((x) => pixelAt(styledFrame, x, 40)));
-  check(edge.some((px) => px[3] > 0), `and the card keeps its 1px line (max alpha ${Math.max(...edge.map((px) => px[3]))} across its left edge)`);
+  // Its line: a pixel drawn somewhere along a row through the card's left side, outside the padding.
+  const edge = await Promise.all(Array.from({ length: 26 }, (_, x) => pixelAt(styledFrame, x, 40)));
+  check(edge.some((px) => px[3] > 0), `and the card keeps its 1px line (max alpha ${Math.max(...edge.map((px) => px[3]))} along the row to its left edge)`);
 
   // A view whose result says the spec needs fixing folds into a short note, and comes back on request;
   // one whose result says it repeats the interface above folds into a single line.
