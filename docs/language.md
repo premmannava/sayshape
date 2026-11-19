@@ -116,6 +116,7 @@ Interactive elements run actions from their `on=` prop.
 | `go:screen` | Show another screen ([Screens](#screens)) |
 | `back` | Return to the previous screen |
 | `notify:'message'` | Show a short message for a few seconds; it can include `{expressions}` |
+| `open:https://…` | Open a web address in a new tab; https only, no username or password, and it leaves the chat. A `link` takes `href=` for the same thing |
 | `add:list:value` | Add an item to the end of a list: `add:todos:{text: 'Map', done: false}` |
 | `remove:t` or `remove:list:index` | Remove the current item inside `each`, or the item at a position |
 | `clear:list` | Empty a list |

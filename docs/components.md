@@ -708,7 +708,8 @@ Pressable text for a secondary action, lighter than a button.
 | Prop | Type | Description |
 |---|---|---|
 | `"text"` | text, required | The link text. |
-| `on` | action, required | What happens when pressed, e.g. emit:size_guide. |
+| `on` | action | What happens when pressed, e.g. emit:size_guide. Leave out when the link only opens a page. |
+| `href` | string | A web address (https) the link opens in a new tab, such as a map or a website. It leaves the chat, so use it for places people go. |
 | `icon` | string | Icon name before the text. |
 
 ```

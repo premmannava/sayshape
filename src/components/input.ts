@@ -6,6 +6,7 @@ import { isDark, isDarkTheme, mixColors, sizesOf, smallControlOf, type Theme } f
 import { MOTION } from "../design";
 import { detailProp, fillTint, iconBefore, iconProblems, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
 import { drawIcon, isIconName, type IconName } from "../icons";
+import { isOpenableUrl } from "../actions";
 import { fitLines, wrapText } from "../text";
 import { EMAIL } from "../text-checks";
 
@@ -722,13 +723,26 @@ export const link: ComponentDef = {
   description: "Pressable text for a secondary action, lighter than a button.",
   text: { description: "The link text.", required: true },
   props: {
-    on: { type: "action", required: true, description: "What happens when pressed, e.g. emit:size_guide." },
+    on: { type: "action", description: "What happens when pressed, e.g. emit:size_guide. Leave out when the link only opens a page." },
+    href: { type: "string", description: "A web address (https) the link opens in a new tab, such as a map or a website. It leaves the chat, so use it for places people go." },
     icon: iconBefore("text"),
   },
   example: `link "Size guide" on=emit:size_guide`,
-  check: (props) => iconProblems(props.icon, "icon"),
+  check: (props) => [
+    ...iconProblems(props.icon, "icon"),
+    ...(props.href !== undefined && !props.href.includes("{") && !isOpenableUrl(props.href)
+      ? [`The href "${props.href}" isn't an https address. Write the whole address, starting with https:// and a site name`]
+      : []),
+    ...(props.on === undefined && props.href === undefined ? [`A link needs on= or href=. An href is a whole address starting with https://`] : []),
+  ],
   semantics(box, ctx) {
     return { role: "link", name: ctx.props(box.node).text() };
+  },
+  press(ctx) {
+    // href opens the address through the host (open:), then any on= actions run.
+    const href = ctx.props(ctx.target.node).raw("href");
+    if (href) ctx.run(`open:${href}`);
+    runOn(ctx);
   },
   layout(box, ctx) {
     box.h = Math.round(ctx.theme.text.body * 1.35);
