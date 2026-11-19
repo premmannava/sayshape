@@ -38,7 +38,8 @@ import type { PopupState } from "../popup";
 import type { PartSemantics } from "../a11y/semantics";
 import { fieldOf, isRecord, makeRecord } from "../data";
 import type { Box, Rect, Value } from "../types";
-import { FIELD_PAD, FIELD_TEXT, fieldBox, fitText, LABEL_SIZE, paintField } from "./input";
+import { fieldBox, fitText, ICON_TAP, paintField } from "./input";
+import { sizesOf } from "../theme";
 import { chevron, fillTint, onProp, partBox, runOn } from "./util";
 
 const PAD = 8;
@@ -416,23 +417,24 @@ date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    box.h = fieldBox(box, p, ctx.theme.control.height).y - box.y + ctx.theme.control.height;
+    box.h = fieldBox(box, p, ctx.theme.control.height, ctx.theme).y - box.y + ctx.theme.control.height;
     warnAbout(box, p, ctx);
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
     const c = theme.colors;
+    const sizes = sizesOf(theme), pad = sizes.fieldPadX;
     const disabled = p.cond("disabled");
     const isOpen = ctx.isPopupOpen(box.node);
-    const field = fieldBox(box, p, theme.control.height);
+    const field = fieldBox(box, p, theme.control.height, theme);
     const v = valueOf(p);
     const r = p.bool("range") ? rangeOf(p.bound()) : null;
     g.save();
     if (disabled) g.globalAlpha *= 0.45;
     const label = p.text();
     if (label) {
-      g.font = ctx.font(600, LABEL_SIZE);
+      g.font = ctx.font(600, sizes.label);
       g.textAlign = "left";
       g.textBaseline = "top";
       g.fillStyle = c.ink;
@@ -441,22 +443,22 @@ date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
     const focus = ctx.tween(box.node, "date:field:focus", isOpen || ctx.isFocused(box.node) ? 1 : 0, MOTION.selection);
     const hover = ctx.tween(box.node, "date:field:hover", !disabled && ctx.isHovered(box.node) ? 1 : 0, MOTION.hover);
-    paintField(g, c, focus, hover);
+    paintField(g, theme, focus, hover);
     const shownAs = r ?? v;
     const text = r?.kind === "range" ? displayRange(r.from, r.to)
       : !r && v.kind === "date" ? displayDate(v.date)
       : shownAs.kind === "invalid" ? (r ? "Invalid dates" : "Invalid date")
       : p.str("placeholder", r ? "Choose dates" : "Choose a date");
-    g.font = ctx.font(400, FIELD_TEXT);
+    g.font = ctx.font(400, sizes.fieldText);
     g.textAlign = "left";
     g.textBaseline = "middle";
     g.fillStyle = shownAs.kind === "range" || shownAs.kind === "date" ? c.ink : shownAs.kind === "invalid" ? c.bad : c.muted;
-    const room = field.w - FIELD_PAD * 2 - 28;
+    const room = field.w - pad * 2 - 28;
     const fitted = r?.kind === "range" && g.measureText(text).width > room ? displayRange(r.from, r.to, false) : text;
-    g.fillText(fitText(g, fitted, room), field.x + FIELD_PAD, field.y + field.h / 2 + 1);
-    calendarIcon(g, field.x + field.w - FIELD_PAD - 8, field.y + field.h / 2, disabled ? c.line : c.muted);
+    g.fillText(fitText(g, fitted, room), field.x + pad, field.y + field.h / 2 + 1);
+    calendarIcon(g, field.x + field.w - pad - 8, field.y + field.h / 2, disabled ? c.line : c.muted);
     g.restore();
-    if (!disabled) ctx.addHit(field);
+    if (!disabled) ctx.addHit(field, { reach: ICON_TAP });
   },
   press(ctx) {
     if (!ctx.popupOpen) open(ctx);
@@ -476,7 +478,7 @@ date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
     measure(owner, ctx) {
       const p = ctx.props(owner.node);
       if (p.cond("disabled") || !p.raw("bind")) return null;
-      const field = fieldBox(owner, p, ctx.theme.control.height);
+      const field = fieldBox(owner, p, ctx.theme.control.height, ctx.theme);
       // A range's footer holds two presets and Clear, so it takes the full calendar width when it can.
       const w = p.bool("range") ? CAL_W : Math.min(CAL_W, Math.max(field.w, 7 * 30 + 2 * PAD));
       const ch = Math.min(CELL, (w - 2 * PAD) / 7);

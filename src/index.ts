@@ -11,8 +11,8 @@ export { languageGuide, guideSections, describeGuide, REPORT_FALLBACK, component
 export { assembleGuide, languageMap, fullGuide, availableCapabilities, capabilityElements, sceneElements, problemsText, CAPABILITIES, FULL_GUIDE_TOPIC, USE_PREFIX, DEFAULT_ASK, type AssembledGuide, type CapabilityDef, type TopicProblem, type MapOptions } from "./capabilities";
 export { resolveProfile, PROFILES, ALWAYS_EXPOSED, type ComponentProfile, type ResolvedProfile } from "./profiles";
 export { COMMON_IMAGE_HOSTS } from "./images";
-export { lightTheme, darkTheme, studioLightTheme, studioDarkTheme, extendTheme, themeFromCSS, forcedColorsTheme, type Theme } from "./theme";
-export { themeFromTokens, seriesFromAccent, type HostTokens } from "./host-tokens";
+export { lightTheme, darkTheme, studioLightTheme, studioDarkTheme, extendTheme, themeFromCSS, forcedColorsTheme, DEFAULT_SIZES, sizesOf, smallControlOf, PHONE_WIDTH, type Theme, type ThemeSizes } from "./theme";
+export { themeFromTokens, seriesFromAccent, controlFor, type HostTokens } from "./host-tokens";
 export { reviewLayout, NESTED_CARD, MAX_LAYOUT_PROBLEMS } from "./review";
 export { applyLook, CHAT_DENSITY, LOOK_OPTIONS, LOOK_PROPS, LOOK_FONTS, lookOptions, type Look, type LookProp } from "./look";
 export { CanvasMeasurer, MonoMeasurer, wrapText, type TextMeasurer } from "./text";

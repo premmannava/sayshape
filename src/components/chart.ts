@@ -277,7 +277,7 @@ function axisGeometry(
   const ns = series.length;
   // Layers share the scale, so a target above the tallest bar still fits.
   const values = [...d.slots.flatMap((s) => s.values.flatMap((v) => (v === null ? [] : [v]))), ...layerValues(layerInput)];
-  const plotH = plotHeight(box.w);
+  const plotH = plotHeight(box.w, t);
   const scale = chartScale(values, kind, Math.max(2, Math.min(6, Math.floor(plotH / 44))));
   const tickText = tickLabels(scale.ticks, scale.step, format);
   const axisW = Math.ceil(Math.max(...tickText.map((s) => m.width(s, labelFont)))) + t.space.sm;
@@ -597,7 +597,7 @@ function loadingGeometry(box: { w: number }, kind: Kind, series: number, title: 
     return { g: { ...base, plot, rowH, labelY: plot.y + plot.h, loading: { series } }, h: plot.y + plot.h + legend };
   }
   const axisW = 28;
-  const plot: Rect = { x: axisW, y: top + Math.ceil(labelLH / 2), w: Math.max(0, box.w - axisW), h: plotHeight(box.w) };
+  const plot: Rect = { x: axisW, y: top + Math.ceil(labelLH / 2), w: Math.max(0, box.w - axisW), h: plotHeight(box.w, t) };
   const labelY = plot.y + plot.h + t.space.xs;
   const legend = series > 1 ? t.space.sm + rowH : 0;
   return { g: { ...base, plot, labelY, loading: { series } }, h: labelY + labelLH + legend };

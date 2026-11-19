@@ -29,7 +29,7 @@ import { parse, type ParseResult } from "./parser";
 import { Registry } from "./registry";
 import { Store } from "./state";
 import { CanvasMeasurer, ellipsize, font as fontString, wrapText } from "./text";
-import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, themeFromCSS, type Theme } from "./theme";
+import { darkTheme, forcedColorsTheme, isDarkTheme, lightTheme, PHONE_WIDTH, themeFromCSS, type Theme } from "./theme";
 import { applyLook, CHAT_DENSITY, lookKey, type AppliedLook, type Look } from "./look";
 import { Inspector } from "./inspector";
 import { browserImageLoader, ImageCache, type ImageLoader, type ImagePolicy } from "./images";
@@ -199,12 +199,16 @@ export interface SayShapeOptions {
   look?: boolean;
   /**
    * Where the view is shown. "chat": inside a chat app's message, which is
-   * the frame and the background. The chat density is then the default look
-   * (tighter type, spacing and controls, list rows on one line where they
-   * fit; a spec's own look density= still wins) and the screen's padding
+   * the frame and the background. The compact scale is then the default
+   * density (tighter type, spacing and controls, list rows on one line where
+   * they fit; a spec's own look density= still wins), surfaces are Hairline
+   * (cards, lists and tables draw a 1px line in the page's color, with no
+   * fill or shadow, whatever density the spec chose) and the screen's padding
    * defaults to CHAT_PADDING. The engine never paints a background of its
    * own (it clears to transparent), so the host leaves its page showing
-   * through. Default: none, the look exactly as before.
+   * through. Default: none, the look exactly as before. On any host, a
+   * canvas narrower than PHONE_WIDTH draws with the theme's phone sizes
+   * where it has them (the compact scale does).
    */
   context?: "chat";
 }
@@ -229,12 +233,16 @@ export class SayShape {
   theme: Theme;
   /** The spec's look line's choices, laid over the host's theme (null: none). */
   private lookChoice: Look | null = null;
+  /** Whether the last layout was narrower than PHONE_WIDTH, so the theme's phone sizes apply. */
+  private phone = false;
 
   private source = "";
   private streaming = false;
   private parsed: ParseResult | null = null;
   private rootBox: Box | null = null;
   private hits: HitRegion[] = [];
+  /** Whether a region this frame was grown for fingers (addHit's reach), so trimReach has work to do. */
+  private grew = false;
   /** While painting the children of elements that scroll: what each shows, innermost last. */
   private clips: Array<{ rect: Rect; owner: Box }> = [];
   /** While painting inside an element that draws its children scaled (a slide): from there to the screen. */
@@ -377,6 +385,7 @@ export class SayShape {
     if (!g) throw new Error("SayShape needs a 2D canvas context");
     this.g = g;
     this.measurer = new CanvasMeasurer(g);
+    this.phone = opts.width !== undefined && opts.width < PHONE_WIDTH;
     this.theme = this.resolveTheme();
     this.inspector = new Inspector(this);
     this.editorHost = opts.editor ?? (typeof document !== "undefined" ? domEditorHost(canvas) : noEditor);
@@ -666,6 +675,13 @@ export class SayShape {
     const t = this.clock.now();
     const width = this.opts.width ?? (this.canvas.parentElement?.clientWidth || 600);
     this.width = width;
+    // Crossing PHONE_WIDTH switches the theme's phone sizes on or off, before anything is laid out with them.
+    const phone = width < PHONE_WIDTH;
+    if (phone !== this.phone) {
+      this.phone = phone;
+      this.theme = this.resolveTheme();
+      this.parsed.root.props.gap = String(this.theme.space.md);
+    }
     const lv = this.loadingView();
     const scope = this.state.scope;
     const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.layoutWarning(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
@@ -801,6 +817,7 @@ export class SayShape {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, this.metrics.width, this.metrics.height);
     this.hits = [];
+    this.grew = false;
     this.clips = [];
     this.waitingForSight = false;
     this.followsSight = false;
@@ -824,6 +841,7 @@ export class SayShape {
       this.painting = true;
       try { this.paintBox(this.modal, ctx, 1); } finally { this.painting = false; }
     }
+    if (this.grew) trimReach(this.hits);
     this.trapFocus();
     this.resolveFocus();
     // Bringing the focused element into view lays out again, in this same frame (renderNow):
@@ -831,9 +849,11 @@ export class SayShape {
     if (this.revealFocus()) return;
     if (this.focus && this.keyboardMode && !this.inspector.inspecting) {
       const f = this.focus;
-      const clip = this.hits.find((h) => h.box.node.id === f.node.id && h.detail === f.detail)?.clip;
+      const region = this.hits.find((h) => h.box.node.id === f.node.id && h.detail === f.detail);
+      const clip = region?.clip;
       if (clip) { g.save(); g.beginPath(); g.rect(clip.x - 4, clip.y - 4, clip.w + 8, clip.h + 8); g.clip(); }
-      this.paintFocusRing(g, f.box);
+      // Round what's drawn, not the larger area a finger can press.
+      this.paintFocusRing(g, region?.ring ?? f.box);
       if (clip) g.restore();
     }
     this.paintPopup(g, ctx);
@@ -1084,7 +1104,10 @@ export class SayShape {
         const clip = this.clips[this.clips.length - 1];
         const xf = this.xform;
         const box = xf ? applyTransform(laid, xf) : laid;
-        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(xf ? { local: { box: laid, transform: xf } } : {}), ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
+        // Draw small, hit big: on a phone, a region asking for reach is grown to it (trimmed after paint).
+        const grown = this.phone && o.reach ? reachOut(box, o.reach) : null;
+        if (grown) this.grew = true;
+        this.hits.push({ box: grown ?? (focusable ? atLeastTarget(box) : box), ...(grown ? { ring: box } : {}), detail: o.detail, focusable, ...(xf ? { local: { box: laid, transform: xf } } : {}), ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
       },
       isHovered: (n, d) => same(this.hover, n, d),
       isFocused: (n, d) => this.keyboardMode && same(this.focus, n, d),
@@ -1510,8 +1533,11 @@ export class SayShape {
   private pressContext(screenTarget: HitTarget): PressContext {
     const readers = new WeakMap<SayShapeNode, PropReader>();
     // Inside a scaled slide, handlers work with the box as it was laid out.
-    const local = screenTarget.layer ? undefined : this.hits.find((h) => sameRegion(h, screenTarget))?.local;
-    const target = local ? { ...screenTarget, box: local.box } : screenTarget;
+    const region = screenTarget.layer ? undefined : this.hits.find((h) => sameRegion(h, screenTarget));
+    const local = region?.local;
+    // A region grown for fingers: handlers see the box as drawn.
+    const ring = region?.ring;
+    const target = local ? { ...screenTarget, box: local.box } : ring ? { ...screenTarget, box: ring } : screenTarget;
     return {
       target,
       scope: scopeOf(target.node, this.state.scope),
@@ -2866,11 +2892,16 @@ export class SayShape {
     return this.lookChoice;
   }
 
-  /** The look drawn with: the spec's, over the chat density in a chat (context "chat") unless the spec chose a density. */
+  /**
+   * The look drawn with: the spec's, and in a chat (context "chat") the
+   * compact scale unless the spec chose a density, and Hairline surfaces
+   * whatever it chose. On a phone-width canvas, the theme's phone sizes.
+   */
   private appliedLook(): AppliedLook | null {
     const look = this.lookChoice;
-    if (this.opts.context !== "chat" || look?.density) return look;
-    return { ...look, density: CHAT_DENSITY };
+    const screen: Pick<AppliedLook, "screen"> = this.phone ? { screen: "phone" } : {};
+    if (this.opts.context !== "chat") return look || this.phone ? { ...look, ...screen } : null;
+    return { ...look, density: look?.density ?? CHAT_DENSITY, surface: "lines", ...screen };
   }
 
   private resolveTheme(): Theme {
@@ -3032,6 +3063,71 @@ function atLeastTarget(box: Box): Box {
   if (box.h >= MIN_TARGET) return box;
   return { ...box, y: box.y - (MIN_TARGET - box.h) / 2, h: MIN_TARGET };
 }
+
+/** A box grown around its middle until each side is at least reach (addHit's reach), or null when it already is. */
+function reachOut(box: Box, reach: number): Box | null {
+  const h = Math.max(box.h, reach), w = Math.max(box.w, reach);
+  if (h === box.h && w === box.w) return null;
+  return { ...box, x: box.x - (w - box.w) / 2, y: box.y - (h - box.h) / 2, w, h };
+}
+
+const rightOf = (r: Rect) => r.x + r.w, bottomOf = (r: Rect) => r.y + r.h;
+const within = (a: Rect, b: Rect) => a.x >= b.x && a.y >= b.y && rightOf(a) <= rightOf(b) && bottomOf(a) <= bottomOf(b);
+const meets = (a: Rect, b: Rect) => a.x < rightOf(b) && b.x < rightOf(a) && a.y < bottomOf(b) && b.y < bottomOf(a);
+
+/**
+ * Grown regions (those with a ring) give way to their neighbours. Each side
+ * may reach as far as the middle of the gap to the nearest region that side,
+ * so no grown region covers what another draws and two neighbours share a gap
+ * evenly. Within that, the growth is shared between the two sides, and what
+ * one side can't take (a button just under another) goes to the other, so a
+ * control by itself still gets its full reach. Regions that hold the other's
+ * drawn box (a pressable card round a button, a tip over its own element)
+ * aren't neighbours, and drawn boxes that overlap can't be parted.
+ */
+function trimReach(hits: HitRegion[]): void {
+  // As far as each region could reach, before any gives way: its whole growth on either side.
+  const most = hits.map((h) => {
+    const d = h.ring;
+    if (!d) return h.box;
+    const nx = h.box.w - d.w, ny = h.box.h - d.h;
+    return { x: d.x - nx, y: d.y - ny, w: d.w + 2 * nx, h: d.h + 2 * ny };
+  });
+  const placed: Array<Box | null> = hits.map(() => null);
+  for (let i = 0; i < hits.length; i++) {
+    const a = hits[i]!, mine = a.ring;
+    if (!mine) continue;
+    const far = most[i]!;
+    let top = far.y, left = far.x, bottom = bottomOf(far), right = rightOf(far);
+    for (let j = 0; j < hits.length; j++) {
+      if (j === i) continue;
+      const n = hits[j]!, theirs = n.ring ?? n.box;
+      if (within(mine, theirs) || within(theirs, mine) || meets(mine, theirs) || !meets(far, most[j]!)) continue;
+      const below = theirs.y >= bottomOf(mine), above = bottomOf(theirs) <= mine.y;
+      const after = theirs.x >= rightOf(mine), before = rightOf(theirs) <= mine.x;
+      const gapY = below ? theirs.y - bottomOf(mine) : above ? mine.y - bottomOf(theirs) : -1;
+      const gapX = after ? theirs.x - rightOf(mine) : before ? mine.x - rightOf(theirs) : -1;
+      // Apart both ways (diagonal neighbours): part them along the wider gap, which leaves more.
+      if (gapY >= gapX) {
+        if (below) bottom = Math.min(bottom, bottomOf(mine) + gapY / 2);
+        else top = Math.max(top, mine.y - gapY / 2);
+      } else if (after) right = Math.min(right, rightOf(mine) + gapX / 2);
+      else left = Math.max(left, mine.x - gapX / 2);
+    }
+    const [y, h] = share(mine.y, mine.h, a.box.h - mine.h, mine.y - top, bottom - bottomOf(mine));
+    const [x, w] = share(mine.x, mine.w, a.box.w - mine.w, mine.x - left, right - rightOf(mine));
+    if (x !== a.box.x || y !== a.box.y || w !== a.box.w || h !== a.box.h) placed[i] = { ...a.box, x, y, w, h };
+  }
+  placed.forEach((b, i) => { if (b) hits[i]!.box = b; });
+}
+
+/** Growth along one axis: half each side, what one side has no room for going to the other. */
+function share(start: number, size: number, grow: number, roomBefore: number, roomAfter: number): [number, number] {
+  const before = Math.min(roomBefore, Math.max(grow / 2, grow - roomAfter));
+  const after = Math.min(roomAfter, grow - before);
+  return [start - before, size + before + after];
+}
+
 const TOAST_FADE = 180;
 
 /** The state name that holds the visible screen. */

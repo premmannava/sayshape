@@ -10,6 +10,7 @@
  * light one, a step lighter on a dark one.
  */
 import { followSurface, type Theme } from "../../../src/theme";
+import { controlFor } from "../../../src/host-tokens";
 
 /** Reads one host variable as a value the canvas can use, or undefined. */
 export type ReadVar = (name: string, kind: "color" | "length" | "font") => string | undefined;
@@ -58,6 +59,8 @@ export function hostTheme(base: Theme, read: ReadVar): Theme {
   }
   // Cards keep SayShape's layering over the host's background.
   followSurface(colors, patch);
+  // Field and control outlines keep 3:1 (WCAG 1.4.11) on the host's background and cards.
+  if (patch.surface) colors.control = controlFor(colors);
   const radius = { ...base.radius };
   for (const [slot, name] of RADIUS_VARS) {
     const v = px(read(name, "length"));

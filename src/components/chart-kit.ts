@@ -10,7 +10,7 @@
 import type { ComponentDef, LayoutContext } from "../component";
 import { fitLines, wrapText, type TextMeasurer } from "../text";
 import { fieldOf, isList, isRecord } from "../data";
-import { isDark, isDarkTheme, mixColors, type Theme } from "../theme";
+import { isDark, isDarkTheme, mixColors, sizesOf, type Theme } from "../theme";
 import type { Value } from "../types";
 import { fillTint, themeFont } from "./util";
 
@@ -350,11 +350,11 @@ export function shareText(share: number): string {
   return pct > 0 && pct < 1 ? "<1%" : `${Math.round(pct)}%`;
 }
 
-/** Plot height for a width: wide enough to read, not taller than a phone screen wants. */
 /** Room inside the plot so dots at the top and bottom stay within it. */
 export const INSET = 5;
 
-export const plotHeight = (w: number) => Math.round(Math.max(144, Math.min(238, w * 0.42)));
+/** Plot height for a width: wide enough to read, not taller than a phone screen wants, and never shorter than the theme's plotMin. */
+export const plotHeight = (w: number, theme: Theme) => Math.round(Math.max(sizesOf(theme).plotMin, Math.min(238, w * 0.42)));
 
 /** Legend swatches: size, and the space between a swatch and its name. */
 export const SWATCH = 10;

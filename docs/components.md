@@ -78,7 +78,7 @@ Places children in responsive equal columns. Cards keep their own height, top-al
 
 | Prop | Type | Description |
 |---|---|---|
-| `min` | number | Narrowest a column may be, in pixels (default 200). |
+| `min` | number | Narrowest a column may be, in pixels (default 150). |
 | `cols` | number | Most columns; fewer when min doesn't fit. |
 | `gap` | number | Space between children in pixels (default 14). |
 | `stretch` | boolean | Cards side by side share the tallest one's height, for panels that should line up. |

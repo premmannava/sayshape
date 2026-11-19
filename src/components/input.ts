@@ -2,7 +2,7 @@ import { toNumber } from "../data";
 import type { ComponentDef, LayoutContext, PaintContext, PropReader } from "../component";
 import type { Box, SayShapeNode } from "../types";
 import { INPUT_KINDS, valueStamp } from "../editor";
-import { isDark, isDarkTheme, mixColors, type Theme } from "../theme";
+import { isDark, isDarkTheme, mixColors, sizesOf, smallControlOf, type Theme } from "../theme";
 import { MOTION } from "../design";
 import { detailProp, fillTint, iconBefore, iconProblems, labelLines, onProp, partBox, runOn, textWidth, themeFont } from "./util";
 import { drawIcon, isIconName, type IconName } from "../icons";
@@ -16,14 +16,17 @@ const VARIANTS = ["primary", "secondary", "danger"] as const;
 export const BUTTON_FULL_UNDER = 480;
 
 const BUTTON_SIZES = ["md", "sm"] as const;
-/** A small button's height and label size, as shares of a regular one's. */
+/**
+ * A small button's least width and label size, as shares of a regular one's. Its height is
+ * the theme's (smallControlOf: control.small, or 0.8 of a control).
+ */
 const SMALL_HEIGHT = 0.8, SMALL_TEXT = 13 / 14;
 const BUTTON_ICON_GAP = 6;
 
 /** A button's height and label size, regular or small. */
 function buttonSize(p: PropReader, theme: Theme): { h: number; text: number; icon: number } {
   const small = p.oneOf("size", BUTTON_SIZES, "md") === "sm";
-  return { h: small ? Math.round(theme.control.height * SMALL_HEIGHT) : theme.control.height, text: small ? Math.round(14 * SMALL_TEXT) : 14, icon: small ? 14 : 16 };
+  return { h: small ? smallControlOf(theme) : theme.control.height, text: small ? Math.round(14 * SMALL_TEXT) : 14, icon: small ? 14 : 16 };
 }
 
 /** Room an icon takes before a button's label, if it has a real one. */
@@ -201,7 +204,7 @@ button icon=trash label="Remove" variant=secondary on=emit:remove`,
       g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
     }
     g.restore();
-    if (!disabled) ctx.addHit(box);
+    if (!disabled) ctx.addHit(box, { reach: ICON_TAP });
   },
   press(ctx) {
     const node = ctx.target.node;
@@ -612,7 +615,7 @@ stepper "Quantity" bind=qty min=1 max=10`,
       g.fillStyle = c.ink;
       g.fillText(part.sign, pb.x + STEP_W / 2, top + h / 2 + 1);
       g.restore();
-      if (part.enabled) ctx.addHit(pb, { detail: part.name });
+      if (part.enabled) ctx.addHit(pb, { detail: part.name, reach: ICON_TAP });
     }
     g.font = ctx.font(600, theme.text.body);
     g.fillStyle = c.ink;
@@ -873,17 +876,33 @@ slider "Up to \${maxPrice}" bind=maxPrice min=20 max=300 step=10`,
   },
 };
 
-/** Field text size: at least 16 px, or phones zoom the page when the field is focused. */
 /**
- * Fill and outline a field whose path is current: an inset surface with a hairline border that
- * firms up under the pointer, and an accent border with a soft halo while it's being typed in.
- * Shared by input, select and date-picker so every field looks the same.
+ * Fill and outline a field whose path is current, so input, select and date-picker look the same.
+ * Raised surfaces: an inset fill with a hairline border that firms up under the pointer, and an
+ * accent border with a soft halo while it's being typed in. Hairline surfaces (lines): no fill,
+ * a 1 px control outline that firms toward ink under the pointer, and a 2 px accent outline in focus.
  */
-export function paintField(g: CanvasRenderingContext2D, c: Theme["colors"], active: boolean | number, hot: boolean | number): void {
+export function paintField(g: CanvasRenderingContext2D, theme: Theme, active: boolean | number, hot: boolean | number): void {
+  const c = theme.colors;
   // Numeric progress lets input, select and date-picker share one soft focus
   // transition, while callers without animation keep boolean compatibility.
   const focus = Math.min(1, Math.max(0, Number(active)));
   const hover = Math.min(1, Math.max(0, Number(hot)));
+  if (theme.surfaces === "lines") {
+    g.save();
+    // Exactly the control color at rest: it is what holds 3:1 against the page.
+    g.strokeStyle = hover > 0 ? mixColors(c.control, c.ink, 0.3 * hover) ?? c.control : c.control;
+    g.lineWidth = 1;
+    g.stroke();
+    if (focus > 0) {
+      g.globalAlpha *= focus;
+      g.strokeStyle = c.accent;
+      g.lineWidth = 2;
+      g.stroke();
+    }
+    g.restore();
+    return;
+  }
   g.fillStyle = c.surface;
   g.fill();
   g.save();
@@ -915,14 +934,13 @@ export function paintField(g: CanvasRenderingContext2D, c: Theme["colors"], acti
   g.restore();
 }
 
-/** 16px keeps phones from zooming in when the typing field opens over it. */
-export const FIELD_TEXT = 16;
 /** The most rows a field of several lines shows. */
 export const MAX_INPUT_LINES = 12;
 /** Padding above and below the text in a field of several lines, and the gap above an error message. */
 const MULTI_PAD = 10;
 const ERROR_GAP = 6;
-const multiLineHeight = () => Math.round(FIELD_TEXT * 1.4);
+/** A row of a field of several lines: the field text size with room between. */
+const multiLineHeight = (t: Theme) => Math.round(sizesOf(t).fieldText * 1.4);
 const errorLineHeight = (t: Theme) => Math.round(t.text.caption * 1.4);
 /** What a field shows under it once it's been left: its problem (if any), wrapped. */
 interface FieldData {
@@ -937,9 +955,9 @@ function linesOf(p: PropReader): number {
 }
 
 /** One line high for a field of one line; several lines and their padding otherwise. */
-function fieldHeight(p: PropReader, controlHeight: number): number {
-  const rows = linesOf(p);
-  return rows > 1 ? Math.max(controlHeight, rows * multiLineHeight() + 2 * MULTI_PAD) : controlHeight;
+function fieldHeight(p: PropReader, theme: Theme): number {
+  const rows = linesOf(p), controlHeight = theme.control.height;
+  return rows > 1 ? Math.max(controlHeight, rows * multiLineHeight(theme) + 2 * MULTI_PAD) : controlHeight;
 }
 
 /** What's wrong with a field's value, in plain words, or "": required, an email's or a number's form, then its own error=. */
@@ -953,18 +971,16 @@ export function fieldProblem(p: PropReader, unparsed: boolean): string {
   return p.str("error", "").trim();
 }
 
-export const FIELD_PAD = 12;
 /** The narrowest a kind=number field gets in a row: room for about six digits. */
 const NUMBER_MIN = 80;
 /** An icon at the start of a field: its size, and the room it takes before the text. */
 const FIELD_ICON = 18, FIELD_ICON_ROOM = FIELD_ICON + 8;
 const fieldLead = (p: PropReader) => (isIconName(p.str("icon")) ? FIELD_ICON_ROOM : 0);
-export const LABEL_SIZE = 13;
-const LABEL_GAP = 6;
 
-/** The field's box, under its label if it has one. */
-export function fieldBox(box: Box, p: PropReader, controlHeight: number): Box {
-  const top = p.text() ? LABEL_SIZE + 4 + LABEL_GAP : 0;
+/** The field's box, under its label (the theme's label size, then labelGap) if it has one. */
+export function fieldBox(box: Box, p: PropReader, controlHeight: number, theme: Theme): Box {
+  const s = sizesOf(theme);
+  const top = p.text() ? s.label + 4 + s.labelGap : 0;
   return partBox(box, box.x, box.y + top, box.w, controlHeight);
 }
 
@@ -1036,7 +1052,7 @@ text "{plural(len(todos), 'item')}" tone=muted`,
   },
   layout(box, ctx) {
     const p = ctx.props(box.node);
-    const field = fieldBox(box, p, fieldHeight(p, ctx.theme.control.height));
+    const field = fieldBox(box, p, fieldHeight(p, ctx.theme), ctx.theme);
     // What's wrong shows only once the field has been typed in and left.
     const v = ctx.view?.(box.node);
     const problem = v?.touched && v.stamp === valueStamp(fieldValue(p)) ? fieldProblem(p, !!v.unparsed) : "";
@@ -1051,8 +1067,9 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     const p = ctx.props(box.node);
     const { g, theme } = ctx;
     const c = theme.colors;
+    const sizes = sizesOf(theme), pad = sizes.fieldPadX;
     const disabled = p.cond("disabled");
-    const field = fieldBox(box, p, fieldHeight(p, theme.control.height));
+    const field = fieldBox(box, p, fieldHeight(p, theme), theme);
     const editing = ctx.isEditing(box.node);
     const hot = !disabled && ctx.isHovered(box.node);
     const d = box.data as unknown as FieldData | undefined;
@@ -1060,7 +1077,7 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     if (disabled) g.globalAlpha *= 0.45;
     const label = p.text();
     if (label) {
-      g.font = ctx.font(600, LABEL_SIZE);
+      g.font = ctx.font(600, sizes.label);
       g.textAlign = "left";
       g.textBaseline = "top";
       g.fillStyle = c.ink;
@@ -1069,7 +1086,7 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
     const focus = ctx.tween(box.node, "field:focus", !disabled && (editing || ctx.isFocused(box.node)) ? 1 : 0, MOTION.selection);
     const hover = ctx.tween(box.node, "field:hover", hot ? 1 : 0, MOTION.hover);
-    paintField(g, c, focus, hover);
+    paintField(g, theme, focus, hover);
     if (d?.problem) {
       // A field with a problem is outlined in the bad color, with the message under it.
       ctx.roundRect(field.x + 0.5, field.y + 0.5, field.w - 1, field.h - 1, theme.radius.md);
@@ -1086,45 +1103,45 @@ text "{plural(len(todos), 'item')}" tone=muted`,
     // An icon at the start of the field, level with the first line of text.
     const lead = fieldLead(p);
     if (lead) {
-      const cy = linesOf(p) > 1 ? field.y + MULTI_PAD + multiLineHeight() / 2 : field.y + field.h / 2;
-      drawIcon(g, p.str("icon") as IconName, field.x + FIELD_PAD, cy - FIELD_ICON / 2, FIELD_ICON, c.muted);
+      const cy = linesOf(p) > 1 ? field.y + MULTI_PAD + multiLineHeight(theme) / 2 : field.y + field.h / 2;
+      drawIcon(g, p.str("icon") as IconName, field.x + pad, cy - FIELD_ICON / 2, FIELD_ICON, c.muted);
     }
     if (!editing) {
       const value = fieldValue(p);
       const kind = p.oneOf("kind", INPUT_KINDS, "text");
       const shown = value ? (kind === "password" ? "•".repeat(value.length) : value) : p.str("placeholder");
-      g.font = ctx.font(400, FIELD_TEXT);
+      g.font = ctx.font(400, sizes.fieldText);
       g.fillStyle = value ? c.ink : c.muted;
       if (!value) g.globalAlpha *= 0.8;
       const rows = linesOf(p);
       if (rows > 1) {
         // Several lines: the text wrapped from the top, as many rows as fit, the last cut with an ellipsis.
         g.textBaseline = "middle";
-        const lh = multiLineHeight();
+        const lh = multiLineHeight(theme);
         const measure = { width: (t: string) => g.measureText(t).width };
-        const wrapped = shown.split("\n").flatMap((para) => (para ? wrapText(para, field.w - FIELD_PAD * 2 - lead, g.font, measure) : [""]));
+        const wrapped = shown.split("\n").flatMap((para) => (para ? wrapText(para, field.w - pad * 2 - lead, g.font, measure) : [""]));
         const shownRows = wrapped.slice(0, rows);
-        if (wrapped.length > rows) shownRows[rows - 1] = fitText(g, shownRows[rows - 1]! + " …", field.w - FIELD_PAD * 2 - lead);
-        shownRows.forEach((l, i) => g.fillText(l, field.x + FIELD_PAD + lead, field.y + MULTI_PAD + i * lh + lh / 2));
+        if (wrapped.length > rows) shownRows[rows - 1] = fitText(g, shownRows[rows - 1]! + " …", field.w - pad * 2 - lead);
+        shownRows.forEach((l, i) => g.fillText(l, field.x + pad + lead, field.y + MULTI_PAD + i * lh + lh / 2));
       } else {
         g.textBaseline = "middle";
-        g.fillText(fitText(g, shown, field.w - FIELD_PAD * 2 - lead), field.x + FIELD_PAD + lead, field.y + field.h / 2 + 1);
+        g.fillText(fitText(g, shown, field.w - pad * 2 - lead), field.x + pad + lead, field.y + field.h / 2 + 1);
       }
     }
     g.restore();
-    if (!disabled) ctx.addHit(field);
+    if (!disabled) ctx.addHit(field, { reach: ICON_TAP });
   },
   editor(box, p, theme) {
     const rows = linesOf(p);
-    const lead = fieldLead(p);
-    const field = fieldBox(box, p, fieldHeight(p, theme.control.height));
+    const lead = fieldLead(p), pad = sizesOf(theme).fieldPadX;
+    const field = fieldBox(box, p, fieldHeight(p, theme), theme);
     const max = Math.min(10_000, Math.max(1, Math.round(p.num("max", rows > 1 ? 2000 : 500))));
     const rect = rows > 1
-      ? { x: field.x + FIELD_PAD + lead, y: field.y + MULTI_PAD, w: Math.max(0, field.w - FIELD_PAD * 2 - lead), h: field.h - 2 * MULTI_PAD }
-      : { x: field.x + FIELD_PAD + lead, y: field.y + 1, w: Math.max(0, field.w - FIELD_PAD * 2 - lead), h: field.h - 2 };
+      ? { x: field.x + pad + lead, y: field.y + MULTI_PAD, w: Math.max(0, field.w - pad * 2 - lead), h: field.h - 2 * MULTI_PAD }
+      : { x: field.x + pad + lead, y: field.y + 1, w: Math.max(0, field.w - pad * 2 - lead), h: field.h - 2 };
     return {
       rect,
-      font: themeFont(theme, 400, FIELD_TEXT),
+      font: themeFont(theme, 400, sizesOf(theme).fieldText),
       color: theme.colors.ink,
       accent: theme.colors.accent,
       muted: theme.colors.muted,
@@ -1133,7 +1150,7 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       placeholder: p.str("placeholder"),
       label: p.text() || p.str("placeholder"),
       max,
-      ...(rows > 1 ? { lines: rows, lineHeight: multiLineHeight() } : {}),
+      ...(rows > 1 ? { lines: rows, lineHeight: multiLineHeight(theme) } : {}),
       ...(p.cond("required") ? { required: true } : {}),
       ...((box.data as unknown as FieldData | undefined)?.problem ? { problem: (box.data as unknown as FieldData).problem } : {}),
     };

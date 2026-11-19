@@ -21,6 +21,8 @@ export interface DrawOp {
   clip?: { x: number; y: number; w: number; h: number };
   /** The canvas filter in effect (blur(…)), when it isn't "none". */
   filter?: string;
+  /** The shadow drawn with it, when there is one: a color that isn't transparent and a blur or offset. */
+  shadow?: { color: string; blur: number; offsetY: number };
 }
 
 /** Calls that mark pixels. Everything else (paths, transforms, state) only prepares. */
@@ -38,6 +40,14 @@ interface Style {
   font: string;
   globalAlpha: number;
   [key: string]: unknown;
+}
+
+/** The shadow a drawing call casts under the current style, or nothing when it casts none. */
+function shadowOf(style: Style): { shadow?: NonNullable<DrawOp["shadow"]> } {
+  const color = typeof style.shadowColor === "string" ? style.shadowColor : "";
+  const blur = Number(style.shadowBlur ?? 0), offsetY = Number(style.shadowOffsetY ?? 0);
+  if (!color || color === "transparent" || /^rgba\(.*,\s*0\)$/.test(color) || (!blur && !offsetY)) return {};
+  return { shadow: { color, blur, offsetY } };
 }
 
 const initialStyle = (): Style => ({ fillStyle: "#000000", strokeStyle: "#000000", font: "10px sans-serif", globalAlpha: 1, filter: "none" });
@@ -112,6 +122,7 @@ export function createRecordingContext(): { context: CanvasRenderingContext2D; t
           textAlign: prop.endsWith("Text") ? String(style.textAlign ?? "start") : "",
           ...(style.clip ? { clip: style.clip as DrawOp["clip"] } : {}),
           ...(style.filter !== "none" ? { filter: String(style.filter) } : {}),
+          ...shadowOf(style),
         });
         return undefined;
       };

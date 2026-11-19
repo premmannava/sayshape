@@ -40,7 +40,9 @@ describe("grid balance and cols", () => {
   it("treats cols as a maximum that min still limits", () => {
     expect(rowsOf(lay(`grid cols=2 gap=10\n${cards(5)}`, 700).children)).toEqual([2, 2, 1]);
     expect(rowsOf(lay(`grid cols=4 min=200 gap=10\n${cards(4)}`, 700).children)).toEqual([2, 2]);
-    expect(rowsOf(lay(`grid cols=2 gap=10\n${cards(4)}`, 375).children)).toEqual([1, 1, 1, 1]);
+    // The default min (150) fits two columns in 375 (335 inside the padding), and only one in 320.
+    expect(rowsOf(lay(`grid cols=2 gap=10\n${cards(4)}`, 375).children)).toEqual([2, 2]);
+    expect(rowsOf(lay(`grid cols=2 gap=10\n${cards(4)}`, 320).children)).toEqual([1, 1, 1, 1]);
   });
 });
 

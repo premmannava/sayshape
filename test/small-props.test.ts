@@ -68,7 +68,9 @@ describe("stat", () => {
 describe("button", () => {
   const box = (spec: string, width: number) => {
     const ui = render(spec, { width });
-    const b = ui.hits.find((h) => h.box.node.type === "button")!.box;
+    // The button as drawn: on a phone its region is grown for fingers (ring is what it draws).
+    const hit = ui.hits.find((h) => h.box.node.type === "button")!;
+    const b = hit.ring ?? hit.box;
     ui.destroy();
     return b;
   };

@@ -188,7 +188,7 @@ export const treemap: ChartKindDef = {
     }
 
     // A bit taller than the other charts: a treemap's areas need room to compare.
-    const h = Math.round(plotHeight(box.w) * 1.25);
+    const h = Math.round(plotHeight(box.w, t) * 1.25);
     const plot: Rect = { x: 0, y: top, w: box.w, h };
     // Keep the largest; fold the rest into one rectangle when there are too many, or when
     // they'd be too small to see. Folding changes the layout, so try again (a few times at most).

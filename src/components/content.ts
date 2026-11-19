@@ -1,6 +1,6 @@
 import type { ComponentDef, LayoutContext, PaintContext, PropReader } from "../component";
 import type { TextMeasurer } from "../text";
-import type { Theme } from "../theme";
+import { sizesOf, type Theme } from "../theme";
 import type { Box, Rect, SayShapeNode, Value } from "../types";
 import { isList, isRecord } from "../data";
 import { balanceText, ellipsize, fitLines, wrapText } from "../text";
@@ -292,7 +292,7 @@ stat label="Total" value="\${price*qty}"`,
     // What its label and its value need at the smallest size, so "Days 2" stays small; long values wrap below 110.
     const p = ctx.props(node);
     const label = p.str("label");
-    const labelW = textWidth(ctx, label, 400, STAT_LABEL) + (isIconName(p.str("icon")) ? STAT_ICON + STAT_ICON_GAP : 0);
+    const labelW = textWidth(ctx, label, 400, sizesOf(ctx.theme).statLabel) + (isIconName(p.str("icon")) ? STAT_ICON + STAT_ICON_GAP : 0);
     const valueW = textWidth(ctx, statValue(p), statWeight(p), statSizes(ctx.theme).at(-1)!);
     return Math.max(40, Math.min(110, Math.max(labelW, valueW)));
   },
@@ -304,7 +304,7 @@ stat label="Total" value="\${price*qty}"`,
     const x = center ? box.x + box.w / 2 : box.x;
     g.textAlign = center ? "center" : "left";
     g.textBaseline = "alphabetic";
-    g.font = ctx.font(400, STAT_LABEL);
+    g.font = ctx.font(400, sizesOf(ctx.theme).statLabel);
     g.fillStyle = ctx.theme.colors.muted;
     // An icon leads the first line of the label; centred, the pair is centred together.
     const iconName = p.str("icon");
@@ -315,7 +315,7 @@ stat label="Total" value="\${price*qty}"`,
       g.textAlign = "left";
       drawIcon(g, iconName as IconName, lx, box.y + 12 - STAT_ICON + 3, STAT_ICON, ctx.theme.colors.muted);
     }
-    d.label.forEach((l, i) => g.fillText(l, lx + lead, box.y + 12 + i * STAT_LABEL_LH));
+    d.label.forEach((l, i) => g.fillText(l, lx + lead, box.y + 12 + i * statLabelLH(ctx.theme)));
     if (lead && center) g.textAlign = "center";
     const extra = (box.data as Partial<StatExtras>).extras ? (box.data as unknown as StatExtras) : null;
     if (ctx.isLoading(box.node)) {
@@ -458,8 +458,8 @@ const statZoom = (t: Theme): number => (t.zoom !== undefined && t.zoom > 1 ? t.z
 
 /** Figures are semibold: confident without the heaviness of bold at display sizes. */
 const STAT_WEIGHT = 600;
-/** The label is a quiet sentence-case caption above the figure. */
-const STAT_LABEL = 13, STAT_LABEL_LH = 17;
+/** The label is a quiet sentence-case caption above the figure: the theme's statLabel size, on lines 4 px taller. */
+const statLabelLH = (t: Theme): number => sizesOf(t).statLabel + 4;
 
 interface StatLayout { label: string[]; value: string[]; size: number; weight: number; valueLH: number; valueTop: number; height: number; labelIndent: number; detail: string[]; detailTop: number }
 
@@ -495,7 +495,7 @@ export function statLayout(label: string, value: string, width: number, theme: T
   const w = Math.max(20, width);
   const weight = extra?.weight ?? STAT_WEIGHT;
   const labelIndent = extra && isIconName(extra.icon) ? STAT_ICON + STAT_ICON_GAP : 0;
-  const labelLines = label ? fitLines(label, Math.max(20, w - labelIndent), themeFont(theme, 400, STAT_LABEL), m, 2) : [];
+  const labelLines = label ? fitLines(label, Math.max(20, w - labelIndent), themeFont(theme, 400, sizesOf(theme).statLabel), m, 2) : [];
   const all = statSizes(theme);
   const capped = like?.size ? all.filter((s) => s <= like.size!) : all;
   const sizes = capped.length ? capped : [all[all.length - 1]!];
@@ -506,7 +506,7 @@ export function statLayout(label: string, value: string, width: number, theme: T
   }
   lines ??= fitLines(value, w, themeFont(theme, weight, size), m, 3);
   const valueLH = Math.round(size * 1.3);
-  const valueTop = 12 + Math.max(0, Math.max(labelLines.length, like?.labelLines ?? 0) - 1) * STAT_LABEL_LH;
+  const valueTop = 12 + Math.max(0, Math.max(labelLines.length, like?.labelLines ?? 0) - 1) * statLabelLH(theme);
   const detail = extra?.detail ? fitLines(extra.detail, w, themeFont(theme, 400, STAT_DETAIL_SIZE), m, 2) : [];
   const detailTop = valueTop + lines.length * valueLH + STAT_DETAIL_GAP;
   return { label: labelLines, value: lines, size, weight, valueLH, valueTop, labelIndent, detail, detailTop, height: valueTop + lines.length * valueLH + (detail.length ? STAT_DETAIL_GAP + detail.length * STAT_DETAIL_LH : 0) + 6 };
@@ -520,8 +520,8 @@ const STAT_CHANGE_GAP = 8;
  * a short value got its change beside it and a longer one in the next card got it underneath.
  */
 const STAT_INLINE_MIN = 260;
-/** The change's pill: text size, height and padding either side. */
-const STAT_PILL_TEXT = 12, STAT_PILL_H = 20, STAT_PILL_X = 8;
+/** The change's pill: text size and padding either side; its height is the theme's pill size. */
+const STAT_PILL_TEXT = 12, STAT_PILL_X = 8;
 /** A sparkline's height and its widest; it's a hint of a trend, not a chart. */
 export const SPARK_H = 28;
 const SPARK_MAX_W = 200;
@@ -646,8 +646,9 @@ function statExtras(box: Box, d: StatLayout, ctx: LayoutContext): StatExtras & {
     if (inline) change = { text, width, valueW, inline, y: bottom - d.size * 0.36 };
     else {
       // A little space above, so the value's descenders stay clear of it.
-      change = { text, width, valueW, inline, y: bottom + t.space.xs + 2 + STAT_PILL_H / 2 };
-      bottom += t.space.xs + 2 + STAT_PILL_H;
+      const pillH = sizesOf(t).pill;
+      change = { text, width, valueW, inline, y: bottom + t.space.xs + 2 + pillH / 2 };
+      bottom += t.space.xs + 2 + pillH;
     }
   }
 
@@ -700,7 +701,8 @@ function paintStatExtras(box: Box, ctx: PaintContext, e: StatExtras, at: { x: nu
     const left = c.inline ? (at.center ? at.vx : at.x) + c.valueW + STAT_CHANGE_GAP : at.center ? at.x - c.width / 2 : at.x;
     const mid = box.y + c.y + at.rise;
     const color = e.tone === "muted" ? theme.colors.muted : statToneColor(theme, e.tone);
-    ctx.roundRect(left, mid - STAT_PILL_H / 2, c.width, STAT_PILL_H, ctx.theme.radius.sm);
+    const pillH = sizesOf(theme).pill;
+    ctx.roundRect(left, mid - pillH / 2, c.width, pillH, ctx.theme.radius.sm);
     fillTint(g, color, 0.085);
     // A hairline gives the pill a crisp, quiet edge. (A small bar inside its left edge read as a
     // stray "|" before the arrow, so it's gone.)
@@ -866,7 +868,7 @@ export const badge: ComponentDef = {
     return { role: "text", name: ctx.props(box.node).text() };
   },
   layout(box, ctx) {
-    box.h = BADGE_H;
+    box.h = sizesOf(ctx.theme).badge;
     // A badge takes its label's width, so rows keep tags together instead of spreading them out.
     box.w = Math.min(box.w, badgeWidth(ctx.props(box.node), ctx));
   },
@@ -878,8 +880,6 @@ export const badge: ComponentDef = {
     paintPill(ctx, box, p.text(), toneColor(ctx.theme, tone), p.oneOf("variant", PILL_VARIANTS, "soft"), badgeLead(p));
   },
 };
-
-const BADGE_H = 22;
 
 /** What starts a badge: its icon, else the status dot. */
 function badgeLead(p: PropReader): "dot" | IconName {

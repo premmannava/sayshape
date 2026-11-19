@@ -46,13 +46,11 @@ function textCollisions(ops: readonly DrawOp[]): string[] {
 }
 
 describe("the chat density (context: \"chat\")", () => {
-  it("is laid over the host's tokens: ~26 px figures, ~15 px card padding, 36 px controls", () => {
+  it("is the compact scale over the host's tokens: 24 px figures, 12 px card padding, 32 px controls", () => {
     const t = applyLook(lightTheme, { density: "chat" });
-    expect(t.text.display).toBeGreaterThanOrEqual(24);
-    expect(t.text.display).toBeLessThanOrEqual(28);
-    expect(t.space.lg).toBeGreaterThanOrEqual(14);
-    expect(t.space.lg).toBeLessThanOrEqual(16);
-    expect(t.control.height).toBe(36);
+    expect(t.text.display).toBe(24);
+    expect(t.space.lg).toBe(12);
+    expect(t.control.height).toBe(32);
     expect(t.text.body).toBe(lightTheme.text.body);
     expect(t.listInline).toBe(true);
   });
@@ -60,14 +58,20 @@ describe("the chat density (context: \"chat\")", () => {
   it("is the default only in a chat, and a spec's density= wins", () => {
     const plain = render(`text "Hi"`);
     expect(plain.sayshape.theme.control.height).toBe(lightTheme.control.height);
+    expect(plain.sayshape.theme.surfaces).toBeUndefined();
     const chat = render(`text "Hi"`, { context: "chat" });
-    expect(chat.sayshape.theme.control.height).toBe(36);
+    expect(chat.sayshape.theme.control.height).toBe(32);
+    expect(chat.sayshape.theme.surfaces).toBe("lines");
     expect(chat.sayshape.boxes!.children[0]!.x).toBe(CHAT_PADDING);
+    expect(render(`text "Hi"`, { context: "chat", width: 375 }).sayshape.theme.control.height).toBe(34);
     const airy = render(`look density=airy\ntext "Hi"`, { context: "chat" });
     expect(airy.sayshape.theme.control.height).toBe(applyLook(lightTheme, { density: "airy" }).control.height);
     expect(airy.sayshape.theme.listInline).toBeUndefined();
+    // A spec's density changes the sizes, never the chat's Hairline surfaces.
+    expect(airy.sayshape.theme.surfaces).toBe("lines");
+    expect(airy.sayshape.theme.colors.raised).toBe(lightTheme.colors.surface);
     const editorial = render(`look type=editorial\ntext "Hi"`, { context: "chat" });
-    expect(editorial.sayshape.theme.control.height).toBe(36);
+    expect(editorial.sayshape.theme.control.height).toBe(32);
   });
 
   it("puts a list row's title, detail and value on one line when they fit, and wraps them when they don't", () => {
@@ -88,7 +92,7 @@ describe("the chat density (context: \"chat\")", () => {
       expect(plain.warnings).toEqual([]);
       const before = plain.sayshape.boxes!.h, after = chat.sayshape.boxes!.h;
       expect(after).toBeLessThan(before * 0.92);
-      for (const width of [320, 600, 900]) {
+      for (const width of [320, 375, 600, 900, 1024]) {
         for (const theme of [lightTheme, darkTheme]) {
           for (const context of [undefined, "chat"] as const) {
             const ui = render(spec(name), { width, theme, ...(context ? { context } : {}) });

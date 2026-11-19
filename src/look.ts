@@ -14,7 +14,7 @@
  * Inside slides, density, shape and type sizes don't apply (a slide has a
  * fixed design size); mood and type's faces do.
  */
-import { extendTheme, isDark, mixColors, parseColor, type DeepPartial, type Theme } from "./theme";
+import { extendTheme, isDark, mixColors, parseColor, type DeepPartial, type Theme, type ThemeSizes } from "./theme";
 
 /** The options each look prop takes, with what each does: the guide and the docs read these. */
 export const LOOK_OPTIONS = {
@@ -86,36 +86,128 @@ const BOLD_SHADOW = 1.8;
 const MAX_SHADOW_ALPHA = 0.6;
 
 /**
- * A look as the engine applies it: a spec's choices, or the host's chat
- * density (SayShapeOptions.context "chat") where the spec chose none.
- * "chat" is never written in a spec: hosts set it.
+ * A look as the engine applies it: a spec's choices, over what the host and
+ * the screen bring. Never written in a spec: the engine sets these.
+ * density "chat": the compact scale (SayShapeOptions.context "chat", where
+ * the spec chose no density). surface "lines": Hairline surfaces (chats).
+ * screen "phone": a canvas narrower than PHONE_WIDTH, so the theme's phone
+ * sizes apply.
  */
-export type AppliedLook = Omit<Look, "density"> & { density?: LookOption<"density"> | typeof CHAT_DENSITY };
+export type AppliedLook = Omit<Look, "density"> & {
+  density?: LookOption<"density"> | typeof CHAT_DENSITY;
+  surface?: "lines";
+  screen?: "phone";
+};
+/** The compact scale, as the density a chat gets by default. */
 export const CHAT_DENSITY = "chat";
 
 /**
- * The chat density, relative to the host's own tokens (a 40 px control, a
- * 30 px display size, 22 px card padding): figures about 26 px, headings a
- * step smaller, card padding about 15 px, gaps about 0.7 as wide, controls
- * 36 px. Body and caption text keep the host's sizes, for reading.
+ * The compact scale, as shares of the host's own tokens (SayShape's light
+ * and dark themes: lead 16, title 20, display 30, a 40 px control, spacing
+ * 4/8/14/22/32 and a 12 px large corner), so a host's own font size still
+ * scales it. With those it gives lead 15, title 18 (17 on a phone), display
+ * 24 (22), 32 px controls (34) with 23 px small ones (24), spacing
+ * 4/6/10/12/18 and a 10 px large corner. Body and caption text keep the
+ * host's sizes, for reading.
  */
-const CHAT = { space: 0.7, control: 0.9, display: 0.87, title: 0.9, lead: 0.94 } as const;
+const COMPACT = {
+  text: { lead: 15 / 16, title: 18 / 20, display: 24 / 30 },
+  phoneText: { title: 17 / 20, display: 22 / 30 },
+  control: 32 / 40,
+  phoneControl: 34 / 40,
+  /** A small button's height, as a share of a compact control's. */
+  small: 0.72,
+  space: { xs: 1, sm: 6 / 8, md: 10 / 14, lg: 12 / 22, xl: 18 / 32 },
+  radiusLg: 10 / 12,
+} as const;
 
-/** The chat density's tokens over a theme; listInline lays list rows out on one line where they fit, gaps tightens containers. */
-function chatPatch(t: Theme): DeepPartial<Theme> {
+/** The compact scale's sizes of parts (ThemeSizes in src/theme.ts), on a desktop. */
+const COMPACT_SIZES: ThemeSizes = {
+  listPadX: 12,
+  listPadY: 8,
+  listIcon: 18,
+  listIconGap: 10,
+  accordionHeader: 36,
+  statLabel: 12,
+  pill: 18,
+  badge: 20,
+  label: 13,
+  labelGap: 4,
+  fieldPadX: 10,
+  fieldText: 14,
+  segmented: 32,
+  segmentedPadX: 12,
+  calloutAction: 28,
+  calloutIcon: 16,
+  emptyIcon: 32,
+  emptyButton: 32,
+  emptyPad: 12,
+  plotMin: 144,
+};
+
+/**
+ * What differs on a phone: taller headers and controls for fingers, 16 px
+ * field text (under 16, iOS zooms the page when the native input opens) and
+ * a shorter shortest plot.
+ */
+const COMPACT_PHONE_SIZES: Partial<ThemeSizes> = {
+  accordionHeader: 44,
+  fieldText: 16,
+  segmented: 34,
+  emptyButton: 34,
+  plotMin: 120,
+};
+
+/** The gaps between children of column, row and grid in the compact scale. */
+const COMPACT_GAPS = { column: 6, row: 8, grid: 8 } as const;
+
+const controlAt = (t: Theme, k: number) => Math.max(MIN_CONTROL, Math.round(t.control.height * k));
+
+/**
+ * The compact scale's tokens over a theme: the sizes above, list rows on one
+ * line where they fit (listInline), tighter gaps, and a phone group for
+ * canvases narrower than PHONE_WIDTH. A theme it already made (scale
+ * "compact", such as a host-token theme shown in a chat) isn't shrunk again.
+ */
+export function compactPatch(t: Theme): DeepPartial<Theme> {
+  if (t.scale === "compact") return { listInline: true, gaps: { ...COMPACT_GAPS } };
+  const height = controlAt(t, COMPACT.control), phoneHeight = controlAt(t, COMPACT.phoneControl);
+  const text = (k: Partial<Record<keyof Theme["text"], number>>) =>
+    Object.fromEntries(Object.entries(k).map(([n, v]) => [n, Math.round(t.text[n as keyof Theme["text"]] * v)])) as Partial<Theme["text"]>;
   return {
-    space: scale(t.space, CHAT.space, 2),
-    control: { height: Math.max(MIN_CONTROL, Math.round(t.control.height * CHAT.control)) },
-    text: { display: Math.round(t.text.display * CHAT.display), title: Math.round(t.text.title * CHAT.title), lead: Math.round(t.text.lead * CHAT.lead) },
+    text: text(COMPACT.text),
+    control: { height, small: Math.round(height * COMPACT.small) },
+    space: Object.fromEntries(Object.entries(t.space).map(([n, v]) => [n, Math.max(2, Math.round(v * COMPACT.space[n as keyof Theme["space"]]))])) as Theme["space"],
+    radius: { lg: Math.max(Math.min(t.radius.lg, 1), Math.round(t.radius.lg * COMPACT.radiusLg)) },
     listInline: true,
-    gaps: { column: 6, row: 8, grid: 10 },
+    gaps: { ...COMPACT_GAPS },
+    sizes: { ...COMPACT_SIZES },
+    phone: {
+      text: text(COMPACT.phoneText),
+      control: { height: phoneHeight, small: Math.round(phoneHeight * COMPACT.small) },
+      sizes: { ...COMPACT_SIZES, ...COMPACT_PHONE_SIZES },
+    },
+    scale: "compact",
+    // A slide keeps its design size: its own tokens, or the host's scaled as before.
+    slide: t.slide ?? slideFallback(t),
   };
+}
+
+/**
+ * Hairline surfaces: cards, lists and tables draw no fill or shadow, only a
+ * 1px line, and take the page's color (raised becomes surface), so they sit
+ * on the host's page as part of it. Popups and dialogs keep their shadow and
+ * line border.
+ */
+export function linesPatch(t: Theme): DeepPartial<Theme> {
+  return { surfaces: "lines", colors: { raised: t.colors.surface } };
 }
 
 /** A look as a short key, for telling whether it changed ("" for none). */
 export function lookKey(look: AppliedLook | null | undefined): string {
   if (!look) return "";
-  return LOOK_PROPS.filter((p) => look[p]).map((p) => `${p}=${look[p]}`).join(" ");
+  const keys = [...LOOK_PROPS, "surface", "screen"] as const;
+  return keys.filter((p) => look[p]).map((p) => `${p}=${look[p]}`).join(" ");
 }
 
 /** The theme each looked theme was made from, so applying a look again starts from the host's, never compounds. */
@@ -129,13 +221,19 @@ const made = new WeakMap<Theme, Map<string, Theme>>();
  */
 export function applyLook(theme: Theme, look: AppliedLook | null | undefined): Theme {
   const base = baseOf.get(theme) ?? theme;
+  // A phone screen changes only a theme that has phone sizes (its own, or the compact scale's).
+  if (look?.screen && !base.phone && look.density !== CHAT_DENSITY) {
+    const { screen: _screen, ...rest } = look;
+    look = rest;
+  }
   const key = lookKey(look);
-  if (!key) return base;
+  if (!key || !look) return base;
   let byKey = made.get(base);
   if (!byKey) made.set(base, (byKey = new Map()));
   let out = byKey.get(key);
   if (!out) {
-    out = extendTheme(base, lookPatch(base, look!));
+    out = extendTheme(base, lookPatch(base, look));
+    if (look.screen === "phone" && out.phone) out = extendTheme(out, out.phone);
     baseOf.set(out, base);
     byKey.set(key, out);
   }
@@ -146,7 +244,7 @@ const scale = <T extends Record<string, number>>(o: T, k: number, min = 0): T =>
   Object.fromEntries(Object.entries(o).map(([n, v]) => [n, Math.max(min, Math.round(v * k))])) as T;
 
 function lookPatch(t: Theme, look: AppliedLook): DeepPartial<Theme> {
-  const patch: DeepPartial<Theme> = look.density === CHAT_DENSITY ? chatPatch(t) : {};
+  const patch: DeepPartial<Theme> = look.density === CHAT_DENSITY ? compactPatch(t) : {};
   if (look.density && look.density !== CHAT_DENSITY) {
     patch.space = scale(t.space, SPACE_SCALE[look.density], 2);
     patch.control = { height: Math.max(MIN_CONTROL, Math.round(t.control.height * CONTROL_SCALE[look.density])) };
@@ -156,6 +254,17 @@ function lookPatch(t: Theme, look: AppliedLook): DeepPartial<Theme> {
   if (look.type === "editorial") {
     patch.font = { display: LOOK_FONTS.serifDisplay };
     patch.text = { ...patch.text, display: Math.round((patch.text?.display ?? t.text.display) * EDITORIAL_TEXT.display), title: Math.round((patch.text?.title ?? t.text.title) * EDITORIAL_TEXT.title) };
+    // The phone's heading sizes replace these on a phone: they carry the serif too.
+    const phone = (patch.phone ?? t.phone) as Theme["phone"];
+    const pt = phone?.text;
+    if (phone && pt) {
+      const up = (v: number | undefined, k: number) => (v === undefined ? undefined : Math.round(v * k));
+      const text: Partial<Theme["text"]> = { ...pt };
+      const display = up(pt.display, EDITORIAL_TEXT.display), title = up(pt.title, EDITORIAL_TEXT.title);
+      if (display !== undefined) text.display = display;
+      if (title !== undefined) text.title = title;
+      patch.phone = { ...phone, text };
+    }
   } else if (look.type === "classic") {
     patch.font = { family: LOOK_FONTS.serifText, display: LOOK_FONTS.serifText };
   } else if (look.type === "system") {
@@ -167,6 +276,11 @@ function lookPatch(t: Theme, look: AppliedLook): DeepPartial<Theme> {
   const colors = moodColors(t, look.mood);
   if (colors) patch.colors = colors;
   if (colors && look.mood) patch.mood = look.mood;
+  if (look.surface === "lines") {
+    const lines = linesPatch(t);
+    patch.surfaces = lines.surfaces;
+    patch.colors = { ...patch.colors, ...lines.colors };
+  }
   // A slide keeps its design size whatever the look: its own tokens, or the host's scaled as before.
   if (patch.space || patch.radius || patch.text || patch.control) patch.slide = t.slide ?? slideFallback(t);
   return patch;

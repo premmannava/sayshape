@@ -2,7 +2,7 @@ import type { ComponentDef, PaintContext } from "../component";
 import type { Box, SayShapeNode } from "../types";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
-import { isDarkTheme, mixColors, parseColor, type Theme } from "../theme";
+import { isDarkTheme, mixColors, parseColor, PHONE_WIDTH, sizesOf, type Theme } from "../theme";
 import { contrastRatio, isForcedColors } from "../scrim";
 import { GLASS_BLUR, glassAlpha, glassTheme } from "../glass";
 import { MOTION } from "../design";
@@ -308,6 +308,8 @@ card on=emit:open_order
     // In a forced-colors mode glass is a plain card in the person's colors.
     const variant = chosen === "glass" && isForcedColors(theme) ? "raised" : chosen;
     const pressable = p.has("on");
+    // Hairline (theme.surfaces lines: chats and host pages): a plain card is a 1px line, with no fill, shadow or highlight.
+    const hairline = variant === "raised" && !fill && theme.surfaces === "lines";
     // Glass before anything else: the card's own hover tween below asks for frames, which would keep its backdrop from being reused.
     if (variant === "glass") paintGlass(box, ctx);
     const hovered = pressable && ctx.isHovered(box.node);
@@ -315,7 +317,9 @@ card on=emit:open_order
     const press = ctx.tween(box.node, "card:press", pressable && ctx.isPressed(box.node) ? 1 : 0, MOTION.press);
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.lg);
     const tint = fill ? null : cardTint(variant, isDarkTheme(theme), isBold(theme));
-    if (variant === "raised" || variant === "hero") {
+    if (hairline) {
+      // Nothing under the line: the card's inside is the page (raised is the surface color here).
+    } else if (variant === "raised" || variant === "hero") {
       // A close, crisp shadow and a faint wide one: the card sits just above the page. Both stay
       // inside the screen's 20px padding. A pressable card lifts a little more under the pointer.
       g.save();
@@ -357,7 +361,7 @@ card on=emit:open_order
     }
     if (press > 0) fillTint(g, c.ink, 0.035 * press);
     // A fine upper highlight adds depth without a second container or extra layout.
-    if ((variant === "raised" || variant === "hero" || variant === "glass") && box.w > 36 && box.h > 10) {
+    if (!hairline && (variant === "raised" || variant === "hero" || variant === "glass") && box.w > 36 && box.h > 10) {
       g.save();
       g.beginPath();
       g.moveTo(box.x + 16, box.y + 1.5);
@@ -376,7 +380,7 @@ card on=emit:open_order
       g.lineWidth = 1;
       // Softer perimeter; elevation and spacing separate cards from the canvas.
       g.save();
-      g.globalAlpha *= variant === "hero" ? 0.28 : variant === "outline" || variant === "glass" ? 1 : 0.72;
+      g.globalAlpha *= variant === "hero" ? 0.28 : hairline || variant === "outline" || variant === "glass" ? 1 : 0.72;
       g.stroke();
       g.restore();
     }
@@ -450,12 +454,15 @@ export const spacer: ComponentDef = {
   },
 };
 
+/** A grid column's narrowest width unless min= says otherwise: two stats side by side on a phone. */
+export const GRID_MIN = 150;
+
 export const grid: ComponentDef = {
   type: "grid",
   category: "layout",
   description: "Places children in responsive equal columns. Cards keep their own height, top-aligned.",
   props: {
-    min: { type: "number", default: 200, description: "Narrowest a column may be, in pixels (default 200)." },
+    min: { type: "number", default: GRID_MIN, description: `Narrowest a column may be, in pixels (default ${GRID_MIN}).` },
     cols: { type: "number", description: "Most columns; fewer when min doesn't fit." },
     gap: gapProp(14),
     stretch: STRETCH,
@@ -472,7 +479,7 @@ export const grid: ComponentDef = {
     const stretch = p.bool("stretch", ctx.theme.stretchCards ?? false);
     const kids = ctx.visibleChildren(box.node);
     // A column is never narrower than its widest child needs, whatever min= says.
-    const min = Math.max(1, p.num("min", 200), ...kids.map((k) => Math.min(box.w, ctx.minWidth(k))));
+    const min = Math.max(1, p.num("min", GRID_MIN), ...kids.map((k) => Math.min(box.w, ctx.minWidth(k))));
     const wanted = Math.floor(p.num("cols", 0));
     const fits = Math.max(1, Math.min(kids.length || 1, Math.floor((box.w + gap) / (min + gap))));
     const most = wanted >= 1 ? Math.min(wanted, fits) : fits;
@@ -519,16 +526,17 @@ export const list: ComponentDef = {
   },
   layout(box, ctx) {
     // A list-item brings its own padding; anything else gets the same, so every row lines up.
+    const { listPadX: padX, listPadY: padY } = sizesOf(ctx.theme);
     const place = () => {
       const rows: ListRow[] = [];
       box.children.length = 0;
       let y = box.y;
       for (const k of ctx.visibleChildren(box.node)) {
         const own = k.type === "list-item";
-        const kb = own ? ctx.layout(k, box.x, y, box.w) : ctx.layout(k, box.x + ITEM_PAD_X, y + ITEM_PAD_Y, box.w - ITEM_PAD_X * 2);
+        const kb = own ? ctx.layout(k, box.x, y, box.w) : ctx.layout(k, box.x + padX, y + padY, box.w - padX * 2);
         box.children.push(kb);
-        rows.push({ y, inset: ITEM_PAD_X + (own ? ((kb.data as { iconW?: number } | undefined)?.iconW ?? 0) : 0) });
-        y += own ? kb.h : kb.h + ITEM_PAD_Y * 2;
+        rows.push({ y, inset: padX + (own ? ((kb.data as { iconW?: number } | undefined)?.iconW ?? 0) : 0) });
+        y += own ? kb.h : kb.h + padY * 2;
       }
       box.data = { rows };
       box.h = y - box.y;
@@ -546,6 +554,8 @@ export const list: ComponentDef = {
     // Inside a card the card is the frame: no second panel in it, only the row lines.
     if (box.data?.embeddedInCard) return;
     const { g, theme } = ctx;
+    // Hairline: no panel, only the frame drawn over the rows.
+    if (theme.surfaces === "lines") return;
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
     g.fillStyle = theme.colors.raised;
     g.fill();
@@ -567,10 +577,10 @@ export const list: ComponentDef = {
   },
 };
 
-const ITEM_PAD_X = 16, ITEM_PAD_Y = 12;
 /** Between the title and the detail when they share a line (theme.listInline). */
 const ITEM_INLINE_GAP = 10;
-const ITEM_ICON = 20, ITEM_ICON_GAP = 12;
+/** On a phone, a pressable row is at least this tall (a comfortable tap), with its text in the middle. */
+const ITEM_TAP = 44;
 /** Icon-only buttons at a row's right end: at most this many, this far apart and from the value before them. */
 const ITEM_ACTIONS = 2, ITEM_ACTION_GAP = 8;
 
@@ -618,18 +628,19 @@ list-item "Groceries" detail="Food" trailing="$142"
   layout(box, ctx) {
     const p = ctx.props(box.node);
     const t = ctx.theme;
+    const { listPadX: padX, listPadY: padY, listIcon, listIconGap } = sizesOf(t);
     const titleFont = themeFont(t, 600, t.text.body), detailFont = themeFont(t, 400, 13);
     const trailing = p.str("trailing");
     const pillW = p.has("tone") && trailing ? pillWidth(ctx, trailing, null) : 0;
     const trailingW = trailing ? (pillW || ctx.measure.width(trailing, titleFont)) + 12 : 0;
     const chevronW = p.has("on") ? 20 : 0;
-    const iconW = isIconName(p.str("icon")) ? ITEM_ICON + ITEM_ICON_GAP : 0;
+    const iconW = isIconName(p.str("icon")) ? listIcon + listIconGap : 0;
     // Icon-only buttons (a remove, an edit) go at the right end, before any chevron; everything else goes under the title.
     const kids = ctx.visibleChildren(box.node);
     let actions = kids.filter((k) => isRowAction(k, ctx)).slice(0, ITEM_ACTIONS);
     let actionWidths = actions.map((a) => ctx.minWidth(a));
     let actionsW = actions.length ? actionWidths.reduce((a, b) => a + b, 0) + ITEM_ACTION_GAP * actions.length : 0;
-    let textW = Math.max(40, box.w - ITEM_PAD_X * 2 - trailingW - chevronW - iconW - actionsW);
+    let textW = Math.max(40, box.w - padX * 2 - trailingW - chevronW - iconW - actionsW);
     // In a narrow row the title comes first: if a word of it wouldn't fit beside the actions (it
     // would break mid-word), they go under the title instead, as any other child does.
     const under = actions.length > 0 && (actionsUnder || Math.max(...p.text().split(/\s+/).map((w) => ctx.measure.width(w, titleFont))) > textW);
@@ -643,20 +654,29 @@ list-item "Groceries" detail="Food" trailing="$142"
     const inline = titleW > 0 && titleW + ITEM_INLINE_GAP + ctx.measure.width(p.str("detail"), detailFont) <= textW;
     const title = inline ? [p.text()] : wrapText(p.text(), textW, titleFont, ctx.measure);
     const detail = inline ? [p.str("detail")] : p.has("detail") ? wrapText(p.str("detail"), textW, detailFont, ctx.measure) : [];
-    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW, actionsW, ...(under ? { actionsUnder: true } : {}), ...(inline ? { detailX: titleW + ITEM_INLINE_GAP } : {}) };
-    let y = box.y + ITEM_PAD_Y + title.length * titleLH + (detail.length && !inline ? 2 + detail.length * detailLH : 0);
+    const data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW, actionsW, padX, top: padY, icon: listIcon, ...(under ? { actionsUnder: true } : {}), ...(inline ? { detailX: titleW + ITEM_INLINE_GAP } : {}) };
+    box.data = data;
+    let y = box.y + padY + title.length * titleLH + (detail.length && !inline ? 2 + detail.length * detailLH : 0);
     // Elements inside go under the text, lined up with it.
-    const left = ITEM_PAD_X + iconW;
+    const left = padX + iconW;
+    let below = 0;
     for (const k of kids) {
       if (actions.includes(k)) continue;
       y += 8;
-      const kb = ctx.layout(k, box.x + left, y, Math.max(40, box.w - left - ITEM_PAD_X - chevronW - actionsW));
+      const kb = ctx.layout(k, box.x + left, y, Math.max(40, box.w - left - padX - chevronW - actionsW));
       box.children.push(kb);
       y += kb.h;
+      below++;
     }
-    box.h = y - box.y + ITEM_PAD_Y;
+    box.h = y - box.y + padY;
+    // On a phone a pressable row is a comfortable tap: it grows to ITEM_TAP, its text in the middle
+    // (a row with elements under its title is taller than that already, so it only grows at the bottom).
+    if (p.has("on") && ctx.screenWidth() < PHONE_WIDTH && box.h < ITEM_TAP) {
+      if (!below) data.top = padY + (ITEM_TAP - box.h) / 2;
+      box.h = ITEM_TAP;
+    }
     // The row grows to hold its tallest action with a little room, and each sits in its middle, right to left.
-    let right = box.x + box.w - ITEM_PAD_X - chevronW;
+    let right = box.x + box.w - padX - chevronW;
     const placed: Box[] = [];
     actions.forEach((a, i) => {
       const w = actionWidths[i]!;
@@ -674,7 +694,7 @@ list-item "Groceries" detail="Food" trailing="$142"
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number; actionsW?: number; detailX?: number };
+    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number; actionsW?: number; detailX?: number; padX: number; top: number; icon: number };
     const p = ctx.props(box.node);
     const pressable = p.has("on");
     if (pressable) {
@@ -688,11 +708,11 @@ list-item "Groceries" detail="Food" trailing="$142"
     }
     // A leading icon in the accent, level with the title's first line.
     const name = p.str("icon");
-    if (d.iconW && isIconName(name)) drawIcon(g, name, box.x + ITEM_PAD_X, box.y + ITEM_PAD_Y + (d.titleLH - ITEM_ICON) / 2, ITEM_ICON, c.accent);
-    const tx = box.x + ITEM_PAD_X + d.iconW;
+    if (d.iconW && isIconName(name)) drawIcon(g, name, box.x + d.padX, box.y + d.top + (d.titleLH - d.icon) / 2, d.icon, c.accent);
+    const tx = box.x + d.padX + d.iconW;
     g.textAlign = "left";
     g.textBaseline = "middle";
-    let y = box.y + ITEM_PAD_Y;
+    let y = box.y + d.top;
     g.font = d.titleFont;
     g.fillStyle = c.ink;
     for (const l of d.title) { g.fillText(l, tx, y + d.titleLH / 2); y += d.titleLH; }
@@ -700,32 +720,32 @@ list-item "Groceries" detail="Food" trailing="$142"
       // On the title's line, after it.
       g.font = d.detailFont;
       g.fillStyle = c.muted;
-      g.fillText(d.detail[0] ?? "", tx + d.detailX, box.y + ITEM_PAD_Y + d.titleLH / 2);
+      g.fillText(d.detail[0] ?? "", tx + d.detailX, box.y + d.top + d.titleLH / 2);
     } else if (d.detail.length) {
       y += 2;
       g.font = d.detailFont;
       g.fillStyle = c.muted;
       for (const l of d.detail) { g.fillText(l, tx, y + d.detailLH / 2); y += d.detailLH; }
     }
-    const right = box.x + box.w - ITEM_PAD_X - (pressable ? 20 : 0) - (d.actionsW ?? 0);
+    const right = box.x + box.w - d.padX - (pressable ? 20 : 0) - (d.actionsW ?? 0);
     if (d.trailing && d.pillW) {
       // A tagged value is a badge, level with the title's first line.
-      const w = d.pillW, h = 22;
-      paintPill(ctx, { x: right - w, y: box.y + ITEM_PAD_Y + (d.titleLH - h) / 2, w, h }, d.trailing, toneColor(theme, p.oneOf("tone", PILL_TONES, "accent")), "soft", null);
+      const w = d.pillW, h = sizesOf(theme).badge;
+      paintPill(ctx, { x: right - w, y: box.y + d.top + (d.titleLH - h) / 2, w, h }, d.trailing, toneColor(theme, p.oneOf("tone", PILL_TONES, "accent")), "soft", null);
     } else if (d.trailing) {
       g.font = d.titleFont;
       g.textAlign = "right";
       g.fillStyle = c.ink;
-      g.fillText(d.trailing, right, box.y + ITEM_PAD_Y + d.titleLH / 2);
+      g.fillText(d.trailing, right, box.y + d.top + d.titleLH / 2);
     }
     if (pressable) {
-      chevron(g, box.x + box.w - ITEM_PAD_X - 4, box.y + box.h / 2, 10, "right", c.muted);
+      chevron(g, box.x + box.w - d.padX - 4, box.y + box.h / 2, 10, "right", c.muted);
       ctx.addHit(box);
     }
   },
 };
 
-const HEADER_H = 48, ACCORDION_DETAIL_LH = 18;
+const ACCORDION_DETAIL_LH = 18;
 
 export const accordion: ComponentDef = {
   type: "accordion",
@@ -756,7 +776,8 @@ accordion "Shipping" bind=shipping
     const lines = wrapText(p.text(), Math.max(40, box.w - 32), font, ctx.measure);
     const lh = Math.round(t.text.body * 1.35);
     const detail = p.has("detail") ? fitLines(p.str("detail"), Math.max(40, box.w - 32), themeFont(t, 400, 13), ctx.measure, 2) : [];
-    const headerH = Math.max(HEADER_H, lines.length * lh + detail.length * ACCORDION_DETAIL_LH + 24);
+    // The theme's header height is the least it gets: a title and detail with their room around them can be taller.
+    const headerH = Math.max(sizesOf(t).accordionHeader, lines.length * lh + detail.length * ACCORDION_DETAIL_LH + 24);
     box.data = { lines, font, lh, headerH, open, detail };
     if (!open) { box.h = headerH; return; }
     const gap = Math.max(0, p.num("gap", 10));
