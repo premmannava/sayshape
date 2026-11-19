@@ -140,8 +140,8 @@ try {
     sent = await page.evaluate(() => window.host.context.filter((m) => m.includes("plan_trip")));
   }
   const shown = await page.evaluate(() => window.host.messages);
-  check(sent.length === 1 && shown.length === 1, "pressing the emit: button sent one message to the conversation");
-  check(/^Plan trip(: \d+)?$/.test(shown[0] ?? ""), `the conversation shows a short line, with no tags or JSON ("${shown[0]}")`);
+  // A host that takes context gets the details silently: the model has them, and the conversation shows nothing.
+  check(sent.length === 1 && shown.length === 0, `pressing the emit: button sent its details as silent context, with nothing shown ("${shown[0] ?? ""}")`);
   check(/I pressed "plan_trip" with the value \d+/.test(sent[0] ?? ""), "the model context names the action and its value");
   check(/"hikers":\d+/.test(sent[0] ?? "") && /"gear":\[/.test(sent[0] ?? ""), "the model context carries the interface's state");
   await page.waitForTimeout(300);
