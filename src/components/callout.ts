@@ -9,7 +9,7 @@ import { easeOut, paintGhost } from "../ghost";
 import { wrapText } from "../text";
 import { sizesOf, type Theme } from "../theme";
 import type { Box } from "../types";
-import { fitText } from "./input";
+import { fitText, ICON_TAP } from "./input";
 import { fillTint, onProp, partBox, themeFont } from "./util";
 
 /** info is the accent; accent is accepted as another name for it. */
@@ -156,7 +156,7 @@ function paintAction(box: Box, ctx: PaintContext, d: CalloutLayout, pressable: b
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillText(fitText(g, d.action, w - theme.space.md), btn.x + w / 2, btn.y + ACTION_H / 2 + 1);
-  if (pressable) ctx.addHit(btn, { detail: "action" });
+  if (pressable) ctx.addHit(btn, { detail: "action", reach: ICON_TAP });
 }
 
 export const callout: ComponentDef = {

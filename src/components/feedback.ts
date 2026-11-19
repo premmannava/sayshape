@@ -2,7 +2,7 @@ import type { ComponentDef } from "../component";
 import { wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
 import { fillTint, iconBefore, iconProblems, onProp, partBox, themeFont } from "./util";
-import { fitText } from "./input";
+import { fitText, ICON_TAP } from "./input";
 import { paintGhost } from "../ghost";
 import { sizesOf } from "../theme";
 
@@ -172,6 +172,6 @@ export const empty: ComponentDef = {
     if (hot) { g.save(); g.globalAlpha *= 0.22; g.strokeStyle = c.ink; g.stroke(); g.restore(); }
     g.fillStyle = c.ink;
     g.fillText(fitText(g, label, w - 16), cx, btn.y + BUTTON_H / 2 + 1);
-    if (p.has("on")) ctx.addHit(btn, { detail: "action" });
+    if (p.has("on")) ctx.addHit(btn, { detail: "action", reach: ICON_TAP });
   },
 };

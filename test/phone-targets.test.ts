@@ -279,3 +279,14 @@ describe("the native editor's font", () => {
     }
   });
 });
+
+describe("callout and empty-state actions on a phone", () => {
+  it("get a full finger's reach, and stay their drawn size on a desktop", () => {
+    const spec = `callout "Stock is low" tone=warn action="Reorder" on=notify:r\nempty "No results" text="Try a wider range." action="Clear filters" on=notify:c`;
+    const actions = (width: number) => render(spec, { width, context: "chat" }).hits.filter((h) => h.detail === "action");
+    const phone = actions(375);
+    expect(phone).toHaveLength(2);
+    for (const h of phone) expect(h.box.h, name(h)).toBeGreaterThanOrEqual(ICON_TAP);
+    for (const h of actions(1024)) expect(h.box, name(h)).toEqual(drawn(h));
+  });
+});
