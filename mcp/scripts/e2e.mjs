@@ -309,16 +309,16 @@ try {
   // the card draws no fill of its own: beside the title the host surface shows through.
   const bareCard = await pixelAt(styledFrame, 600, 30);
   check(bareCard[3] === 0, `a card that is the whole interface draws no frame of its own (alpha ${bareCard[3]} beside the title)`);
-  // With another top-level element the card keeps its frame. Cards follow the host's background
-  // with a 4.5% lift toward its ink in dark mode.
+  // With another top-level element the card keeps its frame. Host-token pages have Hairline
+  // surfaces: the card draws no fill, only a 1px line, so the host's page shows through inside it.
   await styled.evaluate((spec) => window.host.bridge.sendToolInput({ arguments: { spec } }), SPEC + 'text "Plans save to your trip list." tone=muted\n');
   await styled.waitForTimeout(500);
   // Inside the card's padding, 6px in from its top-left corner (the card starts at the 20px root padding).
   const cardPixel = await pixelAt(styledFrame, 26, 26);
-  const expectedRaised = [48, 48, 46].map((channel, i) =>
-    Math.round(channel + ([250, 249, 245][i] - channel) * 0.045));
-  check(cardPixel.slice(0, 3).every((channel, i) => Math.abs(channel - expectedRaised[i]) <= 3),
-    `a framed card matches the raised host light-dark() surface (expected rgb(${expectedRaised.join(", ")}), got rgb(${cardPixel.slice(0, 3).join(", ")})`);
+  check(cardPixel[3] === 0, `a framed card on a host-token page draws no fill inside its line (alpha ${cardPixel[3]})`);
+  // Its line: somewhere across the card's left edge, a pixel is drawn.
+  const edge = await Promise.all([18, 19, 20, 21, 22].map((x) => pixelAt(styledFrame, x, 40)));
+  check(edge.some((px) => px[3] > 0), `and the card keeps its 1px line (max alpha ${Math.max(...edge.map((px) => px[3]))} across its left edge)`);
 
   // A view whose result says the spec needs fixing folds into a short note, and comes back on request;
   // one whose result says it repeats the interface above folds into a single line.
