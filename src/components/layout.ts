@@ -776,9 +776,8 @@ accordion "Shipping" bind=shipping
     const lines = wrapText(p.text(), Math.max(40, box.w - 32), font, ctx.measure);
     const lh = Math.round(t.text.body * 1.35);
     const detail = p.has("detail") ? fitLines(p.str("detail"), Math.max(40, box.w - 32), themeFont(t, 400, 13), ctx.measure, 2) : [];
-    // The room around the title shrinks with a shorter header (24 at the default 48, 12 at 36), so the size holds for one line.
-    const least = sizesOf(t).accordionHeader;
-    const headerH = Math.max(least, lines.length * lh + detail.length * ACCORDION_DETAIL_LH + Math.max(8, Math.min(24, least - 24)));
+    // The theme's header height is the least it gets: a title and detail with their room around them can be taller.
+    const headerH = Math.max(sizesOf(t).accordionHeader, lines.length * lh + detail.length * ACCORDION_DETAIL_LH + 24);
     box.data = { lines, font, lh, headerH, open, detail };
     if (!open) { box.h = headerH; return; }
     const gap = Math.max(0, p.num("gap", 10));

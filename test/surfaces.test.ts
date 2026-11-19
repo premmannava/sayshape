@@ -60,9 +60,15 @@ describe("Hairline cards", () => {
     const system: Record<string, string> = { Canvas: "#000000", CanvasText: "#ffff00", Highlight: "#00ffff", HighlightText: "#000000", GrayText: "#808080" };
     const theme = forcedColorsTheme(lightTheme, (n) => system[n]!);
     const ui = render(`${CARD}\n${LIST}`, { context: "chat", width: 375, theme });
+    expect(ui.sayshape.theme.surfaces).toBe("lines");
     const strokes = ui.drawOps.filter((op) => op.op === "stroke");
-    expect(strokes.length).toBeGreaterThanOrEqual(2);
-    for (const s of strokes) expect(s.strokeStyle).toBe("#ffff00");
+    // The card's line and the list's frame, both full strength.
+    expect(strokes).toHaveLength(2);
+    for (const s of strokes) {
+      expect(s.strokeStyle).toBe("#ffff00");
+      expect(s.globalAlpha).toBe(1);
+    }
+    expect(ui.drawOps.some((op) => op.op === "fill")).toBe(false);
     expect(shadows(ui)).toHaveLength(0);
     ui.destroy();
   });
@@ -109,10 +115,11 @@ describe("popups and dialogs are unaffected", () => {
 
   it("an open select in a chat draws its list with a shadow and fill", () => {
     const ui = render('state sizes=["S","M","L"] pick=""\nselect "Size" items=sizes bind=pick', { context: "chat", width: 375 });
-    expect(shadows(ui)).toHaveLength(0);
+    const before = shadows(ui).filter((op) => op.op === "fill").length;
     ui.press("select");
-    expect(shadows(ui).length).toBeGreaterThan(0);
-    expect(shadows(ui).some((op) => op.op === "fill")).toBe(true);
+    expect(ui.popup).toBeTruthy();
+    // Opening it adds the list's panel: a fill that casts a shadow.
+    expect(shadows(ui).filter((op) => op.op === "fill").length).toBeGreaterThan(before);
     ui.destroy();
   });
 });
@@ -150,13 +157,17 @@ describe("list rows on phones", () => {
 });
 
 describe("accordion and grid", () => {
-  it("an accordion header is the theme's accordionHeader tall", () => {
+  it("an accordion header is at least the theme's accordionHeader, or its title with room around it", () => {
+    const header = (ui: Rendered) => {
+      const t = ui.sayshape.theme;
+      return Math.max(t.sizes!.accordionHeader!, Math.round(t.text.body * 1.35) + 24);
+    };
     const ui = render('state a=false\naccordion "Returns" bind=a\n  text "Free"', { context: "chat", width: 1024 });
-    expect(ui.find("accordion").box!.h).toBe(ui.sayshape.theme.sizes!.accordionHeader);
+    expect(ui.find("accordion").box!.h).toBe(header(ui));
     ui.destroy();
     // On a phone, the phone size (44 in a chat).
     const phone = render('state a=false\naccordion "Returns" bind=a\n  text "Free"', { context: "chat", width: 375 });
-    expect(phone.find("accordion").box!.h).toBe(phone.sayshape.theme.sizes!.accordionHeader);
+    expect(phone.find("accordion").box!.h).toBe(header(phone));
     expect(phone.find("accordion").box!.h).toBeGreaterThanOrEqual(44);
     phone.destroy();
     // A default host keeps 48.
