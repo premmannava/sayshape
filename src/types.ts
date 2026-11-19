@@ -76,6 +76,12 @@ export interface HitRegion {
    * transform from there to the screen. Handlers get the laid-out box and the pointer mapped back.
    */
   local?: { box: Box; transform: { scale: number; dx: number; dy: number } };
+  /**
+   * The box as drawn, when the region was grown past it for fingers (addHit's
+   * reach, on a phone). The focus ring goes round it and handlers are given it;
+   * box is what the pointer reaches.
+   */
+  ring?: Box;
 }
 
 /** What the pointer or keyboard focus is currently on. */

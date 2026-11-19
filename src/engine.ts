@@ -241,6 +241,8 @@ export class SayShape {
   private parsed: ParseResult | null = null;
   private rootBox: Box | null = null;
   private hits: HitRegion[] = [];
+  /** Whether a region this frame was grown for fingers (addHit's reach), so trimReach has work to do. */
+  private grew = false;
   /** While painting the children of elements that scroll: what each shows, innermost last. */
   private clips: Array<{ rect: Rect; owner: Box }> = [];
   /** While painting inside an element that draws its children scaled (a slide): from there to the screen. */
@@ -815,6 +817,7 @@ export class SayShape {
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, this.metrics.width, this.metrics.height);
     this.hits = [];
+    this.grew = false;
     this.clips = [];
     this.waitingForSight = false;
     this.followsSight = false;
@@ -838,6 +841,7 @@ export class SayShape {
       this.painting = true;
       try { this.paintBox(this.modal, ctx, 1); } finally { this.painting = false; }
     }
+    if (this.grew) trimReach(this.hits);
     this.trapFocus();
     this.resolveFocus();
     // Bringing the focused element into view lays out again, in this same frame (renderNow):
@@ -845,9 +849,11 @@ export class SayShape {
     if (this.revealFocus()) return;
     if (this.focus && this.keyboardMode && !this.inspector.inspecting) {
       const f = this.focus;
-      const clip = this.hits.find((h) => h.box.node.id === f.node.id && h.detail === f.detail)?.clip;
+      const region = this.hits.find((h) => h.box.node.id === f.node.id && h.detail === f.detail);
+      const clip = region?.clip;
       if (clip) { g.save(); g.beginPath(); g.rect(clip.x - 4, clip.y - 4, clip.w + 8, clip.h + 8); g.clip(); }
-      this.paintFocusRing(g, f.box);
+      // Round what's drawn, not the larger area a finger can press.
+      this.paintFocusRing(g, region?.ring ?? f.box);
       if (clip) g.restore();
     }
     this.paintPopup(g, ctx);
@@ -1098,7 +1104,10 @@ export class SayShape {
         const clip = this.clips[this.clips.length - 1];
         const xf = this.xform;
         const box = xf ? applyTransform(laid, xf) : laid;
-        this.hits.push({ box: focusable ? atLeastTarget(box) : box, detail: o.detail, focusable, ...(xf ? { local: { box: laid, transform: xf } } : {}), ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
+        // Draw small, hit big: on a phone, a region asking for reach is grown to it (trimmed after paint).
+        const grown = this.phone && o.reach ? reachOut(box, o.reach) : null;
+        if (grown) this.grew = true;
+        this.hits.push({ box: grown ?? (focusable ? atLeastTarget(box) : box), ...(grown ? { ring: box } : {}), detail: o.detail, focusable, ...(xf ? { local: { box: laid, transform: xf } } : {}), ...(clip ? { clip: clip.rect, clipOwner: clip.owner } : {}), ...(o.drags === false ? { drags: false } : {}), ...(o.claimsSwipe ? { claimsSwipe: true } : {}) });
       },
       isHovered: (n, d) => same(this.hover, n, d),
       isFocused: (n, d) => this.keyboardMode && same(this.focus, n, d),
@@ -1524,8 +1533,11 @@ export class SayShape {
   private pressContext(screenTarget: HitTarget): PressContext {
     const readers = new WeakMap<SayShapeNode, PropReader>();
     // Inside a scaled slide, handlers work with the box as it was laid out.
-    const local = screenTarget.layer ? undefined : this.hits.find((h) => sameRegion(h, screenTarget))?.local;
-    const target = local ? { ...screenTarget, box: local.box } : screenTarget;
+    const region = screenTarget.layer ? undefined : this.hits.find((h) => sameRegion(h, screenTarget));
+    const local = region?.local;
+    // A region grown for fingers: handlers see the box as drawn.
+    const ring = region?.ring;
+    const target = local ? { ...screenTarget, box: local.box } : ring ? { ...screenTarget, box: ring } : screenTarget;
     return {
       target,
       scope: scopeOf(target.node, this.state.scope),
@@ -3051,6 +3063,52 @@ function atLeastTarget(box: Box): Box {
   if (box.h >= MIN_TARGET) return box;
   return { ...box, y: box.y - (MIN_TARGET - box.h) / 2, h: MIN_TARGET };
 }
+
+/** A box grown around its middle until each side is at least reach (addHit's reach), or null when it already is. */
+function reachOut(box: Box, reach: number): Box | null {
+  const h = Math.max(box.h, reach), w = Math.max(box.w, reach);
+  if (h === box.h && w === box.w) return null;
+  return { ...box, x: box.x - (w - box.w) / 2, y: box.y - (h - box.h) / 2, w, h };
+}
+
+const rightOf = (r: Rect) => r.x + r.w, bottomOf = (r: Rect) => r.y + r.h;
+const within = (a: Rect, b: Rect) => a.x >= b.x && a.y >= b.y && rightOf(a) <= rightOf(b) && bottomOf(a) <= bottomOf(b);
+const meets = (a: Rect, b: Rect) => a.x < rightOf(b) && b.x < rightOf(a) && a.y < bottomOf(b) && b.y < bottomOf(a);
+
+/**
+ * Grown regions (those with a ring) give way to their neighbours: where one
+ * would reach into another region, it is cut at the middle of the gap between
+ * the two drawn boxes, so no grown region covers what another draws and two
+ * grown neighbours share the gap evenly. Regions that hold the other's drawn
+ * box (a pressable card round a button, a tip over its own element) aren't
+ * neighbours, and drawn boxes that overlap can't be parted: both are left.
+ */
+function trimReach(hits: HitRegion[]): void {
+  for (let i = 0; i < hits.length; i++) {
+    const a = hits[i]!, mine = a.ring;
+    if (!mine) continue;
+    let { x, y } = a.box, r = rightOf(a.box), b = bottomOf(a.box);
+    for (let j = 0; j < hits.length; j++) {
+      const n = hits[j]!;
+      if (j === i) continue;
+      const theirs = n.ring ?? n.box;
+      if (within(mine, theirs) || within(theirs, mine) || meets(mine, theirs)) continue;
+      if (!meets({ x, y, w: r - x, h: b - y }, n.box)) continue;
+      const below = theirs.y >= bottomOf(mine), above = bottomOf(theirs) <= mine.y;
+      const after = theirs.x >= rightOf(mine), before = rightOf(theirs) <= mine.x;
+      const gapY = below ? theirs.y - bottomOf(mine) : above ? mine.y - bottomOf(theirs) : -1;
+      const gapX = after ? theirs.x - rightOf(mine) : before ? mine.x - rightOf(theirs) : -1;
+      // Apart both ways (diagonal neighbours): cut along the wider gap, which leaves more.
+      if (gapY >= gapX) {
+        if (below) b = Math.min(b, bottomOf(mine) + gapY / 2);
+        else y = Math.max(y, mine.y - gapY / 2);
+      } else if (after) r = Math.min(r, rightOf(mine) + gapX / 2);
+      else x = Math.max(x, mine.x - gapX / 2);
+    }
+    if (x !== a.box.x || y !== a.box.y || r !== rightOf(a.box) || b !== bottomOf(a.box)) a.box = { ...a.box, x, y, w: r - x, h: b - y };
+  }
+}
+
 const TOAST_FADE = 180;
 
 /** The state name that holds the visible screen. */

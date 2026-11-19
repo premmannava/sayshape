@@ -140,8 +140,14 @@ export interface PaintContext {
    * an element pressable on its own (a star, a page number), pass a box
    * covering just that part, with the element's node, and a `detail` naming it.
    * Each part is then a separate Tab stop, and press() sees the detail.
+   *
+   * `reach` is the least height (and width) a finger should have to press it,
+   * like ICON_TAP: draw small, hit big. Pass it always; the engine decides. On a
+   * canvas narrower than PHONE_WIDTH it grows the region around its middle to
+   * reach, trimmed where it would cover a neighbour's drawn box, while the focus
+   * ring and handlers keep the box as drawn. Wider, the region is the box.
    */
-  addHit(box: Box, opts?: { detail?: unknown; focusable?: boolean; drags?: boolean; claimsSwipe?: boolean }): void;
+  addHit(box: Box, opts?: { detail?: unknown; focusable?: boolean; drags?: boolean; claimsSwipe?: boolean; reach?: number }): void;
   hover: HitTarget | null;
   /** Pointer position in canvas CSS pixels, or null when outside. */
   pointer: { x: number; y: number } | null;
