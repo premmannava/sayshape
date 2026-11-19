@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { lightTheme, darkTheme } from "../../src/theme";
 import { firstFamily, hostTheme, type ReadVar } from "../src/ui/host-theme";
+import { contrastRatio } from "../../src/scrim";
 
 const reader = (vars: Record<string, string>): ReadVar => (name) => vars[name];
 
@@ -32,6 +33,13 @@ describe("matching the host's look", () => {
     expect(t.radius.md).toBe(8);
     // Pill radii would turn cards into ovals, so they're capped.
     expect(t.radius.lg).toBe(24);
+  });
+
+  it("keeps field and control outlines at 3:1 on the host's background and cards", () => {
+    for (const [base, bg, text] of [[darkTheme, "#262624", "#faf9f5"], [darkTheme, "rgb(31, 31, 30)", "rgb(250, 249, 245)"], [lightTheme, "#f4f5f7", "#1b2533"], [lightTheme, "#faf9f5", "#141413"]] as const) {
+      const t = hostTheme(base, reader({ "--color-background-primary": bg, "--color-text-primary": text }));
+      for (const under of [t.colors.surface, t.colors.raised]) expect(contrastRatio(t.colors.control, under), `${t.colors.control} on ${under}`).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it("keeps cards layered over the host's background", () => {
