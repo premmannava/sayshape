@@ -704,6 +704,9 @@ function paintTable(box: Box, ctx: PaintContext): void {
   d.title.forEach((l, i) => g.fillText(l, ox, oy + i * d.titleLH + d.titleLH / 2));
 
   const f = d.frame;
+  // Hairline: the frame is a full line. The fill stays (raised is the page's own color there):
+  // it must be opaque, because the scroll fades and the sticky header are drawn in it.
+  const hairline = theme.surfaces === "lines";
   ctx.roundRect(ox + f.x + 0.5, oy + f.y + 0.5, f.w - 1, f.h - 1, theme.radius.md);
   g.fillStyle = c.raised;
   g.fill();
@@ -711,7 +714,7 @@ function paintTable(box: Box, ctx: PaintContext): void {
     g.strokeStyle = c.line;
     g.lineWidth = 1;
     g.save();
-    g.globalAlpha *= 0.72;
+    g.globalAlpha *= hairline ? 1 : 0.72;
     g.stroke();
     g.restore();
   }
