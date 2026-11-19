@@ -731,9 +731,9 @@ export const link: ComponentDef = {
   check: (props) => [
     ...iconProblems(props.icon, "icon"),
     ...(props.href !== undefined && !props.href.includes("{") && !isOpenableUrl(props.href)
-      ? [`href="${props.href}" isn't an https address. Write the whole address, like href="https://example.com"`]
+      ? [`The href "${props.href}" isn't an https address. Write the whole address, starting with https:// and a site name`]
       : []),
-    ...(props.on === undefined && props.href === undefined ? [`link needs on= or href=, like link "Open" href="https://example.com"`] : []),
+    ...(props.on === undefined && props.href === undefined ? [`A link needs on= or href=. An href is a whole address starting with https://`] : []),
   ],
   semantics(box, ctx) {
     return { role: "link", name: ctx.props(box.node).text() };
