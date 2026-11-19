@@ -24,10 +24,18 @@ function allOptions(raw: string): string[] {
   return raw.split(/[,|]/).map((s) => s.trim()).filter(Boolean);
 }
 
+/** Whether an option is the bound value: options are text, so 30 is "30" (options="15,20,30" over years=30). */
+function isOption(option: string, bound: unknown): boolean {
+  return (typeof bound === "string" || typeof bound === "number") && String(bound) === option;
+}
+
 function choose(ctx: PressContext, value: string): void {
   const key = ctx.props(ctx.target.node).raw("bind");
   if (!key) return;
-  ctx.set(key, value);
+  // A number stays a number: options="15,20,30" over years=30 writes 15, not "15".
+  const now = ctx.props(ctx.target.node).bound();
+  const asNumber = typeof now === "number" && value.trim() !== "" && Number.isFinite(Number(value));
+  ctx.set(key, asNumber ? Number(value) : value);
   runOn(ctx);
 }
 
@@ -36,7 +44,7 @@ export const segmented: ComponentDef = {
   category: "input",
   description: "Two to six short options in one track, one chosen, like Week, Month and Year, or Chart and Table. Show different content for each with if=.",
   props: {
-    bind: { type: "state", required: true, description: "The state name holding the chosen option's text." },
+    bind: { type: "state", required: true, description: "The state name holding the chosen option's text, or its number when it holds a number (years=30 with options=\"15,20,30\")." },
     label: { type: "string", description: "What the choice is about, read by screen readers, e.g. label=\"Period\". Default: the text just above it." },
     options: { type: "string", required: true, description: "The options, comma-separated, e.g. options=\"Week,Month,Year\". At most 6, one or two words each." },
     on: onProp("after the choice changes"),
@@ -63,7 +71,7 @@ text "Showing the {lower(view)}" tone=muted`,
     const options = optionsOf(p.str("options"));
     const bound = p.bound();
     // Painted as chosen: the bound option, or the first when it's none of them.
-    const chosen = options.some((o) => o === bound) ? bound : options[0];
+    const chosen = options.find((o) => isOption(o, bound)) ?? options[0];
     return { role: "radiogroup", name: p.str("label") || ctx.textBefore(), parts: options.map((o) => ({ detail: o, role: "radio" as const, name: o, checked: o === chosen })) };
   },
   layout(box, ctx) {
@@ -91,7 +99,7 @@ text "Showing the {lower(view)}" tone=muted`,
     const p = ctx.props(box.node);
     const { cells, font, width } = box.data as { cells: Array<{ option: string; x: number; w: number }>; font: string; width: number };
     const chosen = p.bound();
-    const current = cells.some((cell) => cell.option === chosen) ? chosen : cells[0]?.option;
+    const current = cells.find((cell) => isOption(cell.option, chosen))?.option ?? cells[0]?.option;
     ctx.roundRect(box.x, box.y, width, H, theme.radius.md);
     fillTint(g, c.ink, 0.06);
     g.font = font;

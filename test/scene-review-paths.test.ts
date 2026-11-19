@@ -223,3 +223,29 @@ describe("cost", () => {
     expect(performance.now() - start).toBeLessThan(200);
   });
 });
+
+describe("tappable stations (a 44 px tap area around each)", () => {
+  // The metro map from chat: stations are groups with a big, nearly clear tap circle and a small
+  // visible one. The tap area was too big to judge and the circle inside was skipped with it, so
+  // a station 20 px off its line was never reported.
+  const map = (college: string) => `state sel=""
+state stations=[{name: "Harbor", x: 40, y: 120}, {name: "Market", x: 220, y: 120}, {name: "Central", x: 300, y: 200}, {name: "Riverside", x: 560, y: 260}, {name: "Airport", x: 60, y: 300}, {name: "College", x: 200, y: ${college}}, {name: "Uptown", x: 560, y: 140}]
+scene "Two metro lines crossing at Central" w=600 h=360
+  path d="M40 120 L220 120 L360 260 L560 260" fill="none" stroke=bad width=10 cap=round join=round round=24
+  path d="M60 300 L200 300 L360 140 L560 140" fill="none" stroke=good width=10 cap=round join=round round=24
+  each items=stations as=s
+    group x={s.x} y={s.y} on=set:sel:{s.name} tip="{s.name}"
+      rect x=-22 y=-22 w=44 h=44 rx=22 fill="surface 1%"
+      circle x=0 y=0 r=8 fill=surface stroke=ink width=3
+      label "{s.name}" x=0 y=-30 size=15 align=center fill=ink`;
+
+  it("reports the one drawn off its line", () => {
+    const found = offPath(map("320"));
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/px off the path on line 5/);
+  });
+
+  it("says nothing when every station is on its line", () => {
+    expect(offPath(map("300"))).toEqual([]);
+  });
+});

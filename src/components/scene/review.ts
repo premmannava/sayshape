@@ -454,6 +454,9 @@ function offPath(marks: readonly Mark[], regions: readonly SceneRegion[]): Array
 
   const markers: Marker[] = [];
   const seen = new Set<string>();
+  // Pressable shapes judged as one marker; one too big to be one (a 44 px tap area around a
+  // station) leaves the circle inside it to be judged instead.
+  const judged = new Set<SceneRegion>();
   const add = (k: Marker, node: SayShapeNode) => {
     if (movesWithClock(node.props.x) || movesWithClock(node.props.y) || node.props.drag !== undefined) return;
     const key = `${Math.round(k.x)},${Math.round(k.y)}`;
@@ -468,12 +471,15 @@ function offPath(marks: readonly Mark[], regions: readonly SceneRegion[]): Array
     if (!b || Math.max(b.w, b.h) > 36 || Math.min(b.w, b.h) < 3) continue;
     const named = regionName(r);
     const name = named !== "Shape" ? named : undefined;
+    judged.add(r);
     add({ line: r.node.line, order: regions.indexOf(r), x: b.x + b.w / 2, y: b.y + b.h / 2, r: Math.max(b.w, b.h) / 2, what: r.node.type, region: r, ...(name ? { name } : {}) }, r.node);
   }
   const labels = marks.filter((m) => m.kind === "label" && m.alpha >= 0.15 && m.text?.trim());
   for (const c of marks) {
-    // Circles inside a pressable line are judged with it (or not at all, when it's dragged).
-    if (c.kind !== "circle" || c.alpha < 0.15 || c.inside) continue;
+    // Circles inside a pressable line are judged with it (or not at all, when it's dragged); inside
+    // one too big to judge (a station's 44 px tap area), the circle is the station.
+    if (c.kind !== "circle" || c.alpha < 0.15) continue;
+    if (c.inside?.some((r) => judged.has(r) || r.drag)) continue;
     const r = Math.max(c.bounds.w, c.bounds.h) / 2;
     if (r > 12 || r < 1.5) continue;
     const x = c.bounds.x + c.bounds.w / 2, y = c.bounds.y + c.bounds.h / 2;
@@ -493,7 +499,8 @@ function offPath(marks: readonly Mark[], regions: readonly SceneRegion[]): Array
     let attached = false;
     for (const t of tracks) {
       if (k.region && t.mark.inside?.includes(k.region)) continue;
-      const reach = Math.max(20, k.r + t.hw);
+      // As far as a miss can be reported (limit, below), so a station a little further off is still found.
+      const reach = Math.min(28, Math.max(20, k.r + t.hw + 12));
       const b = t.bounds;
       if (k.x < b.x - reach || k.x > b.x + b.w + reach || k.y < b.y - reach || k.y > b.y + b.h + reach) continue;
       const n = nearestOn(t, k.x, k.y, reach);
@@ -515,7 +522,9 @@ function offPath(marks: readonly Mark[], regions: readonly SceneRegion[]): Array
     const closest = near.sort((a, b) => a.n.d - b.n.d)[0];
     if (!closest) continue;
     const { t, n } = closest;
-    const limit = Math.min(20, Math.max(12, k.r + t.hw + 8));
+    // A miss up to a station's own size past the line's edge still looks like a miss (a corner
+    // rounded with round= moves the line a little further away), so the reach grows with both.
+    const limit = Math.min(28, Math.max(12, k.r + t.hw + 12));
     if (n.d > limit || n.atEnd) continue;
     missCount.set(t, (missCount.get(t) ?? 0) + 1);
     misses.push({ k, t, d: n.d });

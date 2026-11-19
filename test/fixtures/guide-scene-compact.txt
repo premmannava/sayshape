@@ -13,7 +13,7 @@ EXPRESSIONS
 - Operators: + - * / % == != < <= > >= && || ! a ? b : c. Words inside {…} are names, so quote text: {done ? 'Yes' : 'No'}
 - Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, range, has, is, contains, starts, ends, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend, map
 - On lists: count(l, 'done'), count(l, 'cat', 'Gas'), sum(l, 'price'), sum(l, 'price', 'qty') multiplies per item, avg/min/max(l, 'f'), group(l, 'f'[, 'n'[, 'avg']]) one record per value of f, named after your fields: group(spend, 'category', 'amount') gives {category, count, amount}, filter(l, 'f'[, value, list of values or {from, to}]), find(l, 'id', x), search(l, 'f', text), sort(l, 'f'[, 'desc']), take(l, n), slice(l, start, end) from 0 with the end left out, so one page is slice(l, (page - 1) * 5, page * 5), first(l)/last(l) (best: first(sort(l, 'f', 'desc')).name), pluck(l, 'f') one field of each, join(l, 'f'), includes(l, x). extend(l, 'q', {total: q.price * q.qty}) adds computed fields to every item (q only inside the braces), rank(l, 'f', 'desc') adds rank (1 best, ties share it), map(l, 'q', expr) one value per item, range(n) or range(a, b) counts up to n or b, not including it. Compute totals; never type them
-- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'us-zip', 'postcode' (any country; is(v, 'postcode', 'GB') for one), 'number' (1,234.5 and 12,5 too) or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Formatting: money(2400) = $2,400.00, number(37000) = 37,000, compact(12345678) = 12.3M, compact(n, 'USD') = $12.3M for big figures in stats, plural(n, 'item') = 1 item / 3 items
 
 ACTIONS on=…, several joined with ; and quoted when they have spaces: on="inc:n;notify:'Saved {n}'"
@@ -37,8 +37,8 @@ ELEMENTS (prop=type: ! required, a|b one of these, cond/expr an expression, path
 - overlap at=top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right inset=number [holds elements] — Puts its later children on top of its first one, at a corner, an edge or the middle: a Sale badge on a picture, a count on an icon, a label over a card.
 - grid min=number cols=number gap=number stretch=true|false [holds elements] — Places children in responsive equal columns.
 - card gap=number pad=number variant=raised|hero|tinted|outline|glass on=action tone=accent|good|warn|bad|muted fill=sky|sunset|dusk|night|accent [holds elements] — A surface that groups related content, stacked vertically.
-- list [holds elements] — A bordered list of rows, separated by lines.
-- list-item "text" detail=text trailing=text tone=accent|good|warn|bad|muted icon=text on=action [holds elements; only in list] — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title.
+- list [holds elements] — A bordered list of rows, separated by lines; inside a card, only the lines.
+- list-item "text" detail=text trailing=text tone=accent|good|warn|bad|muted icon=text on=action [holds elements; only in list] — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title, except an icon-only button (icon= and label=), which sits at the right end.
 - accordion "text" bind=path! gap=number on=action detail=text [holds elements] — A heading that shows or hides the content under it when pressed.
 - divider ["text"] — A thin horizontal line separating sections.
 - spacer size=number — Empty vertical space.

@@ -10,7 +10,7 @@
  * on every part of the gradient.
  */
 import { contrastRatio, liftUntil, lumOf, worstContrast } from "./contrast";
-import { isDarkTheme, mixColors, type Theme } from "./theme";
+import { isDarkTheme, mixColors, parseColor, type Theme } from "./theme";
 import { isForcedColors, SCRIM_CONTRAST } from "./scrim";
 
 export const FILLS = ["sky", "sunset", "dusk", "night", "accent"] as const;
@@ -29,29 +29,73 @@ const STEP = 0.05, MAX_STEPS = 20;
 /** A fill as painted: its ends, and the color words on it are drawn in. */
 export interface ResolvedFill { from: string; to: string; text: string }
 
+/**
+ * The same color with its saturation multiplied (capped at full), lightness kept: a dark theme's
+ * tokens are soft pastels, and mixed toward a dark page they go muddy (amber turns brown); this
+ * gives the color back without changing how light it is, so the text that reads on it still does.
+ */
+function richer(color: string | null, k: number): string | null {
+  const p = color ? parseColor(color) : null;
+  if (!p) return color;
+  const [r, g, b] = [p[0] / 255, p[1] / 255, p[2] / 255];
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  if (d === 0) return color;
+  const s0 = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? ((g - b) / d + (g < b ? 6 : 0)) / 6 : max === g ? ((b - r) / d + 2) / 6 : ((r - g) / d + 4) / 6;
+  const s = Math.min(1, s0 * k);
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s, pp = 2 * l - q;
+  const ch = (t: number) => {
+    t = (t + 1) % 1;
+    const v = t < 1 / 6 ? pp + (q - pp) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp;
+    return Math.round(v * 255).toString(16).padStart(2, "0");
+  };
+  return `#${ch(h + 1 / 3)}${ch(h)}${ch(h - 1 / 3)}`;
+}
+
+/** How much richer a dark theme's sky, sunset and dusk are than its tokens mixed toward the page. */
+const DARK_RICHER = 1.7;
+
 /** The two ends a theme's own tokens give a fill, before the text is chosen. */
 function recipe(theme: Theme, name: FillName): { from: string; to: string } | null {
   const own = theme.fills?.[name];
   if (own) return own;
   const c = theme.colors;
   const dark = isDarkTheme(theme);
-  // Toward the surface: a light theme's fills are pale washes, a dark theme's deep ones.
+  // Toward the surface: a light theme's fills are pale washes, a dark theme's deep ones. Dark ones keep
+  // more of their color than light ones (mixed less toward the surface), so on a dark page they still
+  // read as a mood rather than as grey cards; resolve() then deepens them only as far as AA needs.
   const soft = (color: string, k: number) => mixColors(color, c.surface, k);
-  const [kFrom, kTo] = dark ? [0.66, 0.56] : [0.7, 0.55];
+  const blend = (a: string, b: string, k: number) => mixColors(a, b, k) ?? a;
+  const [kFrom, kTo] = dark ? [0.4, 0.36] : [0.7, 0.55];
   let from: string | null, to: string | null;
   switch (name) {
     case "sky": from = soft(c.series2, kFrom); to = soft(c.accent, kTo); break;
-    // Warm: the amber of a meter's fill into the rose-red of bad.
-    case "sunset": from = soft(c.warnFill, kFrom); to = soft(c.bad, kTo); break;
-    // Violet or rose into blue.
-    case "dusk": from = soft(c.series5, kFrom); to = soft(c.series2, kTo); break;
-    // Night is dark in every theme: from the ink in a light one, from the surface in a dark one.
-    case "night":
-      from = dark ? mixColors(c.surface, c.series2, 0.18) : mixColors(c.ink, c.series2, 0.15);
-      to = dark ? mixColors(c.raised, c.series5, 0.12) : mixColors(c.ink, c.series5, 0.2);
+    // Warm: amber into rose in light themes; in dark ones a deep orange into rose, since amber
+    // mixed toward a dark surface turns brown.
+    case "sunset":
+      from = dark ? soft(blend(c.warnFill, c.bad, 0.4), 0.38) : soft(c.warnFill, kFrom);
+      to = dark ? soft(blend(c.bad, c.series5, 0.35), 0.36) : soft(c.bad, kTo);
       break;
-    case "accent": from = c.accent; to = c.accent2; break;
+    // Violet into blue: violet stays strong at the start, so dusk never reads as a paler sky.
+    case "dusk":
+      from = soft(c.series5, dark ? 0.38 : 0.5);
+      to = soft(blend(c.series5, c.series2, 0.55), dark ? 0.42 : 0.52);
+      break;
+    // Night is dark in every theme: from the ink in a light one; in a dark one a deep navy into
+    // violet, well apart from the page so it doesn't read as an empty card.
+    case "night":
+      from = dark ? mixColors(c.series2, c.surface, 0.7) : mixColors(c.ink, c.series2, 0.15);
+      to = dark ? mixColors(c.series5, c.surface, 0.74) : mixColors(c.ink, c.series5, 0.2);
+      break;
+    // The brand's two colors; with one (accent2 the same as accent), toward the theme's second
+    // chart color, which is set apart from the accent, so it's still a gradient.
+    case "accent": {
+      const second = (contrastRatio(c.accent, c.accent2) ?? 1) >= 1.12 ? c.accent2 : blend(c.accent, c.series2, 0.65);
+      from = c.accent; to = second;
+      break;
+    }
   }
+  if (dark && (name === "sky" || name === "sunset" || name === "dusk")) { from = richer(from, DARK_RICHER); to = richer(to, DARK_RICHER); }
   return from && to ? { from, to } : null;
 }
 

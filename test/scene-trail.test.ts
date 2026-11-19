@@ -10,7 +10,7 @@ import { parse } from "../src/parser";
 import { Registry } from "../src/registry";
 import { coreComponents } from "../src/components";
 import { reviewScenes, sceneComponents } from "../src/components/scene";
-import { MAX_TRAIL_DRAWS, sampleTime } from "../src/components/scene/trail";
+import { MAX_TRAIL_DRAWS, pivotOf, sampleTime } from "../src/components/scene/trail";
 import { render, type Rendered } from "../src/testing";
 import type { Box } from "../src/types";
 
@@ -301,5 +301,41 @@ describe("trail: parsing", () => {
 
   it("warns for a trail-count that isn't a number", () => {
     expect(warnings(`scene "S" w=100 h=100 duration=2\n  circle x=0 y=0 r=2 trail=1 trail-count=3x`).join(" ")).toMatch(/trail-count should be a number/);
+  });
+});
+
+describe("trail: where copies shrink", () => {
+  // A group without x or y draws its shapes where they are in the scene (planets on an orbit), so
+  // its copies only fade; shrinking them around 0,0 pulled every trail to the top-left corner.
+  const num = (node: { props: Record<string, string | undefined> }, k: string, _s: unknown, fallback = 0) => {
+    const v = node.props[k];
+    return v === undefined ? fallback : Number(v);
+  };
+  const str = (node: { props: Record<string, string | undefined> }, k: string) => node.props[k];
+  const groupNode = (props: string) => {
+    const r = parse(`scene "S" w=600 h=300 duration=10\n  group ${props}\n    circle x=300 y=150 r=8`, reg);
+    return r.root!.children[0]!.children[0]!;
+  };
+
+  it("fades a group or use with no x or y in place, without shrinking", () => {
+    expect(pivotOf(groupNode("trail=0.5") as never, (() => undefined) as never, { num, str } as never)).toBeNull();
+    const use = { ...(groupNode("trail=0.5") as object), type: "use", props: { trail: "0.5" } };
+    expect(pivotOf(use as never, (() => undefined) as never, { num, str } as never)).toBeNull();
+  });
+
+  it("still shrinks a group around its own x and y when it has them", () => {
+    expect(pivotOf(groupNode("x=120 y=80 trail=0.5") as never, (() => undefined) as never, { num, str } as never)?.at).toEqual([120, 80]);
+    expect(pivotOf(groupNode("x=120 trail=0.5") as never, (() => undefined) as never, { num, str } as never)?.at).toEqual([120, 0]);
+  });
+
+  it("still draws an orbiting group's copies (the test canvas doesn't record transforms; the pivot tests above cover where they sit)", () => {
+    const ui = render(`scene "Orbit" w=600 h=300 duration=60
+  group trail=0.5
+    let a={t}
+    label "P" x={300 + 100*cos(a)} y={150 + 100*sin(a)}`, MOVING);
+    ui.clock.advance(3000);
+    const ps = ui.drawOps.filter((o) => o.op === "fillText" && o.args[0] === "P");
+    expect(ps.length).toBeGreaterThan(5);
+    ui.destroy();
   });
 });

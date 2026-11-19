@@ -44,6 +44,7 @@ import { domTextLayer } from "./text-layer/dom";
 import { noTextLayer, OVERSCAN, SELECTABLE, SETTLE_MS, TEXT_MAX_WAIT_MS, TOUCH_SELECT_DEFAULT, type TextLayerHost } from "./text-layer/host";
 import type { Box, Diagnostic, HitRegion, HitTarget, SayShapeNode, Rect, Value } from "./types";
 import type { ExpressionFunctions, Scope } from "./expr";
+import { numberFromText } from "./text-checks";
 
 export interface Metrics {
   nodes: number;
@@ -2394,8 +2395,8 @@ export class SayShape {
     if (spec.kind === "number") {
       const t = text.trim();
       if (t === "") value = null;
-      else if (isFinite(Number(t))) value = Number(t);
-      else { this.unparsed = text; return; } // "-" or "1e" on the way to a number: wait for more
+      else if (numberFromText(t) !== null) value = numberFromText(t);
+      else { this.unparsed = text; return; } // "-", "1e" or "1," on the way to a number: wait for more
     }
     this.unparsed = null;
     this.typed = { text, value };

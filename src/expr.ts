@@ -11,7 +11,7 @@
  * objects or globals, so model-written expressions cannot run code.
  */
 import { displayData, fieldOf, isData, isList, isRecord, isScalar, makeList, makeRecord, MAX_DATA_DEPTH, MAX_DATA_VALUES, readField, toNumber } from "./data";
-import { TEXT_HAS, TEXT_IS } from "./text-checks";
+import { isPostcode, POSTCODES, TEXT_HAS, TEXT_IS } from "./text-checks";
 import type { DataList, DataRecord, Value } from "./types";
 
 type Node =
@@ -265,6 +265,14 @@ function range(a: Value | undefined, b: Value | undefined): Value {
 const checkedText = (v: Value | undefined): string | null => (typeof v === "string" ? v : typeof v === "number" && isFinite(v) ? String(v) : null);
 
 /** The check a name picks for has() or is(); any other name is an error listing them, even for empty text. */
+/** is()'s third argument: a country for 'postcode', and nothing else takes one. */
+function checkCountry(kind: Value | undefined, country: Value | undefined): void {
+  if (kind !== "postcode") throw new ExprError(`only is(text, 'postcode', 'GB') takes a country; is(text, ${typeof kind === "string" ? `'${kind}'` : "…"}) checks text alone`);
+  if (typeof country !== "string" || !POSTCODES[country.toUpperCase()]) {
+    throw new ExprError(`is(text, 'postcode', country) knows ${Object.keys(POSTCODES).map((c) => `'${c}'`).join(", ")}, not ${typeof country === "string" ? `'${country}'` : describeValue(country)}; leave the country out for any of them`);
+  }
+}
+
 function namedCheck<T>(fn: string, checks: ReadonlyMap<string, T>, kind: Value | undefined): T {
   const found = typeof kind === "string" ? checks.get(kind) : undefined;
   if (found === undefined) throw new ExprError(`${fn}() checks ${[...checks.keys()].map((k) => `'${k}'`).join(", ")}, not ${typeof kind === "string" ? `'${kind}'` : describeValue(kind)}`);
@@ -349,8 +357,14 @@ const BUILTINS: Record<string, Fn> = {
   range: (a, b) => range(a, b),
   /** has(pw, 'digit'): whether text has a digit, an upper or lower case letter, a symbol or a space, in any script. */
   has: (t, kind) => { const re = namedCheck("has", TEXT_HAS, kind); const s = checkedText(t); return !!s && re.test(s); },
-  /** is(email, 'email'): whether the text is an email, url, phone, zip, number or date (YYYY-MM-DD). */
-  is: (t, kind) => { const ok = namedCheck("is", TEXT_IS, kind); const s = checkedText(t)?.trim(); return !!s && ok(s); },
+  /** is(email, 'email'): whether the text is an email, url, phone, us-zip, postcode, number or date (YYYY-MM-DD); is(code, 'postcode', 'GB') for one country. */
+  is: (t, kind, country) => {
+    const ok = namedCheck("is", TEXT_IS, kind);
+    if (country !== undefined) checkCountry(kind, country);
+    const s = checkedText(t)?.trim();
+    if (!s) return false;
+    return kind === "postcode" && typeof country === "string" ? isPostcode(s, country) : ok(s);
+  },
   /** contains(name, query): text in other text, ignoring case; contains(code, 'A', 'case') matches case. */
   contains: (t, part, mode) => textMatch("contains", t, part, mode),
   /** starts(name, 'Dr'): whether text starts with other text, ignoring case unless the third argument is 'case'. */
@@ -452,7 +466,7 @@ const SIGNATURES: Record<string, string> = {
   extend: "extend(list, 'q', {field: q.a * 2}) adds computed fields to each item, which is q inside the braces",
   map: "map(list, 'q', q.a * 2) makes one value per item, which is q in the third argument",
   range: "range(n) for 0 to n - 1, or range(from, to) with to left out",
-  has: "has(text, 'digit'), or 'upper', 'lower', 'symbol' or 'space'", is: "is(text, 'email'), or 'url', 'phone', 'zip', 'number' or 'date'",
+  has: "has(text, 'digit'), or 'upper', 'lower', 'symbol' or 'space'", is: "is(text, 'email'), or 'url', 'phone', 'us-zip', 'postcode' (is(text, 'postcode', 'GB') for one country), 'number' or 'date'",
   contains: "contains(text, part), or contains(text, part, 'case') to match case", starts: "starts(text, part[, 'case'])", ends: "ends(text, part[, 'case'])",
 };
 
@@ -652,6 +666,7 @@ function parseExpr(src: string, fns?: ExpressionFunctions): Node {
         const kind = args[1];
         if (t.v === "has" && kind?.k === "lit") namedCheck("has", TEXT_HAS, kind.v);
         if (t.v === "is" && kind?.k === "lit") namedCheck("is", TEXT_IS, kind.v);
+        if (t.v === "is" && kind?.k === "lit" && args[2]?.k === "lit") checkCountry(kind.v, args[2].v);
         return { k: "call", fn: t.v, args };
       }
       return { k: "id", name: t.v };

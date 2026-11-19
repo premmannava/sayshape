@@ -20,7 +20,7 @@ EXPRESSIONS
 - Text can mix words and expressions: "Total: ${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! and a ? b : c
 - Functions: min, max, len, count, filter, find, search, sort, rank, first, last, pluck, take, slice, sum, avg, group, join, range, has, is, contains, starts, ends, includes, round, floor, ceil, abs, pow, fixed, money, number, compact, plural, lower, upper, trim, extend, map
-- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'us-zip', 'postcode' (any country; is(v, 'postcode', 'GB') for one), 'number' (1,234.5 and 12,5 too) or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Words inside {…} are state names. Quote text: {done ? 'Packed' : 'To pack'}, tone={late ? 'bad' : 'good'}
 
 ACTIONS (on=…)
@@ -173,14 +173,14 @@ ELEMENTS
         text "Trail runner socks" weight=semibold
         text "Arrives Thursday" tone=muted
 
-  list  — A bordered list of rows, separated by lines. Use list-item children; any other element (a row, a check) becomes a row of its own.
+  list  — A bordered list of rows, separated by lines; inside a card, only the lines. Use list-item children; any other element (a row, a check) becomes a row of its own.
     children: any elements
     example:
       list
         list-item "Trail runner socks" detail="Merino blend" trailing="$24"
         list-item "Rain shell" detail="Packs into its pocket" trailing="$129" on=emit:open_shell
 
-  list-item "<text>"  — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title. Give it on= to make it pressable.
+  list-item "<text>"  — One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title, except an icon-only button (icon= and label=), which sits at the right end. Give it on= to make it pressable.
     "<text>" (required)  The row's title.
     detail=<string>  A second, quieter line under the title.
     trailing=<string>  A short value on the right, like a price or a count.
@@ -191,6 +191,8 @@ ELEMENTS
     only inside: list
     example:
       list-item "Rain shell" detail="Packs into its pocket" trailing="$129" icon=package on=emit:open_shell
+      list-item "Groceries" detail="Food" trailing="$142"
+        button icon=trash label="Remove Groceries" variant=secondary size=sm on=emit:remove
 
   accordion "<text>"  — A heading that shows or hides the content under it when pressed. Stack several for an FAQ.
     "<text>" (required)  The heading.
@@ -625,7 +627,7 @@ ELEMENTS
       text "{plural(len(todos), 'item')}" tone=muted
 
   segmented  — Two to six short options in one track, one chosen, like Week, Month and Year, or Chart and Table. Show different content for each with if=.
-    bind=<state, required>  The state name holding the chosen option's text.
+    bind=<state, required>  The state name holding the chosen option's text, or its number when it holds a number (years=30 with options="15,20,30").
     label=<string>  What the choice is about, read by screen readers, e.g. label="Period". Default: the text just above it.
     options=<string, required>  The options, comma-separated, e.g. options="Week,Month,Year". At most 6, one or two words each.
     on=<action>  Actions to run after the choice changes, e.g. emit:changed. Separate several with ;

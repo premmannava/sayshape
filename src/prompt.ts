@@ -476,7 +476,7 @@ ${opts.layoutFirst ? LAYOUT_FIRST_FULL : `- Declare state first, at the top, uni
 - Text can mix words and expressions: "Total: \${price*qty}"
 - Operators: + - * / % == != < <= > >= && || ! and a ? b : c
 - Functions: ${EXPRESSION_FUNCTIONS.join(", ")}
-- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'us-zip', 'postcode' (any country; is(v, 'postcode', 'GB') for one), 'number' (1,234.5 and 12,5 too) or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Words inside {…} are state names. Quote text: {done ? 'Packed' : 'To pack'}, tone={late ? 'bad' : 'good'}`);
   // Screen and list actions only where their elements are exposed.
   const ops = ACTION_OPS.filter((o) => (has("screen") || (o !== "go" && o !== "back")) && (has("each") || !LIST_OPS.has(o)));
@@ -567,7 +567,7 @@ ${opts.layoutFirst ? LAYOUT_FIRST_COMPACT : `- State first, unindented, every va
 - Operators: + - * / % == != < <= > >= && || ! a ? b : c. Words inside {…} are names, so quote text: {done ? 'Yes' : 'No'}
 - Functions: ${EXPRESSION_FUNCTIONS.join(", ")}
 - On lists: count(l, 'done'), count(l, 'cat', 'Gas'), sum(l, 'price'), sum(l, 'price', 'qty') multiplies per item, avg/min/max(l, 'f'), group(l, 'f'[, 'n'[, 'avg']]) one record per value of f, named after your fields: group(spend, 'category', 'amount') gives {category, count, amount}, filter(l, 'f'[, value, list of values or {from, to}]), find(l, 'id', x), search(l, 'f', text), sort(l, 'f'[, 'desc']), take(l, n), slice(l, start, end) from 0 with the end left out, so one page is slice(l, (page - 1) * 5, page * 5), first(l)/last(l) (best: first(sort(l, 'f', 'desc')).name), pluck(l, 'f') one field of each, join(l, 'f'), includes(l, x). extend(l, 'q', {total: q.price * q.qty}) adds computed fields to every item (q only inside the braces), rank(l, 'f', 'desc') adds rank (1 best, ties share it), map(l, 'q', expr) one value per item, range(n) or range(a, b) counts up to n or b, not including it. Compute totals; never type them
-- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'zip', 'number' or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
+- Text checks, true or false: has(pw, 'digit'), with 'upper', 'lower', 'symbol' or 'space'; is(v, 'email'), with 'url', 'phone', 'us-zip', 'postcode' (any country; is(v, 'postcode', 'GB') for one), 'number' (1,234.5 and 12,5 too) or 'date'; contains, starts and ends(text, part) ignore case unless a third argument is 'case'
 - Formatting: money(2400) = $2,400.00, number(37000) = 37,000, compact(12345678) = 12.3M, compact(n, 'USD') = $12.3M for big figures in stats, plural(n, 'item') = 1 item / 3 items`);
   const local = ["inc:key[:by]", "dec:key[:by] (never below 0)", "toggle:key", "set:key:value or set:key:{expr}", ...(has("each") ? ["add:list:value", "remove:t (current item) or remove:list:index", "clear:list"] : []), "notify:'text {expr}'", ...(has("screen") ? ["go:screen", "back"] : [])];
   add("actions", `ACTIONS on=…, several joined with ; and quoted when they have spaces: on="inc:n;notify:'Saved {n}'"

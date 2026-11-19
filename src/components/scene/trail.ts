@@ -101,8 +101,8 @@ const PLACE: Record<string, readonly string[]> = {
 };
 
 /**
- * Where a copy shrinks around, at the copy's own time (a path has none: it
- * only fades), and the line with the props that took worked out, so drawing
+ * Where a copy shrinks around, at the copy's own time (a path has none, nor a
+ * group or use without x or y: they only fade), and the line with the props that took worked out, so drawing
  * the copy doesn't work them out again.
  */
 export function pivotOf(node: SayShapeNode, scope: Scope, h: Pick<TrailHooks, "num" | "str">): { at: [number, number]; node: SayShapeNode } | null {
@@ -115,6 +115,10 @@ export function pivotOf(node: SayShapeNode, scope: Scope, h: Pick<TrailHooks, "n
   }
   const keys = PLACE[node.type];
   if (!keys) return null;
+  // A group or use with no x or y places its shapes where they are in the scene (each at its own
+  // x={300 + r*cos(a)}), not around 0,0: shrinking toward 0,0 would pull every copy toward the
+  // scene's top-left corner, so its copies only fade, like a path's.
+  if ((node.type === "group" || node.type === "use") && node.props.x === undefined && node.props.y === undefined) return null;
   const v: Record<string, number> = {};
   for (const k of keys) v[k] = h.num(node, k, scope, 0);
   const at: [number, number] = node.type === "rect" ? [v.x! + v.w! / 2, v.y! + v.h! / 2]
