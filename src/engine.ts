@@ -3076,37 +3076,56 @@ const within = (a: Rect, b: Rect) => a.x >= b.x && a.y >= b.y && rightOf(a) <= r
 const meets = (a: Rect, b: Rect) => a.x < rightOf(b) && b.x < rightOf(a) && a.y < bottomOf(b) && b.y < bottomOf(a);
 
 /**
- * Grown regions (those with a ring) give way to their neighbours: where one
- * would reach into another region, it is cut at the middle of the gap between
- * the two drawn boxes, so no grown region covers what another draws and two
- * grown neighbours share the gap evenly. Regions that hold the other's drawn
- * box (a pressable card round a button, a tip over its own element) aren't
- * neighbours, and drawn boxes that overlap can't be parted: both are left.
+ * Grown regions (those with a ring) give way to their neighbours. Each side
+ * may reach as far as the middle of the gap to the nearest region that side,
+ * so no grown region covers what another draws and two neighbours share a gap
+ * evenly. Within that, the growth is shared between the two sides, and what
+ * one side can't take (a button just under another) goes to the other, so a
+ * control by itself still gets its full reach. Regions that hold the other's
+ * drawn box (a pressable card round a button, a tip over its own element)
+ * aren't neighbours, and drawn boxes that overlap can't be parted.
  */
 function trimReach(hits: HitRegion[]): void {
+  // As far as each region could reach, before any gives way: its whole growth on either side.
+  const most = hits.map((h) => {
+    const d = h.ring;
+    if (!d) return h.box;
+    const nx = h.box.w - d.w, ny = h.box.h - d.h;
+    return { x: d.x - nx, y: d.y - ny, w: d.w + 2 * nx, h: d.h + 2 * ny };
+  });
+  const placed: Array<Box | null> = hits.map(() => null);
   for (let i = 0; i < hits.length; i++) {
     const a = hits[i]!, mine = a.ring;
     if (!mine) continue;
-    let { x, y } = a.box, r = rightOf(a.box), b = bottomOf(a.box);
+    const far = most[i]!;
+    let top = far.y, left = far.x, bottom = bottomOf(far), right = rightOf(far);
     for (let j = 0; j < hits.length; j++) {
-      const n = hits[j]!;
       if (j === i) continue;
-      const theirs = n.ring ?? n.box;
-      if (within(mine, theirs) || within(theirs, mine) || meets(mine, theirs)) continue;
-      if (!meets({ x, y, w: r - x, h: b - y }, n.box)) continue;
+      const n = hits[j]!, theirs = n.ring ?? n.box;
+      if (within(mine, theirs) || within(theirs, mine) || meets(mine, theirs) || !meets(far, most[j]!)) continue;
       const below = theirs.y >= bottomOf(mine), above = bottomOf(theirs) <= mine.y;
       const after = theirs.x >= rightOf(mine), before = rightOf(theirs) <= mine.x;
       const gapY = below ? theirs.y - bottomOf(mine) : above ? mine.y - bottomOf(theirs) : -1;
       const gapX = after ? theirs.x - rightOf(mine) : before ? mine.x - rightOf(theirs) : -1;
-      // Apart both ways (diagonal neighbours): cut along the wider gap, which leaves more.
+      // Apart both ways (diagonal neighbours): part them along the wider gap, which leaves more.
       if (gapY >= gapX) {
-        if (below) b = Math.min(b, bottomOf(mine) + gapY / 2);
-        else y = Math.max(y, mine.y - gapY / 2);
-      } else if (after) r = Math.min(r, rightOf(mine) + gapX / 2);
-      else x = Math.max(x, mine.x - gapX / 2);
+        if (below) bottom = Math.min(bottom, bottomOf(mine) + gapY / 2);
+        else top = Math.max(top, mine.y - gapY / 2);
+      } else if (after) right = Math.min(right, rightOf(mine) + gapX / 2);
+      else left = Math.max(left, mine.x - gapX / 2);
     }
-    if (x !== a.box.x || y !== a.box.y || r !== rightOf(a.box) || b !== bottomOf(a.box)) a.box = { ...a.box, x, y, w: r - x, h: b - y };
+    const [y, h] = share(mine.y, mine.h, a.box.h - mine.h, mine.y - top, bottom - bottomOf(mine));
+    const [x, w] = share(mine.x, mine.w, a.box.w - mine.w, mine.x - left, right - rightOf(mine));
+    if (x !== a.box.x || y !== a.box.y || w !== a.box.w || h !== a.box.h) placed[i] = { ...a.box, x, y, w, h };
   }
+  placed.forEach((b, i) => { if (b) hits[i]!.box = b; });
+}
+
+/** Growth along one axis: half each side, what one side has no room for going to the other. */
+function share(start: number, size: number, grow: number, roomBefore: number, roomAfter: number): [number, number] {
+  const before = Math.min(roomBefore, Math.max(grow / 2, grow - roomAfter));
+  const after = Math.min(roomAfter, grow - before);
+  return [start - before, size + before + after];
 }
 
 const TOAST_FADE = 180;

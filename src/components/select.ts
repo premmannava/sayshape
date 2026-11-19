@@ -32,7 +32,7 @@ import { fieldOf, isList, isRecord, makeList } from "../data";
 import type { PopupState } from "../popup";
 import type { PartSemantics } from "../a11y/semantics";
 import type { Box, Rect, Value } from "../types";
-import { fieldBox, fitText, paintField } from "./input";
+import { fieldBox, fitText, ICON_TAP, paintField } from "./input";
 import { sizesOf } from "../theme";
 import { chevron, fillTint, onProp, partBox, runOn } from "./util";
 
@@ -384,7 +384,7 @@ select "Team" items=teams value=id label=name bind=team placeholder="Choose a te
     g.fillText(fitText(g, text, room), field.x + pad, field.y + field.h / 2 + 1);
     chevron(g, field.x + field.w - pad - 6, field.y + field.h / 2, 10, isOpen ? "up" : "down", disabled ? c.line : c.muted);
     g.restore();
-    if (!disabled) ctx.addHit(field);
+    if (!disabled) ctx.addHit(field, { reach: ICON_TAP });
   },
   press(ctx) {
     if (!ctx.popupOpen) open(ctx);

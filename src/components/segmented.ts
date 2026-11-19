@@ -6,7 +6,7 @@
 import { isDarkTheme, sizesOf } from "../theme";
 import { MOTION } from "../design";
 import type { ComponentDef, PressContext } from "../component";
-import { fitText } from "./input";
+import { fitText, ICON_TAP } from "./input";
 import { fillTint, onProp, partBox, runOn, themeFont } from "./util";
 
 /** The track's inset around the chosen tile. Its height and each option's padding are the theme's (sizesOf: segmented, segmentedPadX). */
@@ -150,7 +150,7 @@ text "Showing the {lower(view)}" tone=muted`,
       }
       g.fillStyle = on ? c.ink : c.muted;
       g.fillText(fitText(g, cell.option, Math.max(0, cell.w - 10)), part.x + part.w / 2, part.y + part.h / 2 + 1);
-      ctx.addHit(part, { detail: cell.option });
+      ctx.addHit(part, { detail: cell.option, reach: ICON_TAP });
     }
   },
   press(ctx) {

@@ -204,7 +204,7 @@ button icon=trash label="Remove" variant=secondary on=emit:remove`,
       g.fillText(fitText(g, p.text(), box.w - 16), box.x + box.w / 2, box.y + box.h / 2 + 1);
     }
     g.restore();
-    if (!disabled) ctx.addHit(box);
+    if (!disabled) ctx.addHit(box, { reach: ICON_TAP });
   },
   press(ctx) {
     const node = ctx.target.node;
@@ -615,7 +615,7 @@ stepper "Quantity" bind=qty min=1 max=10`,
       g.fillStyle = c.ink;
       g.fillText(part.sign, pb.x + STEP_W / 2, top + h / 2 + 1);
       g.restore();
-      if (part.enabled) ctx.addHit(pb, { detail: part.name });
+      if (part.enabled) ctx.addHit(pb, { detail: part.name, reach: ICON_TAP });
     }
     g.font = ctx.font(600, theme.text.body);
     g.fillStyle = c.ink;
@@ -1129,7 +1129,7 @@ text "{plural(len(todos), 'item')}" tone=muted`,
       }
     }
     g.restore();
-    if (!disabled) ctx.addHit(field);
+    if (!disabled) ctx.addHit(field, { reach: ICON_TAP });
   },
   editor(box, p, theme) {
     const rows = linesOf(p);

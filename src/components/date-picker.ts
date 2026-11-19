@@ -38,7 +38,7 @@ import type { PopupState } from "../popup";
 import type { PartSemantics } from "../a11y/semantics";
 import { fieldOf, isRecord, makeRecord } from "../data";
 import type { Box, Rect, Value } from "../types";
-import { fieldBox, fitText, paintField } from "./input";
+import { fieldBox, fitText, ICON_TAP, paintField } from "./input";
 import { sizesOf } from "../theme";
 import { chevron, fillTint, onProp, partBox, runOn } from "./util";
 
@@ -458,7 +458,7 @@ date-picker "Due date" bind=due min="2026-01-01" max="2027-12-31"`,
     g.fillText(fitText(g, fitted, room), field.x + pad, field.y + field.h / 2 + 1);
     calendarIcon(g, field.x + field.w - pad - 8, field.y + field.h / 2, disabled ? c.line : c.muted);
     g.restore();
-    if (!disabled) ctx.addHit(field);
+    if (!disabled) ctx.addHit(field, { reach: ICON_TAP });
   },
   press(ctx) {
     if (!ctx.popupOpen) open(ctx);
