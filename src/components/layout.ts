@@ -1,5 +1,5 @@
 import type { ComponentDef, PaintContext } from "../component";
-import type { Box } from "../types";
+import type { Box, SayShapeNode } from "../types";
 import { ellipsize, fitLines, wrapText } from "../text";
 import { drawIcon, isIconName } from "../icons";
 import { isDarkTheme, mixColors, parseColor, type Theme } from "../theme";
@@ -9,10 +9,10 @@ import { MOTION } from "../design";
 import { FILLS, fillGradient, fillSource, isFillName, onFillTheme, type FillName } from "../fills";
 import { chevron, detailProp, fillTint, gapProp, iconProblems, iconProp, onProp, padProp, paintPill, partBox, PILL_TONES, pillWidth, row as rowLayout, ROW_ALIGN, ROW_JUSTIFY, rowMinWidth, runOn, stack, themeFont, toneColor } from "./util";
 
-/** A parent card is already the frame; let nested tables use its surface. */
+/** A parent card is already the frame; let nested tables and lists use its surface (a list keeps only its row lines). */
 function markTablesInsideCard(box: Box): void {
   for (const child of box.children) {
-    if (child.node.type === "table") child.data = { ...child.data, embeddedInCard: true };
+    if (child.node.type === "table" || child.node.type === "list") child.data = { ...child.data, embeddedInCard: true };
     markTablesInsideCard(child);
   }
 }
@@ -507,7 +507,7 @@ export const grid: ComponentDef = {
 export const list: ComponentDef = {
   type: "list",
   category: "layout",
-  description: "A bordered list of rows, separated by lines. Use list-item children; any other element (a row, a check) becomes a row of its own.",
+  description: "A bordered list of rows, separated by lines; inside a card, only the lines. Use list-item children; any other element (a row, a check) becomes a row of its own.",
   props: {},
   children: "any",
   example: `list
@@ -519,19 +519,32 @@ export const list: ComponentDef = {
   },
   layout(box, ctx) {
     // A list-item brings its own padding; anything else gets the same, so every row lines up.
-    const rows: ListRow[] = [];
-    let y = box.y;
-    for (const k of ctx.visibleChildren(box.node)) {
-      const own = k.type === "list-item";
-      const kb = own ? ctx.layout(k, box.x, y, box.w) : ctx.layout(k, box.x + ITEM_PAD_X, y + ITEM_PAD_Y, box.w - ITEM_PAD_X * 2);
-      box.children.push(kb);
-      rows.push({ y, inset: ITEM_PAD_X + (own ? ((kb.data as { iconW?: number } | undefined)?.iconW ?? 0) : 0) });
-      y += own ? kb.h : kb.h + ITEM_PAD_Y * 2;
+    const place = () => {
+      const rows: ListRow[] = [];
+      box.children.length = 0;
+      let y = box.y;
+      for (const k of ctx.visibleChildren(box.node)) {
+        const own = k.type === "list-item";
+        const kb = own ? ctx.layout(k, box.x, y, box.w) : ctx.layout(k, box.x + ITEM_PAD_X, y + ITEM_PAD_Y, box.w - ITEM_PAD_X * 2);
+        box.children.push(kb);
+        rows.push({ y, inset: ITEM_PAD_X + (own ? ((kb.data as { iconW?: number } | undefined)?.iconW ?? 0) : 0) });
+        y += own ? kb.h : kb.h + ITEM_PAD_Y * 2;
+      }
+      box.data = { rows };
+      box.h = y - box.y;
+    };
+    place();
+    // One row too narrow for its buttons beside its title: lay them all out with the buttons under, so they line up.
+    const some = box.children.some((c) => (c.data as { actionsUnder?: boolean } | undefined)?.actionsUnder);
+    const others = box.children.some((c) => ((c.data as { actionsW?: number } | undefined)?.actionsW ?? 0) > 0);
+    if (some && others && !actionsUnder) {
+      actionsUnder = true;
+      try { place(); } finally { actionsUnder = false; }
     }
-    box.data = { rows };
-    box.h = y - box.y;
   },
   paint(box, ctx) {
+    // Inside a card the card is the frame: no second panel in it, only the row lines.
+    if (box.data?.embeddedInCard) return;
     const { g, theme } = ctx;
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
     g.fillStyle = theme.colors.raised;
@@ -546,6 +559,7 @@ export const list: ComponentDef = {
     const rows = (box.data as { rows?: ListRow[] } | undefined)?.rows ?? [];
     rows.slice(1).forEach((r) => g.fillRect(box.x + r.inset, r.y, box.w - r.inset, 1));
     g.restore();
+    if (box.data?.embeddedInCard) return;
     ctx.roundRect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, theme.radius.md);
     g.strokeStyle = theme.colors.line;
     g.lineWidth = 1;
@@ -557,13 +571,29 @@ const ITEM_PAD_X = 16, ITEM_PAD_Y = 12;
 /** Between the title and the detail when they share a line (theme.listInline). */
 const ITEM_INLINE_GAP = 10;
 const ITEM_ICON = 20, ITEM_ICON_GAP = 12;
+/** Icon-only buttons at a row's right end: at most this many, this far apart and from the value before them. */
+const ITEM_ACTIONS = 2, ITEM_ACTION_GAP = 8;
+
+/**
+ * Set while a list lays its rows out again because one row had to put its actions under its title:
+ * then every row does, so the buttons line up down the list. Layout runs synchronously, so a list
+ * sets it around its second pass and clears it in finally.
+ */
+let actionsUnder = false;
+
+/** An icon-only button (icon=, label=, no text): inside a list-item it sits at the row's right end. */
+function isRowAction(node: SayShapeNode, ctx: { props(n: SayShapeNode): { text(): string; str(k: string): string } }): boolean {
+  if (node.type !== "button") return false;
+  const p = ctx.props(node);
+  return !p.text() && isIconName(p.str("icon"));
+}
 /** Where a list's row starts, and how far in its separator begins. */
 interface ListRow { y: number; inset: number }
 
 export const listItem: ComponentDef = {
   type: "list-item",
   category: "layout",
-  description: "One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title. Give it on= to make it pressable.",
+  description: "One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title, except an icon-only button (icon= and label=), which sits at the right end. Give it on= to make it pressable.",
   text: { description: "The row's title.", required: true },
   props: {
     detail: { type: "string", description: "A second, quieter line under the title." },
@@ -574,7 +604,9 @@ export const listItem: ComponentDef = {
   },
   parents: ["list"],
   children: "any",
-  example: `list-item "Rain shell" detail="Packs into its pocket" trailing="$129" icon=package on=emit:open_shell`,
+  example: `list-item "Rain shell" detail="Packs into its pocket" trailing="$129" icon=package on=emit:open_shell
+list-item "Groceries" detail="Food" trailing="$142"
+  button icon=trash label="Remove Groceries" variant=secondary size=sm on=emit:remove`,
   check: (props) => iconProblems(props.icon, "icon"),
   semantics(box, ctx) {
     const p = ctx.props(box.node);
@@ -592,29 +624,57 @@ export const listItem: ComponentDef = {
     const trailingW = trailing ? (pillW || ctx.measure.width(trailing, titleFont)) + 12 : 0;
     const chevronW = p.has("on") ? 20 : 0;
     const iconW = isIconName(p.str("icon")) ? ITEM_ICON + ITEM_ICON_GAP : 0;
-    const textW = Math.max(40, box.w - ITEM_PAD_X * 2 - trailingW - chevronW - iconW);
+    // Icon-only buttons (a remove, an edit) go at the right end, before any chevron; everything else goes under the title.
+    const kids = ctx.visibleChildren(box.node);
+    let actions = kids.filter((k) => isRowAction(k, ctx)).slice(0, ITEM_ACTIONS);
+    let actionWidths = actions.map((a) => ctx.minWidth(a));
+    let actionsW = actions.length ? actionWidths.reduce((a, b) => a + b, 0) + ITEM_ACTION_GAP * actions.length : 0;
+    let textW = Math.max(40, box.w - ITEM_PAD_X * 2 - trailingW - chevronW - iconW - actionsW);
+    // In a narrow row the title comes first: if a word of it wouldn't fit beside the actions (it
+    // would break mid-word), they go under the title instead, as any other child does.
+    const under = actions.length > 0 && (actionsUnder || Math.max(...p.text().split(/\s+/).map((w) => ctx.measure.width(w, titleFont))) > textW);
+    if (under) {
+      textW += actionsW;
+      actions = []; actionWidths = []; actionsW = 0;
+    }
     const titleLH = Math.round(t.text.body * 1.35), detailLH = 18;
     // The chat density: title, detail and trailing value on one line when they fit, else as below.
     const titleW = t.listInline && p.has("detail") ? ctx.measure.width(p.text(), titleFont) : 0;
     const inline = titleW > 0 && titleW + ITEM_INLINE_GAP + ctx.measure.width(p.str("detail"), detailFont) <= textW;
     const title = inline ? [p.text()] : wrapText(p.text(), textW, titleFont, ctx.measure);
     const detail = inline ? [p.str("detail")] : p.has("detail") ? wrapText(p.str("detail"), textW, detailFont, ctx.measure) : [];
-    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW, ...(inline ? { detailX: titleW + ITEM_INLINE_GAP } : {}) };
+    box.data = { title, detail, titleFont, detailFont, titleLH, detailLH, trailing, iconW, pillW, actionsW, ...(under ? { actionsUnder: true } : {}), ...(inline ? { detailX: titleW + ITEM_INLINE_GAP } : {}) };
     let y = box.y + ITEM_PAD_Y + title.length * titleLH + (detail.length && !inline ? 2 + detail.length * detailLH : 0);
     // Elements inside go under the text, lined up with it.
     const left = ITEM_PAD_X + iconW;
-    for (const k of ctx.visibleChildren(box.node)) {
+    for (const k of kids) {
+      if (actions.includes(k)) continue;
       y += 8;
-      const kb = ctx.layout(k, box.x + left, y, Math.max(40, box.w - left - ITEM_PAD_X - chevronW));
+      const kb = ctx.layout(k, box.x + left, y, Math.max(40, box.w - left - ITEM_PAD_X - chevronW - actionsW));
       box.children.push(kb);
       y += kb.h;
     }
     box.h = y - box.y + ITEM_PAD_Y;
+    // The row grows to hold its tallest action with a little room, and each sits in its middle, right to left.
+    let right = box.x + box.w - ITEM_PAD_X - chevronW;
+    const placed: Box[] = [];
+    actions.forEach((a, i) => {
+      const w = actionWidths[i]!;
+      const kb = ctx.layout(a, right - w, box.y, w);
+      placed.push(kb);
+      right -= w + ITEM_ACTION_GAP;
+    });
+    if (placed.length) {
+      box.h = Math.max(box.h, ...placed.map((kb) => kb.h + 8));
+      for (const kb of placed) kb.y = box.y + (box.h - kb.h) / 2;
+      // Read after the title and anything under it, in the order they sit, left to right.
+      box.children.push(...placed.reverse());
+    }
   },
   paint(box, ctx) {
     const { g, theme } = ctx;
     const c = theme.colors;
-    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number; detailX?: number };
+    const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number; trailing: string; iconW: number; pillW: number; actionsW?: number; detailX?: number };
     const p = ctx.props(box.node);
     const pressable = p.has("on");
     if (pressable) {
@@ -647,7 +707,7 @@ export const listItem: ComponentDef = {
       g.fillStyle = c.muted;
       for (const l of d.detail) { g.fillText(l, tx, y + d.detailLH / 2); y += d.detailLH; }
     }
-    const right = box.x + box.w - ITEM_PAD_X - (pressable ? 20 : 0);
+    const right = box.x + box.w - ITEM_PAD_X - (pressable ? 20 : 0) - (d.actionsW ?? 0);
     if (d.trailing && d.pillW) {
       // A tagged value is a badge, level with the title's first line.
       const w = d.pillW, h = 22;

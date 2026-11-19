@@ -80,7 +80,9 @@ describe("is()", () => {
     all(["is('85004', 'zip')", "is('85004-1234', 'zip')"], true);
     all(["is('8500', 'zip')", "is('SW1A 1AA', 'zip')", "is('85004-12', 'zip')"], false);
     all(["is('12', 'number')", "is(' -3.5 ', 'number')", "is('1e3', 'number')", "is(42, 'number')"], true);
-    all(["is('12a', 'number')", "is('', 'number')", "is('  ', 'number')", "is('1,250', 'number')"], false);
+    all(["is('12a', 'number')", "is('', 'number')", "is('  ', 'number')", "is('1,2,50', 'number')"], false);
+    // Grouped and decimal-comma numbers are numbers too (test/text-checks-world.test.ts has the rest).
+    all(["is('1,250', 'number')", "is('12,5', 'number')"], true);
   });
 
   it("checks dates as date pickers write them", () => {
@@ -90,7 +92,7 @@ describe("is()", () => {
 
   it("is false for null and empty text, and names the checks there are", () => {
     for (const kind of ["email", "url", "phone", "zip", "number", "date"]) all([`is(nothing, '${kind}')`, `is('', '${kind}')`, `is(tags, '${kind}')`], false);
-    expect(err("is('x', 'ssn')")).toBe("is() checks 'email', 'url', 'phone', 'zip', 'number', 'date', not 'ssn'");
+    expect(err("is('x', 'ssn')")).toBe("is() checks 'email', 'url', 'phone', 'us-zip', 'zip', 'postcode', 'number', 'date', not 'ssn'");
   });
 });
 

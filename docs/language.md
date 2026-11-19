@@ -242,7 +242,7 @@ Text checks, true or false, for `error=`, `required=`, `disabled=` and `if=`. Th
 | Function | Result |
 |---|---|
 | `has(pw, 'digit')`, `'upper'`, `'lower'`, `'symbol'`, `'space'` | Whether the text has at least one such character, in any script (`É`, `Ω` and `ß` are letters; `٣` is a digit) |
-| `is(v, 'email')`, `'url'`, `'phone'`, `'zip'`, `'number'`, `'date'` | Whether the whole text, spaces around it aside, is one: an email by `input kind=email`'s rule, an `http` or `https` address, 7 to 15 digits with spaces, dashes, dots, brackets and a leading `+`, a US ZIP code (`85004` or `85004-1234`), a number by `input kind=number`'s rule, a real `YYYY-MM-DD` date. A check that doesn't exist is reported, naming the ones that do |
+| `is(v, 'email')`, `'url'`, `'phone'`, `'us-zip'`, `'postcode'`, `'number'`, `'date'` | Whether the whole text, spaces around it aside, is one: an email by `input kind=email`'s rule, an `http` or `https` address, 7 to 15 digits with spaces, dashes, dots, brackets and a leading `+`, a US ZIP code (`85004` or `85004-1234`; `'zip'` is the same check), a postal code of any of 16 countries (US, CA, GB, IE, DE, FR, ES, IT, NL, IN, AU, JP, CN, SG, BR, MX), or of one with `is(v, 'postcode', 'GB')`, a number by `input kind=number`'s rule (`12.5`, `1,234.5`, `12,5` or `1.234,5`; one comma before three digits is a thousands separator), a real `YYYY-MM-DD` date. A check or country that doesn't exist is reported, naming the ones that do |
 | `contains(text, part)`, `starts(text, part)`, `ends(text, part)` | Whether the text holds, starts with or ends with the part, ignoring case; `'case'` as a third argument matches case. An empty part is in any text |
 
 ```sayshape

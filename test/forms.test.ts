@@ -79,7 +79,7 @@ describe("forms: required, email, number and error=", () => {
     ui.type({ type: "input", text: "Seats" }, "two");
     leave(ui);
     expect(ui.state.seats).toBeNull();
-    expect(problems(ui)).toEqual(["Enter a number, like 12 or 3.5"]);
+    expect(problems(ui)).toEqual(["Enter a number, like 12, 3.5 or 1,250"]);
     ui.type({ type: "input", text: "Seats" }, "2", { replace: true });
     leave(ui);
     expect(ui.state.seats).toBe(2);

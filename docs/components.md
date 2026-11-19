@@ -118,7 +118,7 @@ card on=emit:open_order
 
 ### `list`
 
-A bordered list of rows, separated by lines. Use list-item children; any other element (a row, a check) becomes a row of its own.
+A bordered list of rows, separated by lines; inside a card, only the lines. Use list-item children; any other element (a row, a check) becomes a row of its own.
 
 Children: any elements.
 
@@ -130,7 +130,7 @@ list
 
 ### `list-item`
 
-One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title. Give it on= to make it pressable.
+One row of a list: a title, an optional detail line and value on the right, and anything inside it (a badge, a check, a row) under the title, except an icon-only button (icon= and label=), which sits at the right end. Give it on= to make it pressable.
 
 | Prop | Type | Description |
 |---|---|---|
@@ -147,6 +147,8 @@ Only inside: `list`.
 
 ```
 list-item "Rain shell" detail="Packs into its pocket" trailing="$129" icon=package on=emit:open_shell
+list-item "Groceries" detail="Food" trailing="$142"
+  button icon=trash label="Remove Groceries" variant=secondary size=sm on=emit:remove
 ```
 
 ### `accordion`
@@ -873,7 +875,7 @@ Two to six short options in one track, one chosen, like Week, Month and Year, or
 
 | Prop | Type | Description |
 |---|---|---|
-| `bind` | state, required | The state name holding the chosen option's text. |
+| `bind` | state, required | The state name holding the chosen option's text, or its number when it holds a number (years=30 with options="15,20,30"). |
 | `label` | string | What the choice is about, read by screen readers, e.g. label="Period". Default: the text just above it. |
 | `options` | string, required | The options, comma-separated, e.g. options="Week,Month,Year". At most 6, one or two words each. |
 | `on` | action | Actions to run after the choice changes, e.g. emit:changed. Separate several with ; |

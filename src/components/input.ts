@@ -947,7 +947,7 @@ export function fieldProblem(p: PropReader, unparsed: boolean): string {
   const value = fieldValue(p).trim();
   const kind = p.oneOf("kind", INPUT_KINDS, "text");
   // Text that wasn't a number is never written; say so only while nothing else is shown in its place.
-  if (kind === "number" && unparsed && !value) return "Enter a number, like 12 or 3.5";
+  if (kind === "number" && unparsed && !value) return "Enter a number, like 12, 3.5 or 1,250";
   if (!value) return p.cond("required") ? "Required" : "";
   if (kind === "email" && !EMAIL.test(value)) return "Enter an email like name@example.com";
   return p.str("error", "").trim();
