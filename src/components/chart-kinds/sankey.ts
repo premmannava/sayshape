@@ -207,7 +207,7 @@ export const sankey: ChartKindDef = {
     const columns: number[][] = Array.from({ length: cols }, () => []);
     names.forEach((_, i) => columns[col[i]!]!.push(i));
     const most = Math.max(...columns.map((c) => c.length));
-    let plotH = Math.max(Math.round(plotHeight(box.w) * 1.2), most * (NODE_GAP + 14));
+    let plotH = Math.max(Math.round(plotHeight(box.w, t) * 1.2), most * (NODE_GAP + 14));
     const ky = Math.min(...columns.filter((c) => c.length).map((c) => (plotH - NODE_GAP * (c.length - 1)) / c.reduce((a, i) => a + value[i]!, 0)));
     const nodeW = Math.max(8, Math.min(14, box.w / 60));
     const step = cols > 1 ? (box.w - nodeW) / (cols - 1) : 0;

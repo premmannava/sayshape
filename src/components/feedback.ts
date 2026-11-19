@@ -4,6 +4,7 @@ import { drawIcon, isIconName } from "../icons";
 import { fillTint, iconBefore, iconProblems, onProp, partBox, themeFont } from "./util";
 import { fitText } from "./input";
 import { paintGhost } from "../ghost";
+import { sizesOf } from "../theme";
 
 const SHAPES = ["text", "block", "circle"] as const;
 const LINE_H = 12, LINE_GAP = 10;
@@ -47,7 +48,8 @@ skeleton shape=block height=80`,
   },
 };
 
-const ICON = 40, BUTTON_H = 36;
+/** The tray's size at the default emptyIcon, which its lines are drawn for. */
+const TRAY_DRAWN = 40;
 
 export const empty: ComponentDef = {
   type: "empty",
@@ -84,8 +86,9 @@ export const empty: ComponentDef = {
     const detail = p.has("detail") ? wrapText(p.str("detail"), w, detailFont, ctx.measure) : [];
     const titleLH = Math.round(t.text.lead * 1.35), detailLH = Math.round(t.text.body * 1.4);
     const hasAction = p.has("action");
+    const { emptyIcon: ICON, emptyButton: BUTTON_H, emptyPad: PAD } = sizesOf(t);
     box.data = { title, detail, titleFont, detailFont, titleLH, detailLH };
-    box.h = 24 + ICON + 14 + title.length * titleLH + (detail.length ? 4 + detail.length * detailLH : 0) + (hasAction ? 18 + BUTTON_H : 0) + 24;
+    box.h = PAD + ICON + 14 + title.length * titleLH + (detail.length ? 4 + detail.length * detailLH : 0) + (hasAction ? 18 + BUTTON_H : 0) + PAD;
   },
   paint(box, ctx) {
     const p = ctx.props(box.node);
@@ -93,7 +96,8 @@ export const empty: ComponentDef = {
     const c = theme.colors;
     const d = box.data as { title: string[]; detail: string[]; titleFont: string; detailFont: string; titleLH: number; detailLH: number };
     const cx = box.x + box.w / 2;
-    let y = box.y + 24;
+    const { emptyIcon: ICON, emptyButton: BUTTON_H, emptyPad: PAD } = sizesOf(theme);
+    let y = box.y + PAD;
     // An empty tray on a quiet tile: a box with an open top edge, in the muted color.
     ctx.roundRect(cx - ICON / 2 + 0.5, y + 0.5, ICON - 1, ICON - 1, theme.radius.md);
     fillTint(g, c.ink, 0.04);
@@ -106,8 +110,15 @@ export const empty: ComponentDef = {
     const named = p.str("icon");
     if (isIconName(named)) {
       // The spec's own symbol in place of the tray.
-      drawIcon(g, named, cx - 11, y + (ICON - 22) / 2, 22, c.muted);
+      const s = Math.round(ICON * 0.55);
+      drawIcon(g, named, cx - s / 2, y + (ICON - s) / 2, s, c.muted);
     } else {
+      // The tray's lines are drawn for TRAY_DRAWN; about the tile's middle, so a smaller tile scales them down.
+      const k = ICON / TRAY_DRAWN;
+      g.save();
+      g.translate(cx, y + ICON / 2);
+      g.scale(k, k);
+      g.translate(-cx, -(y + TRAY_DRAWN / 2));
       g.beginPath();
       g.moveTo(cx - 9, y + 15);
       g.lineTo(cx - 9, y + 25);
@@ -124,6 +135,7 @@ export const empty: ComponentDef = {
       g.lineJoin = "round";
       g.lineCap = "round";
       g.stroke();
+      g.restore();
     }
     y += ICON + 14;
     g.textAlign = "center";

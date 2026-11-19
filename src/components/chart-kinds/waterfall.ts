@@ -77,7 +77,7 @@ export const waterfall: ChartKindDef = {
     if (totalName) entries.push({ label: totalName, value: running, span: { from: 0, to: running }, tone: "total" });
 
     const n = entries.length;
-    const plotH = plotHeight(box.w);
+    const plotH = plotHeight(box.w, t);
     const values = [0, ...entries.flatMap((e) => (e.span ? [e.span.from, e.span.to] : []))];
     const scale = chartScale(values, "bar", Math.max(2, Math.min(6, Math.floor(plotH / 44))));
     const tickText = tickLabels(scale.ticks, scale.step, input.format);

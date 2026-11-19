@@ -7,7 +7,7 @@
 import type { ComponentDef, LayoutContext, PaintContext } from "../component";
 import { easeOut, paintGhost } from "../ghost";
 import { wrapText } from "../text";
-import type { Theme } from "../theme";
+import { sizesOf, type Theme } from "../theme";
 import type { Box } from "../types";
 import { fitText } from "./input";
 import { fillTint, onProp, partBox, themeFont } from "./util";
@@ -16,11 +16,13 @@ import { fillTint, onProp, partBox, themeFont } from "./util";
 const CALLOUT_TONES = ["info", "accent", "good", "warn", "bad"] as const;
 type CalloutTone = (typeof CALLOUT_TONES)[number];
 
-/** Room before the content where a left bar used to be (none: the border carries the tone), and the icon's diameter. */
+/** Room before the content where a left bar used to be (none: the border carries the tone). */
 const BAR = 0;
-const ICON = 18;
-/** The action button's height. */
-const ACTION_H = 30;
+/** The icon's diameter and the action button's height: the theme's calloutIcon and calloutAction sizes. */
+const iconOf = (t: Theme): number => sizesOf(t).calloutIcon;
+const actionOf = (t: Theme): number => sizesOf(t).calloutAction;
+/** The diameter the icon's symbols are drawn for; a smaller icon scales them down. */
+const ICON_DRAWN = 18;
 
 function calloutColor(theme: Theme, tone: CalloutTone): string {
   const c = theme.colors;
@@ -48,6 +50,7 @@ function measure(box: Box, ctx: LayoutContext): CalloutLayout & { height: number
   const t = ctx.theme;
   const padX = t.space.md, padY = t.space.sm + 2;
   const icon = p.bool("icon", false);
+  const ICON = iconOf(t);
   const textX = BAR + padX + (icon ? ICON + t.space.sm : 0);
   const width = Math.max(20, box.w - textX - padX);
   const font = themeFont(t, 600, t.text.body);
@@ -66,7 +69,7 @@ function measure(box: Box, ctx: LayoutContext): CalloutLayout & { height: number
   return {
     lines, detail, font, detailFont, lh, detailLH, padX, padY, textX, icon, action,
     actionTop: above + t.space.sm,
-    height: above + (action ? t.space.sm + ACTION_H : 0) + padY,
+    height: above + (action ? t.space.sm + actionOf(t) : 0) + padY,
   };
 }
 
@@ -86,7 +89,8 @@ function paintPanel(box: Box, ctx: PaintContext, color: string): void {
 /** A small symbol in a circle: i for info, a tick for good, ! for warn, × for bad. */
 function paintIcon(ctx: PaintContext, tone: CalloutTone, cx: number, cy: number, color: string): void {
   const { g, theme } = ctx;
-  const r = ICON / 2;
+  const r = iconOf(theme) / 2;
+  const k = (r * 2) / ICON_DRAWN;
   g.beginPath();
   g.arc(cx, cy, r, 0, Math.PI * 2);
   g.fillStyle = color;
@@ -96,6 +100,10 @@ function paintIcon(ctx: PaintContext, tone: CalloutTone, cx: number, cy: number,
   g.fillStyle = theme.colors.onAccent;
   g.lineWidth = 1.8;
   g.lineCap = "round";
+  // The symbols are drawn for ICON_DRAWN; about the middle, so a smaller icon keeps them centred.
+  g.translate(cx, cy);
+  g.scale(k, k);
+  g.translate(-cx, -cy);
   g.lineJoin = "round";
   g.beginPath();
   if (tone === "good") {
@@ -129,6 +137,7 @@ function paintAction(box: Box, ctx: PaintContext, d: CalloutLayout, pressable: b
   g.font = ctx.font(600, theme.text.caption + 1);
   const room = Math.max(0, box.x + box.w - d.padX - (box.x + d.textX));
   const w = Math.min(room, g.measureText(d.action).width + theme.space.md * 2);
+  const ACTION_H = actionOf(theme);
   const btn = partBox(box, box.x + d.textX, box.y + d.actionTop, w, ACTION_H);
   ctx.roundRect(btn.x + 0.5, btn.y + 0.5, btn.w - 1, btn.h - 1, theme.radius.md);
   g.save();
@@ -195,6 +204,7 @@ export const callout: ComponentDef = {
     const base = g.globalAlpha;
     g.globalAlpha = base * easeOut(ctx.reveal(box.node) * 2);
     const top = box.y + d.padY;
+    const ICON = iconOf(theme);
     if (d.icon) paintIcon(ctx, tone, box.x + BAR + d.padX + ICON / 2, top + Math.max(d.lh, ICON) / 2, color);
     g.textAlign = "left";
     g.textBaseline = "middle";
@@ -221,6 +231,7 @@ export const callout: ComponentDef = {
     const top = box.y + d.padY, x = box.x + d.textX;
     const room = Math.max(0, box.x + box.w - d.padX - x);
     const pillH = 10;
+    const ICON = iconOf(ctx.theme);
     paintGhost(ctx, { x, y: top, w: room, h: box.h - d.padY * 2 }, (s) => {
       if (d.icon) s.circle(box.x + BAR + d.padX + ICON / 2, top + Math.max(d.lh, ICON) / 2, ICON / 2);
       d.lines.forEach((_l, i) => {

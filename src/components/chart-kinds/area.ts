@@ -55,7 +55,7 @@ export const area: ChartKindDef = {
     const series = fields.map((field, k) => ({ field, label: input.labels[k] || fieldTitle(field), color: k }));
 
     const n = d.slots.length;
-    const plotH = plotHeight(box.w);
+    const plotH = plotHeight(box.w, t);
     const values = d.slots.flatMap((s) => s.values.flatMap((v) => (v === null ? [] : [v])));
     // "bar" keeps 0 on the scale: an area's fill reaches down to it.
     const scale = chartScale([0, ...values], "bar", Math.max(2, Math.min(6, Math.floor(plotH / 44))));

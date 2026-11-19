@@ -140,7 +140,7 @@ export const scatter: ChartKindDef = {
     }
 
     // The y axis: its tick labels set the room on the left.
-    const plotH = plotHeight(box.w);
+    const plotH = plotHeight(box.w, t);
     const yScale = chartScale(raw.map((r) => r.y), "line", Math.max(3, Math.round(plotH / 48)));
     const yLabels = tickLabels(yScale.ticks, yScale.step, input.format);
     const left = Math.ceil(Math.max(...yLabels.map((l) => m.width(l, font)))) + t.space.sm;

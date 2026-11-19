@@ -79,7 +79,7 @@ export const stacked: ChartKindDef = {
       return { pos, neg };
     });
     const n = d.slots.length;
-    const plotH = plotHeight(box.w);
+    const plotH = plotHeight(box.w, t);
     const scale = chartScale([0, ...ends.flatMap((e) => [e.pos, e.neg])], "bar", Math.max(2, Math.min(6, Math.floor(plotH / 44))));
     const tickText = tickLabels(scale.ticks, scale.step, input.format);
     const axisW = Math.ceil(Math.max(...tickText.map((s) => m.width(s, labelFont)))) + t.space.sm;
