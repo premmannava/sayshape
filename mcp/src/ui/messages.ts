@@ -46,17 +46,17 @@ export function visibleMessage(name: string, value: Value | undefined): string {
 export interface EventCaps { message?: boolean; updateModelContext?: boolean }
 
 /**
- * How to send an event: a short visible message with the details as model
- * context when the client takes both; the full message when it only takes
- * messages (so the model still gets the values); context alone when it only
- * takes that (the model reads it with the person's next message).
+ * How to send an event. With context, the full details go in silently and
+ * nothing shows in the chat (the model reads them with the person's next
+ * message). A client that takes only messages gets a short visible line
+ * ("Count: 100"): the pressed value reaches the model, but the rest of the
+ * interface's state doesn't, since a message is all there is to carry it.
  */
 export function eventDelivery(caps: EventCaps, name: string, value: Value | undefined, state: Record<string, Value>):
   { context?: string; message?: string } | null {
   const full = eventMessage(name, value, state);
-  if (caps.message && caps.updateModelContext) return { context: full, message: visibleMessage(name, value) };
-  if (caps.message) return { message: full };
   if (caps.updateModelContext) return { context: full };
+  if (caps.message) return { message: visibleMessage(name, value) };
   return null;
 }
 

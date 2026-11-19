@@ -399,6 +399,16 @@ app.onteardown = async () => {
  * short line like "Confirm laptop", which also makes the model answer straight
  * away. The context is sent first, so it is there when the model answers.
  */
+/** Opens an https address through the host, which shows it in a new tab outside the sandbox. */
+async function openAddress(url: string): Promise<void> {
+  try {
+    const r = await app.openLink({ url });
+    if (r?.isError) sayshape?.notify("Couldn't open that link");
+  } catch {
+    sayshape?.notify("This chat app can't open links");
+  }
+}
+
 async function deliver(name: string, value: Value | undefined, state: Record<string, Value>): Promise<void> {
   const caps = app.getHostCapabilities();
   const plan = eventDelivery({ message: !!caps?.message, updateModelContext: !!caps?.updateModelContext }, name, value, state);
@@ -410,12 +420,13 @@ async function deliver(name: string, value: Value | undefined, state: Record<str
     }
     if (plan.message !== undefined) {
       const r = await app.sendMessage({ role: "user", content: content(plan.message) });
-      sayshape?.notify(r?.isError ? "Couldn't send that to the assistant" : "Sent to the assistant");
+      // Says only what the host confirmed: some hosts place the message in the box for the person to send.
+      sayshape?.notify(r?.isError ? "Couldn't add that to the chat" : "Added to the chat");
     } else {
       sayshape?.notify("Saved for the assistant's next reply");
     }
   } catch {
-    sayshape?.notify("Couldn't send that to the assistant");
+    sayshape?.notify("Couldn't add that to the chat");
   }
 }
 
@@ -667,6 +678,8 @@ async function start(): Promise<void> {
   });
   // After each frame: the boxes only change when the interface is laid out again, so this mostly does nothing.
   sayshape.on("render", placeToolbar);
+  // An open: action or a link's address opens in a new tab through the host, not as a message to the chat.
+  sayshape.on("open", ({ url }) => { void openAddress(url); });
   sayshape.on("action", ({ name, value }: { name: string; value: Value | undefined }) => {
     if (!sayshape) return;
     // A code block's copy button (emit:copy:<code>) is the person's own: it goes to the clipboard, not the model.

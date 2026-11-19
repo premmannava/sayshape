@@ -60,6 +60,8 @@ export interface Metrics {
 export interface SayShapeEvents {
   /** An `emit:` action ran. This is how the host app (or a model) hears about user intent. */
   action: { name: string; value: Value | undefined; node: SayShapeNode };
+  /** An `open:` action or a link's href ran: the host should open this https address in a new tab. */
+  open: { url: string };
   /** A state value changed. */
   change: { key: string; value: Value };
   /** A frame was painted. */
@@ -1452,13 +1454,14 @@ export class SayShape {
       if (age < TOAST_FADE || age > ms - TOAST_FADE) this.invalidate("paint");
     }
     const t = this.theme;
-    const font = fontString(600, 14, t.font.family);
+    // A small line that reads as a status, not a message: the caption size from the theme.
+    const font = fontString(500, t.text.caption, t.font.family);
     const width = this.metrics.width;
     const maxW = Math.max(40, Math.min(420, width - 32));
     const lines = wrapText(this.toast.text, maxW - 32, font, this.measurer).slice(0, 3);
     g.font = font;
     const w = Math.min(maxW, Math.max(...lines.map((l) => g.measureText(l).width)) + 32);
-    const lh = 20;
+    const lh = Math.round(t.text.caption * 1.5);
     const h = lines.length * lh + 20;
     const x = (width - w) / 2;
     const y = Math.max(8, this.visibleBottom() - h - 16);
@@ -2050,6 +2053,7 @@ export class SayShape {
       back: () => this.back(),
       // A password named in a message is hidden there too: the message reaches the host and screen readers.
       notify: (text) => this.notify(hideInText(text, this.secrets())),
+      open: (url) => this.events.emit("open", { url }),
     });
   }
 

@@ -9,6 +9,7 @@
  *   go:screen           show another screen, remembering this one
  *   back                return to the previous screen
  *   notify:'message'    show a short message; may include {expressions}
+ *   open:https://…      open a web address in a new tab (leaves the chat); https only
  *   add:list:value      add an item to the end of a list
  *   remove:t            remove the item t points at (inside each)
  *   remove:list:index   remove the item at a position
@@ -30,11 +31,25 @@ export type Action =
   | { op: "go"; screen: string }
   | { op: "back" }
   | { op: "notify"; message: string }
+  | { op: "open"; url: string }
   | { op: "add"; key: string; value: string }
   | { op: "remove"; key: string; at?: string }
   | { op: "clear"; key: string };
 
-export const ACTION_OPS = ["inc", "dec", "toggle", "set", "emit", "go", "back", "notify", "add", "remove", "clear"] as const;
+export const ACTION_OPS = ["inc", "dec", "toggle", "set", "emit", "go", "back", "notify", "open", "add", "remove", "clear"] as const;
+
+/**
+ * Whether an address may be opened from a spec: https only, with no username or
+ * password in it. A model writes these, so anything else stays closed.
+ */
+export function isOpenableUrl(address: string): boolean {
+  try {
+    const u = new URL(address);
+    return u.protocol === "https:" && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
 
 /** How each action is written, for the model guide and error messages. */
 export const ACTION_SYNTAX: Record<(typeof ACTION_OPS)[number], string> = {
@@ -46,6 +61,7 @@ export const ACTION_SYNTAX: Record<(typeof ACTION_OPS)[number], string> = {
   go: "go:screen shows another screen (see screen)",
   back: "back returns to the previous screen",
   notify: "notify:'Saved {n} items' shows a short message",
+  open: "open:https://example.com opens a web address in a new tab; https only, and it leaves the chat",
   add: "add:list:value adds an item to the end, e.g. add:todos:{text: 'Snacks', done: false}",
   remove: "remove:t removes the current item inside each as=t; remove:list:index removes by position",
   clear: "clear:list empties a list",
@@ -82,6 +98,20 @@ export function parseActions(src: string, fns?: ExpressionFunctions): { actions:
         if ("expr" in p) { const err = checkSyntax(p.expr, fns); if (err) return { error: `In action "${part}": ${err}` }; }
       }
       actions.push({ op, message });
+      continue;
+    }
+    if (op === "open") {
+      const url = rest.trim();
+      if (!url) return { error: `open needs an address, like open:https://example.com` };
+      const parts = splitTemplate(url);
+      for (const p of parts) {
+        if ("expr" in p) { const err = checkSyntax(p.expr, fns); if (err) return { error: `In action "${part}": ${err}` }; }
+      }
+      // A plain address is checked now; one with {expressions} is checked when it runs.
+      if (parts.every((p) => !("expr" in p)) && !isOpenableUrl(url)) {
+        return { error: `open needs an https address, like open:https://example.com. "${url}" isn't one` };
+      }
+      actions.push({ op, url });
       continue;
     }
 
@@ -157,7 +187,8 @@ export function actionExpressions(actions: readonly Action[]): string[] {
     else if (a.op === "set" || a.op === "add") arg(a.value);
     else if (a.op === "remove") arg(a.at);
     else if (a.op === "emit") arg(a.value);
-    else if (a.op === "notify") for (const p of splitTemplate(a.message)) if ("expr" in p) out.push(p.expr);
+    else if (a.op === "notify") { for (const p of splitTemplate(a.message)) if ("expr" in p) out.push(p.expr); }
+    else if (a.op === "open") { for (const p of splitTemplate(a.url)) if ("expr" in p) out.push(p.expr); }
   }
   return out;
 }
@@ -214,6 +245,8 @@ export interface ActionHost {
   back?(): void;
   /** Show a short message, already filled in from state. */
   notify?(message: string): void;
+  /** Open an https address in a new tab. Only the host can do this; hosts without it leave it out. */
+  open?(url: string): void;
 }
 
 export function runActions(actions: Action[], host: ActionHost): void {
@@ -248,6 +281,13 @@ export function runActions(actions: Action[], host: ActionHost): void {
       case "notify":
         host.notify?.(interpolate(a.message, host.scope, fns));
         break;
+      case "open": {
+        // Checked again here: an address built from state can be anything.
+        const url = interpolate(a.url, host.scope, fns).trim();
+        if (!isOpenableUrl(url)) { host.warn?.(`Not opened: "${url}" isn't an https address`); break; }
+        host.open?.(url);
+        break;
+      }
       case "add":
       case "clear":
       case "remove": {

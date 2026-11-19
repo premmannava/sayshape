@@ -32,16 +32,16 @@ describe("view helpers", () => {
     }
   });
 
-  it("sends the details as context and a short line as the message when the client takes both", () => {
+  it("sends the details as silent context, with nothing visible in the chat, when the client takes context", () => {
     const state = { product: "laptop", price: 1200 };
     const d = eventDelivery({ message: true, updateModelContext: true }, "confirm_laptop", undefined, state);
-    expect(d).toEqual({ context: eventMessage("confirm_laptop", undefined, state), message: "Confirm laptop" });
+    expect(d).toEqual({ context: eventMessage("confirm_laptop", undefined, state) });
     expect(d!.context).toContain('"price":1200');
   });
 
-  it("falls back so the model always gets the values", () => {
-    const state = { qty: 2 };
-    expect(eventDelivery({ message: true }, "save", undefined, state)).toEqual({ message: eventMessage("save", undefined, state) });
+  it("sends only a short visible line when the client takes messages alone, never the state", () => {
+    const state = { qty: 2, secret: "x" };
+    expect(eventDelivery({ message: true }, "count", 100, state)).toEqual({ message: "Count: 100" });
     expect(eventDelivery({ updateModelContext: true }, "save", undefined, state)).toEqual({ context: eventMessage("save", undefined, state) });
     expect(eventDelivery({}, "save", undefined, state)).toBeNull();
   });
