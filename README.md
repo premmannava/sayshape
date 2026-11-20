@@ -212,6 +212,6 @@ npm test
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE). Built by [Prem Mannava](https://premmannava.dev).
 
 Country outlines in `src/components/map/world.json` come from [Natural Earth](https://www.naturalearthdata.com/) (public domain) via [world-atlas](https://github.com/topojson/world-atlas). US state borders in `src/components/map/states.json` come from the US Census (public domain) via [us-atlas](https://github.com/topojson/us-atlas). Lakes, rivers and city names in `src/components/map/water.json` and `places.json` come from Natural Earth 1:50m (public domain). All are drawn with the Web Mercator projection.
