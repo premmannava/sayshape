@@ -464,6 +464,8 @@ export const hardTickets = (() => {
     open: open.length,
     avgReply: sum(rows.map((r) => r.replyHours)) / rows.length,
     urgentIds: rows.filter((r) => r.priority === "Urgent").map((r) => r.id),
+    // The Urgent filter's figure: the average first reply over urgent tickets (or the open ones).
+    urgentReply: [rows.filter((r) => r.priority === "Urgent"), rows.filter((r) => r.priority === "Urgent" && r.status === "Open")].filter((xs) => xs.length).map((xs) => sum(xs.map((r) => r.replyHours)) / xs.length),
     lowSubject: rows.find((r) => r.priority === "Low")!.subject,
     anaOpen: ana.filter((r) => r.status === "Open").length,
     notAna: rows.filter((r) => r.agent !== "Ana").slice(0, 2).map((r) => r.subject),
@@ -479,6 +481,9 @@ export const hardStaff = (() => {
 
 // ---------------------------------------------------------------------------
 // Extreme: about 200 messy rows, passed by name
+
+/** One row's clean values, for checks that find rows on screen by what they show (a Day for dates, null for a blank). */
+export type CleanRow = Record<string, string | number | Day | null>;
 
 export interface Supplied {
   /** The list's name, as the app supplies it. */
@@ -523,6 +528,9 @@ export const extremeBudget = (() => {
     total: sum(valued.map((t) => t.amount)),
     groceries: groupSum(truth.filter((t) => !t.blankCategory && t.category === "Groceries"), () => "g", amt).g ?? 0,
     groceryIds: truth.filter((t) => !t.blankCategory && t.category === "Groceries").map((t) => t.id),
+    // With blank amounts skipped, or kept.
+    groceryCounts: [valued.filter((t) => !t.blankCategory && t.category === "Groceries").length, truth.filter((t) => !t.blankCategory && t.category === "Groceries").length],
+    clean: truth.map((t): CleanRow => ({ id: t.id, day: t.day, merchant: t.merchant, category: t.blankCategory ? null : t.category, account: t.account, amount: amt(t) })),
     q3: sum(valued.filter((t) => quarterOf(t.day) === 3).map((t) => t.amount)),
   };
 })();
@@ -541,7 +549,9 @@ export const extremeTrip = (() => {
   const data = supply("expenses", ["id", "date", "paid_by", "city", "category", "amount", "note"], truth, (t, k) => ({ id: t.id, date: messyDate(t.day, k), paid_by: messyName(t.who, k), city: t.city, category: t.category, amount: t.blankAmount ? blank(k) : messyMoney(t.amount, k), note: t.note || null }), 2402);
   const valued = truth.filter((t) => !t.blankAmount);
   const paid = groupSum(valued, (t) => t.who, (t) => t.amount);
-  return { data, people, total: sum(valued.map((t) => t.amount)), paid, lisbon: groupSum(valued, (t) => t.city, (t) => t.amount).Lisbon ?? 0, lisbonIds: truth.filter((t) => t.city === "Lisbon").map((t) => t.id) };
+  return { data, people, total: sum(valued.map((t) => t.amount)), paid, lisbon: groupSum(valued, (t) => t.city, (t) => t.amount).Lisbon ?? 0, lisbonIds: truth.filter((t) => t.city === "Lisbon").map((t) => t.id),
+    lisbonCounts: [valued.filter((t) => t.city === "Lisbon").length, truth.filter((t) => t.city === "Lisbon").length],
+    clean: truth.map((t): CleanRow => ({ id: t.id, day: t.day, who: t.who, city: t.city, category: t.category, amount: t.blankAmount ? null : t.amount, note: t.note || null })) };
 })();
 
 export const extremeWorkouts = (() => {
@@ -556,7 +566,9 @@ export const extremeWorkouts = (() => {
   const data = supply("sessions", ["id", "date", "type", "minutes", "distance_km", "avg_hr"], truth, (t, k) => ({ id: t.id, date: messyDate(t.day, k), type: t.type, minutes: t.blankMinutes ? blank(k) : messyMinutes(t.minutes, k), distance_km: t.km === null ? blank(k) : k % 2 ? `${t.km} km` : String(t.km), avg_hr: t.hr }), 2403);
   const timed = truth.filter((t) => !t.blankMinutes);
   const runs = truth.filter((t) => t.type === "Run" && t.km !== null && !t.blankMinutes);
-  return { data, minutes: sum(timed.map((t) => t.minutes)), runMinutes: sum(timed.filter((t) => t.type === "Run").map((t) => t.minutes)), runIds: truth.filter((t) => t.type === "Run").map((t) => t.id), paces: runs.map((t) => t.minutes / (t.km ?? 1)) };
+  return { data, minutes: sum(timed.map((t) => t.minutes)), runMinutes: sum(timed.filter((t) => t.type === "Run").map((t) => t.minutes)), runIds: truth.filter((t) => t.type === "Run").map((t) => t.id), paces: runs.map((t) => t.minutes / (t.km ?? 1)),
+    runCounts: [timed.filter((t) => t.type === "Run").length, truth.filter((t) => t.type === "Run").length],
+    clean: truth.map((t): CleanRow => ({ id: t.id, day: t.day, type: t.type, minutes: t.blankMinutes ? null : t.minutes, km: t.km, hr: t.hr })) };
 })();
 
 export const extremeStudy = (() => {
@@ -569,7 +581,9 @@ export const extremeStudy = (() => {
   });
   const data = supply("study_log", ["id", "date", "subject", "topic", "minutes", "focus"], truth, (t, k) => ({ id: t.id, date: messyDate(t.day, k), subject: messyName(t.subject, k), topic: t.topic, minutes: t.blankMinutes ? blank(k) : messyMinutes(t.minutes, k), focus: t.focus }), 2404);
   const timed = truth.filter((t) => !t.blankMinutes);
-  return { data, hours: sum(timed.map((t) => t.minutes)) / 60, chemistry: sum(timed.filter((t) => t.subject === "Chemistry").map((t) => t.minutes)) / 60, chemistryIds: truth.filter((t) => t.subject === "Chemistry").map((t) => t.id) };
+  return { data, hours: sum(timed.map((t) => t.minutes)) / 60, chemistry: sum(timed.filter((t) => t.subject === "Chemistry").map((t) => t.minutes)) / 60, chemistryIds: truth.filter((t) => t.subject === "Chemistry").map((t) => t.id),
+    chemistryCounts: [timed.filter((t) => t.subject === "Chemistry").length, truth.filter((t) => t.subject === "Chemistry").length],
+    clean: truth.map((t): CleanRow => ({ id: t.id, day: t.day, subject: t.subject, topic: t.topic, minutes: t.blankMinutes ? null : t.minutes, focus: t.focus })) };
 })();
 
 export const extremeClaims = (() => {
@@ -581,7 +595,9 @@ export const extremeClaims = (() => {
   });
   const data = supply("claims", ["claim_id", "filed", "policy", "claimant", "type", "amount_claimed", "amount_paid", "status", "adjuster"], truth, (t, k) => ({ claim_id: t.id, filed: messyDate(t.day, k), policy: t.policy, claimant: t.claimant, type: t.type, amount_claimed: messyMoney(t.claimed, k), amount_paid: t.paid === null ? blank(k) : messyMoney(t.paid, k + 2), status: messyName(t.status, k), adjuster: t.adjuster }), 2405);
   const big = truth.filter((t) => t.claimed > 10_000);
-  return { data, claimed: sum(truth.map((t) => t.claimed)), auto: sum(truth.filter((t) => t.type === "Auto").map((t) => t.claimed)), autoIds: truth.filter((t) => t.type === "Auto").map((t) => t.id), bigCount: big.length, bigClaimed: sum(big.map((t) => t.claimed)) };
+  return { data, claimed: sum(truth.map((t) => t.claimed)), auto: sum(truth.filter((t) => t.type === "Auto").map((t) => t.claimed)), autoIds: truth.filter((t) => t.type === "Auto").map((t) => t.id), autoCount: truth.filter((t) => t.type === "Auto").length,
+    clean: truth.map((t): CleanRow => ({ id: t.id, day: t.day, policy: t.policy, claimant: t.claimant, type: t.type, claimed: t.claimed, paid: t.paid, status: t.status, adjuster: t.adjuster })),
+    bigCount: big.length, bigClaimed: sum(big.map((t) => t.claimed)) };
 })();
 
 export const extremeRenewals = (() => {
@@ -590,7 +606,10 @@ export const extremeRenewals = (() => {
   const truth = g.sample(COMPANIES, 200).map((client, i) => ({ id: `RN-${5001 + i}`, client, carrier: g.pick(carriers), line: g.pick(["Property", "Auto", "Liability", "Workers Comp", "Cyber"]), premium: g.int(1_500, 140_000), blankPremium: g.chance(0.03) || i === 4, day: dayIn(g, 1, 12), status: g.weighted(["Not started", "Quoted", "Bound", "Lost"], [3, 4, 4, 1]), broker: g.pick(["Hale", "Ng", "Brooks", "Okoye"]) }));
   const data = supply("renewals", ["policy", "client", "carrier", "line", "premium", "expires", "status", "broker"], truth, (t, k) => ({ policy: t.id, client: t.client, carrier: messyName(t.carrier, k), line: t.line, premium: t.blankPremium ? blank(k) : messyMoney(t.premium, k), expires: messyDate(t.day, k), status: t.status, broker: t.broker }), 2406);
   const valued = truth.filter((t) => !t.blankPremium);
-  return { data, premium: sum(valued.map((t) => t.premium)), chubb: sum(valued.filter((t) => t.carrier === "Chubb").map((t) => t.premium)), chubbIds: truth.filter((t) => t.carrier === "Chubb").map((t) => t.id), q3: sum(valued.filter((t) => quarterOf(t.day) === 3).map((t) => t.premium)) };
+  return { data, premium: sum(valued.map((t) => t.premium)), chubb: sum(valued.filter((t) => t.carrier === "Chubb").map((t) => t.premium)), chubbIds: truth.filter((t) => t.carrier === "Chubb").map((t) => t.id),
+    chubbCounts: [valued.filter((t) => t.carrier === "Chubb").length, truth.filter((t) => t.carrier === "Chubb").length],
+    clean: truth.map((t): CleanRow => ({ id: t.id, client: t.client, carrier: t.carrier, line: t.line, premium: t.blankPremium ? null : t.premium, day: t.day, status: t.status, broker: t.broker })),
+    q3: sum(valued.filter((t) => quarterOf(t.day) === 3).map((t) => t.premium)) };
 })();
 
 export const extremeBva = (() => {
@@ -605,7 +624,8 @@ export const extremeBva = (() => {
   const rows = g.shuffle(truth).map((t, i) => ({ ...t, line: `GL-${String(i + 1).padStart(4, "0")}` }));
   const data = supply("ledger", ["line", "cost_center", "dept", "account", "month", "budget", "actual"], rows, (t, k) => ({ line: t.line, cost_center: t.cc, dept: t.dept, account: t.account, month: messyMonth(t.month, k), budget: messyMoney(t.budget, k), actual: t.blankActual ? blank(k) : messyMoney(t.actual, k + 1) }), 2407);
   const mkt = rows.filter((t) => t.dept === "Marketing");
-  return { data, budget: sum(rows.map((t) => t.budget)), actual: sum(rows.filter((t) => !t.blankActual).map((t) => t.actual)), mktBudget: sum(mkt.map((t) => t.budget)), mktActual: sum(mkt.filter((t) => !t.blankActual).map((t) => t.actual)), mktIds: mkt.map((t) => t.line) };
+  return { data, budget: sum(rows.map((t) => t.budget)), actual: sum(rows.filter((t) => !t.blankActual).map((t) => t.actual)), mktBudget: sum(mkt.map((t) => t.budget)), mktActual: sum(mkt.filter((t) => !t.blankActual).map((t) => t.actual)), mktIds: mkt.map((t) => t.line), mktCount: mkt.length,
+    clean: rows.map((t): CleanRow => ({ id: t.line, cc: t.cc, dept: t.dept, account: t.account, budget: t.budget, actual: t.blankActual ? null : t.actual })) };
 })();
 
 export const extremeTickets = (() => {
@@ -613,5 +633,11 @@ export const extremeTickets = (() => {
   const truth = Array.from({ length: 200 }, (_, i) => ({ id: `T-${7001 + i}`, day: dayIn(g, 7, 11), customer: g.pick(COMPANIES), subject: g.pick(TICKET_SUBJECTS), priority: g.weighted(["Urgent", "High", "Normal", "Low"], [1, 3, 5, 2]), agent: g.pick(["Ana", "Ben", "Chen", "Dee", "Eli"]), status: g.weighted(["Open", "Pending", "Solved", "Closed"], [3, 2, 4, 2]), reply: g.chance(0.06) ? null : g.int(1, 120) / 4, csat: g.chance(0.6) ? null : g.int(1, 5) }));
   const data = supply("tickets", ["id", "opened", "customer", "subject", "priority", "agent", "status", "first_reply_hours", "csat"], truth, (t, k) => ({ id: t.id, opened: messyDate(t.day, k), customer: t.customer, subject: t.subject, priority: messyName(t.priority, k), agent: t.agent, status: t.status, first_reply_hours: t.reply, csat: t.csat }), 2408);
   const open = truth.filter((t) => t.status === "Open");
-  return { data, open: open.length, urgentIds: truth.filter((t) => t.priority === "Urgent").map((t) => t.id) };
+  const urgent = truth.filter((t) => t.priority === "Urgent");
+  return {
+    data, open: open.length, urgentIds: urgent.map((t) => t.id),
+    // All urgent tickets, or only the open ones.
+    urgentCounts: [urgent.length, urgent.filter((t) => t.status === "Open").length],
+    clean: truth.map((t): CleanRow => ({ id: t.id, day: t.day, customer: t.customer, subject: t.subject, priority: t.priority, agent: t.agent, status: t.status, reply: t.reply })),
+  };
 })();

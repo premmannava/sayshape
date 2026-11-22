@@ -10,7 +10,7 @@
  */
 import type { Step, Task, TaskCheck } from "../compare/tasks";
 import * as D from "./data";
-import { anyOf, comma, iso, money, num, pct, samples, usd, type Supplied } from "./data";
+import { anyOf, comma, iso, looser, money, num, pct, round2, samples, usd, type CleanRow, type Supplied } from "./data";
 
 export interface RealTask extends Task {
   level: "low" | "medium" | "hard" | "extreme";
@@ -30,35 +30,213 @@ const lit = (s: string) => new RegExp(esc(s));
 const lits = (xs: readonly string[]) => xs.map(lit);
 /** Something to press whose text starts with this word (`Dining`, `Dining (12)`), in any case. */
 const press = (s: string) => new RegExp(`^\\s*${esc(s)}\\s*(\\(?\\d+\\)?)?\\s*$`, "i");
-/** Extreme level: go to the screen with the rows first, if it is a separate one. */
-const goTo = (names: string): Step => ({ press: new RegExp(`^\\s*(${names})\\s*$`, "i"), optional: true });
+/**
+ * Extreme level: go to the screen with the rows first, if it is a separate one: any button, link or tab
+ * whose short text holds the list's word ("View transactions", "All claims"), but not one that adds,
+ * exports or deletes. One that says what it does goes first, so a table header that only names the list
+ * ("Claims", over counts by status) isn't pressed instead; then the list's bare name, for a tab.
+ */
+const goTo = (words: string): Step[] => [
+  { press: new RegExp(`^(?=.{1,40}$)\\s*(view|see|show|open|go to|browse|manage|explore|all)\\b(?!.*\\b(add|new|create|export|import|delete|remove|download)\\b).*\\b(${words})\\b`, "i"), optional: true },
+  { press: new RegExp(`^\\s*(all\\s+)?(${words})(\\s+(list|screen|page|tab|table))?\\s*(\\(\\d+\\))?\\s*[›»>→]*\\s*$`, "i"), optional: true },
+];
 /** A whole count, not part of a bigger number. */
 const count = (n: number) => num(n, [0]);
 const ADD = /^\s*(\+\s*)?(add|save|log|submit|create|record)\b/i;
-const NEXT = /^\s*(next( page)?|load more|show more|more|›|»|>|→|2)\s*$/i;
+/** A next-page control: next wording, page 2, or an arrow (a "›" text, or an aria-label such as "Next page"). */
+const NEXT = /^\s*((go to )?next( page)?|load more|show more|more|older|page 2|2)\s*[›»>→▶▸⟩⏵]*\s*$|^\s*[›»>→▶▸⟩⏵]{1,2}\s*$/i;
 
-/** How many different ids this pattern finds in the visible text. */
-const ids = (text: string[], re: RegExp) => new Set(text.join("\n").match(new RegExp(re.source, "g")) ?? []).size;
+/** Every letter in either case, for patterns that `anyOf` joins (it drops flags). */
+const caseless = (w: string) => w.replace(/[a-z]/gi, (c) => `[${c.toLowerCase()}${c.toUpperCase()}]`);
+/**
+ * A count where a person reads it as one: under a label ("Transactions" then "53"), "53 transactions",
+ * "of 53" or "(53)". Never a bare number among the rows' own numbers.
+ */
+function tally(ns: readonly number[], words: string): RegExp {
+  const w = `(?:${[...words.split("|"), "count", "results", "rows", "items", "records", "matches", "matching", "shown", "found", "total"].map(caseless).join("|")})`;
+  const n = `(?:${[...new Set(ns)].map((x) => comma(x).replace(",", ",?")).join("|")})`;
+  const bare = `(?<![\\d.,$])${n}(?!\\d|[.,]\\d)`;
+  return new RegExp([`${w}[^\\n\\d]{0,20}\\n\\s*${bare}\\s*(?=\\n|$)`, `${bare}\\s+${w}`, `\\b[oO][fF]\\s+${bare}`, `\\(\\s*${bare}\\s*\\)`].join("|"));
+}
 
-/** After a filter: some rows are visible, and every visible id is one of these. */
-const only = (idRe: RegExp, allowed: readonly string[]) => (after: string[]) => {
-  const seen = new Set(after.join("\n").match(new RegExp(idRe.source, "g")) ?? []);
-  return seen.size > 0 && [...seen].every((id) => allowed.includes(id));
+// Finding the supplied rows on screen, whichever columns a model chose to show.
+
+type Kind = "text" | "date" | "num";
+interface RowSpec {
+  rows: readonly CleanRow[];
+  /** The fields a row may show, and how to read each. A "num" field may be shown as minutes or hours (`hours`). */
+  fields: Record<string, Kind | "hours">;
+  /** Fields that alone tell one row (an id, a client): a row is on screen where one shows, or where two of its own fields show close together. */
+  keys: string[];
+  /** Fields whose values pressing a row may use (never a filter's own values). */
+  press: string[];
+}
+const MONTH_RE = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?";
+const MONTH_NO: Record<string, number> = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+const dayKey = (m: number, d: number) => `${m}-${d}`;
+/** Every date a piece of text shows, as month-day keys, in the formats people and models write. */
+function datesIn(s: string): string[] {
+  const out: string[] = [];
+  let rest = s.replace(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/g, (_, _y, m, d) => (out.push(dayKey(+m, +d)), " "));
+  rest = rest.replace(/(?<![\d/])(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?(?![\d/])/g, (_, m, d) => (out.push(dayKey(+m, +d)), " "));
+  for (const x of rest.matchAll(new RegExp(`\\b${MONTH_RE}\\s+(\\d{1,2})(?!\\d)`, "gi"))) out.push(dayKey(MONTH_NO[x[1]!.toLowerCase()] ?? 0, +x[2]!));
+  for (const x of rest.matchAll(new RegExp(`(?<!\\d)(\\d{1,2})\\s+${MONTH_RE}`, "gi"))) out.push(dayKey(MONTH_NO[x[2]!.toLowerCase()] ?? 0, +x[1]!));
+  return out;
+}
+/** Every number a piece of text shows ($1,234.50, 45 min, 0:45 as 45). */
+function numsIn(s: string): number[] {
+  const out: number[] = [];
+  // Not the numbers inside a date: 2026-08-14 is no amount of 14.
+  const rest = s
+    .replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}|(?<![\d/])\d{1,2}\/\d{1,2}(?:\/\d{2,4})?(?![\d/])/g, " ")
+    .replace(new RegExp(`\\b${MONTH_RE}\\s+\\d{1,2}(?:,?\\s+\\d{4})?(?!\\d)|(?<!\\d)\\d{1,2}\\s+${MONTH_RE}(?:\\s+\\d{4})?`, "gi"), " ")
+    .replace(/(?<![\d:])(\d{1,2}):(\d{2})(?![\d:])/g, (_, h, m) => (out.push(+h * 60 + +m), " "));
+  for (const x of rest.matchAll(/(?<![\d.])(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?/g)) out.push(Number(x[1]!.replace(/,/g, "") + (x[2] ?? "")));
+  return out;
+}
+const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+const textIn = (piece: string, value: string) => {
+  const p = norm(piece), v = norm(value);
+  if (!v) return false;
+  if (new RegExp(`(?<![a-z0-9])${esc(v)}(?![a-z0-9])`).test(p)) return true;
+  // A cell cut short: "Trader Jo…" is Trader Joe's.
+  const cut = p.match(/^(.{4,})(…|\.\.\.)$/);
+  return !!cut && v.startsWith(cut[1]!.trim());
 };
-/** Extreme level: a first page of rows, and pressing next shows something else. */
-const pages = (screen: Step, idRe: RegExp, rows: number): TaskCheck => ({
-  label: `shows a page of the ${rows} rows, and next moves on`,
-  steps: [screen, { press: NEXT }],
-  // "before" is the fresh screen, so the page is counted after: fewer ids than rows, and next changed something.
+const closeTo = (a: number, b: number) => Math.abs(a - b) < 0.006 || (b >= 100 && Math.abs(a - b) < 0.5);
+
+/** Where each row's fields show: for each row, for each field, the pieces that show it. */
+function placesOf(spec: RowSpec, text: string[]): Array<Record<string, number[]>> {
+  const out = spec.rows.map(() => ({}) as Record<string, number[]>);
+  const add = (r: number, f: string, i: number) => ((out[r]![f] ??= []).push(i));
+  text.forEach((piece, i) => {
+    const days = new Set(datesIn(piece));
+    const nums = numsIn(piece);
+    spec.rows.forEach((row, r) => {
+      for (const [f, kind] of Object.entries(spec.fields)) {
+        const v = row[f];
+        if (v === null || v === undefined) continue;
+        if (kind === "date") { if (typeof v === "object" && days.has(dayKey(v.m, v.d))) add(r, f, i); }
+        else if (kind === "num" || kind === "hours") { if (typeof v === "number" && nums.some((x) => closeTo(x, v) || (kind === "hours" && closeTo(x, round2(v / 60))) || (kind === "hours" && closeTo(x, Math.round((v / 60) * 10) / 10)))) add(r, f, i); }
+        else if (textIn(piece, String(v))) add(r, f, i);
+      }
+    });
+  });
+  return out;
+}
+/** Whether few other rows share this row's value of a field, so seeing it points at this row. */
+const ownCache = new WeakMap<RowSpec, Map<string, number>>();
+function own(spec: RowSpec, r: number, f: string): boolean {
+  let counts = ownCache.get(spec);
+  if (!counts) {
+    counts = new Map();
+    for (const row of spec.rows) for (const k of Object.keys(spec.fields)) { const key = `${k}=${JSON.stringify(row[k])}`; counts.set(key, (counts.get(key) ?? 0) + 1); }
+    ownCache.set(spec, counts);
+  }
+  return spec.keys.includes(f) || (counts.get(`${f}=${JSON.stringify(spec.rows[r]![f])}`) ?? 0) <= Math.max(3, spec.rows.length * 0.05);
+}
+/** One place a row shows: a run of pieces no longer than a row, with how many of its fields (and of its own fields) show there. */
+interface Showing { all: number; own: number; pieces: number[] }
+function showingsOf(spec: RowSpec, at: Record<string, number[]>, r: number, loose = false): Showing[] {
+  const width = Object.keys(spec.fields).length;
+  const fields = Object.entries(at);
+  const starts = new Set(fields.flatMap(([, ps]) => ps.flatMap((p) => Array.from({ length: width }, (_, k) => p - k))));
+  const out: Showing[] = [];
+  for (const start of starts) {
+    const inside = fields.map(([f, ps]) => [f, ps.filter((p) => p >= start && p < start + width)] as const).filter(([, ps]) => ps.length);
+    const mine = inside.filter(([f]) => own(spec, r, f));
+    if (mine.length >= 2 || inside.some(([f]) => spec.keys.includes(f)) || (loose && mine.length >= 1 && inside.length >= 3)) out.push({ all: inside.length, own: mine.length, pieces: inside.flatMap(([, ps]) => ps) });
+  }
+  return out;
+}
+/** The rows on screen, by index, with where each shows. */
+const seenOn = (spec: RowSpec, text: string[], loose = false) => placesOf(spec, text).map((at, r) => ({ r, shows: showingsOf(spec, at, r, loose) })).filter((x) => x.shows.length);
+const rowsOn = (spec: RowSpec, text: string[]) => seenOn(spec, text).map((x) => x.r);
+
+/** Something to press that shows one of the rows: its id, name or date, as text. */
+function rowPress(spec: RowSpec): RegExp {
+  const alts = new Set<string>();
+  for (const row of spec.rows.slice(0, 200)) {
+    for (const f of spec.press) {
+      const v = row[f];
+      if (v === null || v === undefined || v === "") continue;
+      if (typeof v === "object") {
+        const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][v.m - 1]!;
+        const p2 = (n: number) => String(n).padStart(2, "0");
+        for (const d of [`${v.y}-${p2(v.m)}-${p2(v.d)}`, `${p2(v.m)}/${p2(v.d)}(/(${v.y}|${v.y % 100}))?`, `${v.m}/${v.d}(/(${v.y}|${v.y % 100}))?`, `${mon}[a-z]*\\.? ${v.d}`, `${v.d} ${mon}[a-z]*`, `${v.y}/${v.m}/${v.d}`]) alts.add(d);
+      } else alts.add(esc(String(v)));
+    }
+  }
+  return new RegExp(`(?<![\\w/-])(${[...alts].join("|")})(?![\\w/-]|\\d)`, "i");
+}
+
+/** Extreme level: a page of the rows, a next control, and pressing it shows other rows. */
+const pages = (screen: Step[], spec: RowSpec): TaskCheck => ({
+  label: `shows a page of the ${spec.rows.length} rows, and next moves on`,
+  steps: [...screen, { press: NEXT }],
   test: (after, before) => {
-    const shown = ids(after, idRe);
-    return shown > 0 && shown < rows && after.join("\n") !== before.join("\n");
+    const now = rowsOn(spec, after);
+    if (!now.length || now.length >= spec.rows.length * 0.75) return false;
+    const was = rowsOn(spec, before);
+    // The rows were on the opening screen: next must have shown other ones.
+    if (was.length) return now.some((r) => !was.includes(r));
+    // They were on a screen of their own, which a check can't see before next: what next shows mustn't be
+    // the first rows in the data's order or by date, which is what a page 1 shows.
+    const byDay = spec.rows.map((row, r) => ({ r, d: row.day })).filter((x): x is { r: number; d: D.Day } => typeof x.d === "object" && x.d !== null).sort((a, b) => a.d.m - b.d.m || a.d.d - b.d.d).map((x) => x.r);
+    const all = spec.rows.map((_, r) => r);
+    return [all, byDay, [...byDay].reverse()].every((order) => {
+      const first = new Set(order.slice(0, now.length + 3));
+      return now.filter((r) => first.has(r)).length < now.length * 0.6;
+    });
   },
 });
-/** Extreme level: pressing a row's id opens something about it. */
-const detail = (screen: Step, idRe: RegExp): TaskCheck => ({ label: "pressing a row opens its detail", steps: [screen, { press: idRe }], changes: true });
-/** Extreme level: picking one value in a filter leaves only its rows. */
-const picks = (label: string, screen: Step, value: string, idRe: RegExp, allowed: readonly string[]): TaskCheck => ({ label, steps: [screen, { press: press(value) }], test: only(idRe, allowed) });
+/** Extreme level: pressing a row by what it shows opens more about it: its fields again, or more of them. */
+const detail = (screen: Step[], spec: RowSpec): TaskCheck => ({
+  label: "pressing a row opens its detail",
+  steps: [...screen, { press: rowPress(spec) }],
+  test: (after) => {
+    const seen = seenOn(spec, after);
+    if (!seen.length) {
+      // A screen of one row whose own values are mostly blank (no premium): one own field and two more will do.
+      const one = seenOn(spec, after, true);
+      return one.length > 0 && one.length <= 3;
+    }
+    const best = (shows: Showing[]) => Math.max(...shows.map((x) => x.all));
+    const counts = seen.map((x) => best(x.shows)).sort((a, b) => a - b);
+    const median = counts[Math.floor(counts.length / 2)] ?? 0;
+    // Shown twice in full (in the list and in its detail), in different pieces, not just a value two rows share.
+    const twice = (shows: Showing[]) => {
+      const full = Math.max(...shows.map((x) => x.own));
+      const used = new Set<number>();
+      let n = 0;
+      for (const x of shows.filter((y) => y.own >= full)) {
+        if (x.pieces.some((j) => used.has(j))) continue;
+        x.pieces.forEach((j) => used.add(j));
+        n++;
+      }
+      return n >= 2;
+    };
+    // Or more of its fields than a row of the list shows, or a screen of its own.
+    return seen.some((x) => twice(x.shows) || best(x.shows) >= median + 2 || (seen.length <= 3 && best(x.shows) >= 3));
+  },
+});
+/**
+ * Extreme level: picking one value in a filter shows its figures: the filtered total or count. When the
+ * filter sits on the opening screen and that screen already showed the figure (a total per category),
+ * the figure must show more often than before, so a filter that does nothing doesn't pass.
+ */
+const picks = (label: string, screen: Step[], value: string, ...figures: RegExp[]): TaskCheck => {
+  const fig = anyOf(...figures);
+  const times = (text: string[]) => text.join("\n").match(new RegExp(looser(fig).source, "g"))?.length ?? 0;
+  return {
+    label, steps: [...screen, { press: press(value) }], shows: [fig],
+    test: (after, before) => {
+      const kept = before.filter((t) => after.includes(t)).length;
+      const sameScreen = before.length > 0 && kept >= before.length * 0.6;
+      return !sameScreen || times(before) === 0 || times(after) > times(before);
+    },
+  };
+};
 
 /** The request text for a list the app supplies (extreme level). */
 const supplied = (s: Supplied, vague: boolean) =>
@@ -288,7 +466,8 @@ const hard: RealTask[] = [
     request: `Build a support queue screen. Priority and agent filters drive everything: open tickets, average first reply time in hours, urgent open tickets, a chart of tickets per agent, and the tickets table. Add a form to add a ticket (subject, customer, priority) that updates all of it; new tickets are Open.\n\nTickets (id, subject, customer, priority, agent, status, first reply hours):\n${HK.rows.map((r) => `${r.id}, ${r.subject}, ${r.customer}, ${r.priority}, ${r.agent}, ${r.status}, ${r.replyHours}`).join("\n")}`,
     checks: [
       { label: `open tickets (${HK.open}) and average first reply (${HK.avgReply.toFixed(1)} h)`, shows: [count(HK.open), num(HK.avgReply, [1, 2])] },
-      { label: "Urgent shows only urgent tickets", steps: [{ press: press("Urgent") }], hides: [lit(HK.lowSubject)], test: only(/#\d{4}/, HK.urgentIds) },
+      // Not the urgent open count: the screen shows that before any filter.
+      { label: `Urgent shows its average first reply (${HK.urgentReply.map((h) => `${h.toFixed(1)} h`).join(" or ")})`, steps: [{ press: press("Urgent") }], shows: [anyOf(...HK.urgentReply.map((h) => num(h, [1, 2])))] },
       { label: `adding a ticket makes ${HK.open + 1} open`, steps: [{ type: [0, "Printer offline"] }, { type: [1, "Lakeside Dental"] }, { press: ADD }], shows: [count(HK.open + 1)] },
     ],
     followUp: { request: "now only Ana's tickets", checks: [{ label: `Ana's open tickets (${HK.anaOpen}), no one else's`, shows: [count(HK.anaOpen)], hides: lits(HK.notAna) }] },
@@ -308,10 +487,19 @@ const hard: RealTask[] = [
 // Extreme: about 200 messy rows, passed by name
 
 const EB = D.extremeBudget, ET = D.extremeTrip, EW = D.extremeWorkouts, ES = D.extremeStudy, EC = D.extremeClaims, ER = D.extremeRenewals, EV = D.extremeBva, EK = D.extremeTickets;
-// The screens with the rows, by the names a model is likely to give them.
-const toTx = goTo("transactions|all transactions"), toExpenses = goTo("expenses|all expenses|list"), toSessions = goTo("sessions|all sessions|log");
-const toLog = goTo("log|study log|sessions"), toClaims = goTo("claims|all claims"), toRenewals = goTo("renewals|all renewals|list|policies");
-const toLedger = goTo("ledger|lines"), toTickets = goTo("tickets|all tickets|list");
+// The screens with the rows: anything pressable whose text holds the list's word.
+const toTx = goTo("transactions?"), toExpenses = goTo("expenses?"), toSessions = goTo("sessions?|workouts?");
+const toLog = goTo("log|sessions?"), toClaims = goTo("claims?"), toRenewals = goTo("renewals?|polic(y|ies)");
+const toLedger = goTo("ledger|lines?"), toTickets = goTo("tickets?");
+// What each list's rows may show, and how to know one on screen.
+const rowsEB: RowSpec = { rows: EB.clean, fields: { id: "text", day: "date", merchant: "text", category: "text", account: "text", amount: "num" }, keys: ["id"], press: ["id", "merchant", "day"] };
+const rowsET: RowSpec = { rows: ET.clean, fields: { id: "text", day: "date", who: "text", city: "text", category: "text", amount: "num", note: "text" }, keys: ["id"], press: ["id", "day"] };
+const rowsEW: RowSpec = { rows: EW.clean, fields: { id: "text", day: "date", type: "text", minutes: "num", km: "num", hr: "num" }, keys: ["id"], press: ["id", "day"] };
+const rowsES: RowSpec = { rows: ES.clean, fields: { id: "text", day: "date", subject: "text", topic: "text", minutes: "hours", focus: "num" }, keys: ["id"], press: ["id", "day", "topic"] };
+const rowsEC: RowSpec = { rows: EC.clean, fields: { id: "text", day: "date", policy: "text", claimant: "text", type: "text", claimed: "num", paid: "num", status: "text", adjuster: "text" }, keys: ["id", "policy"], press: ["id", "policy", "claimant"] };
+const rowsER: RowSpec = { rows: ER.clean, fields: { id: "text", client: "text", carrier: "text", line: "text", premium: "num", day: "date", status: "text", broker: "text" }, keys: ["id", "client"], press: ["id", "client", "day"] };
+const rowsEV: RowSpec = { rows: EV.clean, fields: { id: "text", cc: "text", dept: "text", account: "text", budget: "num", actual: "num" }, keys: ["id"], press: ["id"] };
+const rowsEK: RowSpec = { rows: EK.clean, fields: { id: "text", day: "date", customer: "text", subject: "text", agent: "text", status: "text", reply: "num" }, keys: ["id"], press: ["id", "subject", "customer"] };
 const extreme: RealTask[] = [
   {
     id: "ext-budget", level: "extreme", audience: "personal", wording: "tidy", category: "app",
@@ -319,9 +507,9 @@ const extreme: RealTask[] = [
     data: dataOf(EB.data),
     checks: [
       { label: `total spent (${usd(EB.total)})`, shows: [money(EB.total)] },
-      picks("picking Groceries leaves only groceries", toTx, "Groceries", /TX-\d{4}/, EB.groceryIds),
-      pages(toTx, /TX-\d{4}/, 200),
-      detail(toTx, /TX-\d{4}/),
+      picks(`picking Groceries shows its figures (${usd(EB.groceries)}, or ${EB.groceryCounts.join(" or ")} transactions)`, toTx, "Groceries", money(EB.groceries), tally(EB.groceryCounts, "transactions?|groceries")),
+      pages(toTx, rowsEB),
+      detail(toTx, rowsEB),
     ],
     followUp: { request: "now only Q3", checks: [{ label: `Q3 total (${usd(EB.q3)}), not the year's`, shows: [money(EB.q3)], hides: [money(EB.total)] }] },
   },
@@ -332,8 +520,8 @@ const extreme: RealTask[] = [
     checks: [
       { label: `total (${usd(ET.total)})`, shows: [money(ET.total)] },
       { label: "what each person paid", shows: ET.people.map((p) => money(ET.paid[p] ?? 0)) },
-      picks("picking Lisbon leaves only Lisbon", toExpenses, "Lisbon", /E-\d{3}/, ET.lisbonIds),
-      pages(toExpenses, /E-\d{3}/, 200),
+      picks(`picking Lisbon shows its figures (${usd(ET.lisbon)}, or ${ET.lisbonCounts.join(" or ")} expenses)`, toExpenses, "Lisbon", money(ET.lisbon), tally(ET.lisbonCounts, "expenses?|lisbon")),
+      pages(toExpenses, rowsET),
     ],
   },
   {
@@ -342,9 +530,9 @@ const extreme: RealTask[] = [
     data: dataOf(EW.data),
     checks: [
       { label: `total minutes (${comma(EW.minutes)})`, shows: [count(EW.minutes)] },
-      picks("picking Run leaves only runs", toSessions, "Run", /S-\d{3}/, EW.runIds),
-      pages(toSessions, /S-\d{3}/, 200),
-      detail(toSessions, /S-\d{3}/),
+      picks(`picking Run shows its figures (${comma(EW.runMinutes)} min, or ${EW.runCounts.join(" or ")} sessions)`, toSessions, "Run", count(EW.runMinutes), tally(EW.runCounts, "sessions?|runs?|workouts?")),
+      pages(toSessions, rowsEW),
+      detail(toSessions, rowsEW),
     ],
     followUp: {
       request: "add a column for pace on runs (minutes per km)",
@@ -368,9 +556,9 @@ const extreme: RealTask[] = [
     data: dataOf(ES.data),
     checks: [
       { label: `total hours (${ES.hours.toFixed(1)})`, shows: [num(ES.hours, [1, 0, 2])] },
-      picks("picking Chemistry leaves only chemistry", toLog, "Chemistry", /L-\d{3}/, ES.chemistryIds),
-      pages(toLog, /L-\d{3}/, 200),
-      detail(toLog, /L-\d{3}/),
+      picks(`picking Chemistry shows its figures (${ES.chemistry.toFixed(1)} h, or ${ES.chemistryCounts.join(" or ")} sessions)`, toLog, "Chemistry", num(ES.chemistry, [1, 0, 2]), count(Math.round(ES.chemistry * 60)), tally(ES.chemistryCounts, "sessions?|entries|chemistry")),
+      pages(toLog, rowsES),
+      detail(toLog, rowsES),
     ],
   },
   {
@@ -379,9 +567,9 @@ const extreme: RealTask[] = [
     data: dataOf(EC.data),
     checks: [
       { label: `total claimed (${usd(EC.claimed)})`, shows: [money(EC.claimed)] },
-      picks("picking Auto leaves only auto claims", toClaims, "Auto", /CLM-\d{5}/, EC.autoIds),
-      pages(toClaims, /CLM-\d{5}/, 200),
-      detail(toClaims, /CLM-\d{5}/),
+      picks(`picking Auto shows its figures (${usd(EC.auto)} claimed, or ${EC.autoCount} claims)`, toClaims, "Auto", money(EC.auto), tally([EC.autoCount], "claims?|auto")),
+      pages(toClaims, rowsEC),
+      detail(toClaims, rowsEC),
     ],
     followUp: { request: "now only claims over $10,000", checks: [{ label: `${EC.bigCount} claims, ${usd(EC.bigClaimed)} claimed`, shows: [count(EC.bigCount), money(EC.bigClaimed)], hides: [money(EC.claimed)] }] },
   },
@@ -391,9 +579,9 @@ const extreme: RealTask[] = [
     data: dataOf(ER.data),
     checks: [
       { label: `total premium (${usd(ER.premium)})`, shows: [money(ER.premium)] },
-      picks("picking Chubb leaves only Chubb", toRenewals, "Chubb", /RN-\d{4}/, ER.chubbIds),
-      pages(toRenewals, /RN-\d{4}/, 200),
-      detail(toRenewals, /RN-\d{4}/),
+      picks(`picking Chubb shows its figures (${usd(ER.chubb)}, or ${ER.chubbCounts.join(" or ")} renewals)`, toRenewals, "Chubb", money(ER.chubb), tally(ER.chubbCounts, "renewals?|polic(y|ies)|chubb")),
+      pages(toRenewals, rowsER),
+      detail(toRenewals, rowsER),
     ],
     followUp: { request: "now only Q3", checks: [{ label: `Q3 premium (${usd(ER.q3)}), not the year's`, shows: [money(ER.q3)], hides: [money(ER.premium)] }] },
   },
@@ -403,8 +591,8 @@ const extreme: RealTask[] = [
     data: dataOf(EV.data),
     checks: [
       { label: `totals (${usd(EV.budget)} budget, ${usd(EV.actual)} actual)`, shows: [money(EV.budget), money(EV.actual)] },
-      picks("picking Marketing leaves only marketing lines", toLedger, "Marketing", /GL-\d{4}/, EV.mktIds),
-      pages(toLedger, /GL-\d{4}/, 200),
+      picks(`picking Marketing shows its figures (${usd(EV.mktBudget)} budget, ${usd(EV.mktActual)} actual, or ${EV.mktCount} lines)`, toLedger, "Marketing", money(EV.mktBudget), money(EV.mktActual), tally([EV.mktCount], "lines?|entries|marketing")),
+      pages(toLedger, rowsEV),
     ],
   },
   {
@@ -413,9 +601,10 @@ const extreme: RealTask[] = [
     data: dataOf(EK.data),
     checks: [
       { label: `open tickets (${EK.open})`, shows: [count(EK.open)] },
-      picks(`picking Urgent leaves only the ${EK.urgentIds.length} urgent tickets`, toTickets, "Urgent", /T-\d{4}/, EK.urgentIds),
-      pages(toTickets, /T-\d{4}/, 200),
-      detail(toTickets, /T-\d{4}/),
+      // The urgent open count alone is too small to tell from a page number, so only the urgent count counts.
+      picks(`picking Urgent shows its count (${EK.urgentCounts[0]} tickets)`, toTickets, "Urgent", tally(EK.urgentCounts.slice(0, 1), "tickets?|urgent")),
+      pages(toTickets, rowsEK),
+      detail(toTickets, rowsEK),
     ],
   },
 ];
