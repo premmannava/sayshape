@@ -20,7 +20,9 @@
  * joined the expression functions, which adds their names to the list in the quick start, and so
  * did range and map, and has, is, contains, starts and ends. And another: button's validate= and
  * label= props, its optional text and its icon-only example changed the button docs shown in
- * repair results, so main/ui-results.json has those lines too.)
+ * repair results, so main/ui-results.json has those lines too. And another: num, date, month,
+ * quarter, year and tidy joined the expression functions, which adds their names to the list in
+ * both tools files.)
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";

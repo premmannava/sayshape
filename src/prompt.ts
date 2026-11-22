@@ -412,6 +412,9 @@ const indent = (spec: string, by = "  ") => spec.split("\n").map((l) => by + l).
 
 const LIST_OPS = new Set<string>(["add", "remove", "clear"]);
 
+/** Every guide and the map say this once: real data often holds numbers and dates as text. */
+export const DATA_AS_TEXT = "- Data from the app may hold numbers and dates as text: read them with num('$36,626') and date('9 Jan 2026') (YYYY-MM-DD; month(), quarter(), year() of it), and tidy names with tidy() so they group. Totals and charts already read numbers written as text";
+
 // ---------------------------------------------------------------- full mode
 
 function dataSection(ctx: GuideContext): string {
@@ -424,7 +427,8 @@ function dataSection(ctx: GuideContext): string {
     `- Repeat elements with each, once per item. Never copy an element by hand for every item:\n  each items=todos as=t`,
     `- Inside each, the current item is t (from as=t; item if as= is left out). index=i gives its position from 0. t only exists inside its each.`,
     `- Read fields: {t.text}, {cart[0].price}, {todos.length}`,
-    `- Compute numbers from the list instead of writing them yourself: len(list), count(list, 'done') counts items whose field is true, count(list, 'cat', 'Gas') counts items whose field equals a value, sum(list, 'price'), sum(list, 'price', 'qty') multiplies two fields per item, avg(list, 'field'), min(list, 'field'), max(list, 'field'), join(list, 'name'), includes(list, value). These count only numbers: write prices and quantities as numbers (24, not "24")`,
+    `- Compute numbers from the list instead of writing them yourself: len(list), count(list, 'done') counts items whose field is true, count(list, 'cat', 'Gas') counts items whose field equals a value, sum(list, 'price'), sum(list, 'price', 'qty') multiplies two fields per item, avg(list, 'field'), min(list, 'field'), max(list, 'field'), join(list, 'name'), includes(list, value). They skip blank values: write your own prices and quantities as numbers (24, not "24")`,
+    DATA_AS_TEXT,
     `- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), filter(list, 'region', regions) for any of a list of values (a multi-select's), filter(list, 'price', {from: 50, to: budget}) for a range of numbers or dates (leave out an end for no limit: {to: budget}), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), slice(list, (page - 1) * 10, page * 10) for one page of a longer list (from 0, the end not included), first(list) and last(list) for one item, pluck(list, 'revenue') for one field of every item (a stat's spark=). Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate`,
     `- Use filter() for counts and totals. Items of a filtered or sorted list still write back: bind=t.done inside each items=shown as=t changes that task in tasks, and totals worked out from tasks follow. if= on an each picks items per item: each items=todos as=t if={!t.done}`,
     `- Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}`,
@@ -583,6 +587,7 @@ ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty
     add("data", `DATA AND LISTS
 - Keep data in state and repeat with each; never copy an element by hand per item: each items=todos as=t (t exists only inside; index=i is the 0-based position; key={t.id} keeps focus on items)
 - A list inside each item: an each inside the each, items=o.lines
+${DATA_AS_TEXT}
 - bind=t.done and actions on t write back to the list in state the item came from, also through filter, sort, search and take (each items=shown). Items an expression builds (items={[{…}]}) can't be written to${has("radio") ? `
 - To compare two fields of an item, set one when choosing: radio "{o}" bind=q.pick value={o} on="set:q.ok:{o == q.answer}", then count(qs, 'ok')` : ""}${has("input") ? `
 - To add what people type: input bind=task on="add:todos:{text: task, done: false};set:task:''"` : ""}

@@ -7,6 +7,7 @@
  * Like the rest of a component, layout helpers here only measure (headless),
  * and paint helpers only use theme tokens.
  */
+import { readNumber } from "../read-values";
 import type { ComponentDef, LayoutContext } from "../component";
 import { fitLines, wrapText, type TextMeasurer } from "../text";
 import { fieldOf, isList, isRecord } from "../data";
@@ -636,9 +637,11 @@ export function labelOf(v: Value | undefined): string {
   return "—";
 }
 
+/** An item's number in a field: a number, or text num() reads ("$1,200", "45%"); null for blanks and anything else. */
 export const numberAt = (item: Value, field: string): number | null => {
   const raw = isRecord(item) ? fieldOf(item, field) : undefined;
-  return typeof raw === "number" && isFinite(raw) ? raw : null;
+  const n = typeof raw === "string" ? readNumber(raw) : raw;
+  return typeof n === "number" && isFinite(n) ? n : null;
 };
 
 /** Read a list of records into slots with one value per field, without changing it. */

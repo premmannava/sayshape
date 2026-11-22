@@ -352,11 +352,12 @@ describe("sums", () => {
     expect(val("sum(empty, 'p')")).toBe(0);
   });
 
-  it("is NaN (shown as —) when a value isn't a number, never text joined or read as a number", () => {
-    for (const name of ["mixed", "flags"]) expect(val(`sum(${name}, 'p')`), name).toBeNaN();
-    expect(val("sum(texts)")).toBeNaN();
-    expect(val("avg(mixed, 'p')")).toBeNaN();
-    expect(val("max(mixed, 'p')")).toBeNaN();
+  it("reads text num() reads, skips what it can't, and never joins text", () => {
+    expect(val("sum(mixed, 'p')")).toBe(14);
+    expect(val("sum(flags, 'p')")).toBe(2);
+    expect(val("sum(texts)")).toBe(3);
+    expect(val("avg(mixed, 'p')")).toBe(7);
+    expect(val("max(mixed, 'p')")).toBe(12);
   });
 
   it("skips blanks: a missing field or null is left out, not made —", () => {

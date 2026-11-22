@@ -184,7 +184,7 @@ List functions, for computing instead of typing numbers:
 |---|---|
 | `len(list)` | Number of items |
 | `count(list, 'done')` | Items whose field is true |
-| `sum(list)`, `sum(list, 'price')`, `sum(list, 'price', 'qty')` | Total of the items, of a field, or of two fields multiplied per item (cart totals). Blank values (a missing field, `null` or empty text) are skipped, and `avg` divides by the values it counted; when every value is blank the total is —. Otherwise only numbers count: `true`/`false` or text (even `"12"`) makes the total — rather than being read as a number; an empty list totals 0. `avg`, `min` and `max` of a field, and `min(list)`/`max(list)`, work the same way |
+| `sum(list)`, `sum(list, 'price')`, `sum(list, 'price', 'qty')` | Total of the items, of a field, or of two fields multiplied per item (cart totals). Blank values (a missing field, `null` or empty text) are skipped, and `avg` divides by the values it counted; when every value is blank the total is —. Text that `num()` reads (`"$390"`, `"1,200"`, `"12"`) counts as its number; anything else (other text, `true`/`false`) is skipped too. Nothing is ever joined as text, and an empty list totals 0. `avg`, `min` and `max` of a field, and `min(list)`/`max(list)`, work the same way |
 | `avg(list, 'field')` | Average |
 | `join(list)`, `join(list, 'name', ' / ')` | Text listing the items or a field |
 | `includes(list, value)`, `includes(text, part)` | Whether a value is in the list, or text holds other text, matching case: `contains()` is the one that ignores it |
@@ -237,6 +237,17 @@ Formatting, for text people read:
 | `compact(12345678)`, `compact(n, 'USD')` | `12.3M`, `$12.3M`: big figures in small spaces, like a `stat`. Keeps 3 significant digits or 1 decimal, whichever says more: `compact(1240000)` is `1.24M` |
 | `plural(n, 'item')`, `plural(n, 'child', 'children')` | `1 item`, `3 items`, `2 children` |
 | `lower(text)`, `upper(text)`, `trim(text)` | Text in lower or upper case, or without spaces at the ends |
+
+Reading values, for data from an app that holds numbers and dates as text. Nothing is guessed: what can't be read for certain is blank (`null`):
+
+| Function | Result |
+|---|---|
+| `num('$36,626')`, `num('USD 8309')`, `num('45%')`, `num('53.2 km')`, `num('(1,200)')` | `36626`, `8309`, `45`, `53.2`, `-1200`: a currency mark or code, thousands commas, a percent sign or a unit after the number, and brackets for minus. Blank, or anything else, is blank |
+| `num('12,5', 'comma')` | `12.5`: a decimal comma, with points or spaces between thousands, only when asked. Without `'comma'`, `"12,5"` is blank |
+| `date('9 Jan 2026')`, `date('Jan 9, 2026')`, `date('2026/8/11')` | `2026-01-09`, `2026-01-09`, `2026-08-11`: dates as `YYYY-MM-DD`, the form every date in SayShape takes |
+| `date('01/14/2026')`, `date(v, 'mdy')`, `date(v, 'dmy')` | A day/month date is read only when one reading is impossible (a part above 12, or both parts the same), or with its order. `date('03/04/2026')` is blank |
+| `month(d)`, `quarter(d)`, `year(d)` | `'2026-01'`, `'2026 Q1'`, `2026` for anything `date()` reads: months and quarters as text that sorts and groups in order |
+| `tidy(text)` | `'Liberty Mutual'` for `'liberty  mutual '`: spaces tidied and each word capitalized, so names written differently group together |
 
 Text checks, true or false, for `error=`, `required=`, `disabled=` and `if=`. They take a check by name, never a pattern, and null or empty text is always false:
 

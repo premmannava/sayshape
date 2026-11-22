@@ -123,7 +123,7 @@ describe("grouping", () => {
     expect(by("max")).toBe(-38.9);
   });
 
-  it("follows sum()'s rules: text makes that group's total nothing, a missing field is skipped", () => {
+  it("follows sum()'s rules: text num() reads counts, a missing field is skipped", () => {
     const s = new Store();
     s.set("rows", [{ c: "A", v: 1 }, { c: "A", v: "2" }, { c: "B", v: 3 }, { c: "B" }, { c: "C", v: 4 }] as unknown as Value);
     const r = evaluate("group(rows, 'c', 'v')", s.scope);
@@ -131,7 +131,7 @@ describe("grouping", () => {
     const out = json(r.value) as Array<{ c: string; count: number; v: number | null }>;
     expect(out.map((g) => [g.c, g.count])).toEqual([["A", 2], ["B", 2], ["C", 1]]);
     // NaN is shown as —; JSON writes it as null.
-    expect(out.map((g) => g.v)).toEqual([null, 3, 4]);
+    expect(out.map((g) => g.v)).toEqual([3, 3, 4]);
   });
 
   it("groups items without the field, or with a list or record in it, together under null", () => {
