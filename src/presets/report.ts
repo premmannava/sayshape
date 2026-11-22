@@ -59,6 +59,8 @@ type FigureOp = (typeof FIGURE_OPS)[number];
 type ChartKind = (typeof CHART_KINDS)[number];
 
 const REPORT_LINE = /^(\s*)report(?=\s|$)/;
+/** The name a chart's count field is totalled under, while group() uses count for each group's size. */
+const GROUP_COPY = "reportTotal";
 const NAME = /^[A-Za-z_]\w*$/;
 /** Fields that hold amounts of money, by name. */
 const MONEY = /(amount|price|cost|revenue|incurred|paid|salary|sales|spend|budget|income|fee|mrr|arr|value|balance|profit|total)/i;
@@ -308,6 +310,11 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
         y = picked.join(",");
       } else if (ys.length > 1) {
         items = rows; y = ys.join(",");
+      } else if (ys[0] === "count" && NAME.test(x)) {
+        // group() names each group's item count "count", so it can't total a field of that name. Total a copy of
+        // the field under another name, then give it its own name back, so the chart and its table still say count.
+        items = `{map(group(extend(${rows}, 'r', {${GROUP_COPY}: r.count}), '${x}', '${GROUP_COPY}'), 'g', {${x}: g.${x}, count: g.${GROUP_COPY}})}`;
+        y = "count";
       } else {
         items = `{group(${rows}, '${x}'${ys[0] ? `, '${ys[0]}'` : ""})}`;
         y = ys[0] ?? "count";
