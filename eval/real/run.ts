@@ -326,6 +326,22 @@ async function ask(c: RunnerContext, m: ResolvedModel, format: RealFormat, reque
   return { raw: { output: spec, usage, calls, firstTokenMs, totalMs, route, warnings, ...(reply !== undefined ? { reply } : {}) }, convo: { refine: next, ...(topics ? { topics } : {}) }, finishReason };
 }
 
+/** Score one answer on a fresh screen per check: exact, then (for a failed check) with every figure pattern loosened to its rounded twin. Number controls (steppers, sliders, range inputs) count as fields. */
+export async function scoreOutput(task: RealTask, turn: 1 | 2, format: RealFormat, output: string): Promise<{ valid: boolean; problems: string[]; checks: RealAnswer["checks"]; success: boolean; successRounded: boolean }> {
+  const checks: TaskCheck[] = turn === 1 ? task.checks : task.followUp!.checks;
+  const request = turn === 1 ? task.request : task.followUp!.request;
+  const scoreFormat = format === "html" ? "html" : "sayshape";
+  const env: ScreenEnv = { numberControls: true, ...(task.data ? { data: task.data } : {}), ...(format !== "html" ? { presets: true } : {}) };
+  const s = await score(scoreFormat, { id: task.id, category: task.category, request, checks }, output, env);
+  const rounded: RealAnswer["checks"] = [];
+  for (const [i, r] of s.checks.entries()) {
+    const c = checks[i];
+    const retry = !r.passed && c?.shows?.length ? await runCheck(scoreFormat, output, { ...c, shows: c.shows.map(looser) }, env) : r;
+    rounded.push({ ...r, passedRounded: r.passed || retry.passed });
+  }
+  return { valid: s.valid, problems: s.problems, checks: rounded, success: s.valid && s.checks.every((x) => x.passed), successRounded: s.valid && rounded.every((x) => x.passedRounded) };
+}
+
 /** Ask, score, and shape one answer record. Never throws. */
 async function answerOne(c: RunnerContext, m: ResolvedModel, task: RealTask, format: RealFormat, run: number, turn: 1 | 2, convo: Convo, outDir: string | undefined): Promise<{ answer: RealAnswer; convo: Convo }> {
   const request = turn === 1 ? task.request : task.followUp!.request;
@@ -340,16 +356,8 @@ async function answerOne(c: RunnerContext, m: ResolvedModel, task: RealTask, for
     return { answer, convo };
   }
   const { raw } = got;
-  const env: ScreenEnv = { ...(task.data ? { data: task.data } : {}), ...(format !== "html" ? { presets: true } : {}) };
   const scoreFormat = format === "html" ? "html" : "sayshape";
-  const s = await score(scoreFormat, { id: task.id, category: task.category, request, checks }, raw.output, env);
-  // A failed check gets a second look with every figure pattern loosened to its rounded twin.
-  const checksR: RealAnswer["checks"] = [];
-  for (const [i, r] of s.checks.entries()) {
-    const c = checks[i];
-    const retry = !r.passed && c?.shows?.length ? await runCheck(scoreFormat, raw.output, { ...c, shows: c.shows.map(looser) }, env) : r;
-    checksR.push({ ...r, passedRounded: r.passed || retry.passed });
-  }
+  const sc = await scoreOutput(task, turn, format, raw.output);
   const u = raw.usage;
   const { cost, costNoCache } = costs(u, m.prices);
   c.budget.add(cost);
@@ -368,7 +376,7 @@ async function answerOne(c: RunnerContext, m: ResolvedModel, task: RealTask, for
     modelCalls: raw.calls, answerTokens: tokens(raw.output), answerChars: raw.output.length,
     firstTokenMs: raw.firstTokenMs, totalMs: raw.totalMs,
     tokensPerSecond: u.completionTokens !== undefined && gen > 0 ? u.completionTokens / (gen / 1000) : undefined,
-    cost, costNoCache, valid: s.valid, problems: s.problems, checks: checksR, success: s.valid && s.checks.every((x) => x.passed), successRounded: s.valid && checksR.every((x) => x.passedRounded), ...(noScreen ? { noScreen: true } : {}),
+    cost, costNoCache, valid: sc.valid, problems: sc.problems, checks: sc.checks, success: sc.success, successRounded: sc.successRounded, ...(noScreen ? { noScreen: true } : {}),
     ...(raw.route ? { route: raw.route } : {}),
     code: codeStats(scoreFormat, raw.output, raw.warnings),
     ...(task.data ? { copiedRows: copiedRows(task, raw.output) } : {}),
@@ -531,6 +539,21 @@ export function loadSaved(dir: string): RunRecord {
   const part = JSON.parse(readFileSync(resolve(dir, "partial.json"), "utf8")) as Pick<RunRecord, "meta" | "cold">;
   const lines = readFileSync(resolve(dir, "answers.jsonl"), "utf8").split("\n").filter(Boolean);
   return { meta: part.meta, cold: part.cold, answers: lines.map((l) => JSON.parse(l) as RealAnswer) };
+}
+
+/** Score the saved answer files of a finished (or stopped) run again, with no model calls. Returns the record to write beside the original. */
+export async function rescore(dir: string, tasks: RealTask[]): Promise<RunRecord> {
+  const rec = loadSaved(dir);
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const answers: RealAnswer[] = [];
+  for (const a of rec.answers) {
+    const task = byId.get(a.task);
+    if (!a.ok || !a.file || !task || (a.turn === 2 && !task.followUp)) { answers.push(a); continue; }
+    const output = readFileSync(resolve(dir, "answers", a.file), "utf8");
+    const sc = await scoreOutput(task, a.turn, a.format, output);
+    answers.push({ ...a, valid: sc.valid, problems: sc.problems, checks: sc.checks, success: sc.success, successRounded: sc.successRounded });
+  }
+  return { ...rec, meta: { ...rec.meta, flags: { ...rec.meta.flags, rescoredFrom: dir } }, answers };
 }
 
 /** Rough cost of the plan, with no caching: input and output sizes are guesses, so it's an upper-ish bound for the budget. */

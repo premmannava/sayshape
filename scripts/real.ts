@@ -10,14 +10,15 @@
  *   npm run real -- --only hard           a level (low, medium, hard, extreme) or request ids
  *   npm run real -- --budget 20           hard stop in dollars (default 20)
  *   npm run real -- --report <dir>        build report.md again from a finished run's results.json
+ *   npm run real -- --rescore <dir>       score a run's saved answer files again (no model calls); writes <dir>-rescored beside it
  *
  * Settings: SAYSHAPE_API_KEY (an OpenRouter key) and optionally SAYSHAPE_MODEL_URL, from .env.local.
  * Results: eval/real/results/<date>/ with results.json, report.md and answers/.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildReport } from "../eval/real/report";
-import { estimateCost, plannedCalls, promptSizes, makeRegistry, resolveModels, runReal, loadSaved, MODEL_SPECS, type RealFormat } from "../eval/real/run";
+import { estimateCost, plannedCalls, promptSizes, makeRegistry, resolveModels, runReal, loadSaved, rescore, MODEL_SPECS, type RealFormat } from "../eval/real/run";
 import { realTasks } from "../eval/real/tasks";
 import { readModelEnv } from "./model-env";
 
@@ -39,6 +40,19 @@ async function main(): Promise<void> {
     const rec = loadSaved(dir);
     writeFileSync(resolve(dir, "report.md"), buildReport(rec));
     console.log(`Wrote ${dir}/report.md`);
+    return;
+  }
+
+  const rescoreDir = arg("rescore");
+  if (rescoreDir) {
+    const dir = resolve(rescoreDir);
+    const rec = await rescore(dir, realTasks);
+    const out = `${dir.replace(/\/$/, "")}-rescored`;
+    mkdirSync(out, { recursive: true });
+    if (!existsSync(resolve(out, "answers"))) symlinkSync(resolve(dir, "answers"), resolve(out, "answers"));
+    writeFileSync(resolve(out, "results.json"), JSON.stringify(rec, null, 2));
+    writeFileSync(resolve(out, "report.md"), buildReport(rec));
+    console.log(`Scored ${rec.answers.length} saved answers again. The original is untouched. Report: ${out}/report.md`);
     return;
   }
 

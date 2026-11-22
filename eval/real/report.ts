@@ -33,10 +33,24 @@ function table(head: string[], rows: string[][]): string {
 }
 
 /** Figures for a set of answers, all of one format. Only answered requests count. */
+/** Every check passes with rounding allowed; render and console errors are ignored. */
+const screenCorrect = (a: RealAnswer): boolean => a.ok && a.checks.length > 0 && a.checks.every((c) => c.passedRounded);
+
+/** What kind of render error an answer has. A "sentence" is an unknown element whose name starts with a capital letter: the model wrote prose after the spec and the parser skipped the line. */
+type ErrorKind = "sentence" | "unknown" | "other";
+function errorKind(a: RealAnswer): ErrorKind | undefined {
+  if (!a.ok || a.valid || a.noScreen) return undefined;
+  const unknown = a.problems.map((p) => /Unknown element "([^"]*)"/.exec(p)?.[1]);
+  if (unknown.some((n) => n !== undefined && /^[A-Z]/.test(n))) return "sentence";
+  if (unknown.some((n) => n !== undefined) || a.problems.some((p) => /\bno prop\b|[Uu]nknown prop/.test(p))) return "unknown";
+  return "other";
+}
+
 interface Stat {
   n: number;
   works: number;
   worksRounded: number;
+  correct: number;
   answerTokens?: number;
   outputTokens?: number;
   totalMs?: number;
@@ -45,6 +59,7 @@ interface Stat {
   cost?: number;
   costPerWorking?: number;
   costPerWorkingRounded?: number;
+  costPerCorrect?: number;
   /** How many answers have a known cost. */
   costed: number;
 }
@@ -55,10 +70,12 @@ function stat(rs: RealAnswer[]): Stat {
   const works = a.filter((r) => r.success).length;
   const costedWorks = a.filter((r) => r.cost !== undefined && r.success).length;
   const worksRounded = a.filter((r) => r.successRounded).length;
+  const correct = a.filter(screenCorrect).length;
+  const costedCorrect = a.filter((r) => r.cost !== undefined && screenCorrect(r)).length;
   const costedWorksRounded = a.filter((r) => r.cost !== undefined && r.successRounded).length;
   const total = costs.length ? sum(costs) : undefined;
   return {
-    n: a.length, works, worksRounded, costed: costs.length,
+    n: a.length, works, worksRounded, correct, costed: costs.length,
     answerTokens: median(a.map((r) => r.answerTokens)),
     outputTokens: median(known(a.map((r) => r.outputTokens))),
     totalMs: median(a.map((r) => r.totalMs)),
@@ -68,6 +85,7 @@ function stat(rs: RealAnswer[]): Stat {
     // Cost over answers with a known cost, divided by those of them that work.
     costPerWorking: total !== undefined && costedWorks ? total / costedWorks : undefined,
     costPerWorkingRounded: total !== undefined && costedWorksRounded ? total / costedWorksRounded : undefined,
+    costPerCorrect: total !== undefined && costedCorrect ? total / costedCorrect : undefined,
   };
 }
 
@@ -117,13 +135,13 @@ export function buildReport(rec: RunRecord): string {
 
   h("Headline: SayShape vs HTML, per model");
   out.push(`Ratios are HTML divided by SayShape (adaptive): above 1 means HTML is larger, slower or dearer. Cost per working screen is the model's cost over the answers that work.\n`);
-  const head = ["Model", "Format", "Answers", "Works (exact)", "Works (rounded accepted)", "Answer size (yardstick tokens, median)", "Output tokens (reported, median)", "Total time (median)", "Cost per working screen (rounded accepted)", "Cost per working screen (exact)"];
+  const head = ["Model", "Format", "Answers", "Works (exact)", "Works (rounded accepted)", "Screen correct", "Answer size (yardstick tokens, median)", "Output tokens (reported, median)", "Total time (median)", "Cost per working screen (rounded accepted)", "Cost per working screen (exact)", "Cost per screen-correct answer"];
   const rows: string[][] = [];
   for (const m of rec.meta.models) {
     const mine = used.filter((a) => a.model === m.key);
     for (const f of formats) {
       const s = stat(mine.filter((a) => a.format === f));
-      rows.push([name(m.key), f, String(s.n), share(s.works, s.n), share(s.worksRounded, s.n), n0(s.answerTokens), n0(s.outputTokens), secs(s.totalMs), usd(s.costPerWorkingRounded), usd(s.costPerWorking)]);
+      rows.push([name(m.key), f, String(s.n), share(s.works, s.n), share(s.worksRounded, s.n), share(s.correct, s.n), n0(s.answerTokens), n0(s.outputTokens), secs(s.totalMs), usd(s.costPerWorkingRounded), usd(s.costPerWorking), usd(s.costPerCorrect)]);
     }
     if (formats.includes("adaptive") && formats.includes("html")) {
       const a = stat(mine.filter((x) => x.format === "adaptive")), t = stat(mine.filter((x) => x.format === "html"));
@@ -139,7 +157,9 @@ export function buildReport(rec: RunRecord): string {
       ["Output tokens (reported)", n0(per("adaptive", (s) => s.outputTokens)), n0(per("html", (s) => s.outputTokens)), ratio(per("html", (s) => s.outputTokens), per("adaptive", (s) => s.outputTokens))],
       ["Answer size (yardstick tokens)", n0(per("adaptive", (s) => s.answerTokens)), n0(per("html", (s) => s.answerTokens)), ratio(per("html", (s) => s.answerTokens), per("adaptive", (s) => s.answerTokens))],
       ["Total time", secs(per("adaptive", (s) => s.totalMs)), secs(per("html", (s) => s.totalMs)), ratio(per("html", (s) => s.totalMs), per("adaptive", (s) => s.totalMs))],
-      ["Cost per working screen (rounded accepted)", "Cost per working screen (exact)", usd(per("adaptive", (s) => s.costPerWorking)), usd(per("html", (s) => s.costPerWorking)), ratio(per("html", (s) => s.costPerWorking), per("adaptive", (s) => s.costPerWorking))],
+      ["Cost per working screen (rounded accepted)", usd(per("adaptive", (s) => s.costPerWorkingRounded)), usd(per("html", (s) => s.costPerWorkingRounded)), ratio(per("html", (s) => s.costPerWorkingRounded), per("adaptive", (s) => s.costPerWorkingRounded))],
+      ["Cost per working screen (exact)", usd(per("adaptive", (s) => s.costPerWorking)), usd(per("html", (s) => s.costPerWorking)), ratio(per("html", (s) => s.costPerWorking), per("adaptive", (s) => s.costPerWorking))],
+      ["Cost per screen-correct answer", usd(per("adaptive", (s) => s.costPerCorrect)), usd(per("html", (s) => s.costPerCorrect)), ratio(per("html", (s) => s.costPerCorrect), per("adaptive", (s) => s.costPerCorrect))],
     ]));
   }
 
@@ -149,16 +169,16 @@ export function buildReport(rec: RunRecord): string {
   h("By level");
   out.push(`All models together, first turns, each model's median run.\n`);
   const lvl = used.filter((a) => a.turn === 1);
-  out.push(table(["Level", "Format", "Answers", "Works (exact)", "Works (rounded accepted)", "Answer size (median)", "Output tokens (median)", "Total time (median)", "Cost per working screen (rounded accepted)", "Cost per working screen (exact)"], LEVELS.flatMap((L) => formats.map((f) => { const s = stat(lvl.filter((a) => a.level === L && a.format === f)); return [L, f, String(s.n), share(s.works, s.n), share(s.worksRounded, s.n), n0(s.answerTokens), n0(s.outputTokens), secs(s.totalMs), usd(s.costPerWorkingRounded), usd(s.costPerWorking)]; }))));
+  out.push(table(["Level", "Format", "Answers", "Works (exact)", "Works (rounded accepted)", "Screen correct", "Answer size (median)", "Output tokens (median)", "Total time (median)", "Cost per working screen (rounded accepted)", "Cost per working screen (exact)", "Cost per screen-correct answer"], LEVELS.flatMap((L) => formats.map((f) => { const s = stat(lvl.filter((a) => a.level === L && a.format === f)); return [L, f, String(s.n), share(s.works, s.n), share(s.worksRounded, s.n), share(s.correct, s.n), n0(s.answerTokens), n0(s.outputTokens), secs(s.totalMs), usd(s.costPerWorkingRounded), usd(s.costPerWorking), usd(s.costPerCorrect)]; }))));
 
   h("Personal vs enterprise, tidy vs vague");
   out.push(`Across all ${rec.meta.taskCount} requests only (four a side inside one level is too few to say anything), first turns.\n`);
-  const split = (key: (a: RealAnswer) => string, values: string[]) => table([" ", "Format", "Answers", "Works (exact)", "Works (rounded accepted)", "Answer size (median)", "Total time (median)", "Cost per working screen (rounded accepted)", "Cost per working screen (exact)"], values.flatMap((v) => formats.map((f) => { const s = stat(lvl.filter((a) => key(a) === v && a.format === f)); return [v, f, String(s.n), share(s.works, s.n), share(s.worksRounded, s.n), n0(s.answerTokens), secs(s.totalMs), usd(s.costPerWorkingRounded), usd(s.costPerWorking)]; })));
+  const split = (key: (a: RealAnswer) => string, values: string[]) => table([" ", "Format", "Answers", "Works (exact)", "Works (rounded accepted)", "Screen correct", "Answer size (median)", "Total time (median)", "Cost per working screen (rounded accepted)", "Cost per working screen (exact)", "Cost per screen-correct answer"], values.flatMap((v) => formats.map((f) => { const s = stat(lvl.filter((a) => key(a) === v && a.format === f)); return [v, f, String(s.n), share(s.works, s.n), share(s.worksRounded, s.n), share(s.correct, s.n), n0(s.answerTokens), secs(s.totalMs), usd(s.costPerWorkingRounded), usd(s.costPerWorking), usd(s.costPerCorrect)]; })));
   out.push(split((a) => a.audience, ["personal", "enterprise"]));
   out.push("\n" + split((a) => a.wording, ["tidy", "vague"]));
 
   h("First turn vs follow-up");
-  out.push(table(["Turn", "Format", "Answers", "Works (exact)", "Works (rounded accepted)", "Answer size (median)", "Output tokens (median)", "Total time (median)", "Cost per working screen (rounded accepted)", "Cost per working screen (exact)"], ([1, 2] as const).flatMap((t) => formats.map((f) => { const s = stat(used.filter((a) => a.turn === t && a.format === f)); return [t === 1 ? "request" : "follow-up", f, String(s.n), share(s.works, s.n), share(s.worksRounded, s.n), n0(s.answerTokens), n0(s.outputTokens), secs(s.totalMs), usd(s.costPerWorkingRounded), usd(s.costPerWorking)]; }))));
+  out.push(table(["Turn", "Format", "Answers", "Works (exact)", "Works (rounded accepted)", "Screen correct", "Answer size (median)", "Output tokens (median)", "Total time (median)", "Cost per working screen (rounded accepted)", "Cost per working screen (exact)", "Cost per screen-correct answer"], ([1, 2] as const).flatMap((t) => formats.map((f) => { const s = stat(used.filter((a) => a.turn === t && a.format === f)); return [t === 1 ? "request" : "follow-up", f, String(s.n), share(s.works, s.n), share(s.worksRounded, s.n), share(s.correct, s.n), n0(s.answerTokens), n0(s.outputTokens), secs(s.totalMs), usd(s.costPerWorkingRounded), usd(s.costPerWorking), usd(s.costPerCorrect)]; }))));
 
   h("Prompt cache");
   out.push(`Share of input tokens read from the cache, over the median run's answers. The cold request is the warm-up call (one per model and format), left out of every median above.\n`);
@@ -198,7 +218,10 @@ export function buildReport(rec: RunRecord): string {
       ["Working answers, rounded accepted (share)", ...formats.map((f) => range(f, (s) => (s.n ? s.worksRounded / s.n : undefined), (x) => (x === undefined ? "?" : `${Math.round(x * 100)}%`)))],
       ["Output tokens (median)", ...formats.map((f) => range(f, (s) => s.outputTokens, n0))],
       ["Total time (median)", ...formats.map((f) => range(f, (s) => s.totalMs, secs))],
-      ["Cost per working screen (rounded accepted)", "Cost per working screen (exact)", ...formats.map((f) => range(f, (s) => s.costPerWorking, usd))],
+      ["Screen correct (share)", ...formats.map((f) => range(f, (s) => (s.n ? s.correct / s.n : undefined), (x) => (x === undefined ? "?" : `${Math.round(x * 100)}%`)))],
+      ["Cost per working screen, rounded accepted", ...formats.map((f) => range(f, (s) => s.costPerWorkingRounded, usd))],
+      ["Cost per working screen, exact", ...formats.map((f) => range(f, (s) => s.costPerWorking, usd))],
+      ["Cost per screen-correct answer", ...formats.map((f) => range(f, (s) => s.costPerCorrect, usd))],
     ]));
   }
 
@@ -219,6 +242,31 @@ export function buildReport(rec: RunRecord): string {
   const noScreen = all.filter((a) => a.ok && a.noScreen);
   out.push(table(["Model", ...formats.map((f) => `${f} (of answers)`)], rec.meta.models.map((m) => [name(m.key), ...formats.map((f) => { const a = all.filter((x) => x.model === m.key && x.format === f && x.ok); return `${a.filter((x) => x.noScreen).length}/${a.length}`; })])));
   for (const a of noScreen.slice(0, 40)) out.push(`- ${name(a.model)} · ${a.task}${a.turn === 2 ? " follow-up" : ""} · ${a.format} · run ${a.run}${a.file ? ` · ${a.file}.raw.txt` : ""}`);
+
+  h("Render errors by kind");
+  out.push(`Answers with a render error, by what the error was (an answer counts once, under the first kind that fits). "Sentence line": an unknown element whose name starts with a capital letter, which is prose written after the spec that the parser skipped. "Other unknown": any other unknown element or prop. "Anything else": the rest. "Screen correct" ignores all of these.\n`);
+  out.push(table(["Model", "Format", "Sentence line", "Other unknown element or prop", "Anything else", "Screen correct"], rec.meta.models.flatMap((m) => formats.map((f) => {
+    const a = all.filter((x) => x.model === m.key && x.format === f && x.ok);
+    const k = (kind: ErrorKind) => String(a.filter((x) => errorKind(x) === kind).length);
+    return [name(m.key), f, k("sentence"), k("unknown"), k("other"), share(a.filter(screenCorrect).length, a.length)];
+  }))));
+
+  h("Every check: how many models passed it");
+  out.push(`First run only. A model passes a check when its answer passes it with rounding allowed (render errors ignored: the "screen correct" rule). Counted over the models that answered that request in that format. Sorted by the biggest SayShape shortfall (HTML models passing minus SayShape models passing). The last column is the stored reason from one SayShape answer that failed it.\n`);
+  type CheckTally = { sayshape: Map<string, boolean>; html: Map<string, boolean>; why?: string };
+  const byCheck = new Map<string, CheckTally>();
+  for (const x of all.filter((r) => r.ok && r.run === 1)) {
+    for (const c of x.checks) {
+      const key = `${x.task}${x.turn === 2 ? " (follow-up)" : ""}: ${c.label}`;
+      const e: CheckTally = byCheck.get(key) ?? { sayshape: new Map(), html: new Map() };
+      (x.format === "html" ? e.html : e.sayshape).set(x.model, c.passedRounded);
+      if (x.format !== "html" && !c.passedRounded && e.why === undefined) e.why = c.why ?? "";
+      byCheck.set(key, e);
+    }
+  }
+  const passed = (m: Map<string, boolean>) => [...m.values()].filter(Boolean).length;
+  const checkRows = [...byCheck].map(([k, e]) => ({ k, e, short: passed(e.html) - passed(e.sayshape) })).sort((a, b) => b.short - a.short || a.k.localeCompare(b.k));
+  out.push(table(["Check", "SayShape passed", "HTML passed", "Shortfall", "Example reason (SayShape)"], checkRows.map(({ k, e, short }) => [k.replace(/\|/g, "\\|"), `${passed(e.sayshape)}/${e.sayshape.size}`, `${passed(e.html)}/${e.html.size}`, String(short), (e.why ?? "").replace(/\|/g, "\\|").slice(0, 140)])));
 
   h("Every answer whose checks failed");
   out.push(`Listed so a wrong check is easy to spot by eye: if one check fails across many models and both formats, suspect the check. Answers are in answers/<file>.\n`);
