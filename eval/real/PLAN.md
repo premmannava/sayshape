@@ -130,3 +130,20 @@ Results go to `eval/real/results/<date>/` (git-ignored): `results.json`, `report
    - `npm run real -- --smoke`
    - `npm run real`
 4. After I say the run finished, read only `report.md` (no sub-agent, no other file) and write `SUMMARY.md` beside it: the five most important findings, each with its numbers, and anything that looks unreliable.
+
+---
+
+## Addendum: repair the hard and extreme checks (agent C, Opus)
+
+Confirmed faults in the first checks: a correct ext-budget screen (total $21,338, 189 transactions, a table of date, merchant, category, account and amount, paging 1 to 19, a "View transactions" button) passed only 1 of 4 checks, because (a) the filter, paging and detail checks found rows by id text such as TX-0001, which the request never asks to display, and (b) the step that goes to the list screen only matched a control named exactly "Transactions" or "All transactions".
+
+Agent C owns `eval/real/tasks.ts` and `eval/real/data.ts` (hard and extreme levels only; do not touch low, medium, the requests, the datasets or the expected figures). Do not change any other file. Rules:
+
+1. A check may only rely on what the request asked to be shown. Never require an id or any column the request did not name.
+2. Filter checks pass on the figures a person would read after filtering (the filtered count or total, rounding allowed), not on row ids.
+3. Paging checks pass when a next control exists, pressing it changes the rows shown, and not all rows are shown at once. Accept number buttons, arrows drawn as icons, and "next" wording.
+4. Detail checks press a row by any of its visible cell values and pass when more of that row's fields appear.
+5. The go-to-list step accepts any button, link or tab whose text contains the list's word (transactions, expenses, sessions, claims and so on), such as "View transactions".
+6. Apply every change to both formats alike. Review every hard-level check against the same rules and list any you change.
+
+Verify with `npm run typecheck` only (no test suite, no model calls, no results.json). Check your repairs by writing a small throwaway script outside the repo's tracked files that scores a hand-written correct SayShape spec and a hand-written correct HTML page for two extreme requests, through `score` in `eval/compare/run.ts` with `env` as `scoreOutput` in `eval/real/run.ts` builds it, and delete the script after. Reply in 10 lines or fewer: the checks changed, by id, and how you verified.
