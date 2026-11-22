@@ -168,9 +168,29 @@ function shortAlts(x: number): string[] {
 }
 const bounded = (alts: string[]) => `(?<![\\d.,])(?:${alts.join("|")})(?!\\d|\\.\\d|,\\d{3})`;
 
+/** Each figure pattern's looser twin: rounded or compact (K, M, B), correct at the precision shown. */
+const LOOSE = new WeakMap<RegExp, RegExp>();
+/** The looser form of a pattern made by `num`, `money`, `pct` or `anyOf`; any other pattern stays as it is. */
+export const looser = (re: RegExp): RegExp => LOOSE.get(re) ?? re;
+const roundTo = (x: number, dp: number): number => Math.round((Math.abs(x) + 1e-9) * 10 ** dp) / 10 ** dp;
+function roundedAlts(x: number, compact = true): string[] {
+  const a = Math.abs(x);
+  const out: string[] = [];
+  for (const dp of [0, 1, 2]) {
+    const [i = "0", d] = roundTo(a, dp).toFixed(dp).split(".");
+    out.push(d ? `${grouped(i)}\\.${d}` : `${grouped(i)}(?:\\.0{1,2})?`);
+  }
+  for (const [scale, unit] of [[1e3, "[kK]"], [1e6, "M"], [1e9, "B"]] as const) {
+    if (!compact || a < scale) continue;
+    for (const dp of [0, 1, 2]) out.push(`${esc(roundTo(a / scale, dp).toFixed(dp))}\\s?${unit}(?![A-Za-z])`);
+  }
+  return out;
+}
+const tie = (strict: RegExp, loose: RegExp): RegExp => (LOOSE.set(strict, loose), strict);
+
 /** A number with these decimal places accepted (default: as given, 1 place, whole). */
 export function num(x: number, dps: readonly number[] = Number.isInteger(x) ? [0] : [2, 1, 0]): RegExp {
-  return new RegExp(bounded([...fixedAlts(x, dps), ...shortAlts(x)]));
+  return tie(new RegExp(bounded([...fixedAlts(x, dps), ...shortAlts(x)])), new RegExp(bounded(roundedAlts(x))));
 }
 /** A money figure: whole dollars, or cents and the rounded dollar. Sign is ignored. */
 export function money(x: number): RegExp {
@@ -179,11 +199,12 @@ export function money(x: number): RegExp {
 }
 /** A percentage, to one place or whole. */
 export function pct(x: number, dps: readonly number[] = [1, 0]): RegExp {
-  return new RegExp(`${bounded(fixedAlts(x, dps))}\\s?%`);
+  return tie(new RegExp(`${bounded(fixedAlts(x, dps))}\\s?%`), new RegExp(`${bounded(roundedAlts(x).filter((a) => !/\[kK\]|M\(|B\(/.test(a)))}\\s?%`));
 }
 /** Matches if any of these do. */
 export function anyOf(...res: RegExp[]): RegExp {
-  return new RegExp(res.map((r) => `(?:${r.source})`).join("|"));
+  const join = (rs: RegExp[]) => new RegExp(rs.map((r) => `(?:${r.source})`).join("|"));
+  return tie(join(res), join(res.map(looser)));
 }
 
 // ---------------------------------------------------------------------------

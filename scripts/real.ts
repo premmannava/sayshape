@@ -14,10 +14,10 @@
  * Settings: SAYSHAPE_API_KEY (an OpenRouter key) and optionally SAYSHAPE_MODEL_URL, from .env.local.
  * Results: eval/real/results/<date>/ with results.json, report.md and answers/.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildReport } from "../eval/real/report";
-import { estimateCost, plannedCalls, promptSizes, makeRegistry, resolveModels, runReal, MODEL_SPECS, type RealFormat, type RunRecord } from "../eval/real/run";
+import { estimateCost, plannedCalls, promptSizes, makeRegistry, resolveModels, runReal, loadSaved, MODEL_SPECS, type RealFormat } from "../eval/real/run";
 import { realTasks } from "../eval/real/tasks";
 import { readModelEnv } from "./model-env";
 
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   const reportDir = arg("report");
   if (reportDir) {
     const dir = resolve(reportDir);
-    const rec = JSON.parse(readFileSync(resolve(dir, "results.json"), "utf8")) as RunRecord;
+    const rec = loadSaved(dir);
     writeFileSync(resolve(dir, "report.md"), buildReport(rec));
     console.log(`Wrote ${dir}/report.md`);
     return;
@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     flags: { smoke, models: wanted, formats, only: only ?? null, budget },
     onAnswer: (a, spent) => {
       done++;
-      const mark = !a.ok ? `NO ANSWER: ${a.error?.slice(0, 60)}` : a.success ? "works" : "problems";
+      const mark = !a.ok ? `NO ANSWER: ${a.error?.slice(0, 60)}` : a.noScreen ? "no screen" : a.success ? "works" : a.successRounded ? "rounded" : !a.valid ? "render error" : "check failed";
       console.log(`${String(done).padStart(4)}/${plan.total}  ${a.model.padEnd(9)} ${a.task.padEnd(10)} t${a.turn} ${a.format.padEnd(8)} ${mark.padEnd(10)} ${a.outputTokens ?? "?"} tok ${(a.totalMs / 1000).toFixed(1)}s  spent ${usd(spent)}`);
     },
   });
