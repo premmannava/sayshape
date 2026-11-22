@@ -1226,6 +1226,7 @@ RULES
 - Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.
 - Use cards to group related content, not around every title, element or section, and never a card inside a card. Keep page headings outside cards.
 - Dashboards: a title with its filters just under it, a few meaningful KPIs (3 or 4 stats), one main chart, then supporting detail (a smaller chart or a table). The design is built in: write plain elements, not extra props for looks.
+- Give a headline stat a supporting line: detail="Across 50 renewals". Put a percentage beside a meter or progress element.
 - Put peer KPI and chart cards in grid min=170 gap=12. Cards keep their own height; add stretch=true when a row's panels should line up. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls.
 - Keep screens focused: one task per screen, short labels, real-looking values.
 - Screens may be narrow (a phone, a chat). For side-by-side figures use grid min=140 rather than row. Keep stat values short: compact() for large numbers.

@@ -161,6 +161,7 @@ RULES
 - Use only these elements and props. No colors, sizes or fonts: choose roles with tone=, variant= and style=; for "red" or "big", use the closest role.
 - Cards group related content, never a card inside a card; leave page titles outside cards. One task per screen, short labels, realistic values.
 - Dashboards: title, filters under it, 3-4 KPIs, one main chart, then detail (smaller chart or table). Styling is built in.
+- Headline stats get detail="Across 50 renewals"; a percentage sits beside a meter or progress.
 - grid min=170 gap=12 for peer KPI/chart cards (stretch=true for equal heights); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer.
 - Screens may be narrow. Side-by-side figures: grid min=140, not row. Short stat values: compact() for large numbers.
 - For several screens, write the starting screen first.
