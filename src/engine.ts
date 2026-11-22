@@ -297,6 +297,8 @@ export class SayShape {
   private lastDiagKey = "";
   /** Warnings about the data the last layout showed, on their lines (see diagnostics). */
   private dataDiagnostics: Diagnostic[] = [];
+  /** dataDiagnostics as JSON, to tell when a layout's findings changed ("" for none). */
+  private dataKey = "";
   private cleanup: Array<() => void> = [];
   private clock: Clock;
   /** Rules (behavior on, and the spec has some), or null: nothing runs and nothing is checked. */
@@ -684,6 +686,7 @@ export class SayShape {
     this.dirty.parse = false;
     // A new spec: its data is looked at again by the next layout.
     this.dataDiagnostics = [];
+    this.dataKey = "";
     this.emitDiagnostics();
   }
 
@@ -709,6 +712,10 @@ export class SayShape {
       seen.add(k);
       out.push({ line: f.line, severity: "warning", message: f.message });
     }
+    // Most layouts find what the last one did (or nothing): only a change is told.
+    const key = out.length ? JSON.stringify(out) : "";
+    if (key === this.dataKey) return;
+    this.dataKey = key;
     this.dataDiagnostics = out;
     this.emitDiagnostics();
   }
