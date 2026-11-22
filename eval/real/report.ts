@@ -162,7 +162,7 @@ export function buildReport(rec: RunRecord): string {
     }
     if (formats.includes("adaptive") && formats.includes("html")) {
       const a = stat(mine.filter((x) => x.format === "adaptive")), t = stat(mine.filter((x) => x.format === "html"));
-      rows.push([`**${name(m.key)}**`, "**html / adaptive**", "", "", ratio(t.answerTokens, a.answerTokens), ratio(t.outputTokens, a.outputTokens), ratio(t.totalMs, a.totalMs), ratio(t.costPerWorking, a.costPerWorking)]);
+      rows.push([`**${name(m.key)}**`, "**html / adaptive**", "", "", "", "", ratio(t.answerTokens, a.answerTokens), ratio(t.outputTokens, a.outputTokens), ratio(t.totalMs, a.totalMs), ratio(t.costPerWorkingRounded, a.costPerWorkingRounded), ratio(t.costPerWorking, a.costPerWorking), ratio(t.costPerCorrect, a.costPerCorrect)]);
     }
   }
   out.push(table(head, rows));
