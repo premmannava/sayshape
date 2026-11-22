@@ -57,22 +57,41 @@ const extraOf = (fns: ExpressionFunctions | undefined, name: string): Fn | undef
 /** min(3, 5) or min(list): a single list argument stands for its items. */
 const spread = (a: Value[]): Value[] => (a.length === 1 && isList(a[0]) ? [...a[0]] : a);
 
-/** Only numbers count in sums: text ("12"), true/false, null or a missing field is NaN. */
+/** A value that isn't there: null, a missing field, or empty text. Totals skip these. */
+export const isBlank = (v: Value | undefined): boolean => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+
+/** Only numbers count in sums: text ("12") or true/false is NaN. Blanks are skipped before this is asked. */
 const amount = (v: Value | undefined): number => (typeof v === "number" ? v : NaN);
 
 /**
  * sum/avg/min/max over a list: the items, one field of each, or two fields
- * multiplied (price × qty). A value that isn't a number makes the result NaN
- * (shown as —) rather than being read as one: "12" is never 12, and nothing
- * is joined as text. An empty list sums to 0.
+ * multiplied (price × qty). Blank values (null, a missing field, empty text)
+ * are skipped, so one empty row doesn't hide the total; an item with either
+ * of two multiplied fields blank is skipped too. A value that is there but
+ * isn't a number makes the result NaN (shown as —) rather than being read as
+ * one: "12" is never 12, and nothing is joined as text. An empty list sums to
+ * 0; a list whose values are all blank has nothing to total (NaN).
  */
 function amounts(v: Value, a?: Value, b?: Value): number[] | null {
   if (!isList(v)) return null;
-  return v.map((item) => {
-    if (a === undefined) return amount(item);
-    const x = amount(fieldOf(item, a));
-    return b === undefined ? x : x * amount(fieldOf(item, b));
-  });
+  const out: number[] = [];
+  for (const item of v) {
+    if (a === undefined) { if (!isBlank(item)) out.push(amount(item)); continue; }
+    const x = fieldOf(item, a);
+    if (isBlank(x)) continue;
+    if (b === undefined) { out.push(amount(x)); continue; }
+    const y = fieldOf(item, b);
+    if (!isBlank(y)) out.push(amount(x) * amount(y));
+  }
+  return out;
+}
+
+/** The total of the values counted: 0 for an empty list, NaN when it had items but every one was blank. */
+function total(v: Value, a?: Value, b?: Value): number {
+  const xs = amounts(v, a, b);
+  if (!xs) return NaN;
+  if (!xs.length) return isList(v) && v.length ? NaN : 0;
+  return xs.reduce((t, x) => t + x, 0);
 }
 
 /** The items whose field equals a value, or (with no value) whose field is true or not empty. */
@@ -144,18 +163,24 @@ function pickOf(xs: readonly number[], largest: boolean): number {
 
 /** min(3, 5), min(list) or min(list, 'field'). */
 function extreme(largest: boolean, a: Value[]): number {
-  if (isList(a[0]) && typeof a[1] === "string") return pickOf(amounts(a[0], a[1]) ?? [], largest);
+  if (isList(a[0]) && typeof a[1] === "string") return orNothing(pickOf(amounts(a[0], a[1]) ?? [], largest));
+  // min(list) skips blank items like sum(list); min(a, b) reads its arguments as they are.
+  if (a.length === 1 && isList(a[0])) return orNothing(pickOf(amounts(a[0]) ?? [], largest));
   return pickOf(spread(a).map(toNumber), largest);
 }
+
+/** No values at all (every one blank) is nothing to show (—), not ±Infinity. */
+const orNothing = (x: number): number => (isFinite(x) || isNaN(x) ? x : NaN);
 
 const GROUP_RESULTS = ["sum", "avg", "min", "max"] as const;
 type GroupResult = (typeof GROUP_RESULTS)[number];
 
 /** One number from a group's values: sum, avg, min or max, by the same rules as those functions. */
 function combine(xs: readonly number[], how: GroupResult): number {
-  if (how === "min" || how === "max") return pickOf(xs, how === "max");
-  const total = xs.reduce((t, x) => t + x, 0);
-  return how === "sum" ? total : xs.length ? total / xs.length : NaN;
+  if (!xs.length) return NaN;
+  if (how === "min" || how === "max") return orNothing(pickOf(xs, how === "max"));
+  const sum = xs.reduce((t, x) => t + x, 0);
+  return how === "sum" ? sum : sum / xs.length;
 }
 
 /**
@@ -163,7 +188,8 @@ function combine(xs: readonly number[], how: GroupResult): number {
  * appears, with how many items it has: [{region: "West", count: 12}, …].
  * group(sales, 'region', 'revenue') also totals that field per group, under
  * the field's own name, and a fourth argument works out 'avg', 'min' or 'max'
- * instead of the 'sum'. Totals follow sum()'s rules: only numbers count.
+ * instead of the 'sum'. Totals follow sum()'s rules: only numbers count, blanks
+ * are skipped, and a group whose values are all blank has no total (NaN).
  *
  * Items group by the field's value as it is ("US" and "USA" are two groups);
  * items without the field, or with a list or record in it, share a null group.
@@ -179,17 +205,21 @@ function group(v: Value, by: Value | undefined, field: Value | undefined, how: V
   if (!GROUP_RESULTS.includes(result as GroupResult)) {
     throw new ExprError(`group() works out 'sum', 'avg', 'min' or 'max' of a field, not ${typeof result === "string" ? `'${result}'` : String(result)}`);
   }
-  const groups = new Map<Value, number[]>();
+  // Each group's item count, and the values its total is worked out from (blanks skipped).
+  const groups = new Map<Value, { n: number; values: number[] }>();
   for (const item of v) {
     const raw = fieldOf(item, by);
     const key = raw === undefined || !isScalar(raw) ? null : raw;
-    let values = groups.get(key);
-    if (!values) groups.set(key, (values = []));
-    values.push(field === undefined ? 0 : amount(fieldOf(item, field)));
+    let g = groups.get(key);
+    if (!g) groups.set(key, (g = { n: 0, values: [] }));
+    g.n++;
+    if (field === undefined) continue;
+    const x = fieldOf(item, field);
+    if (!isBlank(x)) g.values.push(amount(x));
   }
-  return makeList([...groups].map(([key, values]) => {
-    const entries: Array<[string, Value]> = [[by, key], ["count", values.length]];
-    if (field !== undefined) entries.push([field, combine(values, result as GroupResult)]);
+  return makeList([...groups].map(([key, g]) => {
+    const entries: Array<[string, Value]> = [[by, key], ["count", g.n]];
+    if (field !== undefined) entries.push([field, combine(g.values, result as GroupResult)]);
     return makeRecord(entries);
   }));
 }
@@ -338,7 +368,8 @@ const BUILTINS: Record<string, Fn> = {
     const from = at(start, 0), to = end === undefined ? v.length : at(end, v.length);
     return typeof v === "string" ? v.slice(from, to) : makeList(v.slice(from, to));
   },
-  sum: (v, a, b) => amounts(v, a, b)?.reduce((t, x) => t + x, 0) ?? NaN,
+  sum: (v, a, b) => total(v, a, b),
+  /** The average of the values counted: blanks are skipped, so they don't pull it down. */
   avg: (v, a, b) => {
     const xs = amounts(v, a, b);
     return xs && xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length : NaN;

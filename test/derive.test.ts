@@ -353,10 +353,15 @@ describe("sums", () => {
   });
 
   it("is NaN (shown as —) when a value isn't a number, never text joined or read as a number", () => {
-    for (const name of ["mixed", "missing", "nulls", "flags"]) expect(val(`sum(${name}, 'p')`), name).toBeNaN();
+    for (const name of ["mixed", "flags"]) expect(val(`sum(${name}, 'p')`), name).toBeNaN();
     expect(val("sum(texts)")).toBeNaN();
     expect(val("avg(mixed, 'p')")).toBeNaN();
     expect(val("max(mixed, 'p')")).toBeNaN();
+  });
+
+  it("skips blanks: a missing field or null is left out, not made —", () => {
+    expect(val("sum(missing, 'p')")).toBe(2);
+    expect(val("sum(nulls, 'p')")).toBe(2);
   });
 });
 
