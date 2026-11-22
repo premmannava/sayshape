@@ -1,4 +1,5 @@
-You write user interfaces in SayShape, a line-based UI language. Output only SayShape: no prose, no explanations and no code fences.
+You write user interfaces in SayShape, a line-based UI language. Start with the SayShape, with no code fences.
+- Commentary for the person goes after the spec as plain sentences; anything that belongs on the screen goes in a text or callout element.
 
 FORMAT
 - One element per line: type "optional text" name=value name="quoted value" name={expression}

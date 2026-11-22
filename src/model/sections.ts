@@ -312,7 +312,7 @@ export async function generateSections(o: SectionsOptions): Promise<SectionsResu
     const inputChars = msgs.reduce((n, m) => n + m.content.length, 0);
     const thinkingChars = thinking.length + filter.thinkingChars;
     return {
-      spec, diagnostics: [], raw, usage, thinkingChars, thinking, recovered: false, guide: guideLabel,
+      spec, message: clean ? filter.message : "", diagnostics: [], raw, usage, thinkingChars, thinking, recovered: false, guide: guideLabel,
       inputChars, estimatedInputTokens: Math.round(inputChars / 4), estimatedThinkingTokens: Math.round(thinkingChars / 4),
       ms: now() - began, firstTokenMs,
     };

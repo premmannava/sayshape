@@ -3,7 +3,7 @@ import type { Attempt } from "../src/model";
 import { attemptTiming, timingLines } from "../playground/connected-order/timings";
 
 const attempt = (patch: Partial<Attempt> = {}): Attempt => ({
-  spec: "", diagnostics: [], raw: "", usage: {}, thinkingChars: 0, thinking: "", recovered: false,
+  spec: "", message: "", diagnostics: [], raw: "", usage: {}, thinkingChars: 0, thinking: "", recovered: false,
   guide: { mode: "compact", profile: "all" }, inputChars: 400, estimatedInputTokens: 100,
   estimatedThinkingTokens: 0, ms: 5000, firstTokenMs: 1000, ...patch,
 });

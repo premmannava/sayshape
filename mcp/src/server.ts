@@ -304,7 +304,8 @@ export function adaptiveStart(withData = false, withMcp = false, textOnly = fals
   const extra = Object.keys(extraTopics(withData, withMcp, textOnly, fileMode, pressesSaved));
   const ask = `For anything else, call sayshape_docs once with every capability and element the screen needs, such as topics: ["forms", "calculations"], elements: ["slider"], then write it. Other topics: ${extra.join(", ")}.`;
   return [
-    languageMap(registry, { ...adaptiveOptions(textOnly, fileMode), ask }),
+    // No line on commentary after the spec: here the spec is show_interface's argument, and the reply is where words go.
+    languageMap(registry, { ...adaptiveOptions(textOnly, fileMode), ask, commentary: false }),
     `${CHAT_LINE}
 ${emitLine(textOnly, pressesSaved)}`,
     ...(withMcp ? ["Imported results: call list_datasets for available ids and fields. Pass data={\"rows\":\"m1\"} to show_interface; don't put dataset rows in spec."] : []),

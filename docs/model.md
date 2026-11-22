@@ -127,8 +127,10 @@ const result = await generateSpec({
   onReset: () => ui.beginStream(), // a fix is coming: start the screen over
 });
 ui.endStream();
-// result.spec, result.diagnostics, result.first, result.repair, result.timings, result.usage, result.messages
+// result.spec, result.message, result.diagnostics, result.first, result.repair, result.timings, result.usage, result.messages
 ```
+
+`result.message` is what the model wrote for the person around the spec: its sentences before the spec and after it, to show under the screen (an empty string when it wrote only SayShape). Only trailing lines that are plainly sentences are taken; a line in the middle of a spec, or one that might be a spec line (`txet "Hi"`), stays in the spec for the parser to report. A reply with no spec at all comes back as an empty `spec` with the reply as `message`, and no repair is asked for. The guides say where words go: commentary for the person after the spec as plain sentences, anything that belongs on the screen in a `text` or `callout` element. `generateAdaptive`, `generateReport` and refine carry `message` through as they are.
 
 If your app supplies data with `ui.state.set`, pass its names as `stateNames: ["products"]`, so a spec that reads them isn't flagged as using unknown names and sent back for a needless repair. When a model writes its whole spec inside a thinking block it never closes, `generateSpec` finds the spec there (`result.first.recovered`).
 

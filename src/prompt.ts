@@ -412,6 +412,9 @@ const indent = (spec: string, by = "  ") => spec.split("\n").map((l) => by + l).
 
 const LIST_OPS = new Set<string>(["add", "remove", "clear"]);
 
+/** Every guide and the map say where words for the person go: after the spec, or on the screen. */
+export const COMMENTARY = "- Commentary for the person goes after the spec as plain sentences; anything that belongs on the screen goes in a text or callout element.";
+
 /** Every guide and the map say this once: real data often holds numbers and dates as text. */
 export const DATA_AS_TEXT = "- Data from the app may hold numbers and dates as text: read them with num('$36,626') and date('9 Jan 2026') (YYYY-MM-DD; month(), quarter(), year() of it), and tidy names with tidy() so they group. Totals and charts already read numbers written as text";
 
@@ -460,7 +463,7 @@ function fullSections(ctx: GuideContext): GuideSection[] {
   const out: GuideSection[] = [];
   const add = (name: string, text: string) => out.push({ name, text });
 
-  add("intro", `You write user interfaces in SayShape, a line-based UI language. Output only SayShape: no prose, no explanations and no code fences.`);
+  add("intro", `You write user interfaces in SayShape, a line-based UI language. Start with the SayShape, with no code fences.\n${COMMENTARY}`);
   add("format", `FORMAT
 - One element per line: type "optional text" name=value name="quoted value" name={expression}
 - Indent children with 2 spaces under a container.
@@ -558,7 +561,7 @@ function compactSections(ctx: GuideContext): GuideSection[] {
   const out: GuideSection[] = [];
   const add = (name: string, text: string) => out.push({ name, text });
 
-  add("intro", `You write user interfaces in SayShape, a line-based UI language. Output only SayShape: no prose, no explanations and no code fences.`);
+  add("intro", `You write user interfaces in SayShape, a line-based UI language. Start with the SayShape, with no code fences.\n${COMMENTARY}`);
   add("format", `FORMAT
 - One element per line: type "text" prop=value prop="quoted value" prop={expression}. Indent children 2 spaces.
 - Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true; else after it, otherwise.
