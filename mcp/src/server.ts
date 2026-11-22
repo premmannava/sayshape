@@ -46,6 +46,7 @@ import { lookGuide } from "../../src/look";
 import { assembleGuide, availableCapabilities, FULL_GUIDE_TOPIC, languageMap, problemsText } from "../../src/capabilities";
 import type { GuideOptions } from "../../src/prompt";
 import { reviewLayout } from "../../src/review";
+import { render } from "../../src/testing";
 import type { Diagnostic } from "../../src/types";
 import { tidySpec } from "../../src/model/clean";
 import { EXPRESSION_FUNCTIONS } from "../../src/expr";
@@ -421,6 +422,35 @@ export interface SpecCheck {
    * problems to fix before it appears; the model is asked to tidy them.
    */
   drawing: Diagnostic[];
+  /**
+   * What's wrong with the data the interface shows (a chart with no numbers, values a total couldn't
+   * read), found by drawing it once here with the data it loads. The interface still shows, so these are
+   * never problems to fix before it appears; they tell the model what the person will see.
+   */
+  data?: Diagnostic[];
+}
+
+/** The width the data check lays the interface out at: only what's read matters, not where it goes. */
+const DATA_CHECK_WIDTH = 600;
+
+/**
+ * Draw a spec once, headless, with the rows it loads, and return the engine's warnings about its data
+ * (src/engine.ts dataWarnings). Never throws: data that can't be loaded or drawn is no data warning.
+ */
+export function dataProblems(spec: string, rows: Record<string, unknown> = {}, textOnly = false, fileMode = false): Diagnostic[] {
+  try {
+    const behavior = behaviorFor(textOnly, fileMode);
+    const presets = reportsFor(textOnly, fileMode);
+    const ui = render("", { components, width: DATA_CHECK_WIDTH, ...(behavior ? { behavior } : {}), ...(presets ? { presets } : {}) });
+    for (const [name, value] of Object.entries(rows)) ui.set(name, value as never);
+    ui.setSpec(spec);
+    ui.sayshape.renderNow();
+    const out = [...ui.sayshape.dataWarnings];
+    ui.sayshape.destroy();
+    return out;
+  } catch {
+    return [];
+  }
 }
 
 /** Parse a spec with the engine's own parser and components. Never throws. hostNames: state the interface fills in (datasets). */
@@ -452,6 +482,15 @@ export const isHarmless = (d: Diagnostic) => d.severity !== "error" && HARMLESS.
  * before the page existed (test/ui-results.test.ts).
  */
 function describeCheck(c: SpecCheck, textOnly = false, fileMode = false, widget = ""): string {
+  const said = describeSpecCheck(c, textOnly, fileMode, widget);
+  const data = (c.data ?? []).slice(0, MAX_REPORTED).map((d) => `line ${d.line} (warning): ${d.message}`);
+  return data.length ? `${said}\n${DATA_LEAD}\n${data.join("\n")}` : said;
+}
+
+/** Before the data warnings in a result: they don't hold the interface back. */
+export const DATA_LEAD = "About the data it shows (the interface still shows; tell the person if it matters, or read values with num() or date()):";
+
+function describeSpecCheck(c: SpecCheck, textOnly = false, fileMode = false, widget = ""): string {
   const all = [...c.errors, ...c.warnings];
   const drawing = c.drawing.map((d) => `line ${d.line}: ${d.message.replace(/^Drawing: /, "")}`);
   if (textOnly) {
@@ -700,7 +739,10 @@ export function createServer(opts: ServerOptions): McpServer {
       const names = Object.keys(datasets);
       const textOnly = cannotDrawViews(server);
       const fileMode = fileModeFor(textOnly);
-      const parsed = checkSpec(spec, names, textOnly, fileMode);
+      const checked = checkSpec(spec, names, textOnly, fileMode);
+      // Only a spec that parses cleanly is drawn to look at its data: one with errors gets those fixed first.
+      const rows = Object.fromEntries(names.map((n) => [n, findDataset(datasets[n]!.id)!.rows]));
+      const parsed = checked.errors.length ? checked : { ...checked, data: dataProblems(spec, rows, textOnly, fileMode) };
       // On a page outside the chat emit: goes nowhere, so text-only clients fix it first, unless a host adapter saves it.
       // Clients that draw views never see this.
       const saved = pressesSavedFor(textOnly);
@@ -782,10 +824,10 @@ export function createServer(opts: ServerOptions): McpServer {
           datasets,
           title: title ?? null,
           errors: check.errors.length,
-          warnings: check.warnings.length,
+          warnings: check.warnings.length + (check.data?.length ?? 0),
           toFix,
           repeat: false,
-          diagnostics: [...check.errors, ...check.warnings].slice(0, MAX_REPORTED).map((d) => ({ line: d.line, severity: d.severity, message: d.message })),
+          diagnostics: [...check.errors, ...check.warnings, ...(check.data ?? [])].slice(0, MAX_REPORTED).map((d) => ({ line: d.line, severity: d.severity, message: d.message })),
         },
       };
     },

@@ -73,8 +73,12 @@ function noteData(message: string): void {
   if (dataNotes && dataNotes.length < MAX_DATA_NOTES && !dataNotes.includes(message)) dataNotes.push(message);
 }
 
-/** Run fn, gathering the notes about data that expressions worked out inside it leave (see noteData). */
-export function collectDataNotes<T>(fn: () => T): { value: T; notes: string[] } {
+/**
+ * Run fn, gathering the notes about data that expressions worked out inside it leave (see noteData).
+ * They're passed on to an enclosing collectDataNotes too, unless bubble is false: an element's
+ * notes belong to its own line, and a derived value's to its derive line, not to whatever read it.
+ */
+export function collectDataNotes<T>(fn: () => T, bubble = true): { value: T; notes: string[] } {
   const outer = dataNotes;
   const notes: string[] = [];
   dataNotes = notes;
@@ -82,7 +86,7 @@ export function collectDataNotes<T>(fn: () => T): { value: T; notes: string[] } 
     return { value: fn(), notes };
   } finally {
     dataNotes = outer;
-    if (outer) for (const n of notes) if (outer.length < MAX_DATA_NOTES && !outer.includes(n)) outer.push(n);
+    if (outer && bubble) for (const n of notes) if (outer.length < MAX_DATA_NOTES && !outer.includes(n)) outer.push(n);
   }
 }
 
@@ -95,7 +99,7 @@ function readAmount(v: Value | undefined): number | null {
 
 const quoted = (field: Value | undefined) => (typeof field === "string" ? `"${field}" ` : "");
 /** "12 of 200 "amount" values aren't numbers": what a total says it skipped. */
-function noteSkipped(skipped: number, of: number, field: string): void {
+export function noteSkipped(skipped: number, of: number, field: string): void {
   if (skipped) noteData(`${skipped} of ${of} ${field}values ${skipped === 1 ? "isn't a number" : "aren't numbers"}`);
 }
 

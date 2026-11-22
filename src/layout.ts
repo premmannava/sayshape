@@ -5,7 +5,7 @@
 import { localToday } from "./dates";
 import { PropReader, type ChildTransform, type ElementView, type LayoutContext } from "./component";
 import { eachInstances, MAX_EACH_ELEMENTS, scopeOf, type EachBudget } from "./each";
-import { bareExpression, evaluate, type Scope } from "./expr";
+import { bareExpression, collectDataNotes, evaluate, type Scope } from "./expr";
 import type { Registry } from "./registry";
 import type { TextMeasurer } from "./text";
 import type { Theme } from "./theme";
@@ -53,6 +53,7 @@ export function createLayoutContext(
   registry: Registry, theme: Theme, measure: TextMeasurer, scope: Scope, warn?: (message: string) => void, today: () => string = localToday,
   isLoading?: (node: SayShapeNode) => boolean,
   view?: (node: SayShapeNode) => ElementView,
+  dataWarning?: (node: SayShapeNode, message: string) => void,
 ): LayoutContext {
   const readers = new WeakMap<SayShapeNode, PropReader>();
   // Containers may ask more than once per layout; copies must stay the same objects.
@@ -73,6 +74,7 @@ export function createLayoutContext(
     scope,
     overlays,
     ...(view ? { view } : {}),
+    ...(dataWarning ? { dataWarning } : {}),
     props(node) {
       let r = readers.get(node);
       if (!r) readers.set(node, (r = new PropReader(node, scopeOf(node, scope))));
@@ -130,7 +132,9 @@ export function createLayoutContext(
     const def = registry.get(node.type);
     laying.push(node);
     try {
-      if (def) def.layout(box, within(outer, node));
+      // What this element's expressions noted about its data (values a total skipped) is told on its own line.
+      const { notes } = collectDataNotes(() => { if (def) def.layout(box, within(outer, node)); }, false);
+      for (const n of notes) dataWarning?.(node, n);
     } finally {
       laying.pop();
     }
@@ -141,7 +145,8 @@ export function createLayoutContext(
       let w = mins.get(node);
       if (w === undefined) {
         const def = registry.get(node.type);
-        if (def?.minWidth) w = def.minWidth(node, ctx);
+        // Its own layout reports what it notes about its data; working out a width doesn't report it again.
+        if (def?.minWidth) w = collectDataNotes(() => def.minWidth!(node, ctx), false).value;
         else if (def?.children) {
           // Containers: their widest child, plus padding on both sides when they have a pad prop.
           const padDef = def.props.pad?.default;

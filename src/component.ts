@@ -99,6 +99,12 @@ export interface LayoutContext {
    */
   warn?(message: string): void;
   /**
+   * Report something wrong with the data an element shows (a chart with no
+   * numbers to draw, values a total couldn't read), as a warning on that
+   * element's line among the screen's diagnostics. The screen still draws.
+   */
+  dataWarning?(node: SayShapeNode, message: string): void;
+  /**
    * Whether this element reads data the host is still loading (SayShape.setLoading).
    * Lay it out at its usual size, without warning about the missing data:
    * paintLoading draws a placeholder there until the data arrives.
@@ -650,6 +656,14 @@ export class PropReader {
     if (raw === undefined) return undefined;
     const r = evaluate(bareExpression(raw), this.scope);
     return r.ok ? r.value : undefined;
+  }
+
+  /** Why an expression prop can't be worked out (its error), or undefined when it can or is missing. */
+  exprError(name: string): string | undefined {
+    const raw = this.node.props[name];
+    if (raw === undefined) return undefined;
+    const r = evaluate(bareExpression(raw), this.scope);
+    return r.ok ? undefined : r.error;
   }
 
   /** Read a condition prop (`disabled=done` or `disabled={count>3}`) as a boolean. */

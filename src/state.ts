@@ -1,5 +1,5 @@
 import { toData } from "./data";
-import { evaluate } from "./expr";
+import { collectDataNotes, evaluate } from "./expr";
 import type { Value } from "./types";
 
 /** A derived value as the store needs it: see DerivedDef in parser.ts. */
@@ -39,6 +39,8 @@ export class Store {
   private derived = new Map<string, Derivation>();
   /** Worked-out derived values; undefined means it failed. Absent means not worked out yet. */
   private computed = new Map<string, Value | undefined>();
+  /** What working out each derived value noted about its data (values a total skipped), kept with the value. */
+  private notes = new Map<string, string[]>();
   /** For each name, the derived values that read it directly. */
   private readers = new Map<string, Set<string>>();
   /** Derived values being worked out right now, to stop a loop the parser didn't catch. */
@@ -74,6 +76,7 @@ export class Store {
   derive(defs: readonly Derivation[]): void {
     this.derived = new Map(defs.map((d) => [d.name, d]));
     this.computed.clear();
+    this.notes.clear();
     this.readers.clear();
     for (const d of defs) {
       for (const r of d.reads) {
@@ -85,6 +88,14 @@ export class Store {
   }
 
   /** Every derived value, worked out now, for tools and tests. */
+  /** Notes about data from the derived values worked out so far, on their derive lines. */
+  derivedNotes(): Array<{ line: number; message: string }> {
+    return [...this.notes].flatMap(([name, notes]) => {
+      const d = this.derived.get(name);
+      return d && this.computed.has(name) ? notes.map((message) => ({ line: d.line, message })) : [];
+    });
+  }
+
   derivedSnapshot(): Record<string, Value | undefined> {
     return Object.fromEntries([...this.derived.keys()].map((k) => [k, this.derivedValue(k)]));
   }
@@ -94,10 +105,12 @@ export class Store {
     const d = this.derived.get(name)!;
     if (this.working.has(name)) return undefined;
     this.working.add(name);
-    const r = evaluate(d.expr, this.scope);
+    const { value: r, notes } = collectDataNotes(() => evaluate(d.expr, this.scope), false);
     this.working.delete(name);
     const value = r.ok ? r.value : undefined;
     this.computed.set(name, value);
+    if (notes.length) this.notes.set(name, notes);
+    else this.notes.delete(name);
     if (!r.ok) this.onDerivedError?.(d, r.error);
     return value;
   }
@@ -112,6 +125,7 @@ export class Store {
         if (seen.has(d)) continue;
         seen.add(d);
         this.computed.delete(d);
+        this.notes.delete(d);
         queue.push(d);
       }
     }
@@ -153,6 +167,7 @@ export class Store {
     this.values.clear();
     this.declared.clear();
     this.computed.clear();
+    this.notes.clear();
   }
 
   snapshot(): Record<string, Value> {
