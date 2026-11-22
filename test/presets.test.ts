@@ -309,3 +309,25 @@ describe("a chart whose value field is named like a figure word", () => {
     expect(ui.diagnostics.map((d) => d.message).join("\n")).toMatch(/has no field "count"/);
   });
 });
+
+describe("money figures keep their cents", () => {
+  const figure = (rows: unknown, line = "sum amount") => {
+    const ui = render("", { presets: true });
+    ui.set("s", rows as Value);
+    ui.setSpec(`report "Spend" data=s\n  ${line}\n`);
+    ui.sayshape.renderNow();
+    return ui.findAll("stat").map((f) => f.node.props.value)[0] && ui.copyText();
+  };
+
+  it("shows two decimals when there are cents, none when there aren't", () => {
+    expect(figure([{ amount: 100 }, { amount: 3.45 }])).toContain("$103.45");
+    expect(figure([{ amount: 100 }, { amount: 3 }])).toMatch(/\$103(?![.\d])/);
+    expect(figure([{ amount: 0.1 }, { amount: 0.2 }])).toContain("$0.30");
+    expect(figure([{ amount: 10.5 }, { amount: 20.25 }], "avg amount")).toContain("$15.38");
+  });
+
+  it("still shortens large figures as before", () => {
+    expect(figure([{ amount: 2400.55 }])).toContain("$2.4K");
+    expect(figure([{ amount: 1240000 }])).toContain("$1.24M");
+  });
+});

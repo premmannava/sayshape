@@ -68,6 +68,14 @@ const MONEY = /(amount|price|cost|revenue|incurred|paid|salary|sales|spend|budge
 const NUMBERISH = /(count|days|qty|quantity|units|users|age|score|hours|rate|pct|percent|change|growth|yoy|rank|level|size|views|visits|clicks|signups|orders)/i;
 const ACRONYMS: Record<string, string> = { id: "ID", yoy: "YoY", mrr: "MRR", arr: "ARR", mau: "MAU", dau: "DAU", kpi: "KPI", url: "URL", nps: "NPS", roi: "ROI", ytd: "YTD", sku: "SKU" };
 
+/**
+ * A money figure: under 1,000 it keeps its cents ($103.45; $103 when there are none), where compact() would
+ * keep three digits ($103.5). From 1,000 it's shortened to K or M as before ($2.4K).
+ */
+function moneyFigure(calc: string): string {
+  return `{abs(${calc}) >= 1000 || round(${calc}, 2) == round(${calc}) ? compact(${calc}, 'USD') : money(${calc})}`;
+}
+
 /** A field or list name as words people read: incurred → Incurred, byLine → By line, yoy → YoY. */
 export function humanize(name: string): string {
   const words = name.replace(/_/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/\s+/).filter(Boolean);
@@ -276,7 +284,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
       } else {
         const kind = fieldKind(field!, mainRows);
         const calc = `${op}(${list}, '${field}')`;
-        value = kind === "money" ? `{compact(${calc}, 'USD')}` : op === "sum" ? `{compact(${calc})}` : `{number(round(${calc}, 1))}`;
+        value = kind === "money" ? moneyFigure(calc) : op === "sum" ? `{compact(${calc})}` : `{number(round(${calc}, 1))}`;
         const word = { sum: "Total", avg: "Average", min: "Lowest", max: "Highest" }[op as Exclude<FigureOp, "count">];
         name = label ?? `${word} ${humanize(field!).toLowerCase()}${cond ? `, ${cond}` : ""}`;
       }
