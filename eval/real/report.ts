@@ -116,7 +116,18 @@ export function buildReport(rec: RunRecord): string {
   const label = new Map(rec.meta.models.map((m) => [m.key, m.label]));
   const name = (k: string) => label.get(k) ?? k;
   const formats = FORMATS.filter((f) => rec.answers.some((a) => a.format === f));
-  const all = rec.answers;
+  // A model that didn't finish a level (the run was stopped first) is left out of that level in every table and total, and listed below.
+  const firstRun = rec.answers.filter((a) => a.run === 1);
+  const countOf = (m: string, level: string, f: RealFormat) => firstRun.filter((a) => a.model === m && a.level === level && a.format === f).length;
+  const incomplete: Array<{ model: string; level: string; done: number; of: number }> = [];
+  for (const L of LEVELS) {
+    const of = Math.max(0, ...rec.meta.models.flatMap((m) => formats.map((f) => countOf(m.key, L, f))));
+    for (const m of rec.meta.models) {
+      const done = formats.reduce((n, f) => n + countOf(m.key, L, f), 0);
+      if (formats.some((f) => countOf(m.key, L, f) < of)) incomplete.push({ model: m.key, level: L, done, of: of * formats.length });
+    }
+  }
+  const all = rec.answers.filter((a) => !incomplete.some((i) => i.model === a.model && i.level === a.level));
   const mr = medianRuns(all);
   const used = all.filter((a) => a.run === mr.get(a.model)); // tables use the median run
   const noAnswer = all.filter((a) => !a.ok);
@@ -132,6 +143,12 @@ export function buildReport(rec: RunRecord): string {
   out.push(table(["Model", "OpenRouter id", "Endpoint", "$/M in", "$/M out", "$/M cache read", "Runs", "Cache marked"], rec.meta.models.map((m) => [m.label, m.id, `${m.providerName ?? m.provider ?? "unpinned"}${m.thirdParty ? " (third-party endpoint: cache figures not comparable)" : ""}`, (m.prices.prompt * 1e6).toFixed(2), (m.prices.completion * 1e6).toFixed(2), m.prices.cacheRead !== undefined ? (m.prices.cacheRead * 1e6).toFixed(2) : "?", String(m.runs), m.cache ? "yes" : "no (automatic)"])));
   const ps = rec.meta.promptSizes;
   out.push(`\nSystem prompts: adaptive map ${n0(ps.adaptiveMap.tokens)} tokens (${n0(ps.adaptiveMap.chars)} chars), whole guide ${n0(ps.full.tokens)} tokens (${n0(ps.full.chars)} chars), HTML ${n0(ps.html.tokens)} tokens (${n0(ps.html.chars)} chars).`);
+
+  if (incomplete.length) {
+    h("Incomplete: left out");
+    out.push(`The run was stopped before these finished. They are left out of every table and total below, at that level only (the model's other levels are counted).\n`);
+    for (const i of incomplete) out.push(`- ${name(i.model)}, ${i.level} level: finished ${i.done} of ${i.of} answers (first run, both formats).`);
+  }
 
   h("Headline: SayShape vs HTML, per model");
   out.push(`Ratios are HTML divided by SayShape (adaptive): above 1 means HTML is larger, slower or dearer. Cost per working screen is the model's cost over the answers that work.\n`);
