@@ -6,6 +6,7 @@ dist-playground/
 test-results/
 playwright-report/
 eval/results/
+eval/real/results/
 .env.local
 .env.*.local
 # Website (site/): build output, cache and generated pages

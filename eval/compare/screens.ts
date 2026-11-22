@@ -13,6 +13,7 @@ import { JSDOM, VirtualConsole } from "jsdom";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { render, type Rendered } from "../../src/testing";
+import type { SayShapeNode, Value } from "../../src/types";
 
 export interface Screen {
   /** Visible text, one entry per piece (a line on canvas, a text node in HTML). */
@@ -29,10 +30,36 @@ export interface Screen {
 }
 
 const FIELD_TYPES = new Set(["input"]);
+const NUMBER_CONTROL_TYPES = new Set(["input", "stepper", "slider"]);
+
+/**
+ * What the host supplies around a screen (the real-world benchmark, eval/real): lists by name,
+ * and whether the engine draws `report` blocks. Left out, a screen is drawn as before.
+ */
+export interface ScreenEnv {
+  /** Lists the app supplies: set on the engine's state before the spec is drawn, and as window.DATA in HTML. */
+  data?: Record<string, unknown>;
+  /** The engine's presets option (SayShape only). */
+  presets?: boolean;
+  /**
+   * A "type" step counts number controls as fields, in screen order with the text fields, and sets them
+   * to the typed number as a person would, within min and max: SayShape steppers (pressed up or down) and
+   * sliders (dragged), HTML range inputs (number inputs were already fields). Off: only text fields count.
+   */
+  numberControls?: boolean;
+}
 
 /** A SayShape spec rendered by the real engine. Errors are its error-level diagnostics. */
-export function sayshapeScreen(spec: string): Screen {
-  const ui: Rendered = render(spec, { components: [...coreComponents, ...mapComponents], width: 600, today: "2026-11-04" });
+export function sayshapeScreen(spec: string, env: ScreenEnv = {}): Screen {
+  const opts = { components: [...coreComponents, ...mapComponents], width: 600, today: "2026-11-04", ...(env.presets ? { presets: true } : {}) };
+  let ui: Rendered;
+  if (env.data) {
+    // The way a host does it: its data first (by reference), then the spec.
+    ui = render("", opts);
+    for (const [k, v] of Object.entries(env.data)) ui.set(k, v as Value);
+    ui.setSpec(spec);
+    ui.sayshape.renderNow();
+  } else ui = render(spec, opts);
   const errors = ui.diagnostics.filter((d) => d.severity === "error").map((d) => `line ${d.line}: ${d.message}`);
 
   // Text drawn inside a region, for regions with no text of their own (table headers, segmented options).
@@ -91,12 +118,46 @@ export function sayshapeScreen(spec: string): Screen {
     return false;
   };
 
+  // A stepper is pressed up or down until it shows the number; a slider is dragged to where the number sits.
+  const setNumberControl = (node: SayShapeNode, value: string): boolean => {
+    const wanted = value.trim() === "" ? NaN : Number(value.replace(/[^\d.\-]/g, ""));
+    const bind = node.props.bind;
+    if (!Number.isFinite(wanted) || !bind) return false;
+    const num = (raw: string | undefined, fallback: number) => (raw !== undefined && Number.isFinite(Number(raw)) ? Number(raw) : fallback);
+    const min = num(node.props.min, 0);
+    const max = num(node.props.max, node.type === "slider" ? 100 : Infinity);
+    const target = Math.min(max, Math.max(min, wanted));
+    const hitsOf = () => ui.hits.filter((h) => h.box.node.id === node.id);
+    if (node.type === "slider") {
+      const area = hitsOf().find((h) => h.detail === "track");
+      if (!area || max <= min) return false;
+      const left = area.box.x + 9, width = Math.max(1, area.box.w - 18);
+      ui.drag({ id: node.id }, left + ((target - min) / (max - min)) * width);
+      return true;
+    }
+    let last = 0;
+    for (let i = 0; i < 2000; i++) {
+      const now = Number(ui.state[bind]);
+      const cur = Number.isFinite(now) ? now : min;
+      if (Math.abs(cur - target) < 1e-9) return true;
+      const dir = cur < target ? "inc" : "dec";
+      if (last && (dir === "inc" ? 1 : -1) !== last) return true; // stepped past a number that isn't a multiple of the step
+      const hit = hitsOf().find((h) => h.detail === dir);
+      if (!hit) return i > 0;
+      ui.click(hit.box.x + hit.box.w / 2, hit.box.y + hit.box.h / 2);
+      last = dir === "inc" ? 1 : -1;
+    }
+    return true;
+  };
+
   return {
     errors,
     text: () => ui.text(),
     async type(nth, value) {
-      const field = ui.findAll({}).filter((f) => f.box && FIELD_TYPES.has(f.node.type))[nth];
+      const kinds = env.numberControls ? NUMBER_CONTROL_TYPES : FIELD_TYPES;
+      const field = ui.findAll({}).filter((f) => f.box && kinds.has(f.node.type))[nth];
       if (!field) return false;
+      if (field.node.type !== "input") return setNumberControl(field.node, value);
       ui.type({ id: field.node.id }, value, { replace: true });
       ui.key("Escape");
       return true;
@@ -168,14 +229,14 @@ window.Chart.register = function () {}; window.Chart.defaults = { plugins: { leg
 const INJECTED = "[onerror], [onload], [onclick][data-pwn], script[data-pwn], img[src='x']";
 
 /** An HTML fragment run in jsdom. Errors are uncaught script errors and errors logged to the console. */
-export async function htmlScreen(html: string): Promise<Screen> {
+export async function htmlScreen(html: string, env: ScreenEnv = {}): Promise<Screen> {
   const errors: string[] = [];
   const vc = new VirtualConsole();
   vc.on("jsdomError", (e: Error) => { if (!/Not implemented/.test(e.message)) errors.push(e.message); });
   vc.on("error", (...a: unknown[]) => errors.push(a.map(String).join(" ")));
   // External scripts (a CDN's Chart.js) aren't fetched: the stand-in Chart is already there.
   const body = html.replace(/<script\b[^>]*\bsrc=["'][^"']*["'][^>]*>\s*<\/script>/gi, "");
-  const dom = new JSDOM(`<!doctype html><html><head><script>${SHIMS}</script></head><body>${body}</body></html>`, {
+  const dom = new JSDOM(`<!doctype html><html><head>${env.data ? `<script>window.DATA=${JSON.stringify(env.data).replace(/</g, "\\u003c").replace(/\u2028|\u2029/g, " ")};</script>` : ""}<script>${SHIMS}</script></head><body>${body}</body></html>`, {
     runScripts: "dangerously",
     pretendToBeVisual: true,
     virtualConsole: vc,
@@ -209,12 +270,17 @@ export async function htmlScreen(html: string): Promise<Screen> {
     errors,
     text: visible,
     async type(nth, value) {
-      const fields = [...d.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input:not([type]), input[type=text], input[type=search], input[type=email], input[type=number], textarea")]
+      const fields = [...d.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(`input:not([type]), input[type=text], input[type=search], input[type=email], input[type=number]${env.numberControls ? ", input[type=range]" : ""}, textarea`)]
         .filter((f) => w.getComputedStyle(f).display !== "none");
       const f = fields[nth];
       if (!f) return false;
       f.focus();
       f.value = value;
+      if (env.numberControls && f instanceof w.HTMLInputElement && (f.type === "number" || f.type === "range")) {
+        // As a person would: the number stays inside the field's own min and max.
+        const n = Number(value.replace(/[^\d.\-]/g, "")), lo = f.min === "" ? -Infinity : Number(f.min), hi = f.max === "" ? (f.type === "range" ? 100 : Infinity) : Number(f.max);
+        if (Number.isFinite(n)) f.value = String(Math.min(hi, Math.max(lo, n)));
+      }
       for (const ev of ["input", "keyup", "change"]) f.dispatchEvent(new w.Event(ev, { bubbles: true }));
       await pause();
       return true;

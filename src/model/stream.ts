@@ -67,6 +67,8 @@ export interface Usage {
   cachedTokens?: number;
   /** Input tokens written to the prompt cache on this request. Already counted in promptTokens. */
   cacheWriteTokens?: number;
+  /** Why the reply ended, when the server says ("stop", "length" when cut off at max tokens). */
+  finishReason?: string;
 }
 
 export class ModelError extends Error {
@@ -79,7 +81,7 @@ export class ModelError extends Error {
 type Fetch = typeof fetch;
 
 interface ChunkJSON {
-  choices?: Array<{ delta?: { content?: string | null; reasoning_content?: string | null; reasoning?: string | null } }>;
+  choices?: Array<{ finish_reason?: string | null; delta?: { content?: string | null; reasoning_content?: string | null; reasoning?: string | null } }>;
   usage?: {
     prompt_tokens?: number;
     completion_tokens?: number;
@@ -177,6 +179,8 @@ function* parseLine(line: string, usage: Usage | undefined): Generator<StreamPar
     const written = json.usage.prompt_tokens_details?.cache_write_tokens ?? json.usage.cache_write_tokens ?? json.usage.cache_creation_input_tokens;
     if (written !== undefined) usage.cacheWriteTokens = written;
   }
+  const finish = json.choices?.[0]?.finish_reason;
+  if (finish && usage) usage.finishReason = finish;
   const delta = json.choices?.[0]?.delta;
   if (!delta) return;
   const reasoning = delta.reasoning_content ?? delta.reasoning;
