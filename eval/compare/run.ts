@@ -17,7 +17,7 @@ import type { Registry } from "../../src/registry";
 import { a2uiPrompt } from "./a2ui";
 import { a2uiScreen, cleanA2ui } from "./a2ui-screen";
 import { askMcp } from "./mcp-route";
-import { htmlScreen, sayshapeScreen, type Screen } from "./screens";
+import { htmlScreen, sayshapeScreen, type Screen, type ScreenEnv } from "./screens";
 import type { Task, TaskCheck } from "./tasks";
 
 /** "mcp" is SayShape through the MCP server's tools (mcp-route.ts), scored like "sayshape". */
@@ -245,18 +245,18 @@ function addUsage(a: Usage, b: Usage): Usage {
   return out;
 }
 
-async function open(format: Format, code: string): Promise<Screen> {
-  return format === "sayshape" || format === "mcp" ? sayshapeScreen(code) : format === "a2ui" ? a2uiScreen(code) : htmlScreen(code);
+async function open(format: Format, code: string, env?: ScreenEnv): Promise<Screen> {
+  return format === "sayshape" || format === "mcp" ? sayshapeScreen(code, env) : format === "a2ui" ? a2uiScreen(code) : htmlScreen(code, env);
 }
 
 /** Run one check on a fresh screen. */
-export async function runCheck(format: Format, code: string, check: TaskCheck): Promise<CheckResult> {
-  const r = await runSteps(format, code, check);
+export async function runCheck(format: Format, code: string, check: TaskCheck, env?: ScreenEnv): Promise<CheckResult> {
+  const r = await runSteps(format, code, check, env);
   return check.safe ? { ...r, safety: true } : r;
 }
 
-async function runSteps(format: Format, code: string, check: TaskCheck): Promise<CheckResult> {
-  const screen = await open(format, code);
+async function runSteps(format: Format, code: string, check: TaskCheck, env?: ScreenEnv): Promise<CheckResult> {
+  const screen = await open(format, code, env);
   try {
     const before = screen.text();
     for (const step of check.steps ?? []) {
@@ -281,12 +281,12 @@ async function runSteps(format: Format, code: string, check: TaskCheck): Promise
 }
 
 /** Load the answer once for validity, then run every check on its own fresh screen. */
-export async function score(format: Format, task: Task, code: string): Promise<{ valid: boolean; problems: string[]; checks: CheckResult[] }> {
+export async function score(format: Format, task: Task, code: string, env?: ScreenEnv): Promise<{ valid: boolean; problems: string[]; checks: CheckResult[] }> {
   if (!code.trim()) return { valid: false, problems: ["empty answer"], checks: task.checks.map((c) => ({ label: c.label, passed: false, why: "empty answer" })) };
   let problems: string[];
   let empty = false;
   try {
-    const screen = await open(format, code);
+    const screen = await open(format, code, env);
     problems = [...screen.errors];
     empty = screen.text().length === 0;
     screen.destroy();
@@ -295,7 +295,7 @@ export async function score(format: Format, task: Task, code: string): Promise<{
   }
   if (empty) problems.push("shows nothing");
   const checks: CheckResult[] = [];
-  for (const c of task.checks) checks.push(await runCheck(format, code, c));
+  for (const c of task.checks) checks.push(await runCheck(format, code, c, env));
   return { valid: problems.length === 0, problems, checks };
 }
 

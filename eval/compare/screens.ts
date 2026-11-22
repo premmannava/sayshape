@@ -13,6 +13,7 @@ import { JSDOM, VirtualConsole } from "jsdom";
 import { coreComponents } from "../../src/components";
 import { mapComponents } from "../../src/components/map";
 import { render, type Rendered } from "../../src/testing";
+import type { Value } from "../../src/types";
 
 export interface Screen {
   /** Visible text, one entry per piece (a line on canvas, a text node in HTML). */
@@ -30,9 +31,28 @@ export interface Screen {
 
 const FIELD_TYPES = new Set(["input"]);
 
+/**
+ * What the host supplies around a screen (the real-world benchmark, eval/real): lists by name,
+ * and whether the engine draws `report` blocks. Left out, a screen is drawn as before.
+ */
+export interface ScreenEnv {
+  /** Lists the app supplies: set on the engine's state before the spec is drawn, and as window.DATA in HTML. */
+  data?: Record<string, unknown>;
+  /** The engine's presets option (SayShape only). */
+  presets?: boolean;
+}
+
 /** A SayShape spec rendered by the real engine. Errors are its error-level diagnostics. */
-export function sayshapeScreen(spec: string): Screen {
-  const ui: Rendered = render(spec, { components: [...coreComponents, ...mapComponents], width: 600, today: "2026-11-04" });
+export function sayshapeScreen(spec: string, env: ScreenEnv = {}): Screen {
+  const opts = { components: [...coreComponents, ...mapComponents], width: 600, today: "2026-11-04", ...(env.presets ? { presets: true } : {}) };
+  let ui: Rendered;
+  if (env.data) {
+    // The way a host does it: its data first (by reference), then the spec.
+    ui = render("", opts);
+    for (const [k, v] of Object.entries(env.data)) ui.set(k, v as Value);
+    ui.setSpec(spec);
+    ui.sayshape.renderNow();
+  } else ui = render(spec, opts);
   const errors = ui.diagnostics.filter((d) => d.severity === "error").map((d) => `line ${d.line}: ${d.message}`);
 
   // Text drawn inside a region, for regions with no text of their own (table headers, segmented options).
@@ -168,14 +188,14 @@ window.Chart.register = function () {}; window.Chart.defaults = { plugins: { leg
 const INJECTED = "[onerror], [onload], [onclick][data-pwn], script[data-pwn], img[src='x']";
 
 /** An HTML fragment run in jsdom. Errors are uncaught script errors and errors logged to the console. */
-export async function htmlScreen(html: string): Promise<Screen> {
+export async function htmlScreen(html: string, env: ScreenEnv = {}): Promise<Screen> {
   const errors: string[] = [];
   const vc = new VirtualConsole();
   vc.on("jsdomError", (e: Error) => { if (!/Not implemented/.test(e.message)) errors.push(e.message); });
   vc.on("error", (...a: unknown[]) => errors.push(a.map(String).join(" ")));
   // External scripts (a CDN's Chart.js) aren't fetched: the stand-in Chart is already there.
   const body = html.replace(/<script\b[^>]*\bsrc=["'][^"']*["'][^>]*>\s*<\/script>/gi, "");
-  const dom = new JSDOM(`<!doctype html><html><head><script>${SHIMS}</script></head><body>${body}</body></html>`, {
+  const dom = new JSDOM(`<!doctype html><html><head>${env.data ? `<script>window.DATA=${JSON.stringify(env.data).replace(/</g, "\\u003c").replace(/\u2028|\u2029/g, " ")};</script>` : ""}<script>${SHIMS}</script></head><body>${body}</body></html>`, {
     runScripts: "dangerously",
     pretendToBeVisual: true,
     virtualConsole: vc,
