@@ -280,3 +280,54 @@ state claims=[{status: "Closed", days: 10}, {status: "Closed", days: 20}, {statu
   });
 });
 
+
+describe("a chart whose value field is named like a figure word", () => {
+  const tickets = (field: string) => [{ priority: "Urgent", [field]: 5 }, { priority: "High", [field]: 51 }, { priority: "Urgent", [field]: 2 }];
+  const draw = (field: string, rows: unknown = tickets(field)) => {
+    const ui = render("", { presets: true });
+    ui.set("tickets", rows as Value);
+    ui.setSpec(`report "Open tickets" data=tickets\n  donut priority ${field}\n  bar priority ${field}\n`);
+    ui.sayshape.renderNow();
+    return ui;
+  };
+
+  for (const field of ["count", "sum", "avg", "min", "max"]) {
+    it(`draws a donut and a bar of a field named ${field}, totalled per x`, () => {
+      const ui = draw(field);
+      expect(ui.diagnostics).toEqual([]);
+      expect(ui.warnings).toEqual([]);
+      const text = ui.copyText();
+      expect(text).not.toContain("No data to chart");
+      // Urgent is 5 + 2, High is 51.
+      expect(text).toMatch(/Urgent\t7/);
+      expect(text).toMatch(/High\t51/);
+    });
+  }
+
+  it("still reports a count field the data doesn't have", () => {
+    const ui = draw("count", [{ priority: "Urgent", open: 5 }]);
+    expect(ui.diagnostics.map((d) => d.message).join("\n")).toMatch(/has no field "count"/);
+  });
+});
+
+describe("money figures keep their cents", () => {
+  const figure = (rows: unknown, line = "sum amount") => {
+    const ui = render("", { presets: true });
+    ui.set("s", rows as Value);
+    ui.setSpec(`report "Spend" data=s\n  ${line}\n`);
+    ui.sayshape.renderNow();
+    return ui.findAll("stat").map((f) => f.node.props.value)[0] && ui.copyText();
+  };
+
+  it("shows two decimals when there are cents, none when there aren't", () => {
+    expect(figure([{ amount: 100 }, { amount: 3.45 }])).toContain("$103.45");
+    expect(figure([{ amount: 100 }, { amount: 3 }])).toMatch(/\$103(?![.\d])/);
+    expect(figure([{ amount: 0.1 }, { amount: 0.2 }])).toContain("$0.30");
+    expect(figure([{ amount: 10.5 }, { amount: 20.25 }], "avg amount")).toContain("$15.38");
+  });
+
+  it("still shortens large figures as before", () => {
+    expect(figure([{ amount: 2400.55 }])).toContain("$2.4K");
+    expect(figure([{ amount: 1240000 }])).toContain("$1.24M");
+  });
+});

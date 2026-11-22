@@ -412,6 +412,12 @@ const indent = (spec: string, by = "  ") => spec.split("\n").map((l) => by + l).
 
 const LIST_OPS = new Set<string>(["add", "remove", "clear"]);
 
+/** Every guide and the map say where words for the person go: after the spec, or on the screen. */
+export const COMMENTARY = "- Commentary for the person goes after the spec as plain sentences; anything that belongs on the screen goes in a text or callout element.";
+
+/** Every guide and the map say this once: real data often holds numbers and dates as text. */
+export const DATA_AS_TEXT = "- Data from the app may hold numbers and dates as text: read them with num('$36,626') and date('9 Jan 2026') (YYYY-MM-DD; month(), quarter(), year() of it), and tidy names with tidy() so they group. Totals and charts already read numbers written as text";
+
 // ---------------------------------------------------------------- full mode
 
 function dataSection(ctx: GuideContext): string {
@@ -424,7 +430,8 @@ function dataSection(ctx: GuideContext): string {
     `- Repeat elements with each, once per item. Never copy an element by hand for every item:\n  each items=todos as=t`,
     `- Inside each, the current item is t (from as=t; item if as= is left out). index=i gives its position from 0. t only exists inside its each.`,
     `- Read fields: {t.text}, {cart[0].price}, {todos.length}`,
-    `- Compute numbers from the list instead of writing them yourself: len(list), count(list, 'done') counts items whose field is true, count(list, 'cat', 'Gas') counts items whose field equals a value, sum(list, 'price'), sum(list, 'price', 'qty') multiplies two fields per item, avg(list, 'field'), min(list, 'field'), max(list, 'field'), join(list, 'name'), includes(list, value). These count only numbers: write prices and quantities as numbers (24, not "24")`,
+    `- Compute numbers from the list instead of writing them yourself: len(list), count(list, 'done') counts items whose field is true, count(list, 'cat', 'Gas') counts items whose field equals a value, sum(list, 'price'), sum(list, 'price', 'qty') multiplies two fields per item, avg(list, 'field'), min(list, 'field'), max(list, 'field'), join(list, 'name'), includes(list, value). They skip blank values: write your own prices and quantities as numbers (24, not "24")`,
+    DATA_AS_TEXT,
     `- Narrow and order lists: filter(list, 'done'), filter(list, 'cat', 'Gas'), filter(list, 'region', regions) for any of a list of values (a multi-select's), filter(list, 'price', {from: 50, to: budget}) for a range of numbers or dates (leave out an end for no limit: {to: budget}), find(list, 'id', picked) for one item, search(list, 'name', query), sort(list, 'price'), sort(list, 'price', 'desc'), take(list, 3), slice(list, (page - 1) * 10, page * 10) for one page of a longer list (from 0, the end not included), first(list) and last(list) for one item, pluck(list, 'revenue') for one field of every item (a stat's spark=). Combine them: first(sort(sales, 'revenue', 'desc')).month for the best one, sum(filter(tx, 'cat', 'Gas'), 'amount'), find(rooms, 'id', room).rate`,
     `- Use filter() for counts and totals. Items of a filtered or sorted list still write back: bind=t.done inside each items=shown as=t changes that task in tasks, and totals worked out from tasks follow. if= on an each picks items per item: each items=todos as=t if={!t.done}`,
     `- Share one computed list or total between elements instead of repeating it: derive open={filter(orders, 'status', 'open')}, then items=open and {len(open)}`,
@@ -456,7 +463,7 @@ function fullSections(ctx: GuideContext): GuideSection[] {
   const out: GuideSection[] = [];
   const add = (name: string, text: string) => out.push({ name, text });
 
-  add("intro", `You write user interfaces in SayShape, a line-based UI language. Output only SayShape: no prose, no explanations and no code fences.`);
+  add("intro", `You write user interfaces in SayShape, a line-based UI language. Start with the SayShape, with no code fences.\n${COMMENTARY}`);
   add("format", `FORMAT
 - One element per line: type "optional text" name=value name="quoted value" name={expression}
 - Indent children with 2 spaces under a container.
@@ -508,6 +515,7 @@ ${comps.map((c) => componentBlock(c, examples && ctx.valid(componentExampleSpec(
     "- Use only the elements and props above. Never invent colors, sizes or fonts; use style=, tone= and variant=. If asked for a specific color or size, use the closest role instead.",
     ...(has("card") ? ["- Use cards to group related content, not around every title, element or section, and never a card inside a card. Keep page headings outside cards."] : []),
     ...(has("stat") && has("chart") ? ["- Dashboards: a title with its filters just under it, a few meaningful KPIs (3 or 4 stats), one main chart, then supporting detail (a smaller chart or a table). The design is built in: write plain elements, not extra props for looks."] : []),
+    ...(has("stat") ? [`- Give a headline stat a supporting line: detail="Across 50 renewals".${has("meter") || has("progress") ? ` Put a percentage beside a ${[has("meter") ? "meter" : "", has("progress") ? "progress" : ""].filter(Boolean).join(" or ")} element.` : ""}`] : []),
     ...(has("card") && has("grid") ? ["- Put peer KPI and chart cards in grid min=170 gap=12. Cards keep their own height; add stretch=true when a row's panels should line up. Prefer card pad=18 gap=10 for compact panels. Tables are already framed: don't wrap one in a card unless it also needs controls."] : []),
     "- Keep screens focused: one task per screen, short labels, real-looking values.",
     ...(has("grid") || has("stat") ? [`- Screens may be narrow (a phone, a chat).${has("grid") ? " For side-by-side figures use grid min=140 rather than row." : ""}${has("stat") ? " Keep stat values short: compact() for large numbers." : ""}`] : []),
@@ -554,7 +562,7 @@ function compactSections(ctx: GuideContext): GuideSection[] {
   const out: GuideSection[] = [];
   const add = (name: string, text: string) => out.push({ name, text });
 
-  add("intro", `You write user interfaces in SayShape, a line-based UI language. Output only SayShape: no prose, no explanations and no code fences.`);
+  add("intro", `You write user interfaces in SayShape, a line-based UI language. Start with the SayShape, with no code fences.\n${COMMENTARY}`);
   add("format", `FORMAT
 - One element per line: type "text" prop=value prop="quoted value" prop={expression}. Indent children 2 spaces.
 - Props stay on their element's line. A line holding only if={…} shows the lines indented under it while true; else after it, otherwise.
@@ -583,6 +591,7 @@ ${has("each") ? "- A key can be a path into an item: toggle:t.done, inc:item.qty
     add("data", `DATA AND LISTS
 - Keep data in state and repeat with each; never copy an element by hand per item: each items=todos as=t (t exists only inside; index=i is the 0-based position; key={t.id} keeps focus on items)
 - A list inside each item: an each inside the each, items=o.lines
+${DATA_AS_TEXT}
 - bind=t.done and actions on t write back to the list in state the item came from, also through filter, sort, search and take (each items=shown). Items an expression builds (items={[{…}]}) can't be written to${has("radio") ? `
 - To compare two fields of an item, set one when choosing: radio "{o}" bind=q.pick value={o} on="set:q.ok:{o == q.answer}", then count(qs, 'ok')` : ""}${has("input") ? `
 - To add what people type: input bind=task on="add:todos:{text: task, done: false};set:task:''"` : ""}
@@ -598,6 +607,7 @@ ${comps.map((c) => `- ${compactLine(c)}${showExample(c) ? `\n    example:\n${ind
     "- Use only these elements and props. No colors, sizes or fonts: choose roles with tone=, variant= and style=; for \"red\" or \"big\", use the closest role.",
     `- ${has("card") ? "Cards group related content, never a card inside a card; leave page titles outside cards. " : ""}One task per screen, short labels, realistic values.`,
     ...(has("stat") && has("chart") ? ["- Dashboards: title, filters under it, 3-4 KPIs, one main chart, then detail (smaller chart or table). Styling is built in."] : []),
+    ...(has("stat") ? [`- Headline stats get detail="Across 50 renewals"${has("meter") || has("progress") ? `; a percentage sits beside a ${[has("meter") ? "meter" : "", has("progress") ? "progress" : ""].filter(Boolean).join(" or ")}` : ""}.`] : []),
     ...(has("card") && has("grid") ? ["- grid min=170 gap=12 for peer KPI/chart cards (stretch=true for equal heights); card pad=18 gap=10 for tighter panels; no card around a table or around the whole answer."] : []),
     ...(has("grid") || has("stat") ? [`- Screens may be narrow.${has("grid") ? " Side-by-side figures: grid min=140, not row." : ""}${has("stat") ? " Short stat values: compact() for large numbers." : ""}`] : []),
     ...(has("screen") ? ["- For several screens, write the starting screen first."] : []),

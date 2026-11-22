@@ -196,9 +196,9 @@ describe("pie data", () => {
   const rows = (vals: unknown[]) => toData(vals.map((v, i) => ({ k: `${i}`, v })));
 
   it("skips zeros and gaps and keeps list order", () => {
-    const d = pieData(rows([3, 0, null, 1, "2"]), "k", "v");
-    expect(d.slices).toEqual([{ label: "0", value: 3 }, { label: "3", value: 1 }]);
-    expect(d.total).toBe(4);
+    const d = pieData(rows([3, 0, null, 1, "2", "x"]), "k", "v");
+    expect(d.slices).toEqual([{ label: "0", value: 3 }, { label: "3", value: 1 }, { label: "4", value: 2 }]);
+    expect(d.total).toBe(6);
     expect(d.gaps).toBe(2);
   });
 

@@ -81,7 +81,7 @@ The canvas fills its parent's width and grows to fit its content.
 |---|---|---|
 | `action` | `{ name, value, node }` | An `emit:` action ran |
 | `change` | `{ key, value }` | A state value changed |
-| `diagnostics` | `Diagnostic[]` | The spec's problems changed |
+| `diagnostics` | `Diagnostic[]` | The spec's problems changed, including warnings about the data a layout showed (`sayshape.dataWarnings` holds those alone) |
 | `render` | `Metrics` | A frame was painted (node count and timings) |
 | `inspect` | `{ node, box }` or `null` | Inspect mode selected something |
 | `navigate` | `{ screen, from }` | The visible screen changed |

@@ -36,8 +36,9 @@
  */
 import { LAYER_TYPES, layerValues, paintBands, paintLayers, placeLayers, readLayers, type LayerInput } from "./chart-layers";
 import { chartSemantics } from "./chart-a11y";
-import type { ComponentDef } from "../component";
+import type { ComponentDef, LayoutContext } from "../component";
 import { fieldOf, isList, isRecord } from "../data";
+import { isBlank } from "../expr";
 import { ellipsize } from "../text";
 import { SERIES_COUNT, seriesColors, sliceColors, type Theme } from "../theme";
 import type { Box, Value } from "../types";
@@ -853,6 +854,40 @@ function check(props: Readonly<Record<string, string>>): string[] {
   return out;
 }
 
+/**
+ * Tell the spec's author about the numbers a chart's fields hold: a field
+ * with no numbers at all (the chart draws a message instead), or values that
+ * are there but can't be read as numbers (left out), as warnings on its line.
+ */
+function reportValues(box: Box, items: readonly Value[], fields: readonly string[], ctx: LayoutContext): void {
+  const named = fields.filter(Boolean);
+  if (!items.length || !named.length) return;
+  const rows = items.filter(isRecord);
+  if (!rows.length) return;
+  const read = named.map((f) => {
+    let numbers = 0, unread = 0;
+    for (const item of rows) {
+      if (isBlank(fieldOf(item, f))) continue;
+      if (numberAt(item, f) === null) unread++;
+      else numbers++;
+    }
+    return { f, numbers, unread };
+  });
+  if (read.every((r) => !r.numbers)) {
+    const list = named.map((f) => `"${f}"`).join(" or ");
+    const seen = new Set(rows.flatMap((r) => Object.keys(r)));
+    const missing = named.filter((f) => !seen.has(f));
+    ctx.dataWarning?.(box.node, `This chart has no numbers to draw: none of its ${rows.length} items has a number in ${list}.${missing.length ? ` Its items have no field ${missing.map((f) => `"${f}"`).join(" or ")}; their fields: ${[...seen].slice(0, 12).join(", ")}.` : " Read text with num(), or check y= names the field with the numbers."}`);
+    return;
+  }
+  for (const r of read) if (r.unread) ctx.dataWarning?.(box.node, skippedText(r.unread, items.length, r.f));
+}
+
+/** The same words noteSkipped uses, for a chart's field. */
+function skippedText(n: number, of: number, field: string): string {
+  return `${n} of ${of} "${field}" values ${n === 1 ? "isn't a number" : "aren't numbers"}, so the chart leaves ${n === 1 ? "it" : "them"} out`;
+}
+
 export const chart: ComponentDef = {
   type: "chart",
   category: "data",
@@ -925,7 +960,12 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const items = p.expr("items");
     const line = box.node.line;
     const layerKids = ctx.visibleChildren(box.node).filter((k) => (LAYER_TYPES as readonly string[]).includes(k.type));
-    if (p.has("items") && !isList(items)) ctx.warn?.(`chart on line ${line}: items is not a list, so there's nothing to chart. Use a list of records, like items=sales`);
+    if (p.has("items") && !isList(items)) {
+      ctx.warn?.(`chart on line ${line}: items is not a list, so there's nothing to chart. Use a list of records, like items=sales`);
+      const why = p.exprError("items");
+      if (why) ctx.dataWarning?.(box.node, `This chart has nothing to draw: items= can't be worked out. ${why}`);
+      else if (items !== undefined) ctx.dataWarning?.(box.node, `This chart has nothing to draw: items= is ${items === null ? "null" : typeof items === "string" ? "text" : typeof items === "object" ? "a record" : `a ${typeof items}`}, not a list of records, like items=sales`);
+    } else if (isList(items)) reportValues(box, items, fields, ctx);
     let out: { g: ChartGeometry; h: number };
     if (own) {
       const extra: Record<string, string> = {};

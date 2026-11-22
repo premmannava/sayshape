@@ -184,7 +184,7 @@ List functions, for computing instead of typing numbers:
 |---|---|
 | `len(list)` | Number of items |
 | `count(list, 'done')` | Items whose field is true |
-| `sum(list)`, `sum(list, 'price')`, `sum(list, 'price', 'qty')` | Total of the items, of a field, or of two fields multiplied per item (cart totals). Only numbers count: a missing field, `null`, `true`/`false` or text (even `"12"`) makes the total — rather than being read as a number; an empty list totals 0. `avg`, `min` and `max` of a field work the same way |
+| `sum(list)`, `sum(list, 'price')`, `sum(list, 'price', 'qty')` | Total of the items, of a field, or of two fields multiplied per item (cart totals). Blank values (a missing field, `null` or empty text) are skipped, and `avg` divides by the values it counted; when every value is blank the total is —. Text that `num()` reads (`"$390"`, `"1,200"`, `"12"`) counts as its number; anything else (other text, `true`/`false`) is skipped too, and a warning on the line says how many values weren't numbers (`12 of 200 "amount" values aren't numbers`). Nothing is ever joined as text, and an empty list totals 0. `avg`, `min` and `max` of a field, and `min(list)`/`max(list)`, work the same way |
 | `avg(list, 'field')` | Average |
 | `join(list)`, `join(list, 'name', ' / ')` | Text listing the items or a field |
 | `includes(list, value)`, `includes(text, part)` | Whether a value is in the list, or text holds other text, matching case: `contains()` is the one that ignores it |
@@ -202,7 +202,7 @@ List functions, for computing instead of typing numbers:
 | `map(list, 'y', {year: y, total: save * y})`, `map(range(4), 'n', n * n)` | One value per item, worked out by the last argument with the item named as in `extend()` (a plain word in quotes, only inside that argument; nesting is fine). The value can be a record, a number, text or a list. Not a list gives nothing (—), and a failing item is named (`map(): item 2: …`). The result is new values, so like `extend()` it can be shown, charted, totalled and filtered, but not written back to |
 | `rank(list, 'score', 'desc')` | The list in its own order with a `rank` field on each item: 1 for the best, items that tie share a rank (1, 1, 3), and items whose field isn't a number get `null`. `'asc'` (the default, as in `sort()`) makes the smallest 1. Use `sort()` to put the list in order |
 | `first(list)`, `last(list)` | The first or last item, or nothing for an empty list: `first(sort(sales, 'revenue', 'desc')).month` is the best month |
-| `group(list, 'region')`, `group(list, 'region', 'revenue')`, `group(list, 'region', 'revenue', 'avg')` | Totals per category: one record per region, in the order each first appears, with `count` (how many items) and, given a field, its total under the field's own name: `[{region: "West", count: 12, revenue: 48200}, …]`. A fourth argument works out `'avg'`, `'min'` or `'max'` instead. Totals follow `sum()`'s rules. Values group as they are (`"US"` and `"USA"` are two groups), and items without the field share a `null` group. The groups are new, read-only records |
+| `group(list, 'region')`, `group(list, 'region', 'revenue')`, `group(list, 'region', 'revenue', 'avg')` | Totals per category: one record per region, in the order each first appears, with `count` (how many items) and, given a field, its total under the field's own name: `[{region: "West", count: 12, revenue: 48200}, …]`. A fourth argument works out `'avg'`, `'min'` or `'max'` instead. Totals follow `sum()`'s rules (blanks skipped; a group whose values are all blank has no total, —); `count` is always how many items the group has. Values group as they are (`"US"` and `"USA"` are two groups), and items without the field share a `null` group. The groups are new, read-only records |
 
 A value for every item, and a ranking, take two short derive lines, whatever the list's length:
 
@@ -237,6 +237,17 @@ Formatting, for text people read:
 | `compact(12345678)`, `compact(n, 'USD')` | `12.3M`, `$12.3M`: big figures in small spaces, like a `stat`. Keeps 3 significant digits or 1 decimal, whichever says more: `compact(1240000)` is `1.24M` |
 | `plural(n, 'item')`, `plural(n, 'child', 'children')` | `1 item`, `3 items`, `2 children` |
 | `lower(text)`, `upper(text)`, `trim(text)` | Text in lower or upper case, or without spaces at the ends |
+
+Reading values, for data from an app that holds numbers and dates as text. Nothing is guessed: what can't be read for certain is blank (`null`):
+
+| Function | Result |
+|---|---|
+| `num('$36,626')`, `num('USD 8309')`, `num('45%')`, `num('53.2 km')`, `num('(1,200)')` | `36626`, `8309`, `45`, `53.2`, `-1200`: a currency mark or code, thousands commas, a percent sign or a unit after the number, and brackets for minus. Blank, or anything else, is blank |
+| `num('12,5', 'comma')` | `12.5`: a decimal comma, with points or spaces between thousands, only when asked. Without `'comma'`, `"12,5"` is blank |
+| `date('9 Jan 2026')`, `date('Jan 9, 2026')`, `date('2026/8/11')` | `2026-01-09`, `2026-01-09`, `2026-08-11`: dates as `YYYY-MM-DD`, the form every date in SayShape takes |
+| `date('01/14/2026')`, `date(v, 'mdy')`, `date(v, 'dmy')` | A day/month date is read only when one reading is impossible (a part above 12, or both parts the same), or with its order. `date('03/04/2026')` is blank, with a warning naming the argument to add |
+| `month(d)`, `quarter(d)`, `year(d)` | `'2026-01'`, `'2026 Q1'`, `2026` for anything `date()` reads: months and quarters as text that sorts and groups in order |
+| `tidy(text)` | `'Liberty Mutual'` for `'liberty  mutual '`: spaces tidied and each word capitalized, so names written differently group together |
 
 Text checks, true or false, for `error=`, `required=`, `disabled=` and `if=`. They take a check by name, never a pattern, and null or empty text is always false:
 
@@ -598,6 +609,7 @@ SayShape never stops on a mistake. Each problem becomes a diagnostic with a line
 
 - **Errors** (unknown element, element in the wrong place, nesting more than 100 levels deep): that line and anything nested under it are skipped.
 - **Warnings** (unknown prop, bad value, broken expression, a name nothing defines, a loop variable outside its `each`): the element still renders, and the bad part is ignored.
+- **Data warnings** (a chart with no numbers in its field, or whose `items=` can't be worked out; a total or chart that left out values it couldn't read; a slash date that needs its order): found when the screen is laid out with its data, on the line that showed it. The screen still draws, and they go away when the data is fixed.
 
 ```
 L10  Unknown element "sparkle". It was skipped, along with anything inside it

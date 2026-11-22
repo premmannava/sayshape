@@ -19,6 +19,8 @@ export type Phase = "waiting" | "thinking" | "writing" | "repairing" | "done";
 
 export interface Attempt {
   spec: string;
+  /** The model's words for the person, before and after the spec (see GenerateResult.message). */
+  message: string;
   diagnostics: Diagnostic[];
   /** Raw text the model sent, before thinking and fences were removed. */
   raw: string;
@@ -65,6 +67,12 @@ export interface EditReport {
 export interface GenerateResult {
   /** The final spec: the repaired one if a repair ran, otherwise the first. */
   spec: string;
+  /**
+   * What the model wrote for the person around the spec: sentences before it
+   * and after it, to show under the screen. Empty when it wrote only SayShape.
+   * A reply with no spec at all is all message, with an empty spec.
+   */
+  message: string;
   diagnostics: Diagnostic[];
   first: Attempt;
   repair?: Attempt;
@@ -182,6 +190,14 @@ export interface GenerateOptions {
 
 const clock = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
+/** The words around a whole spec, as SpecFilter sets them aside. */
+function messageOf(text: string, isSayShapeLine: (line: string) => boolean): string {
+  const f = new SpecFilter(isSayShapeLine);
+  f.push(stripThinking(text));
+  f.end();
+  return f.message;
+}
+
 /** The message asking the model to fix its spec, listing what the parser found. */
 export function repairPrompt(diagnostics: Diagnostic[]): string {
   const list = diagnostics.map((d) => `- Line ${d.line} (${d.severity}): ${d.message}`).join("\n");
@@ -275,7 +291,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
     const inputChars = msgs.reduce((n, m) => n + m.content.length, 0);
     const thinkingChars = thinking.length + filter.thinkingChars;
     return {
-      spec, diagnostics, raw, usage, thinkingChars, thinking, recovered,
+      spec, message: filter.message, diagnostics, raw, usage, thinkingChars, thinking, recovered,
       guide: g, inputChars, estimatedInputTokens: Math.round(inputChars / 4), estimatedThinkingTokens: Math.round(thinkingChars / 4),
       ms: now() - began, firstTokenMs,
     };
@@ -300,8 +316,8 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
     const text = stripThinking(raw);
     const thinkingChars = thinking.length + raw.length - text.length;
     const inputChars = editSent.reduce((n, m) => n + m.content.length, 0);
-    const attemptOf = (spec: string, diagnostics: Diagnostic[]): Attempt => ({
-      spec, diagnostics, raw, usage, thinkingChars, thinking, recovered: false,
+    const attemptOf = (spec: string, diagnostics: Diagnostic[], message = ""): Attempt => ({
+      spec, message, diagnostics, raw, usage, thinkingChars, thinking, recovered: false,
       guide: firstGuide, inputChars, estimatedInputTokens: Math.round(inputChars / 4), estimatedThinkingTokens: Math.round(thinkingChars / 4),
       ms: now() - began, firstTokenMs,
     });
@@ -328,7 +344,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
       if (timings.firstLineMs === undefined) timings.firstLineMs = now() - start;
       setPhase("writing");
       o.onText?.(spec);
-      first = attemptOf(spec, diagnose(spec));
+      first = attemptOf(spec, diagnose(spec), mode === "rewrite" ? messageOf(text, isSayShapeLine) : "");
       edit = { mode, applied, attempt: first, messages: editSent };
     } else {
       edit = { mode: "fallback", applied: 0, reason, attempt: attemptOf("", []), messages: editSent };
@@ -364,6 +380,7 @@ export async function generateSpec(o: GenerateOptions): Promise<GenerateResult> 
   const final = useRepair ? repair! : first;
   return {
     spec: final.spec,
+    message: final.message,
     diagnostics: final.diagnostics,
     first,
     repair,

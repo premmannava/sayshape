@@ -3,7 +3,10 @@
  *
  * - drops thinking (`<think>…</think>`, as Qwen3 and DeepSeek R1 write it),
  * - drops code fences (```), which models add out of habit,
- * - drops chatter before the spec starts ("Here is your interface:"),
+ * - sets aside the model's words before the spec ("Here is your interface:")
+ *   and after it ("Press Book to send it."), as `message`, so an app can show
+ *   them under the screen; only trailing lines that are plainly sentences are
+ *   taken, never a line from the middle of a spec,
  * - joins a state value spread over several lines back into one line. SayShape
  *   needs each value on one line (so a stream can render line by line), but
  *   models often lay out long lists like JSON, one item per line.
@@ -30,10 +33,30 @@ const FENCE = /^\s*```/;
 const MAX_JOINED_LINES = 300;
 
 
+/**
+ * Whether a line after the spec is plainly a sentence for the person, not a
+ * spec line: unindented, no props or expressions, not an element name alone
+ * or followed by quoted text, and either a few words or ending like a sentence.
+ * When in doubt it isn't, and the line stays in the spec.
+ */
+export function isProseLine(line: string): boolean {
+  if (/^\s/.test(line)) return false;
+  const t = line.trim();
+  if (!t || t.startsWith("#") || /[={}]/.test(t)) return false;
+  if (/^[A-Za-z][\w-]*(\s+"|\s*$)/.test(t)) return false;
+  return t.split(/\s+/).length >= 3 || /[.!?:]$/.test(t);
+}
+
 export class SpecFilter {
   private partial = "";
   private thinking = false;
   private started = false;
+  /** The model's words before the spec started. */
+  private before: string[] = [];
+  /** Lines after the spec that look like sentences, held until a spec line follows (then they were in the middle) or the stream ends. */
+  private held: string[] = [];
+  /** Sentences after the spec, once the stream has ended. */
+  private after: string[] = [];
   /** Lines of a state value still being joined, and how many brackets they leave open. */
   private joining: string[] = [];
   private depth = 0;
@@ -60,7 +83,19 @@ export class SpecFilter {
     const rest = this.partial;
     this.partial = "";
     const out = rest ? this.lines([rest]) : { text: "", reset: false };
+    // Sentences still held at the end were after the spec: they're the model's words, not spec lines.
+    this.after = this.held;
+    this.held = [];
     return { text: out.text + this.flushJoin(), reset: out.reset };
+  }
+
+  /**
+   * The model's words for the person: its sentences before the spec, then
+   * after it, paragraphs kept. Complete once end() has been called.
+   */
+  get message(): string {
+    const part = (ls: string[]) => ls.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    return [part(this.before), part(this.after)].filter(Boolean).join("\n\n");
   }
 
   private flushJoin(): string {
@@ -95,6 +130,8 @@ export class SpecFilter {
           out = "";
           this.started = false;
           this.joining = [];
+          this.before = [];
+          this.held = [];
           line = line.slice(orphanClose + "</think>".length);
           continue;
         }
@@ -104,7 +141,7 @@ export class SpecFilter {
         line = line.slice(open + "<think>".length);
         if (before.trim()) out += this.keep(before);
       }
-      if (!line.trim() && !this.started) continue;
+      if (!line.trim() && !this.started) { if (this.before.length) this.before.push(""); continue; }
       out += this.keep(line);
     }
     return { text: out, reset };
@@ -113,8 +150,21 @@ export class SpecFilter {
   private keep(line: string): string {
     if (FENCE.test(line)) return "";
     if (!this.started) {
-      if (!this.looksLikeSayShape(line)) return "";
+      if (!this.looksLikeSayShape(line)) { this.before.push(line.trim()); return ""; }
       this.started = true;
+    }
+    if (!this.joining.length) {
+      // After the spec: hold sentences (and the blank lines between them) until it's clear they were the last thing.
+      if (!line.trim() || (!this.looksLikeSayShape(line) && isProseLine(line))) {
+        this.held.push(line.trim());
+        return "";
+      }
+      if (this.held.length) {
+        // A spec line follows, so the held lines were in the middle of the spec: they stay in it, as they were.
+        const back = this.held.map((l) => l + "\n").join("");
+        this.held = [];
+        return back + this.keep(line);
+      }
     }
     if (this.joining.length) {
       this.joining.push(line);

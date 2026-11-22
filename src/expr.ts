@@ -11,6 +11,7 @@
  * objects or globals, so model-written expressions cannot run code.
  */
 import { displayData, fieldOf, isData, isList, isRecord, isScalar, makeList, makeRecord, MAX_DATA_DEPTH, MAX_DATA_VALUES, readField, toNumber } from "./data";
+import { readDate, readNumber, tidyText, type DateOrder } from "./read-values";
 import { isPostcode, POSTCODES, TEXT_HAS, TEXT_IS } from "./text-checks";
 import type { DataList, DataRecord, Value } from "./types";
 
@@ -57,22 +58,84 @@ const extraOf = (fns: ExpressionFunctions | undefined, name: string): Fn | undef
 /** min(3, 5) or min(list): a single list argument stands for its items. */
 const spread = (a: Value[]): Value[] => (a.length === 1 && isList(a[0]) ? [...a[0]] : a);
 
-/** Only numbers count in sums: text ("12"), true/false, null or a missing field is NaN. */
-const amount = (v: Value | undefined): number => (typeof v === "number" ? v : NaN);
+/** A value that isn't there: null, a missing field, or empty text. Totals skip these. */
+export const isBlank = (v: Value | undefined): boolean => v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+
+/**
+ * Notes about the data an expression read: values a total skipped because it
+ * couldn't read them, a date it couldn't read without its order. Gathered
+ * only while collectDataNotes runs, so the line that asked can be told.
+ */
+let dataNotes: string[] | null = null;
+/** The most notes one expression keeps. */
+const MAX_DATA_NOTES = 5;
+function noteData(message: string): void {
+  if (dataNotes && dataNotes.length < MAX_DATA_NOTES && !dataNotes.includes(message)) dataNotes.push(message);
+}
+
+/**
+ * Run fn, gathering the notes about data that expressions worked out inside it leave (see noteData).
+ * They're passed on to an enclosing collectDataNotes too, unless bubble is false: an element's
+ * notes belong to its own line, and a derived value's to its derive line, not to whatever read it.
+ */
+export function collectDataNotes<T>(fn: () => T, bubble = true): { value: T; notes: string[] } {
+  const outer = dataNotes;
+  const notes: string[] = [];
+  dataNotes = notes;
+  try {
+    return { value: fn(), notes };
+  } finally {
+    dataNotes = outer;
+    if (outer && bubble) for (const n of notes) if (outer.length < MAX_DATA_NOTES && !outer.includes(n)) outer.push(n);
+  }
+}
+
+/** A number a total can count: a number as it is, or text num() reads ("$390", "1,200"); null when it can't. */
+function readAmount(v: Value | undefined): number | null {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") return readNumber(v);
+  return null;
+}
+
+const quoted = (field: Value | undefined) => (typeof field === "string" ? `"${field}" ` : "");
+/** "12 of 200 "amount" values aren't numbers": what a total says it skipped. */
+export function noteSkipped(skipped: number, of: number, field: string): void {
+  if (skipped) noteData(`${skipped} of ${of} ${field}values ${skipped === 1 ? "isn't a number" : "aren't numbers"}`);
+}
 
 /**
  * sum/avg/min/max over a list: the items, one field of each, or two fields
- * multiplied (price × qty). A value that isn't a number makes the result NaN
- * (shown as —) rather than being read as one: "12" is never 12, and nothing
- * is joined as text. An empty list sums to 0.
+ * multiplied (price × qty). Blank values (null, a missing field, empty text)
+ * are skipped, so one empty row doesn't hide the total; an item with either
+ * of two multiplied fields blank is skipped too. Text that num() reads
+ * ("$390", "1,200") counts as its number; anything else (other text,
+ * true/false, lists) is skipped too, and noted so the line can say so. An
+ * empty list sums to 0; a list with nothing to count totals nothing (NaN).
  */
 function amounts(v: Value, a?: Value, b?: Value): number[] | null {
   if (!isList(v)) return null;
-  return v.map((item) => {
-    if (a === undefined) return amount(item);
-    const x = amount(fieldOf(item, a));
-    return b === undefined ? x : x * amount(fieldOf(item, b));
-  });
+  const out: number[] = [];
+  let skipped = 0;
+  for (const item of v) {
+    const x = a === undefined ? item : fieldOf(item, a);
+    if (isBlank(x)) continue;
+    const y = b === undefined ? undefined : fieldOf(item, b);
+    if (b !== undefined && isBlank(y)) continue;
+    const n = readAmount(x);
+    const m = b === undefined ? 1 : readAmount(y);
+    if (n === null || m === null) { skipped++; continue; }
+    out.push(n * m);
+  }
+  noteSkipped(skipped, v.length, a === undefined ? "" : b === undefined ? quoted(a) : `${quoted(a).trim()} or ${quoted(b)}`);
+  return out;
+}
+
+/** The total of the values counted: 0 for an empty list, NaN when it had items but none could be counted. */
+function total(v: Value, a?: Value, b?: Value): number {
+  const xs = amounts(v, a, b);
+  if (!xs) return NaN;
+  if (!xs.length) return isList(v) && v.length ? NaN : 0;
+  return xs.reduce((t, x) => t + x, 0);
 }
 
 /** The items whose field equals a value, or (with no value) whose field is true or not empty. */
@@ -144,18 +207,24 @@ function pickOf(xs: readonly number[], largest: boolean): number {
 
 /** min(3, 5), min(list) or min(list, 'field'). */
 function extreme(largest: boolean, a: Value[]): number {
-  if (isList(a[0]) && typeof a[1] === "string") return pickOf(amounts(a[0], a[1]) ?? [], largest);
+  if (isList(a[0]) && typeof a[1] === "string") return orNothing(pickOf(amounts(a[0], a[1]) ?? [], largest));
+  // min(list) skips blank items like sum(list); min(a, b) reads its arguments as they are.
+  if (a.length === 1 && isList(a[0])) return orNothing(pickOf(amounts(a[0]) ?? [], largest));
   return pickOf(spread(a).map(toNumber), largest);
 }
+
+/** No values at all (every one blank) is nothing to show (—), not ±Infinity. */
+const orNothing = (x: number): number => (isFinite(x) || isNaN(x) ? x : NaN);
 
 const GROUP_RESULTS = ["sum", "avg", "min", "max"] as const;
 type GroupResult = (typeof GROUP_RESULTS)[number];
 
 /** One number from a group's values: sum, avg, min or max, by the same rules as those functions. */
 function combine(xs: readonly number[], how: GroupResult): number {
-  if (how === "min" || how === "max") return pickOf(xs, how === "max");
-  const total = xs.reduce((t, x) => t + x, 0);
-  return how === "sum" ? total : xs.length ? total / xs.length : NaN;
+  if (!xs.length) return NaN;
+  if (how === "min" || how === "max") return orNothing(pickOf(xs, how === "max"));
+  const sum = xs.reduce((t, x) => t + x, 0);
+  return how === "sum" ? sum : sum / xs.length;
 }
 
 /**
@@ -163,7 +232,9 @@ function combine(xs: readonly number[], how: GroupResult): number {
  * appears, with how many items it has: [{region: "West", count: 12}, …].
  * group(sales, 'region', 'revenue') also totals that field per group, under
  * the field's own name, and a fourth argument works out 'avg', 'min' or 'max'
- * instead of the 'sum'. Totals follow sum()'s rules: only numbers count.
+ * instead of the 'sum'. Totals follow sum()'s rules: numbers and text num()
+ * reads count, blanks and anything else are skipped, and a group with nothing
+ * to count has no total (NaN).
  *
  * Items group by the field's value as it is ("US" and "USA" are two groups);
  * items without the field, or with a list or record in it, share a null group.
@@ -179,19 +250,39 @@ function group(v: Value, by: Value | undefined, field: Value | undefined, how: V
   if (!GROUP_RESULTS.includes(result as GroupResult)) {
     throw new ExprError(`group() works out 'sum', 'avg', 'min' or 'max' of a field, not ${typeof result === "string" ? `'${result}'` : String(result)}`);
   }
-  const groups = new Map<Value, number[]>();
+  // Each group's item count, and the values its total is worked out from (blanks skipped).
+  const groups = new Map<Value, { n: number; values: number[] }>();
+  let skipped = 0;
   for (const item of v) {
     const raw = fieldOf(item, by);
     const key = raw === undefined || !isScalar(raw) ? null : raw;
-    let values = groups.get(key);
-    if (!values) groups.set(key, (values = []));
-    values.push(field === undefined ? 0 : amount(fieldOf(item, field)));
+    let g = groups.get(key);
+    if (!g) groups.set(key, (g = { n: 0, values: [] }));
+    g.n++;
+    if (field === undefined) continue;
+    const x = fieldOf(item, field);
+    if (isBlank(x)) continue;
+    const n = readAmount(x);
+    if (n === null) skipped++;
+    else g.values.push(n);
   }
-  return makeList([...groups].map(([key, values]) => {
-    const entries: Array<[string, Value]> = [[by, key], ["count", values.length]];
-    if (field !== undefined) entries.push([field, combine(values, result as GroupResult)]);
+  noteSkipped(skipped, v.length, quoted(field));
+  return makeList([...groups].map(([key, g]) => {
+    const entries: Array<[string, Value]> = [[by, key], ["count", g.n]];
+    if (field !== undefined) entries.push([field, combine(g.values, result as GroupResult)]);
     return makeRecord(entries);
   }));
+}
+
+/** An argument as it was written, for messages: 'dot', or what kind of value it was. */
+const describeArg = (v: Value | undefined): string => (typeof v === "string" ? `'${v}'` : describeValue(v));
+
+/** The YYYY-MM-DD date date() reads in a value, or null; an ambiguous one is noted. */
+function dateOf(v: Value | undefined, order?: DateOrder): string | null {
+  if (typeof v !== "string") return null;
+  const r = readDate(v, order);
+  if (r.ambiguous) noteData(`"${v.trim()}" could be read as month/day or day/month, so it shows as blank: say which, date(v, 'mdy') or date(v, 'dmy')`);
+  return r.iso;
 }
 
 /** What a value is, for messages: "a number", "text", "a list". */
@@ -338,7 +429,8 @@ const BUILTINS: Record<string, Fn> = {
     const from = at(start, 0), to = end === undefined ? v.length : at(end, v.length);
     return typeof v === "string" ? v.slice(from, to) : makeList(v.slice(from, to));
   },
-  sum: (v, a, b) => amounts(v, a, b)?.reduce((t, x) => t + x, 0) ?? NaN,
+  sum: (v, a, b) => total(v, a, b),
+  /** The average of the values counted: blanks are skipped, so they don't pull it down. */
   avg: (v, a, b) => {
     const xs = amounts(v, a, b);
     return xs && xs.length ? xs.reduce((t, x) => t + x, 0) / xs.length : NaN;
@@ -427,6 +519,33 @@ const BUILTINS: Record<string, Fn> = {
     const word = textOf(one);
     return `${isFinite(x) ? new Intl.NumberFormat(LOCALE).format(x) : "—"} ${x === 1 ? word : many === undefined ? word + "s" : textOf(many)}`;
   },
+  /**
+   * num('$36,626') is 36626: the number in text from an app, with a currency mark or code,
+   * thousands commas, a percent sign (45% is 45) or a unit after it (53.2 km), and (1,200) as -1200.
+   * num(v, 'comma') reads a decimal comma (12,5). Blank, or anything else, is blank (null).
+   */
+  num: (v, mode) => {
+    if (mode !== undefined && mode !== "comma") throw new ExprError(`num() reads a decimal point; num(v, 'comma') reads a decimal comma (12,5). Nothing else goes there, not ${describeArg(mode)}`);
+    if (typeof v === "number") return isFinite(v) ? v : null;
+    return typeof v === "string" ? readNumber(v, mode === "comma") : null;
+  },
+  /**
+   * date('9 Jan 2026') is '2026-01-09': a date in text from an app, as YYYY-MM-DD. A day/month date
+   * (01/14/2026) is read only when one reading is impossible, or with its order: date(v, 'mdy') or
+   * date(v, 'dmy'). Anything else is blank (null), and an ambiguous date says which argument to add.
+   */
+  date: (v, order) => {
+    if (order !== undefined && order !== "mdy" && order !== "dmy") throw new ExprError(`date() takes the order of a slash date as 'mdy' or 'dmy', not ${describeArg(order)}`);
+    return dateOf(v, order as DateOrder | undefined);
+  },
+  /** month('9 Jan 2026') is '2026-01': the month of anything date() reads, as text that sorts and groups by month. */
+  month: (v) => dateOf(v)?.slice(0, 7) ?? null,
+  /** quarter('2026-08-11') is '2026 Q3'. */
+  quarter: (v) => { const d = dateOf(v); return d ? `${d.slice(0, 4)} Q${Math.ceil(Number(d.slice(5, 7)) / 3)}` : null; },
+  /** year('Jan 9, 2026') is 2026, a number. */
+  year: (v) => { const d = dateOf(v); return d ? Number(d.slice(0, 4)) : null; },
+  /** tidy('liberty  mutual ') is 'Liberty Mutual': spaces tidied and each word capitalized, so names group together. */
+  tidy: (t) => tidyText(textOf(t)),
   lower: (t) => textOf(t).toLowerCase(),
   upper: (t) => textOf(t).toUpperCase(),
   trim: (t) => textOf(t).trim(),
@@ -495,6 +614,9 @@ const FUNCTION_HINTS: Record<string, string> = {
   where: "filter(list, 'field', value)", startswith: "starts(text, part)", starts_with: "starts(text, part)", endswith: "ends(text, part)", ends_with: "ends(text, part)",
   match: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns", regex: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns", test: "has(text, 'digit') or is(text, 'email'): SayShape has named checks, not patterns",
   groupby: "group(list, 'field', 'amount')", group_by: "group(list, 'field', 'amount')", aggregate: "group(list, 'field', 'amount')", pivot: "group(list, 'field', 'amount')",
+  parsefloat: "num(text)", parseint: "num(text)", tonumber: "num(text)", to_number: "num(text)", float: "num(text)", int: "num(text)",
+  parsedate: "date(text)", parse_date: "date(text)", todate: "date(text)", to_date: "date(text)", strptime: "date(text)",
+  titlecase: "tidy(text)", title: "tidy(text)", capitalize: "tidy(text)", normalize: "tidy(text)",
   format: "number(n) or money(n)", currency: "money(n)", tofixed: "fixed(n, 2)", str: "text in quotes: \"{n} items\"", string: "text in quotes: \"{n} items\"",
   if: "a ? b : c", iif: "a ? b : c", concat: "join(list) or text in quotes",
   mutate: "extend(list, 'q', {field: q.price * 2})", assign: "extend(list, 'q', {field: q.price * 2})", withcolumn: "extend(list, 'q', {field: q.price * 2})", addfield: "extend(list, 'q', {field: q.price * 2})",

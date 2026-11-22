@@ -19,7 +19,7 @@
 import type { Category } from "./component";
 import { parse } from "./parser";
 import {
-  elementGuide, elementIndex, guideSections, languageGuide, WORKED_EXAMPLES,
+  COMMENTARY, DATA_AS_TEXT, elementGuide, elementIndex, guideSections, languageGuide, WORKED_EXAMPLES,
   type GuideOptions, type GuideSection, type WorkedExampleName,
 } from "./prompt";
 import { reportSyntax } from "./presets/report";
@@ -301,6 +301,11 @@ export interface MapOptions extends GuideOptions {
   ask?: string;
   /** Put the report syntax in the map, so a report needs no second step. Default true where reports are offered. */
   reportSyntax?: boolean;
+  /**
+   * Say that commentary for the person goes after the spec (default true). Off for the MCP server, where
+   * the spec is a tool argument and the model's own reply is already where its words go.
+   */
+  commentary?: boolean;
 }
 
 /** The default way to ask, for an app that reads the model's answer (sayshape/model's generateAdaptive). */
@@ -322,6 +327,8 @@ export function languageMap(registry: Registry, opts: MapOptions = {}): string {
     "- state holds values: state budget=500 picked=\"All\". derive works a value out from others and updates by itself: derive left={budget - spent}",
     "- {…} reads them in text and props. Controls write them with bind=; on= actions change them (set, inc, add) or tell the app (emit)",
     "- each repeats elements for every item of a list; if= shows or hides an element",
+    DATA_AS_TEXT.replace(/^- Data/, "- data"),
+    ...(opts.commentary === false ? [] : [COMMENTARY.replace(/^- Commentary/, "- commentary")]),
     ...(scenes.size ? ["- a scene draws shapes whose props read state and the time t"] : []),
     ...(offered.some((c) => c.name === "behavior") ? ["- every rules change state on a timer; drag=true lets people move a scene's shape"] : []),
   ];

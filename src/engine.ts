@@ -295,6 +295,10 @@ export class SayShape {
   private destroyed = false;
   private width = 0;
   private lastDiagKey = "";
+  /** Warnings about the data the last layout showed, on their lines (see diagnostics). */
+  private dataDiagnostics: Diagnostic[] = [];
+  /** dataDiagnostics as JSON, to tell when a layout's findings changed ("" for none). */
+  private dataKey = "";
   private cleanup: Array<() => void> = [];
   private clock: Clock;
   /** Rules (behavior on, and the spec has some), or null: nothing runs and nothing is checked. */
@@ -483,8 +487,20 @@ export class SayShape {
     return { ...root, h: Math.max(root.h, m.y + m.h), children: [...root.children, m] };
   }
 
+  /**
+   * Problems in the spec, by line: the parser's, then warnings about the data
+   * the last layout showed (a chart with no numbers, values a total skipped),
+   * each on the line that showed it.
+   */
+  /** The warnings about data alone (see diagnostics): what the last layout found wrong with the values it showed. */
+  get dataWarnings(): readonly Diagnostic[] {
+    return this.dataDiagnostics;
+  }
+
   get diagnostics(): Diagnostic[] {
-    return this.parsed?.diagnostics ?? [];
+    const parsed = this.parsed?.diagnostics ?? [];
+    if (!this.dataDiagnostics.length) return parsed;
+    return [...parsed, ...this.dataDiagnostics].sort((a, b) => a.line - b.line);
   }
 
   /** The interactive regions registered while painting the last frame, in paint order. */
@@ -668,8 +684,40 @@ export class SayShape {
     this.metrics.parseMs = this.clock.now() - t;
     this.metrics.nodes = this.parsed.nodeCount;
     this.dirty.parse = false;
-    const key = JSON.stringify(this.parsed.diagnostics);
-    if (key !== this.lastDiagKey) { this.lastDiagKey = key; this.events.emit("diagnostics", this.parsed.diagnostics); }
+    // A new spec: its data is looked at again by the next layout.
+    this.dataDiagnostics = [];
+    this.dataKey = "";
+    this.emitDiagnostics();
+  }
+
+  /** Tell listeners the diagnostics, when they changed. */
+  private emitDiagnostics(): void {
+    const all = this.diagnostics;
+    const key = JSON.stringify(all);
+    if (key !== this.lastDiagKey) { this.lastDiagKey = key; this.events.emit("diagnostics", all); }
+  }
+
+  /**
+   * The data warnings one layout found: what elements noted on their own lines and what derive
+   * lines noted, once each. While a spec streams in with placeholders, half-arrived data isn't reported.
+   */
+  private collectDataDiagnostics(found: ReadonlyArray<{ line: number; message: string }>): void {
+    if (!this.parsed) return;
+    const quiet = this.streaming && this.opts.streamPlaceholders;
+    const seen = new Set<string>();
+    const out: Diagnostic[] = [];
+    for (const f of quiet ? [] : [...found, ...this.state.derivedNotes()]) {
+      const k = `${f.line}\u0000${f.message}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ line: f.line, severity: "warning", message: f.message });
+    }
+    // Most layouts find what the last one did (or nothing): only a change is told.
+    const key = out.length ? JSON.stringify(out) : "";
+    if (key === this.dataKey) return;
+    this.dataKey = key;
+    this.dataDiagnostics = out;
+    this.emitDiagnostics();
   }
 
   private runLayout(): void {
@@ -686,7 +734,9 @@ export class SayShape {
     }
     const lv = this.loadingView();
     const scope = this.state.scope;
-    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.layoutWarning(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf);
+    const found: Array<{ line: number; message: string }> = [];
+    const ctx = createLayoutContext(this.registry, this.theme, this.measurer, scope, (m) => this.layoutWarning(m), this.today, (n) => lv.isLoading(n, scopeOf(n, scope)), this.viewOf,
+      (node, message) => { if (!lv.isLoading(node, scopeOf(node, scope))) found.push({ line: node.line, message }); });
     if (this.opts.bareRootCard) {
       const root = this.parsed.root;
       const top = ctx.visibleChildren(root).filter((n) => !this.registry.get(n.type)?.overlay);
@@ -721,6 +771,7 @@ export class SayShape {
     this.canvas.style.height = height + "px";
     Object.assign(this.metrics, { width, height, pixelWidth: pw, pixelHeight: ph, layoutMs: this.clock.now() - t });
     this.dirty.layout = false;
+    this.collectDataDiagnostics(found);
     this.a11yDirty = true;
     this.refreshTargets();
   }

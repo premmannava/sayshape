@@ -53,10 +53,10 @@ describe("chart data", () => {
     expect(d.problem).toBeUndefined();
   });
 
-  it("turns missing, null, text and non-record items into gaps, never zero", () => {
-    const d = chartData(list([{ k: "A", v: 1 }, { k: "B" }, { k: "C", v: null }, { k: "D", v: "12" }, "oops", { v: 2 }]), "k", "v");
-    expect(d.slots.map((s) => s.value)).toEqual([1, null, null, null, null, 2]);
-    expect(d.slots.map((s) => s.label)).toEqual(["A", "B", "C", "D", "—", "—"]);
+  it("turns missing, null, unreadable text and non-record items into gaps, never zero; reads text num() reads", () => {
+    const d = chartData(list([{ k: "A", v: 1 }, { k: "B" }, { k: "C", v: null }, { k: "D", v: "12" }, "oops", { v: 2 }, { k: "E", v: "lots" }]), "k", "v");
+    expect(d.slots.map((s) => s.value)).toEqual([1, null, null, 12, null, 2, null]);
+    expect(d.slots.map((s) => s.label)).toEqual(["A", "B", "C", "D", "—", "—", "E"]);
     expect(d.gaps).toBe(4);
   });
 

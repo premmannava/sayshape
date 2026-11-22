@@ -59,12 +59,22 @@ type FigureOp = (typeof FIGURE_OPS)[number];
 type ChartKind = (typeof CHART_KINDS)[number];
 
 const REPORT_LINE = /^(\s*)report(?=\s|$)/;
+/** The name a chart's count field is totalled under, while group() uses count for each group's size. */
+const GROUP_COPY = "reportTotal";
 const NAME = /^[A-Za-z_]\w*$/;
 /** Fields that hold amounts of money, by name. */
 const MONEY = /(amount|price|cost|revenue|incurred|paid|salary|sales|spend|budget|income|fee|mrr|arr|value|balance|profit|total)/i;
 /** Fields that hold counts or measures, by name, when the values aren't known. */
 const NUMBERISH = /(count|days|qty|quantity|units|users|age|score|hours|rate|pct|percent|change|growth|yoy|rank|level|size|views|visits|clicks|signups|orders)/i;
 const ACRONYMS: Record<string, string> = { id: "ID", yoy: "YoY", mrr: "MRR", arr: "ARR", mau: "MAU", dau: "DAU", kpi: "KPI", url: "URL", nps: "NPS", roi: "ROI", ytd: "YTD", sku: "SKU" };
+
+/**
+ * A money figure: under 1,000 it keeps its cents ($103.45; $103 when there are none), where compact() would
+ * keep three digits ($103.5). From 1,000 it's shortened to K or M as before ($2.4K).
+ */
+function moneyFigure(calc: string): string {
+  return `{abs(${calc}) >= 1000 || round(${calc}, 2) == round(${calc}) ? compact(${calc}, 'USD') : money(${calc})}`;
+}
 
 /** A field or list name as words people read: incurred → Incurred, byLine → By line, yoy → YoY. */
 export function humanize(name: string): string {
@@ -274,7 +284,7 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
       } else {
         const kind = fieldKind(field!, mainRows);
         const calc = `${op}(${list}, '${field}')`;
-        value = kind === "money" ? `{compact(${calc}, 'USD')}` : op === "sum" ? `{compact(${calc})}` : `{number(round(${calc}, 1))}`;
+        value = kind === "money" ? moneyFigure(calc) : op === "sum" ? `{compact(${calc})}` : `{number(round(${calc}, 1))}`;
         const word = { sum: "Total", avg: "Average", min: "Lowest", max: "Highest" }[op as Exclude<FigureOp, "count">];
         name = label ?? `${word} ${humanize(field!).toLowerCase()}${cond ? `, ${cond}` : ""}`;
       }
@@ -308,6 +318,11 @@ function expandReport(r: ReportSource, data: PresetData, head: Out[], body: Out[
         y = picked.join(",");
       } else if (ys.length > 1) {
         items = rows; y = ys.join(",");
+      } else if (ys[0] === "count" && NAME.test(x)) {
+        // group() names each group's item count "count", so it can't total a field of that name. Total a copy of
+        // the field under another name, then give it its own name back, so the chart and its table still say count.
+        items = `{map(group(extend(${rows}, 'r', {${GROUP_COPY}: r.count}), '${x}', '${GROUP_COPY}'), 'g', {${x}: g.${x}, count: g.${GROUP_COPY}})}`;
+        y = "count";
       } else {
         items = `{group(${rows}, '${x}'${ys[0] ? `, '${ys[0]}'` : ""})}`;
         y = ys[0] ?? "count";
