@@ -41,8 +41,9 @@ describe("chart values=", () => {
   it("adds part values and totals to a stacked chart without repeating the totals", () => {
     const few = (props: string) => `state s=[{m: "Jan", a: 12000, b: 9000}, {m: "Feb", a: 18000, b: 15000}]\nchart "S" items=s x=m y=a,b format=money ${props}\n`;
     // Already drawn without values=: the two totals.
-    expect(labelsOf(render(few("kind=stacked"), { width: 500 })).sort()).toEqual(["$21K", "$33K"]);
-    // Added: each part's value inside its segment; the totals aren't drawn twice.
+    expect(labelsOf(render(few("kind=stacked"), { width: 500 })).sort()).toEqual(["$21,000", "$33,000"]);
+    // Added: each part's value inside its segment, short as the bars are too narrow for $12,000, and
+    // the totals short like them; the totals aren't drawn twice.
     expect(labelsOf(render(few("kind=stacked values=true"), { width: 500 })).sort()).toEqual(["$12K", "$15K", "$18K", "$21K", "$33K", "$9K"]);
     // Ten bars: no totals without values=, one over each bar with it.
     expect(labelsOf(render(spec("kind=stacked", "a,b"), { width: 700 }))).toEqual([]);
@@ -99,5 +100,32 @@ describe("stacked part values", () => {
     expect(segs.every((bar) => bar.every((s) => s.text))).toBe(true);
     const drawn = words(ui);
     for (const t of ["$18K", "$15K", "$17K"]) expect(drawn).toContain(t);
+  });
+});
+
+describe("amounts under a million", () => {
+  const months = `state rows=[{m: "Jan", v: 172500}, {m: "Feb", v: 98000}, {m: "Mar", v: 240000}, {m: "Apr", v: 310000}, {m: "May", v: 120000}, {m: "Jun", v: 99000}, {m: "Jul", v: 99000}]\nchart "Rev" kind=bar items=rows x=m y=v format=money\n`;
+
+  it("are written in full over upright bars, or all short when one has no room", () => {
+    expect(labelsOf(render(months, { width: 520 }))).toEqual(["$172,500", "$98,000", "$240,000", "$310,000", "$120,000", "$99,000", "$99,000"]);
+    // $172,500 no longer fits its slot: every label goes short, so $98,000 doesn't sit beside $172.5K.
+    expect(labelsOf(render(months, { width: 470 }))).toEqual(["$172.5K", "$98K", "$240K", "$310K", "$120K", "$99K", "$99K"]);
+  });
+
+  it("are written in full in a donut's middle, short only where no size holds them", () => {
+    const donut = `state rows=[{n: "A", v: 456789}, {n: "B", v: 318000}, {n: "C", v: 120500.5}]\nchart kind=donut items=rows x=n y=v format=money\n`;
+    expect(words(render(donut, { width: 700 }))).toContain("$895,289.50");
+    const narrow = words(render(donut, { width: 240 }));
+    expect(narrow).toContain("$895.3K");
+    expect(narrow.some((t) => t.endsWith("…") && t.startsWith("$895"))).toBe(false);
+  });
+
+  it("are written in full on a meter and a sankey, short where that's what fits", () => {
+    const meter = (width: number) => words(render(`state v=456789\nmeter "Raised" kind=gauge value={v} max=500000 format=money\n`, { width }));
+    expect(meter(360)).toEqual(expect.arrayContaining(["$456,789", "$500,000"]));
+    expect(meter(160)).toContain("$500K");
+    const flows = (width: number) => words(render(`state rows=[{a: "Budget", b: "Engineering", v: 620000}, {a: "Budget", b: "Marketing", v: 180000}]\nchart kind=sankey items=rows from=a to=b y=v format=money\n`, { width }));
+    expect(flows(420)).toEqual(expect.arrayContaining(["Budget $800,000", "Engineering $620,000", "Marketing $180,000"]));
+    expect(flows(260)).toContain("Budget $800K");
   });
 });

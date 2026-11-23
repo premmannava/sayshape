@@ -27,5 +27,5 @@ export { MAX_SCATTER_GROUPS, type ScatterDot, type ScatterGeometry } from "./sca
 export { MAX_TREEMAP_ITEMS, squarify, type TreemapCell, type TreemapGeometry } from "./treemap";
 export { MAX_SANKEY_LINKS, MAX_SANKEY_NODES, paintSankeyHover, sankeyLinkAt, type SankeyGeometry, type SankeyLink, type SankeyNode } from "./sankey";
 export { MAX_FUNNEL_STAGES, type FunnelGeometry, type FunnelStage } from "./funnel";
-export { barText } from "../chart-kit";
+export { shortText, valueStyle, valueTextIn } from "../chart-kit";
 export { changeText, type WaterfallBar, type WaterfallGeometry } from "./waterfall";

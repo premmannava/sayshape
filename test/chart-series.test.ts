@@ -222,8 +222,13 @@ describe("pie data", () => {
   it("formats values and shares for reading", () => {
     expect(valueText(12000, "money")).toBe("$12,000");
     expect(valueText(12.5, "money")).toBe("$12.50");
+    // Under a million in full; from there up, shortened.
+    expect(valueText(318_000, "money")).toBe("$318,000");
+    expect(valueText(999_999, "money")).toBe("$999,999");
+    expect(valueText(456_789.37, "money")).toBe("$456,789.37");
+    expect(valueText(1_000_000, "money")).toBe("$1M");
     expect(valueText(1_250_000, "number")).toBe("1.3M");
-    expect(valueText(318_000, "money")).toBe("$318K");
+    expect(valueText(-2_400_000, "money")).toBe("-$2.4M");
     expect(shareText(0.004)).toBe("<1%");
     expect(shareText(0.335)).toBe("34%");
     expect(shareText(0)).toBe("0%");

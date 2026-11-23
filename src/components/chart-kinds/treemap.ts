@@ -28,7 +28,7 @@ import { ellipsize } from "../../text";
 import type { Value } from "../../types";
 import { fieldOf, isList, isRecord } from "../../data";
 import { fillTint, themeFont } from "../util";
-import { header, labelOf, numberAt, plotHeight, preciseText, shareText, valueText, MAX_CHART_ITEMS, type ChartGeometry, type ChartSlot, type Rect } from "../chart-kit";
+import { header, labelOf, numberAt, plotHeight, preciseText, shareText, valueTextIn, MAX_CHART_ITEMS, type ChartGeometry, type ChartSlot, type Rect } from "../chart-kit";
 import { cellInk } from "./heatmap";
 import { mixColors, parseColor, type Theme } from "../../theme";
 import type { ChartKindDef } from "./types";
@@ -224,15 +224,15 @@ export const treemap: ChartKindDef = {
       // The gap between neighbours comes off each rectangle's own edges.
       const rect: Rect = { x: r.x + GAP / 2, y: r.y + GAP / 2, w: Math.max(0, r.w - GAP), h: Math.max(0, r.h - GAP) };
       const share = s.value / total;
-      const value = valueText(s.value, input.format);
       // The name and value where both fit, the name alone where only it does, else nothing.
       const room = rect.w - 2 * pad;
       const fits = (text: string, font: string) => room > 0 && m.width(text, font) <= room;
+      const value = valueTextIn(s.value, input.format, (text) => fits(text, valueFont));
       const cut = room >= 24 ? ellipsize(s.label, room, nameFont, m) : "";
       // A name cut to a stub ("So…") says nothing: leave it to the tip.
       const kept = cut.endsWith("…") ? cut.length - 1 : cut.length;
       const name = kept >= Math.min(4, s.label.length) && kept >= s.label.length / 2 ? cut : "";
-      const lines = !name ? [] : rect.h >= lineH * 2 + 2 * pad - 2 && fits(value, valueFont) ? [name, value] : rect.h >= lineH + 2 * pad - 4 ? [name] : [];
+      const lines = !name ? [] : rect.h >= lineH * 2 + 2 * pad - 2 && value ? [name, value] : rect.h >= lineH + 2 * pad - 4 ? [name] : [];
       const shade = s.other ? 0 : max > min ? (s.value - min) / (max - min) : 1;
       const alpha = s.other ? 0.12 : readableAlpha(t.colors, shade);
       const n = seen.get(s.label) ?? 0;

@@ -36,7 +36,7 @@ describe("hbar props", () => {
   it("is taught in the model guide", async () => {
     const { languageGuide } = await import("../src/prompt");
     const guide = languageGuide(registry);
-    expect(guide).toContain("hbar draws the bars across");
+    expect(guide).toContain("hbar always draws the bars across");
     expect(guide).toContain("kind=<bar|hbar|line|area|stacked|pie|donut|funnel|waterfall|bullet|heatmap|scatter|treemap|sankey>");
   });
 });

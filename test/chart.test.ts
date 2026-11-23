@@ -159,6 +159,7 @@ describe("chart scale", () => {
   });
 });
 
+// Upright bars: items in time order (months, weekdays), since bars of categories are drawn across (chart-across.test.ts).
 describe("bar geometry", () => {
   it("maps each category to its value, bars proportional to the values", () => {
     const ui = render(`${sales}\nchart "Revenue" kind=bar items=sales x=month y=revenue format=money\n`);
@@ -176,7 +177,7 @@ describe("bar geometry", () => {
   });
 
   it("draws negative values below zero and positive above, in a mixed chart", () => {
-    const g = geo(chartOf(`[{k: "a", v: 4}, {k: "b", v: -2}]`));
+    const g = geo(chartOf(`[{k: "Mon", v: 4}, {k: "Tue", v: -2}]`));
     const [up, down] = g.slots.map((s) => s.bar!);
     near(up!.y + up!.h, g.zeroY!);
     near(down!.y, g.zeroY!);
@@ -185,13 +186,13 @@ describe("bar geometry", () => {
   });
 
   it("hangs all-negative bars from a zero line at the top", () => {
-    const g = geo(chartOf(`[{k: "a", v: -4}, {k: "b", v: -2}]`));
+    const g = geo(chartOf(`[{k: "Mon", v: -4}, {k: "Tue", v: -2}]`));
     expect(g.max).toBe(0);
     for (const s of g.slots) near(s.bar!.y, g.zeroY!);
   });
 
   it("handles all-zero values without dividing by zero", () => {
-    const g = geo(chartOf(`[{k: "a", v: 0}, {k: "b", v: 0}]`));
+    const g = geo(chartOf(`[{k: "Mon", v: 0}, {k: "Tue", v: 0}]`));
     expect(g.message).toBeUndefined();
     for (const s of g.slots) {
       expect(s.bar!.h).toBe(0);
@@ -202,11 +203,11 @@ describe("bar geometry", () => {
   });
 
   it("leaves a gap for an item with no number", () => {
-    const ui = chartOf(`[{k: "a", v: 4}, {k: "b"}, {k: "c", v: 1}]`);
+    const ui = chartOf(`[{k: "Mon", v: 4}, {k: "Tue"}, {k: "Wed", v: 1}]`);
     const g = geo(ui);
-    expect(g.slots[1]).toMatchObject({ label: "b", value: null });
+    expect(g.slots[1]).toMatchObject({ label: "Tue", value: null });
     expect(g.slots[1]!.bar).toBeUndefined();
-    expect(g.slots[1]!.shownLabel).toBe("b");
+    expect(g.slots[1]!.shownLabel).toBe("Tue");
     expect(ui.warnings).toEqual([`chart on line 2: 1 of 3 items have no number in their y field, so they're shown as gaps`]);
   });
 });
@@ -256,9 +257,9 @@ describe("line geometry", () => {
 
 describe("extreme values", () => {
   it.each([
-    ["tiny", `[{k: "a", v: 1e-101}, {k: "b", v: 3e-101}, {k: "c", v: 2e-101}]`],
-    ["huge", `[{k: "a", v: -1e308}, {k: "b", v: 1e308}]`],
-    ["close", `[{k: "a", v: 10000}, {k: "b", v: 10001}, {k: "c", v: 10002}]`],
+    ["tiny", `[{k: "Mon", v: 1e-101}, {k: "Tue", v: 3e-101}, {k: "Wed", v: 2e-101}]`],
+    ["huge", `[{k: "Mon", v: -1e308}, {k: "Tue", v: 1e308}]`],
+    ["close", `[{k: "Mon", v: 10000}, {k: "Tue", v: 10001}, {k: "Wed", v: 10002}]`],
   ])("draws %s values inside the plot, with distinct axis labels", (_, rows) => {
     for (const kind of ["bar", "line"]) {
       const ui = chartOf(rows, kind);
@@ -282,7 +283,7 @@ describe("extreme values", () => {
 
 describe("chart layout", () => {
   const many = (n: number) => `[${Array.from({ length: n }, (_, i) => `{k: "Category ${i + 1}", v: ${(i * 37) % 11}}`).join(", ")}]`;
-  // Items in time order: bars stay vertical on a phone too (categories turn across, see chart-phone.test.ts).
+  // Items in time order: bars stay vertical (categories are drawn across, see chart-across.test.ts).
   const weeks = (n: number) => `[${Array.from({ length: n }, (_, i) => `{k: "Week ${i + 1}", v: ${(i * 37) % 11}}`).join(", ")}]`;
 
   it.each([320, 1000])("keeps every mark, tick and label inside its box at %i px", (width) => {
@@ -448,16 +449,17 @@ describe("the Charts playground sample", () => {
     expect(ui.diagnostics).toEqual([]);
     expect(ui.warnings).toEqual([]);
     const [bars, line] = [geo(ui, 0), geo(ui, 1)];
-    expect(bars.kind).toBe("bar");
+    // Units by department: categories, so the bars are drawn across.
+    expect(bars.kind).toBe("hbar");
     expect(line.kind).toBe("line");
     expect(line.slots).toHaveLength(6);
 
     // A stepper's plus raises its department's bar.
-    const h0 = bars.slots[3]!.bar!.h;
+    const w0 = bars.slots[3]!.bar!.w;
     const plus = ui.hits.filter((h) => h.box.node.type === "stepper" && h.detail === "inc")[3]!.box;
     ui.click(plus.x + plus.w / 2, plus.y + plus.h / 2);
     expect((ui.state.depts as Array<{ units: number }>)[3]!.units).toBe(280);
-    expect(geo(ui, 0).slots[3]!.bar!.h).toBeGreaterThan(h0);
+    expect(geo(ui, 0).slots[3]!.bar!.w).toBeGreaterThan(w0);
 
     ui.press({ type: "button", text: "Add November" });
     expect(geo(ui, 1).slots.map((s) => s.label).at(-1)).toBe("Nov");
