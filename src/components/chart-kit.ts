@@ -299,20 +299,61 @@ export function fit(text: string, width: number, font: string, m: TextMeasurer):
   return lo ? text.slice(0, lo) + "…" : "";
 }
 
-/** One value as it reads in a legend or a donut's middle: $12,000, 37.5, $1.2M. */
+/**
+ * Amounts under this are written out in full ($172,500), and from here up
+ * they're shortened ($1.2M): a figure under a million is one people read
+ * whole, and shortening it hides digits they asked for. Axis ticks are the
+ * exception (tickLabels): they mark the scale, not anyone's amount.
+ */
+export const FULL_BELOW = 1_000_000;
+
+/** One value as it reads by a bar, in a legend or a donut's middle: $172,500, 37.5, $1.2M. */
 export function valueText(v: number, format: Format): string {
   const money = format === "money";
   const a = Math.abs(v);
   const whole = Number.isInteger(v);
   const opts: Intl.NumberFormatOptions =
     a >= 1e15 ? { notation: "scientific", minimumFractionDigits: 0, maximumFractionDigits: 2 }
-    : a >= 100_000 ? { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 }
+    : a >= FULL_BELOW ? { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 }
     : { minimumFractionDigits: money && !whole ? 2 : 0, maximumFractionDigits: whole ? 0 : 2 };
   try {
     return formatter(format, opts).format(v);
   } catch {
     return plainText(v, format);
   }
+}
+
+/** A value in its shortest form, for where the full one has no room: $172.5K, or $173K with digits=0. */
+export function shortText(v: number, format: Format, digits = 1): string {
+  if (Math.abs(v) >= 1e15) return valueText(v, format);
+  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: digits };
+  try {
+    return formatter(format, opts).format(v);
+  } catch {
+    return valueText(v, format);
+  }
+}
+
+/**
+ * A value for a space of limited room: in full when that fits, then
+ * shortened ($172.5K), then shortened to a whole number ($173K); null when
+ * none fits, for the caller to cut the text or leave it out.
+ */
+export function valueTextIn(v: number, format: Format, fits: (text: string) => boolean): string | null {
+  return [valueText(v, format), shortText(v, format), shortText(v, format, 0)].find(fits) ?? null;
+}
+
+/**
+ * How labels that sit side by side (over bars, inside them) are written, so
+ * neighbours read alike: all in full when every one fits, else all short,
+ * $22K beside $480K and never $22,000 beside it. Short, each keeps its
+ * decimal where its own room (fitsOne) holds it: $9.8K, and $18K for $18.4K.
+ */
+export function valueStyle(
+  values: readonly number[], format: Format, fits: (text: string, index: number) => boolean,
+): (v: number, fitsOne: (text: string) => boolean) => string {
+  const full = values.every((v, i) => fits(valueText(v, format), i));
+  return (v, fitsOne) => (full ? valueText(v, format) : fitsOne(shortText(v, format)) ? shortText(v, format) : shortText(v, format, 0));
 }
 
 /**
@@ -775,19 +816,6 @@ export function traceSmoothLine(
   }
 }
 
-/**
- * A value by its bar. One style for the whole chart: compact ($480K, $45K)
- * once any value reaches 10,000, so neighbouring labels read alike.
- */
-export function barText(v: number, format: Format, compact: boolean, digits = 1): string {
-  if (!compact || Math.abs(v) >= 1e15) return valueText(v, format);
-  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: digits };
-  try {
-    return formatter(format, opts).format(v);
-  } catch {
-    return valueText(v, format);
-  }
-}
 
 
 /** A bar's color when another item is highlighted: tinted toward the surface, still the same hue. */

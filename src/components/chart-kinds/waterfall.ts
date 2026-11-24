@@ -18,8 +18,8 @@
  */
 import { easeOut, staggered } from "../../ghost";
 import {
-  barPath, barText, chartData, preciseText, chartScale, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintPremiumBar, paintSlotLabels, plotHeight,
-  slotLabels, labelRows, tickLabels, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect,
+  barPath, chartData, preciseText, chartScale, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintPremiumBar, paintSlotLabels, plotHeight,
+  slotLabels, labelRows, tickLabels, valueStyle, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect,
 } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
@@ -42,8 +42,8 @@ export interface WaterfallGeometry {
 }
 
 /** A change as it reads: always signed, so a rise and a fall can't be confused. */
-export function changeText(v: number, format: Format, compact = false): string {
-  const text = barText(v, format, compact);
+export function changeText(v: number, format: Format): string {
+  const text = valueText(v, format);
   return v > 0 ? "+" + text : text;
 }
 
@@ -96,7 +96,10 @@ export const waterfall: ChartKindDef = {
     const placed = slotLabels(entries.map((e) => e.label), plot, box.w, labelFont, ctx);
     // Values by the bars only when every one has room to be read.
     const showValues = n <= 8 && slotW >= 54;
-    const compact = entries.some((e) => e.value !== null && Math.abs(e.value) >= 10_000);
+    // Every bar's value in full when each fits its slot, else all shortened ($480K). Room for the
+    // sign of a change, and they're drawn a little bolder than labelFont measures.
+    const inSlot = (s: string) => m.width("+" + s, labelFont) * 1.1 + 4 <= slotW;
+    const text = valueStyle(entries.flatMap((e) => (e.value === null ? [] : [e.value])), input.format, inSlot);
     const slots: ChartSlot[] = [];
     const bars: WaterfallGeometry["bars"] = [];
     entries.forEach((e, i) => {
@@ -112,7 +115,7 @@ export const waterfall: ChartKindDef = {
         slot.notes = e.tone === "total"
           ? [`Total: ${preciseText(e.value, input.format)}`]
           : [`Change: ${e.value > 0 ? "+" : ""}${preciseText(e.value, input.format)}`, `Running total: ${preciseText(e.span.to, input.format)}`];
-        bars.push({ tone: e.tone, rising: e.span.to >= e.span.from, label: showValues ? (e.tone === "total" ? barText(e.value, input.format, compact) : changeText(e.value, input.format, compact)) : null });
+        bars.push({ tone: e.tone, rising: e.span.to >= e.span.from, label: showValues ? (e.tone !== "total" && e.value > 0 ? "+" : "") + text(e.value, inSlot) : null });
       } else {
         slot.bars = [null];
         slot.notes = ["No number"];

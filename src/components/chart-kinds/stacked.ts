@@ -17,7 +17,7 @@
  */
 import { easeOut, staggered } from "../../ghost";
 import {
-  barPath, barText, mutedBar, onFill, chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels,
+  barPath, mutedBar, onFill, chartScale, chartSeries, flowLegend, header, INSET, MAX_CHART_ITEMS, paintAxisGrid, paintLegend, paintSlotLabels, valueStyle,
   plotHeight, preciseText, slotLabels, labelRows, fieldTitle, tickLabels, type ChartGeometry, type ChartSlot, type Rect,
 } from "../chart-kit";
 import { fillTint } from "../util";
@@ -97,8 +97,14 @@ export const stacked: ChartKindDef = {
     const showValues = input.extra.values === "true";
     // values=true: a total over every bar it fits over, measured, not only up to 8 wide bars.
     const showTotals = showValues || (n <= 8 && slotW >= 54);
-    const compact = ends.some((e) => Math.abs(e.pos) >= 10_000 || Math.abs(e.neg) >= 10_000);
 
+    // One style for the totals and the parts written with them, so a bar's parts read like their
+    // sum: in full when every one fits its bar or slot, else short ($18.4K, or $18K where that's what fits).
+    const inBar = (s: string) => m.width(s, labelFont) * 1.1 + 6 <= barW;
+    const overBar = (s: string) => m.width(s, labelFont) * 1.1 + 4 <= slotW;
+    const sums = d.slots.flatMap((s) => (s.values.some((v) => v !== null) ? [s.values.reduce<number>((a, v) => a + (v ?? 0), 0)] : []));
+    const parts = showValues ? d.slots.flatMap((s) => s.values.flatMap((v) => (v === null || v === 0 ? [] : [v]))) : [];
+    const text = valueStyle([...sums, ...parts], input.format, (s, i) => (i < sums.length ? overBar(s) : inBar(s)));
     const bars: StackSegment[][] = [];
     const totals: Array<string | null> = [];
     const slots: ChartSlot[] = d.slots.map((s, i) => {
@@ -112,12 +118,7 @@ export const stacked: ChartKindDef = {
         const y1 = y(from), y2 = y(to);
         const seg: StackSegment = { series: k, rect: { x: cx - barW / 2, y: Math.min(y1, y2), w: barW, h: Math.abs(y2 - y1) }, end: false, up: v > 0 };
         if (showValues) {
-          // The same style as the totals; whole thousands ($18K) when $18.4K is too wide for the bar.
-          if (seg.rect.h >= SEGMENT_TEXT_H) {
-            const fit = (t: string) => m.width(t, labelFont) * 1.1 + 6 <= barW;
-            const text = [barText(v, input.format, compact), barText(v, input.format, compact, 0)].find(fit);
-            if (text) seg.text = text;
-          }
+          if (seg.rect.h >= SEGMENT_TEXT_H && inBar(text(v, inBar))) seg.text = text(v, inBar);
         }
         segs.push(seg);
       });
@@ -128,8 +129,7 @@ export const stacked: ChartKindDef = {
       bars.push(segs);
       const total = s.values.reduce<number>((a, v) => a + (v ?? 0), 0);
       const known = s.values.some((v) => v !== null);
-      const totalText = known ? barText(total, input.format, compact) : null;
-      totals.push(showTotals && totalText && (!showValues || m.width(totalText, labelFont) * 1.1 + 4 <= slotW) ? totalText : null);
+      totals.push(showTotals && known && (!showValues || overBar(text(total, overBar))) ? text(total, overBar) : null);
       const notes: string[] = [], noteSeries: Array<number | null> = [];
       s.values.forEach((v, k) => {
         if (v === null) return;

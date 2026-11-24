@@ -21,7 +21,7 @@ import { ellipsize } from "../../text";
 import type { Value } from "../../types";
 import { fieldOf, isList, isRecord } from "../../data";
 import { fillTint, themeFont } from "../util";
-import { barText, formatter, header, labelOf, MAX_CHART_ITEMS, numberAt, preciseText, valueText, type ChartGeometry, type ChartSlot, type Rect } from "../chart-kit";
+import { header, labelOf, MAX_CHART_ITEMS, numberAt, preciseText, shortText, valueText, type ChartGeometry, type ChartSlot, type Rect } from "../chart-kit";
 import { mixColors, parseColor, type Theme } from "../../theme";
 import type { ChartKindDef } from "./types";
 
@@ -151,13 +151,11 @@ export const heatmap: ChartKindDef = {
     // 0 stays on the scale for amounts; negatives stretch it down.
     const low = Math.min(0, ...values), high = Math.max(...values);
     const cellFont = themeFont(t, 500, t.text.caption);
-    const compact = values.some((v) => Math.abs(v) >= 10_000);
-    // The numbers as written; then whole numbers (53% for 53.3%) when those don't all fit.
+    // One style for every cell: the numbers in full, then shortened ($48.2K), then shortened to
+    // whole numbers ($48K, 53% for 53.3%), whichever all fit first; none when even those don't.
     const fits = (list: string[]) => cellH >= 20 && list.every((s) => m.width(s, cellFont) <= cellW - GAP - 4);
-    const whole = formatter(input.format, { notation: compact ? "compact" : "standard", maximumFractionDigits: 0 });
-    const full = picked.map((p) => (p.value === null ? "—" : barText(p.value, input.format, compact)));
-    const short = picked.map((p) => (p.value === null ? "—" : whole.format(p.value)));
-    const texts = fits(full) ? full : fits(short) ? short : null;
+    const written = (text: (v: number) => string) => picked.map((p) => (p.value === null ? "—" : text(p.value)));
+    const texts = [written((v) => valueText(v, input.format)), written((v) => shortText(v, input.format)), written((v) => shortText(v, input.format, 0))].find(fits) ?? null;
 
     const cells: HeatCell[] = [];
     const slots: ChartSlot[] = picked.map((p, i) => {

@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import { coreComponents } from "../src/components";
 import { chartHoverAt, type ChartGeometry } from "../src/components/chart";
-import { barText, bulletTone, heatShade, MIN_HEATMAP_CELL, type HeatmapGeometry, changeText, CHART_KINDS, MAX_BULLET_ROWS, MAX_FUNNEL_STAGES, pairText, type AreaGeometry, type BulletGeometry, type FunnelGeometry, type StackedGeometry, type WaterfallGeometry } from "../src/components/chart-kinds";
+import { shortText, bulletTone, heatShade, MIN_HEATMAP_CELL, type HeatmapGeometry, changeText, CHART_KINDS, MAX_BULLET_ROWS, MAX_FUNNEL_STAGES, pairText, type AreaGeometry, type BulletGeometry, type FunnelGeometry, type StackedGeometry, type WaterfallGeometry } from "../src/components/chart-kinds";
 import { KINDS, preciseText, tickLabels, valueText } from "../src/components/chart-kit";
 import { parse } from "../src/parser";
 import { languageGuide } from "../src/prompt";
@@ -136,11 +136,16 @@ describe("waterfall", () => {
     expect(d.slots[1]!.notes).toEqual(["Change: -$190,000", "Running total: $290,000"]);
   });
 
-  it("labels bars in one style, signed for changes", () => {
+  it("labels bars in one style, signed for changes: in full, or all short when one has no room", () => {
     const ui = waterfall(STEPS, `total="Net" format=money`);
-    expect(texts(ui)).toEqual(expect.arrayContaining(["+$480K", "-$190K", "+$22K", "$172K"]));
+    expect(texts(ui)).toEqual(expect.arrayContaining(["+$480,000", "-$190,000", "+$22,000", "$172,000"]));
+    // Narrower slots: +$480,000 doesn't fit, so every label goes short, not only that one.
+    const narrow = waterfall(STEPS, `total="Net" format=money`, 420);
+    expect(texts(narrow)).toEqual(expect.arrayContaining(["+$480K", "-$190K", "+$22K", "$172K"]));
+    expect(texts(narrow)).not.toContain("+$22,000");
     expect(changeText(1200, "number")).toBe("+1,200");
-    expect(barText(-45000, "money", true)).toBe("-$45K");
+    expect(shortText(-45000, "money")).toBe("-$45K");
+    expect(shortText(18400, "money", 0)).toBe("$18K");
   });
 
   it("draws a total below 0 going down from 0", () => {
@@ -192,7 +197,7 @@ describe("stacked", () => {
   it("shows each total above its bar, and every part in the tooltip", () => {
     const ui = stackedChart(SALES, `labels="Hardware,Software,Services" format=money`);
     const d = geo(ui);
-    expect((d.custom as StackedGeometry).totals).toEqual(["$24K", "$28K", "$28K"]);
+    expect((d.custom as StackedGeometry).totals).toEqual(["$24,000", "$28,000", "$28,000"]);
     expect(d.slots[0]!.notes).toEqual(["Hardware: $12,000", "Software: $8,000", "Services: $4,000", "Total: $24,000"]);
     expect(d.slots[0]!.noteSeries).toEqual([0, 1, 2, null]);
     const bar = d.slots[1]!.bar!;
@@ -312,12 +317,14 @@ describe("bullet", () => {
 
   it("reads each row as actual of target, telling close numbers apart", () => {
     const ui = bullet(KPIS, "format=money");
-    expect(texts(ui)).toEqual(expect.arrayContaining(["Revenue", "$1.24M of $1.15M", "$182 of $200", "$310K of $400K"]));
-    expect(pairText(310000, 400000, "number")).toBe("310K of 400K");
+    expect(texts(ui)).toEqual(expect.arrayContaining(["Revenue", "$1.24M of $1.15M", "$182 of $200", "$310,000 of $400,000"]));
+    // Under a million, both in full.
+    expect(pairText(310000, 400000, "number")).toBe("310,000 of 400,000");
+    expect(pairText(98000, 120000, "money")).toBe("$98,000 of $120,000");
     // One short and one written out would read as two units: both go short.
-    expect(pairText(98000, 120000, "money")).toBe("$98K of $120K");
-    expect(pairText(120000, 98500, "money")).toBe("$120K of $98.5K");
-    expect(pairText(950, 120000, "money")).toBe("$950 of $120K");
+    expect(pairText(980000, 1200000, "money")).toBe("$980K of $1.2M");
+    expect(pairText(1200000, 985000, "money")).toBe("$1.2M of $985K");
+    expect(pairText(950, 1200000, "money")).toBe("$950 of $1.2M");
     expect(pairText(1000, 1000, "number")).toBe("1,000 of 1,000");
     expect(pairText(1000001, 1000002, "number")).toBe("1,000,001 of 1,000,002");
   });

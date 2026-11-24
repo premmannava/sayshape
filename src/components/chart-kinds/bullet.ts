@@ -20,7 +20,7 @@
 import { easeOut, staggered } from "../../ghost";
 import { ellipsize } from "../../text";
 import { fillTint, themeFont } from "../util";
-import { chartData, formatter, header, MAX_CHART_ITEMS, numberAt, preciseText, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect } from "../chart-kit";
+import { chartData, formatter, FULL_BELOW, header, MAX_CHART_ITEMS, numberAt, preciseText, valueText, type ChartGeometry, type ChartSlot, type Format, type Rect } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
 /** More rows than this stop reading as a scorecard: show the important ones with take(). */
@@ -63,8 +63,8 @@ export interface BulletGeometry {
  */
 export function pairText(actual: number, target: number, format: Format): string {
   const a = valueText(actual, format), t = valueText(target, format);
-  // One short and one written out ($98,000 of $120K) reads as two different units: both go short.
-  const short = (v: number) => Math.abs(v) >= 100_000 && Math.abs(v) < 1e15;
+  // One short and one written out ($980,000 of $1.2M) reads as two different units: both go short.
+  const short = (v: number) => Math.abs(v) >= FULL_BELOW && Math.abs(v) < 1e15;
   if (short(actual) !== short(target) && Math.abs(actual) < 1e15 && Math.abs(target) < 1e15 && Math.min(Math.abs(actual), Math.abs(target)) >= 1000) {
     try {
       const nf = formatter(format, { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: 1 });

@@ -25,7 +25,7 @@ import type { Value } from "../../types";
 import { fieldOf, isList, isRecord } from "../../data";
 import { seriesColors } from "../../theme";
 import { fillTint } from "../util";
-import { header, labelOf, numberAt, plotHeight, preciseText, shareText, valueText, MAX_CHART_ITEMS, type ChartGeometry, type ChartSlot, type PaintCtx, type Rect } from "../chart-kit";
+import { header, labelOf, numberAt, plotHeight, preciseText, shareText, valueTextIn, MAX_CHART_ITEMS, type ChartGeometry, type ChartSlot, type PaintCtx, type Rect } from "../chart-kit";
 import type { ChartKindDef } from "./types";
 
 export const MAX_SANKEY_NODES = 40;
@@ -282,9 +282,9 @@ export const sankey: ChartKindDef = {
     const nodes: SankeyNode[] = names.map((name, i) => {
       const last = col[i] === cols - 1 && cols > 1;
       const room = roomFor(col[i]!);
-      const full = `${name} ${valueText(value[i]!, input.format)}`;
-      // The name and amount, or the name alone, or nothing: a stub of a name says nothing.
-      let label = m.width(full, labelFont) <= room ? full : room >= 24 ? ellipsize(name, room, labelFont, m) : "";
+      // The name and amount (shortened when that's what fits), or the name alone, or nothing: a stub of a name says nothing.
+      const amount = valueTextIn(value[i]!, input.format, (text) => m.width(`${name} ${text}`, labelFont) <= room);
+      let label = amount ? `${name} ${amount}` : room >= 24 ? ellipsize(name, room, labelFont, m) : "";
       if (label.endsWith("…") && label.length - 1 < Math.min(4, name.length)) label = "";
       return {
         name, col: col[i]!, value: value[i]!, inflow: inflow[i]!, outflow: outflow[i]!,

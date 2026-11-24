@@ -26,6 +26,10 @@
  *   with the label on the left and the value at the end of each bar. Bars
  *   grow from a zero line; negative values go left of it. Too many rows to
  *   fit MAX_HBAR_HEIGHT shows a message suggesting take().
+ * - kind=bar draws its bars across as well, whenever it can (barsAcross):
+ *   every item keeps its whole name and its amount in full, which vertical
+ *   bars have no room for. It stays vertical for items in time order, with
+ *   layers, and for lists too long to stay about the same height.
  * - Pie and donut: one slice per item with a positive y, in list order. Zero
  *   and gaps are left out. More than MAX_SLICES slices keeps the largest
  *   MAX_SLICES - 1 and adds an "Other" slice holding the rest. A negative
@@ -48,7 +52,7 @@ import { statSizes } from "./content";
 import { CHART_KINDS, paintSankeyHover, sankeyLinkAt, type SankeyGeometry } from "./chart-kinds";
 import {
   mutedBar, onFill, barPath, chartData, smoothLineControls, traceLine, baselineGradient, chartSeries, chartScale, INSET, labelOf, numberAt, FORMATS, paintAxisGrid, paintMessage, paintSlotLabels, paintTitle, slotLabels, labelRows, fieldTitle, fit, flowLegend, header, KINDS, LOCALE, MAX_CHART_ITEMS, paintLegend, paintPremiumBar,
-  legendValueTexts, plotHeight, shareText, SWATCH, SWATCH_GAP, tickLabels, valueText,
+  legendValueTexts, plotHeight, shareText, shortText, SWATCH, SWATCH_GAP, tickLabels, valueStyle, valueText, valueTextIn,
   formatter, type ChartData, type ChartGeometry, type ChartSlot, type SeriesData, type Ctx, type Format, type Kind, type LegendItem, type PaintCtx, type PieSlice, type Rect,
 } from "./chart-kit";
 
@@ -64,19 +68,26 @@ export const MAX_SLICES = SERIES_COUNT;
 export const MIN_SLOT = { bar: 4, line: 3 } as const;
 /** The tallest a horizontal bar chart's rows get, in pixels; more rows show a message suggesting take(). */
 export const MAX_HBAR_HEIGHT = 1200;
+/**
+ * kind=bar draws its bars across, as kind=hbar does, while its rows are no
+ * taller than this (see barsAcross): about the upright chart it replaces
+ * (296 px at chat and desktop widths), which is 13 rows of one series or 10
+ * of two. Longer lists stay upright: across they'd be several times the
+ * height the spec asked for, and a slide, whose height is fixed, cuts them
+ * off (24 rows are). kind=hbar is for long rankings, with take().
+ */
+export const MAX_ACROSS_HEIGHT = 360;
+/**
+ * Narrower than this (a phone), kind=bar draws across whatever its rows'
+ * height, up to MAX_HBAR_HEIGHT. Measured in a browser: below 480 px, five
+ * to eight category labels are thinned out or cut under vertical bars and
+ * the bars are 16 to 37 px wide, so upright isn't worth keeping there.
+ */
+export const BARS_ACROSS_WIDTH = 480;
 /** Horizontal bars: the most of the width the label column takes. */
 export const HBAR_LABEL_SHARE = 0.4;
 /** Horizontal bars: the narrowest the bars' own area gets before the chart says it's too narrow. */
 const MIN_HBAR_AREA = 40;
-/**
- * kind=bar narrower than this (a phone) draws its bars across, as kind=hbar
- * does, when it can (see barsAcross). Measured in a browser: below 480 px,
- * five to eight category labels (regions, products, teams, channels) are
- * thinned out or cut under vertical bars and the bars are 16 to 37 px wide;
- * every phone (up to 430 px) is under it, and tablets and desktop chat
- * columns are over it, so those stay vertical.
- */
-export const BARS_ACROSS_WIDTH = 480;
 /** Grouped bars: the narrowest bar, and the surface gap between bars in a group. */
 const MIN_GROUP_BAR = 3;
 const BAR_GAP = 2;
@@ -409,20 +420,25 @@ export function inTimeOrder(items: Value | undefined, x: string): boolean {
 }
 
 /**
- * Whether a kind=bar chart this wide draws its bars across: only when it's
- * narrower than BARS_ACROSS_WIDTH, has no layers (chart-line, chart-rule and
- * chart-note are drawn on vertical bars only), its items aren't in time
- * order, and every row fits MAX_HBAR_HEIGHT. hbarGeometry has the last word:
- * when it can't fit them either, the bars stay vertical.
+ * Whether a kind=bar chart draws its bars across, at any width: a row per
+ * item holds its whole name and its amount in full, where vertical bars
+ * have room for short amounts only. It stays vertical when it has layers
+ * (chart-line, chart-rule and chart-note are drawn on vertical bars only),
+ * when its items are in time order, which reads left to right, and when its
+ * rows are taller than MAX_ACROSS_HEIGHT (on a phone, than MAX_HBAR_HEIGHT).
+ * hbarGeometry has the last word: when it can't fit them either, the bars
+ * stay vertical.
  */
 function barsAcross(w: number, d: SeriesData, ns: number, layers: number, items: Value | undefined, x: string, t: Theme): boolean {
-  if (w >= BARS_ACROSS_WIDTH || layers > 0 || d.problem) return false;
-  if (d.slots.length * hbarRows(t, ns).rowH > MAX_HBAR_HEIGHT) return false;
+  if (layers > 0 || d.problem) return false;
+  if (d.slots.length * hbarRows(t, ns).rowH > (w < BARS_ACROSS_WIDTH ? MAX_HBAR_HEIGHT : MAX_ACROSS_HEIGHT)) return false;
   return !inTimeOrder(items, x);
 }
 
 /** Rows a loading horizontal bar chart keeps room for. */
 const GHOST_HBAR_ROWS = 5;
+/** x= field names that say the items are points in time: all a loading bar chart has to go by, with no data yet. */
+const TIME_FIELD = /^(date|day|weekday|week|month|quarter|year|period|time|hour)s?$/i;
 
 function hbarGeometry(
   box: { w: number }, d: SeriesData, series: ChartGeometry["series"], format: Format, title: string, line: number, ctx: Ctx,
@@ -445,16 +461,22 @@ function hbarGeometry(
   }
 
   // Values read at the end of each bar: room for them on the right, and on the left for negatives.
-  const texts = d.slots.map((s) => s.values.map((v) => (v === null ? null : valueText(v, format))));
-  const roomFor = (neg: boolean) => {
-    let w = -1;
-    d.slots.forEach((s, i) => s.values.forEach((v, k) => { if (v !== null && v < 0 === neg) w = Math.max(w, m.width(texts[i]![k]!, labelFont)); }));
-    return w < 0 ? 0 : Math.ceil(w) + t.space.xs;
-  };
-  const right = roomFor(false), left = roomFor(true);
+  // In full ($172,500); shortened ($172.5K) only when written out they'd leave the bars no room.
   const labelCol = Math.ceil(Math.min(Math.max(...d.slots.map((s) => m.width(s.label, labelFont))), box.w * HBAR_LABEL_SHARE));
   const plot: Rect = { x: labelCol + t.space.sm, y: top, w: Math.max(0, box.w - labelCol - t.space.sm), h: n * rowH };
-  const area = plot.w - left - right;
+  const written = (text: (v: number) => string) => {
+    const texts = d.slots.map((s) => s.values.map((v) => (v === null ? null : text(v))));
+    const roomFor = (neg: boolean) => {
+      let w = -1;
+      d.slots.forEach((s, i) => s.values.forEach((v, k) => { if (v !== null && v < 0 === neg) w = Math.max(w, m.width(texts[i]![k]!, labelFont)); }));
+      return w < 0 ? 0 : Math.ceil(w) + t.space.xs;
+    };
+    const right = roomFor(false), left = roomFor(true);
+    return { texts, left, area: plot.w - left - right };
+  };
+  let ends = written((v) => valueText(v, format));
+  if (ends.area < MIN_HBAR_AREA) ends = written((v) => shortText(v, format));
+  const { texts, left, area } = ends;
   if (area < MIN_HBAR_AREA) {
     ctx.warn?.(`chart on line ${line}: ${Math.round(box.w)} pixels leave no room for horizontal bars beside their labels and values`);
     return done(say("Too narrow to chart these values"));
@@ -540,12 +562,14 @@ function roundGeometry(box: { w: number }, d: PieData, kind: "pie" | "donut", fo
 
   let center: NonNullable<ChartGeometry["pie"]>["center"];
   if (inner) {
-    const text = valueText(d.total, format);
     const width = inner * 2 * 0.85;
     // Semibold like a stat's figure, and never larger than a stat's largest value in this theme.
     const most = statSizes(t)[0]!;
     const sizes = [t.text.title, t.text.lead, t.text.body].map((s) => Math.min(s, most));
     const fonts = sizes.map((s) => themeFont(t, CENTER_WEIGHT, s));
+    // The total in full at the largest size that holds it; shortened ($172.5K) only when no size does.
+    const smallest = fonts[fonts.length - 1]!;
+    const text = valueTextIn(d.total, format, (s) => m.width(s, smallest) <= width) ?? valueText(d.total, format);
     const fits = fonts.findIndex((f) => m.width(text, f) <= width);
     const k = fits >= 0 ? fits : fonts.length - 1;
     const font = fonts[k]!, fontSize = sizes[k]!;
@@ -897,7 +921,7 @@ export const chart: ComponentDef = {
   props: {
     kind: {
       type: "enum", values: KINDS, default: "bar",
-      description: "bar compares categories and always starts at 0; hbar draws the bars across, one row per item with its name on the left and its value at the end, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows; heatmap draws a grid with a row per value of rows= and a column per value of x=, each cell shaded by its y number (darker is more), for patterns such as orders by weekday and hour; scatter puts a dot per item at its x and y numbers, both on number scales, with label= naming each dot, size= sizing it by a number and group= coloring it by category (at most 6), and labels= naming the axes, e.g. labels=\"Risk,Return\"; treemap splits a rectangle into one per item, its area its share of the total, biggest top left in the strongest color, with names where they fit, for when there are too many parts for a pie (up to 60; the smallest are drawn together as one). sankey draws bands between columns of places, each as thick as its amount, from one flow per item: from= and to= name the places and y= the amount; columns are worked out from the flows, and flows that go round in a circle show a message (at most 40 places and 120 flows). pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey take one y field; pie, donut, funnel, bullet, treemap and sankey take no negative values.",
+      description: "bar compares categories and always starts at 0: its bars are drawn across, one row per item with its name on the left and its value at the end, and upright when the items are in time order (months, dates, years), there are more than about a dozen, or it holds chart-line, chart-rule or chart-note; hbar always draws the bars across, for rankings and long names (top 10 artists or customers): sort the list and take() the top items, since rows are drawn in list order; line shows a trend in list order, scaled to the values; area is a line with the space under it filled down to 0, for amounts over time such as visitors a week; stacked piles each item's y fields into one bar, bottom up in the order written, with its total on top, for parts of a whole such as revenue by product per month; pie and donut show each item's share of the total, and donut puts the total in the middle; funnel shows stages top to bottom in list order, each with its share of the stage before; waterfall shows each item as a change from the running total, rises good and falls bad, with total= adding the final total as a last bar; bullet gives each item a row with its bar against the goal in target=, colored good when on target, warn when close and bad when far off, each row on its own scale so mixed units fit, at most 20 rows; heatmap draws a grid with a row per value of rows= and a column per value of x=, each cell shaded by its y number (darker is more), for patterns such as orders by weekday and hour; scatter puts a dot per item at its x and y numbers, both on number scales, with label= naming each dot, size= sizing it by a number and group= coloring it by category (at most 6), and labels= naming the axes, e.g. labels=\"Risk,Return\"; treemap splits a rectangle into one per item, its area its share of the total, biggest top left in the strongest color, with names where they fit, for when there are too many parts for a pie (up to 60; the smallest are drawn together as one). sankey draws bands between columns of places, each as thick as its amount, from one flow per item: from= and to= name the places and y= the amount; columns are worked out from the flows, and flows that go round in a circle show a message (at most 40 places and 120 flows). pie, donut, funnel, waterfall, bullet, heatmap, scatter, treemap and sankey take one y field; pie, donut, funnel, bullet, treemap and sankey take no negative values.",
     },
     items: { type: "expression", required: true, description: "The list of records to chart, e.g. items=sales or items={filter(sales, 'open')}." },
     x: { type: "name", required: true, unlessProp: { name: "kind", values: ["sankey"] }, description: "The field holding each item's label (each slice's name in a pie), e.g. x=month. For scatter, the field with each item's x number. Not used by sankey." },
@@ -921,7 +945,7 @@ export const chart: ComponentDef = {
     values: { type: "boolean", default: false, description: "bar, hbar, stacked: write each bar's value (stacked: totals and parts) where it fits." },
     highlight: { type: "string", description: "bar, hbar, stacked: one item's x value, e.g. highlight=\"Mar\"; its bar keeps full color, the others fade." },
     curve: { type: "enum", values: ["straight", "smooth"], default: "straight", description: "line and area: straight lines between points, true to the data; smooth curves them, for continuous readings only." },
-    format: { type: "enum", values: FORMATS, default: "number", description: "How values read on the axis, at the ends of hbar bars, in a pie's legend and in a donut's middle: number (37K), money ($37K) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. On a scatter it formats y only; x reads as a plain number." },
+    format: { type: "enum", values: FORMATS, default: "number", description: "How values read: number (37,000), money ($37,000) or percent (42%), for values that are already percentages, like a rate of 42 or a retention of 61.5. Amounts under a million are written in full and larger ones shortened ($1.2M); the axis, and a label with no room for its full amount, are shortened sooner ($37K). On a scatter it formats y only; x reads as a plain number." },
   },
   picks: [
     { for: "a target or forecast on bars", write: "chart kind=bar holding chart-rule y=50000" },
@@ -951,7 +975,9 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
     const fields = fieldsOf(p.str("y"));
     const own = CHART_KINDS[kind];
     if (ctx.isLoading?.(box.node)) {
-      const shape = own?.loadingAs ?? kind;
+      // A bar chart will most likely draw across (barsAcross), so it waits in that shape and little moves when its data arrives.
+      const upright = ctx.visibleChildren(box.node).some((k) => (LAYER_TYPES as readonly string[]).includes(k.type)) || TIME_FIELD.test(x);
+      const shape = own?.loadingAs ?? (kind === "bar" && !upright ? "hbar" : kind);
       const out = loadingGeometry(box, shape, isRound(shape) || (own && !own.multiField) ? 1 : Math.min(MAX_SERIES, Math.max(1, fields.length)), p.text(), ctx);
       box.data = out.g;
       box.h = out.h;
@@ -988,7 +1014,7 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       const labels = labelsOf(p.str("labels"));
       const series = ys.map((field, k) => ({ field, label: labels[k] || fieldTitle(field), color: k }));
       const data = chartSeries(items, x, ys);
-      // A bar chart on a phone tries its bars across first; its warnings wait until it's kept.
+      // A bar chart tries its bars across first; its warnings wait until it's kept.
       let across: { g: ChartGeometry; h: number } | null = null;
       if (kind === "bar" && barsAcross(box.w, data, series.length, layerKids.length, items, x, ctx.theme)) {
         const held: string[] = [];
@@ -1121,6 +1147,15 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
       // values=true asks for them on every bar that has room, whatever the count or series.
       const showLabels = d.values || (d.series.length === 1 && d.slots.length <= 7 && pw / d.slots.length >= 54 && !d.layers?.lines.length);
       const format = ctx.props(box.node).oneOf("format", FORMATS, "number");
+      // With several series each label sits over its own bar, so the room is a bar and its gap.
+      const barW = d.slots.flatMap((s) => s.bars ?? []).find((b) => b)?.w ?? 0;
+      const slotRoom = d.series.length > 1 ? barW + BAR_GAP : pw / d.slots.length - 8;
+      // One style for every label, so neighbours read alike: in full when each fits its slot, else the short form ($24K).
+      const shownValues = showLabels ? d.slots.flatMap((s) => s.values.flatMap((v, k) => (v != null && (k === 0 || d.values) ? [v] : []))) : [];
+      g.save();
+      g.font = ctx.font(600, 11);
+      const labelText = valueStyle(shownValues, format, (text) => g.measureText(text).width < slotRoom);
+      g.restore();
       d.slots.forEach((s, i) => {
         // A wave from left to right: each bar grows out of the zero line.
         const grow = reveal < 1 ? staggered(reveal, i, d.slots.length) : 1;
@@ -1138,22 +1173,19 @@ chart "Revenue vs last year" kind=line items=sales x=month y=revenue,last_year l
             fill, up ? "up" : "down", hover);
           if (showLabels && (k === 0 || d.values) && s.values[k] != null) {
             const value = s.values[k]!;
-            let label = valueText(value, format);
             g.save();
             g.font = ctx.font(600, 11);
-            // With several series each label sits over its own bar, so the room is a bar and its gap.
-            const slotRoom = d.series.length > 1 ? full.w + BAR_GAP : pw / d.slots.length - 8;
+            let label = labelText(value, (text) => g.measureText(text).width < slotRoom);
             const outside = up ? b.y - 9 : b.y + b.h + 9;
             const roomOutside = outside >= d.plot.y + 8 && outside <= d.plot.y + d.plot.h - 8;
             // Near the plot edge, place the value inside a tall bar instead
             // of dropping the label or letting it clip above the chart.
             const inside = !roomOutside && b.h >= 30;
             const labelY = roomOutside ? outside : up ? b.y + 14 : b.y + b.h - 14;
-            // Inside, the bar is the room, not the slot: try the short form ($24K) before giving up.
+            // Inside, the bar is the room, not the slot: the short forms ($24K, then $18K) before leaving the label out.
             const room = inside ? b.w - 6 : slotRoom;
-            if ((inside || d.values) && g.measureText(label).width >= room) label = shortValueText(value, format);
-            // values=true on a crowded chart: round to whole thousands ($18K) before leaving the label out.
-            if (d.values && g.measureText(label).width >= room) label = shortValueText(value, format, 0);
+            if (g.measureText(label).width >= room) label = shortText(value, format);
+            if (g.measureText(label).width >= room) label = shortText(value, format, 0);
             if ((roomOutside || inside) && g.measureText(label).width < room) {
               g.textAlign = "center";
               g.textBaseline = "middle";
@@ -1500,12 +1532,3 @@ function paintChartHover(box: Box, ctx: PaintCtx, d: ChartGeometry): void {
   g.restore();
 }
 
-/** A value in its shortest form, for a label that must fit inside a bar: $24K, 1.2M. */
-function shortValueText(v: number, format: Format, digits = 1): string {
-  const opts: Intl.NumberFormatOptions = { notation: "compact", minimumFractionDigits: 0, maximumFractionDigits: digits };
-  try {
-    return formatter(format, opts).format(v);
-  } catch {
-    return valueText(v, format);
-  }
-}

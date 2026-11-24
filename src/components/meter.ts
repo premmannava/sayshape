@@ -20,7 +20,7 @@ import { ellipsize, fitLines } from "../text";
 import type { Theme } from "../theme";
 import type { Value } from "../types";
 import { easeOut } from "../ghost";
-import { valueText } from "./chart-kit";
+import { valueText, valueTextIn } from "./chart-kit";
 import { themeFont } from "./util";
 
 const KINDS = ["ring", "gauge"] as const;
@@ -78,11 +78,14 @@ function zonesFor(bands: number[], good: "up" | "down"): Zone[] {
   return good === "up" ? up : [...up].reverse();
 }
 
-/** The number in its format: 37, $1,200, $1.2M, or the share of the range for percent. */
-export function meterText(v: number | null, min: number, max: number, format: Format): string {
+/**
+ * The number in its format: 37, $172,500, $1.2M, or the share of the range for percent.
+ * With fits, shortened ($172.5K) when that's what the space holds.
+ */
+export function meterText(v: number | null, min: number, max: number, format: Format, fits?: (text: string) => boolean): string {
   if (v === null) return "—";
   if (format === "percent") return `${Math.round(((v - min) / (max - min)) * 100)}%`;
-  return valueText(v, format);
+  return (fits && valueTextIn(v, format, fits)) ?? valueText(v, format);
 }
 
 const asNumber = (v: Value | undefined): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -126,7 +129,7 @@ export function meterLayout(box: { w: number; node: { line: number } }, ctx: Pic
   const labelFont = themeFont(t, 400, t.text.caption + 1);
   const labelLH = Math.round((t.text.caption + 1) * 1.4);
   const label = p.label ? fitLines(p.label, box.w, labelFont, m, 2) : [];
-  const text = meterText(value, min, max, format);
+  const textIn = (room: number, font: string) => ellipsize(meterText(value, min, max, format, (s) => m.width(s, font) <= room), room, font, m);
 
   if (kind === "ring") {
     const d = Math.min(box.w, MAX_RING);
@@ -135,7 +138,7 @@ export function meterLayout(box: { w: number; node: { line: number } }, ctx: Pic
     const size = d >= 140 ? t.text.display : t.text.title;
     const textFont = themeFont(t, 700, size);
     // The number sits inside the ring, so it must fit the hole.
-    const shown = ellipsize(text, Math.max(0, 2 * r - stroke * 2), textFont, m);
+    const shown = textIn(Math.max(0, 2 * r - stroke * 2), textFont);
     const labelY = d + (label.length ? t.space.sm : 0);
     return {
       g: { kind, frac, zone, zones, text: shown, textFont, label, labelFont, labelLH, cx: box.w / 2, cy: d / 2, r, stroke, textY: d / 2, labelY },
@@ -149,13 +152,13 @@ export function meterLayout(box: { w: number; node: { line: number } }, ctx: Pic
   const cy = stroke / 2 + r;
   const size = gw >= 200 ? t.text.display : t.text.title;
   const textFont = themeFont(t, 700, size);
-  const shown = ellipsize(text, Math.max(0, 2 * (r - stroke)), textFont, m);
+  const shown = textIn(Math.max(0, 2 * (r - stroke)), textFont);
   const endFont = themeFont(t, 400, t.text.caption);
   const endLH = Math.round(t.text.caption * 1.4);
-  const fmt = (v: number) => (format === "percent" ? meterText(v, min, max, "percent") : valueText(v, format));
   // The ends' labels sit under the arc's ends, each in half the arc's width.
   const half = Math.max(0, gw / 2 - t.space.sm);
-  const ends = { min: ellipsize(fmt(min), half, endFont, m), max: ellipsize(fmt(max), half, endFont, m), y: cy + t.space.xs + endLH / 2, font: endFont };
+  const fmt = (v: number) => ellipsize(meterText(v, min, max, format, (s) => m.width(s, endFont) <= half), half, endFont, m);
+  const ends = { min: fmt(min), max: fmt(max), y: cy + t.space.xs + endLH / 2, font: endFont };
   const labelY = cy + t.space.xs + endLH + (label.length ? t.space.sm : 0);
   return {
     g: { kind, frac, zone, zones, text: shown, textFont, label, labelFont, labelLH, cx: box.w / 2, cy, r, stroke, textY: cy - size * 0.45, ends, labelY },
